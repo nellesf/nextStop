@@ -1,0 +1,33 @@
+name: Swift Core
+
+on:
+  push:
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: swift-core-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  test:
+    name: Build and test NextStopCore
+    runs-on: macos-latest
+    timeout-minutes: 15
+
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@v7
+
+      - name: Show Swift toolchain
+        run: swift --version
+
+      - name: Lint Swift formatting
+        working-directory: ios/NextStopCore
+        run: swift format lint --recursive --strict Package.swift Sources Tests
+
+      - name: Run Swift tests
+        working-directory: ios/NextStopCore
+        run: swift test
