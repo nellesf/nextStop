@@ -85,6 +85,9 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 
 ## iPhone and CarPlay tests
 
+- Profile form defaults come from the central domain configuration.
+- Profile name/destination validation and edit identity preservation.
+- SwiftData create/update/delete round trips without a cloud container.
 - SwiftUI CRUD and German localization with long text/Dynamic Type.
 - Permission denied/restricted/reduced accuracy/no GPS/no internet.
 - App Intent resolution, cancellation, and destination-not-found.

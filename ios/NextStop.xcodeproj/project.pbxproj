@@ -1,0 +1,659 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		0A56B0796B8DFF4F5E47D319 /* AppleMapsNavigationLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 781FE83B6F5761EE04D09918 /* AppleMapsNavigationLauncher.swift */; };
+		13C12D2BDABBDCFBB8B88711 /* ProfileFormStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */; };
+		17E5C82E730CB75CC435A105 /* NextStopCore in Frameworks */ = {isa = PBXBuildFile; productRef = FF162B8F3C9FA21199D407A7 /* NextStopCore */; };
+		1942CF02A504CECE848B4902 /* StoredProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4272F18BB579FF235A8B9A23 /* StoredProfile.swift */; };
+		1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */; };
+		20EB8233A7F199507DEC2554 /* NextStopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */; };
+		216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */; };
+		385184661CFE7FFED13CB6A6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */; };
+		52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */; };
+		572EB67B7AF9A67D585843DD /* LocalizedFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591141EC9A8DCA661E58575C /* LocalizedFormat.swift */; };
+		68A66498D44FD20880CEF9D2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B936DEF99FE1F507CA9B6722 /* InfoPlist.strings */; };
+		7CCFD3948C9340965D2EFFD0 /* ProfileFormState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3467548739E0E33D89EBB21 /* ProfileFormState.swift */; };
+		7D31019D061455FEAE354542 /* NextStopCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2B1FD1A8B5FC0BB5C586FEDE /* NextStopCore */; };
+		7D7AB734B41947A50BBDC239 /* ProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */; };
+		836FF291D867CC66CC553C66 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */; };
+		AA92E3B84AD755284A4FA227 /* MapKitDestinationSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884B6AE7AAAB9A9D190C255D /* MapKitDestinationSearchService.swift */; };
+		B1634765022692F9CA56146F /* ProfileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A67286539089D33E4CBEC3F /* ProfileListView.swift */; };
+		BBB65984984E1796B31E40E6 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5FC1596ABBD13CE9837EE992 /* Localizable.strings */; };
+		C293804B5F1E7EC8DE9823AE /* DestinationSearching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F676250C62DF04A9C781207 /* DestinationSearching.swift */; };
+		C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */; };
+		CAB24ECC13A38EC7FD84189C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C708DEF31532E56B1BEEBC7 /* Assets.xcassets */; };
+		D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */; };
+		D3DED96EB256A63F17E9BDE8 /* MapKitRoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */; };
+		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		0C462F02B03F90E2B91B7D75 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 66BF7E08A702838ECEBB6CA5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BED25C39656ADD572FA4F827;
+			remoteInfo = NextStopApp;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlanning.swift; sourceTree = "<group>"; };
+		185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocationProvider.swift; sourceTree = "<group>"; };
+		4272F18BB579FF235A8B9A23 /* StoredProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredProfile.swift; sourceTree = "<group>"; };
+		42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextStopApp.swift; sourceTree = "<group>"; };
+		52BBCEDFD7E2DD4EBD37FA7B /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentLocationProviding.swift; sourceTree = "<group>"; };
+		591141EC9A8DCA661E58575C /* LocalizedFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedFormat.swift; sourceTree = "<group>"; };
+		626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileRepositoryTests.swift; sourceTree = "<group>"; };
+		6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitRoutePlanner.swift; sourceTree = "<group>"; };
+		781FE83B6F5761EE04D09918 /* AppleMapsNavigationLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMapsNavigationLauncher.swift; sourceTree = "<group>"; };
+		7C708DEF31532E56B1BEEBC7 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		831D390EF7CA37E8A3904E1F /* NextStopCore */ = {isa = PBXFileReference; lastKnownFileType = folder; name = NextStopCore; path = NextStopCore; sourceTree = SOURCE_ROOT; };
+		884B6AE7AAAB9A9D190C255D /* MapKitDestinationSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitDestinationSearchService.swift; sourceTree = "<group>"; };
+		8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormStateTests.swift; sourceTree = "<group>"; };
+		8F676250C62DF04A9C781207 /* DestinationSearching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearching.swift; sourceTree = "<group>"; };
+		9A67286539089D33E4CBEC3F /* ProfileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileListView.swift; sourceTree = "<group>"; };
+		A19B25042473CCB4F38697B2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
+		A3467548739E0E33D89EBB21 /* ProfileFormState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormState.swift; sourceTree = "<group>"; };
+		AD868339BFFD12E7F0EB6EB1 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
+		D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NextStopApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearchView.swift; sourceTree = "<group>"; };
+		E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		E45715BD4F1FED50FC352F93 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileRepository.swift; sourceTree = "<group>"; };
+		FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataProfileRepository.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		1AD7F7B975B09A54D1106D19 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				17E5C82E730CB75CC435A105 /* NextStopCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9AF8C8D79214116B07944F32 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7D31019D061455FEAE354542 /* NextStopCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		06CEB4C85001868891BBD812 /* Infrastructure */ = {
+			isa = PBXGroup;
+			children = (
+				4BA0DDF672B1ABF672806EC4 /* Location */,
+				ABEAD0110AEEF55F24D8E2BD /* MapKit */,
+				313A17400D56281233143419 /* Persistence */,
+			);
+			path = Infrastructure;
+			sourceTree = "<group>";
+		};
+		12D2400A23E88966FA158349 /* Profiles */ = {
+			isa = PBXGroup;
+			children = (
+				C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */,
+				A3467548739E0E33D89EBB21 /* ProfileFormState.swift */,
+				9A67286539089D33E4CBEC3F /* ProfileListView.swift */,
+			);
+			path = Profiles;
+			sourceTree = "<group>";
+		};
+		168D91D734579E74ABE1CEE9 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				B936DEF99FE1F507CA9B6722 /* InfoPlist.strings */,
+				5FC1596ABBD13CE9837EE992 /* Localizable.strings */,
+				7C708DEF31532E56B1BEEBC7 /* Assets.xcassets */,
+				E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		2BD15C362C23DF92E71B4B27 = {
+			isa = PBXGroup;
+			children = (
+				AB54FB826B6C7A6417C9525C /* NextStopApp */,
+				8A4D78933B68333449C8A8F3 /* NextStopAppTests */,
+				A7E23D20B666E59F803F2D29 /* Packages */,
+				CF53C57AC8B4C48E25A9674A /* Products */,
+			);
+			indentWidth = 2;
+			sourceTree = "<group>";
+			tabWidth = 2;
+		};
+		313A17400D56281233143419 /* Persistence */ = {
+			isa = PBXGroup;
+			children = (
+				F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */,
+				4272F18BB579FF235A8B9A23 /* StoredProfile.swift */,
+				FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */,
+			);
+			path = Persistence;
+			sourceTree = "<group>";
+		};
+		3D82E9BFDFC293C67B2D53FD /* Sources */ = {
+			isa = PBXGroup;
+			children = (
+				E06CD21E433B0A3F247531CE /* App */,
+				8A41B0156DE9B0AB7A08E27A /* Features */,
+				06CEB4C85001868891BBD812 /* Infrastructure */,
+			);
+			path = Sources;
+			sourceTree = "<group>";
+		};
+		4BA0DDF672B1ABF672806EC4 /* Location */ = {
+			isa = PBXGroup;
+			children = (
+				28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */,
+				58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */,
+			);
+			path = Location;
+			sourceTree = "<group>";
+		};
+		5DCF6114F429BD14C228C009 /* Destinations */ = {
+			isa = PBXGroup;
+			children = (
+				8F676250C62DF04A9C781207 /* DestinationSearching.swift */,
+				E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */,
+			);
+			path = Destinations;
+			sourceTree = "<group>";
+		};
+		8A41B0156DE9B0AB7A08E27A /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				5DCF6114F429BD14C228C009 /* Destinations */,
+				12D2400A23E88966FA158349 /* Profiles */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		8A4D78933B68333449C8A8F3 /* NextStopAppTests */ = {
+			isa = PBXGroup;
+			children = (
+				8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */,
+				626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */,
+			);
+			path = NextStopAppTests;
+			sourceTree = "<group>";
+		};
+		A7E23D20B666E59F803F2D29 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				831D390EF7CA37E8A3904E1F /* NextStopCore */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
+		AB54FB826B6C7A6417C9525C /* NextStopApp */ = {
+			isa = PBXGroup;
+			children = (
+				168D91D734579E74ABE1CEE9 /* Resources */,
+				3D82E9BFDFC293C67B2D53FD /* Sources */,
+			);
+			path = NextStopApp;
+			sourceTree = "<group>";
+		};
+		ABEAD0110AEEF55F24D8E2BD /* MapKit */ = {
+			isa = PBXGroup;
+			children = (
+				781FE83B6F5761EE04D09918 /* AppleMapsNavigationLauncher.swift */,
+				884B6AE7AAAB9A9D190C255D /* MapKitDestinationSearchService.swift */,
+				6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */,
+				074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */,
+			);
+			path = MapKit;
+			sourceTree = "<group>";
+		};
+		CF53C57AC8B4C48E25A9674A /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */,
+				185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		E06CD21E433B0A3F247531CE /* App */ = {
+			isa = PBXGroup;
+			children = (
+				591141EC9A8DCA661E58575C /* LocalizedFormat.swift */,
+				42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		BC15AA4D28A8EB63090DB6A0 /* NextStopAppTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 25EFA881985F46D1A08787E5 /* Build configuration list for PBXNativeTarget "NextStopAppTests" */;
+			buildPhases = (
+				EC83254D822E6B5050BE16F2 /* Sources */,
+				1AD7F7B975B09A54D1106D19 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				14191A796674EFA6746D3A1C /* PBXTargetDependency */,
+			);
+			name = NextStopAppTests;
+			packageProductDependencies = (
+				FF162B8F3C9FA21199D407A7 /* NextStopCore */,
+			);
+			productName = NextStopAppTests;
+			productReference = 185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		BED25C39656ADD572FA4F827 /* NextStopApp */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = C6C062F0A482D203A31D4B22 /* Build configuration list for PBXNativeTarget "NextStopApp" */;
+			buildPhases = (
+				AAED34EC24FBC26DFF040848 /* Sources */,
+				34664D73E7BD429E6F5014ED /* Resources */,
+				9AF8C8D79214116B07944F32 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = NextStopApp;
+			packageProductDependencies = (
+				2B1FD1A8B5FC0BB5C586FEDE /* NextStopCore */,
+			);
+			productName = NextStopApp;
+			productReference = D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		66BF7E08A702838ECEBB6CA5 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 2600;
+				TargetAttributes = {
+					BC15AA4D28A8EB63090DB6A0 = {
+						DevelopmentTeam = "";
+					};
+					BED25C39656ADD572FA4F827 = {
+						DevelopmentTeam = "";
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = AA22F3388D9C054F1D8A006F /* Build configuration list for PBXProject "NextStop" */;
+			developmentRegion = de;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				de,
+				en,
+			);
+			mainGroup = 2BD15C362C23DF92E71B4B27;
+			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				EB72B8D1D56E9521A80CCB80 /* XCLocalSwiftPackageReference "NextStopCore" */,
+			);
+			preferredProjectObjectVersion = 77;
+			productRefGroup = CF53C57AC8B4C48E25A9674A /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				BED25C39656ADD572FA4F827 /* NextStopApp */,
+				BC15AA4D28A8EB63090DB6A0 /* NextStopAppTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		34664D73E7BD429E6F5014ED /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CAB24ECC13A38EC7FD84189C /* Assets.xcassets in Resources */,
+				68A66498D44FD20880CEF9D2 /* InfoPlist.strings in Resources */,
+				BBB65984984E1796B31E40E6 /* Localizable.strings in Resources */,
+				385184661CFE7FFED13CB6A6 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		AAED34EC24FBC26DFF040848 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				0A56B0796B8DFF4F5E47D319 /* AppleMapsNavigationLauncher.swift in Sources */,
+				D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */,
+				52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */,
+				C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */,
+				C293804B5F1E7EC8DE9823AE /* DestinationSearching.swift in Sources */,
+				572EB67B7AF9A67D585843DD /* LocalizedFormat.swift in Sources */,
+				AA92E3B84AD755284A4FA227 /* MapKitDestinationSearchService.swift in Sources */,
+				D3DED96EB256A63F17E9BDE8 /* MapKitRoutePlanner.swift in Sources */,
+				20EB8233A7F199507DEC2554 /* NextStopApp.swift in Sources */,
+				836FF291D867CC66CC553C66 /* ProfileEditorView.swift in Sources */,
+				7CCFD3948C9340965D2EFFD0 /* ProfileFormState.swift in Sources */,
+				B1634765022692F9CA56146F /* ProfileListView.swift in Sources */,
+				7D7AB734B41947A50BBDC239 /* ProfileRepository.swift in Sources */,
+				216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */,
+				1942CF02A504CECE848B4902 /* StoredProfile.swift in Sources */,
+				E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		EC83254D822E6B5050BE16F2 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				13C12D2BDABBDCFBB8B88711 /* ProfileFormStateTests.swift in Sources */,
+				1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		14191A796674EFA6746D3A1C /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BED25C39656ADD572FA4F827 /* NextStopApp */;
+			targetProxy = 0C462F02B03F90E2B91B7D75 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin PBXVariantGroup section */
+		5FC1596ABBD13CE9837EE992 /* Localizable.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				AD868339BFFD12E7F0EB6EB1 /* de */,
+				E45715BD4F1FED50FC352F93 /* en */,
+			);
+			name = Localizable.strings;
+			sourceTree = "<group>";
+		};
+		B936DEF99FE1F507CA9B6722 /* InfoPlist.strings */ = {
+			isa = PBXVariantGroup;
+			children = (
+				52BBCEDFD7E2DD4EBD37FA7B /* de */,
+				A19B25042473CCB4F38697B2 /* en */,
+			);
+			name = InfoPlist.strings;
+			sourceTree = "<group>";
+		};
+/* End PBXVariantGroup section */
+
+/* Begin XCBuildConfiguration section */
+		0D319C4B2C178509672F085E /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NextStopApp.app/NextStopApp";
+			};
+			name = Release;
+		};
+		0D4180E7DE647D83975A70CD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NextStopApp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
+				PRODUCT_NAME = nextStop;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8047B5D28300B33481203626 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				DEVELOPMENT_TEAM = "";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		90F5F0218377F46A1DBF8CF0 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED = YES;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				DEVELOPMENT_TEAM = "";
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_STRICT_CONCURRENCY = complete;
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		DA9C319B9E4E362139C18179 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NextStopApp.app/NextStopApp";
+			};
+			name = Debug;
+		};
+		DC8B34C04D8963D621F4195D /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 1;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = NextStopApp/Resources/Info.plist;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.1.0;
+				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
+				PRODUCT_NAME = nextStop;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		25EFA881985F46D1A08787E5 /* Build configuration list for PBXNativeTarget "NextStopAppTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DA9C319B9E4E362139C18179 /* Debug */,
+				0D319C4B2C178509672F085E /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		AA22F3388D9C054F1D8A006F /* Build configuration list for PBXProject "NextStop" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				90F5F0218377F46A1DBF8CF0 /* Debug */,
+				8047B5D28300B33481203626 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		C6C062F0A482D203A31D4B22 /* Build configuration list for PBXNativeTarget "NextStopApp" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				DC8B34C04D8963D621F4195D /* Debug */,
+				0D4180E7DE647D83975A70CD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		EB72B8D1D56E9521A80CCB80 /* XCLocalSwiftPackageReference "NextStopCore" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = NextStopCore;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		2B1FD1A8B5FC0BB5C586FEDE /* NextStopCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NextStopCore;
+		};
+		FF162B8F3C9FA21199D407A7 /* NextStopCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NextStopCore;
+		};
+/* End XCSwiftPackageProductDependency section */
+	};
+	rootObject = 66BF7E08A702838ECEBB6CA5 /* Project object */;
+}

@@ -2,13 +2,15 @@
 
 - The Apple EV-charging CarPlay entitlement has not been shown to be available for
   this project. CarPlay runtime behavior cannot be claimed as verified.
-- The portable Swift domain core is implemented, but the SwiftUI/MapKit/CarPlay app
-  targets and backend are not yet implemented.
+- The portable Swift domain core and initial SwiftUI/SwiftData/MapKit iPhone app
+  target are implemented. Backend search, App Intents, recent destinations,
+  favorites, and the CarPlay target are not yet implemented.
 - The current machine lacks an active full Xcode installation and backend runtime/
   database tooling. Its standalone Swift compiler and SDK revisions also mismatch,
   so the executed core test suite must run on the Xcode Mac or in CI. Product and
-  sources pass a direct compiler typecheck against the compatible local macOS 15.4
-  SDK; test sources pass parsing but need a compatible XCTest module elsewhere.
+  core sources pass a direct compiler typecheck against the compatible local macOS
+  15.4 SDK. The iPhone target can only be typechecked and executed with the current
+  Xcode iOS SDK on the separate development Mac.
 - CEAP is due by 2026-12-31 and was not discoverable as a production data gateway
   during research on 2026-08-13. National and operator feeds remain necessary.
 - European national-access-point coverage and data quality are heterogeneous. AFIR

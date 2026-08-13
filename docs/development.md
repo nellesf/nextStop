@@ -39,33 +39,53 @@ can also be opened directly through `ios/NextStopCore/Package.swift` in Xcode.
 ```bash
 git clone <repository-url>
 cd nextStop
-open ios/NextStopCore/Package.swift
+open ios/NextStop.xcodeproj
 ```
 
-Opening the package requires no signing or CarPlay entitlement. Run Product → Test
-to validate the core. Once the app project exists, open its checked-in
-`NextStop.xcodeproj` instead; it will reference `NextStopCore` as a local package.
-Signing, the iOS simulator, MapKit, SwiftData, App Intents, and CarPlay remain
-Xcode-only verification steps.
+The checked-in project references `NextStopCore` as a local package and contains
+the `NextStopApp` and `NextStopAppTests` targets. Select a personal development
+team only when installing on a device; simulator tests need no CarPlay entitlement.
+The package can still be opened directly at `ios/NextStopCore/Package.swift` for
+the fastest domain-only test loop.
+
+### Regenerating the Xcode project
+
+The generated project is committed so XcodeGen is not required after a pull. When
+targets, source roots, build settings, or schemes change, edit `ios/project.yml`
+and regenerate with XcodeGen 2.46 or newer:
+
+```bash
+xcodegen generate --spec ios/project.yml --project ios
+```
+
+Do not make structural changes only in the generated project; they would be lost
+on the next regeneration.
 
 ### GitHub verification
 
-`.github/workflows/swift-core.yml` runs `swift format lint` and `swift test` on a
-hosted macOS runner for every push and pull request. GitHub's official checkout
-action is pinned to the current v7 major and the workflow grants read-only
-repository permission.
+`.github/workflows/swift-core.yml` runs `swift format lint` and `swift test` for
+the portable package. `.github/workflows/ios-app.yml` builds and tests the app on
+the GA `macos-26` runner with Xcode 26. Both run for every push and pull request,
+use read-only repository permissions, and pin GitHub's checkout action to v7.
 
 ### iOS app
 
 ```bash
 xcodebuild \
+  -project ios/NextStop.xcodeproj \
   -scheme NextStopApp \
   -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
   test
 ```
 
-The exact simulator name must be discovered from the installed Xcode and kept in
-CI configuration; it is not yet verified.
+Replace the simulator name with one installed by the selected Xcode version. The
+app requires an Xcode 26 SDK to compile its current MapKit compatibility adapter
+while retaining the accepted iOS 18 deployment target.
+
+MapKit deprecated `MKMapItem.placemark` in iOS 26 when it introduced the modern
+`location` and `address` properties. The adapter uses the modern API on iOS 26+
+and keeps the old call isolated behind an availability branch solely for devices
+running the still-supported iOS 18–25 versions.
 
 ### Backend
 

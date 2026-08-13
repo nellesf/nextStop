@@ -6,8 +6,9 @@ matching charging parks along the current MapKit route and hands the selected
 park to Apple Maps. It does not provide turn-by-turn navigation.
 
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
-Implementation now starts with the portable, entitlement-independent Swift core,
-followed by the vertical slice and the approved backend architecture.
+Implementation includes the portable, entitlement-independent Swift core and the
+first iPhone vertical slice: a localized SwiftUI profile editor, local SwiftData
+persistence, destination lookup, and isolated MapKit/Core Location adapters.
 
 ## Non-negotiable product rules
 
@@ -58,11 +59,13 @@ The full rationale and boundaries are in
 
 ```text
 ios/
+  NextStop.xcodeproj        # Checked-in iOS app project
+  project.yml              # Reproducible XcodeGen project definition
   NextStopCore/             # Pure Swift package: domain and use cases
   NextStopApp/              # SwiftUI app, MapKit, persistence, App Intents
-  NextStopCarPlay/          # Entitlement-gated CarPlay adapter
+  NextStopCarPlay/          # Planned entitlement-gated CarPlay adapter
   NextStopAppTests/
-  NextStopCarPlayTests/
+  NextStopCarPlayTests/     # Planned
 backend/
   src/
     domain/
@@ -108,15 +111,15 @@ presentation model must be testable without the final CarPlay entitlement.
 
 ## Build and test status
 
-The portable Swift core can be built and tested with command-line Swift; see
-[`docs/development.md`](docs/development.md). This Mac currently has Swift 6.3
-command-line tools but no active full Xcode installation, Node.js, PostgreSQL, or
-container runtime. Xcode-only app, simulator, CarPlay, and signing verification is
-therefore performed on a separate development Mac after pulling the repository.
-The checked-in `Swift Core` GitHub Actions workflow runs formatting and the full
-package test suite on a matching hosted macOS toolchain after a push.
+The checked-in `ios/NextStop.xcodeproj` opens the iPhone app and its local
+`NextStopCore` package directly. The core test suite was run successfully in Xcode
+on 2026-08-13. This machine has no active full Xcode installation, so app,
+simulator, MapKit, and signing verification still runs on the separate Xcode Mac.
+The checked-in GitHub workflows verify both the portable core and the iOS app
+after a push. See [`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Build the vertical slice with the accepted decisions and one official, free
-charging data source before broad European provider coverage.
+Connect the iPhone route/search orchestration to the first official, free charging
+data source, then add the entitlement-independent CarPlay presenter and template
+adapter before broad European provider coverage.

@@ -1,0 +1,102 @@
+name: NextStop
+
+options:
+  bundleIdPrefix: de.nextstop
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: "18.0"
+  developmentLanguage: de
+  generateEmptyDirectories: true
+  groupSortPosition: top
+  indentWidth: 2
+  tabWidth: 2
+  xcodeVersion: "26.0"
+
+packages:
+  NextStopCore:
+    path: NextStopCore
+
+settings:
+  base:
+    CLANG_ANALYZER_LOCALIZABILITY_NONLOCALIZED: YES
+    DEVELOPMENT_TEAM: ""
+    ENABLE_STRICT_OBJC_MSGSEND: YES
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: complete
+    SWIFT_VERSION: "6.0"
+
+targets:
+  NextStopApp:
+    type: application
+    platform: iOS
+    sources:
+      - path: NextStopApp/Sources
+      - path: NextStopApp/Resources
+        buildPhase: resources
+        excludes:
+          - Info.plist
+    dependencies:
+      - package: NextStopCore
+    info:
+      path: NextStopApp/Resources/Info.plist
+      properties:
+        CFBundleDisplayName: nextStop
+        CFBundleShortVersionString: $(MARKETING_VERSION)
+        CFBundleVersion: $(CURRENT_PROJECT_VERSION)
+        ITSAppUsesNonExemptEncryption: false
+        LSApplicationCategoryType: public.app-category.navigation
+        NSLocationWhenInUseUsageDescription: nextStop uses your location to calculate the driving route and find matching charging parks along it.
+        UIApplicationSceneManifest:
+          UIApplicationSupportsMultipleScenes: false
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+    settings:
+      base:
+        CODE_SIGN_STYLE: Automatic
+        CURRENT_PROJECT_VERSION: 1
+        GENERATE_INFOPLIST_FILE: NO
+        MARKETING_VERSION: 0.1.0
+        PRODUCT_BUNDLE_IDENTIFIER: de.nextstop.app
+        PRODUCT_NAME: nextStop
+        TARGETED_DEVICE_FAMILY: "1,2"
+
+  NextStopAppTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: NextStopAppTests
+    dependencies:
+      - target: NextStopApp
+      - package: NextStopCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: de.nextstop.app.tests
+
+schemes:
+  NextStopApp:
+    build:
+      targets:
+        NextStopApp: all
+        NextStopAppTests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: NextStopAppTests
+          parallelizable: true
+          randomExecutionOrder: true
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
