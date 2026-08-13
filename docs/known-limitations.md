@@ -9,8 +9,8 @@
   database tooling. Its standalone Swift compiler and SDK revisions also mismatch,
   so the executed core test suite must run on the Xcode Mac or in CI. Product and
   core sources pass a direct compiler typecheck against the compatible local macOS
-  15.4 SDK. The iPhone target can only be typechecked and executed with the current
-  Xcode iOS SDK on the separate development Mac.
+  15.4 SDK. The iPhone target is built and tested with the current Xcode iOS SDK in
+  GitHub Actions and can be run interactively on the separate development Mac.
 - CEAP is due by 2026-12-31 and was not discoverable as a production data gateway
   during research on 2026-08-13. National and operator feeds remain necessary.
 - European national-access-point coverage and data quality are heterogeneous. AFIR

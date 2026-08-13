@@ -113,10 +113,11 @@ presentation model must be testable without the final CarPlay entitlement.
 
 The checked-in `ios/NextStop.xcodeproj` opens the iPhone app and its local
 `NextStopCore` package directly. The core test suite was run successfully in Xcode
-on 2026-08-13. This machine has no active full Xcode installation, so app,
-simulator, MapKit, and signing verification still runs on the separate Xcode Mac.
-The checked-in GitHub workflows verify both the portable core and the iOS app
-after a push. See [`docs/development.md`](docs/development.md).
+on 2026-08-13. The checked-in GitHub workflows verify both the portable core and
+the iOS app after a push; the app build and all seven app tests pass with Xcode
+26.6 and an iOS 26.5 simulator. This machine has no active full Xcode installation,
+so interactive MapKit and signing checks still run on the separate Xcode Mac. See
+[`docs/development.md`](docs/development.md).
 
 ## Current next step
 
