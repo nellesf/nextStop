@@ -8,7 +8,8 @@ import XCTest
 @MainActor
 final class ProfileRepositoryTests: XCTestCase {
   func testSwiftDataRepositoryCreatesUpdatesAndDeletesProfile() throws {
-    let repository = try makeRepository()
+    let (container, repository) = try makeRepository()
+    defer { withExtendedLifetime(container) {} }
     let profileID = UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!
     let firstTimestamp = Date(timeIntervalSince1970: 1_700_000_000)
     let original = try makeProfile(
@@ -55,16 +56,19 @@ final class ProfileRepositoryTests: XCTestCase {
     )
     let repository = InMemoryProfileRepository(profiles: [older, newer])
 
-    XCTAssertEqual(try repository.fetchProfiles().map(\.id), [newer.id, older.id])
+    XCTAssertEqual(repository.fetchProfiles().map(\.id), [newer.id, older.id])
   }
 
-  private func makeRepository() throws -> SwiftDataProfileRepository {
-    let configuration = ModelConfiguration(isStoredInMemoryOnly: true)
-    let container = try ModelContainer(
-      for: StoredProfile.self,
-      configurations: configuration
+  private func makeRepository() throws -> (ModelContainer, SwiftDataProfileRepository) {
+    let schema = Schema([StoredProfile.self])
+    let configuration = ModelConfiguration(
+      "ProfileRepositoryTests-\(UUID().uuidString)",
+      schema: schema,
+      isStoredInMemoryOnly: true
     )
-    return SwiftDataProfileRepository(modelContext: container.mainContext)
+    let container = try ModelContainer(for: schema, configurations: [configuration])
+    let repository = SwiftDataProfileRepository(modelContext: container.mainContext)
+    return (container, repository)
   }
 
   private func makeProfile(id: UUID, name: String, timestamp: Date) throws -> UserProfile {

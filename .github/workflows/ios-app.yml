@@ -30,5 +30,10 @@ jobs:
           -project ios/NextStop.xcodeproj
           -scheme NextStopApp
           -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
+          -resultBundlePath TestResults.xcresult
           CODE_SIGNING_ALLOWED=NO
           test
+
+      - name: Show failed test summary
+        if: failure()
+        run: xcrun xcresulttool get test-results summary --path TestResults.xcresult

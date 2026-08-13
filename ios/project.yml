@@ -91,8 +91,8 @@ schemes:
       gatherCoverageData: true
       targets:
         - name: NextStopAppTests
-          parallelizable: true
-          randomExecutionOrder: true
+          parallelizable: false
+          randomExecutionOrder: false
     profile:
       config: Release
     analyze:
