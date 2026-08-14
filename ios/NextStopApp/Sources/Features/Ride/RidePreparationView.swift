@@ -6,22 +6,38 @@ import UIKit
 struct RidePreparationView: View {
   @Environment(\.openURL) private var openURL
   @StateObject private var viewModel: RidePreparationViewModel
+  private let navigationLauncher: any NavigationLaunching
 
   @MainActor
   init(profile: UserProfile) {
     let draft = RideSearchDraft(profile: profile)
+    let candidateSearcher = RideCandidateSearchCoordinator(
+      pageSearcher: HTTPCandidateSearchService(),
+      enricher: MapKitCandidateEnricher()
+    )
     _viewModel = StateObject(
       wrappedValue: RidePreparationViewModel(
         draft: draft,
         locationProvider: CoreLocationProvider(),
-        routePlanner: MapKitRoutePlanner()
+        routePlanner: MapKitRoutePlanner(),
+        candidateSearcher: candidateSearcher
       )
     )
+    navigationLauncher = AppleMapsNavigationLauncher()
   }
 
   @MainActor
   init(viewModel: RidePreparationViewModel) {
+    self.init(
+      viewModel: viewModel,
+      navigationLauncher: AppleMapsNavigationLauncher()
+    )
+  }
+
+  @MainActor
+  init(viewModel: RidePreparationViewModel, navigationLauncher: any NavigationLaunching) {
     _viewModel = StateObject(wrappedValue: viewModel)
+    self.navigationLauncher = navigationLauncher
   }
 
   var body: some View {
@@ -160,7 +176,151 @@ struct RidePreparationView: View {
           .font(.footnote)
           .foregroundStyle(.secondary)
       }
+
+      candidateSearchContent
     }
+  }
+
+  @ViewBuilder
+  private var candidateSearchContent: some View {
+    switch viewModel.candidateSearchState {
+    case .idle:
+      searchButton
+    case .searching:
+      Card {
+        ProgressView()
+          .controlSize(.large)
+          .frame(maxWidth: .infinity)
+        Text("ride.search.progress.title")
+          .font(.headline)
+          .frame(maxWidth: .infinity)
+          .multilineTextAlignment(.center)
+        Text("ride.search.progress.description")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+          .frame(maxWidth: .infinity)
+          .multilineTextAlignment(.center)
+      }
+    case .results(let results):
+      resultsContent(results)
+    case .noResults:
+      Card {
+        Label("ride.search.empty.title", systemImage: "bolt.slash")
+          .font(.headline)
+        Text("ride.search.empty.description")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+        searchButton
+      }
+    case .failed(let failure):
+      Card {
+        Label("ride.search.error.title", systemImage: "exclamationmark.triangle.fill")
+          .font(.headline)
+          .foregroundStyle(.orange)
+        Text(LocalizedStringKey(failure.localizationKey))
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+        searchButton
+      }
+    }
+  }
+
+  private var searchButton: some View {
+    Button {
+      Task {
+        await viewModel.searchCandidates()
+      }
+    } label: {
+      Label("ride.search.action", systemImage: "bolt.car.fill")
+        .frame(maxWidth: .infinity)
+    }
+    .buttonStyle(.borderedProminent)
+  }
+
+  private func resultsContent(_ results: [RouteSearchResult]) -> some View {
+    VStack(spacing: 12) {
+      HStack {
+        Label("ride.results.title", systemImage: "bolt.car.fill")
+          .font(.title3.weight(.semibold))
+        Spacer()
+        Text("\(results.count)")
+          .font(.headline.monospacedDigit())
+          .foregroundStyle(.secondary)
+      }
+
+      ForEach(results) { result in
+        resultCard(result)
+      }
+
+      Text("ride.results.attribution")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .frame(maxWidth: .infinity, alignment: .leading)
+    }
+  }
+
+  private func resultCard(_ result: RouteSearchResult) -> some View {
+    let candidate = result.candidate
+    let park = candidate.park
+    return Card {
+      HStack(alignment: .firstTextBaseline) {
+        Text(park.name)
+          .font(.headline)
+          .frame(maxWidth: .infinity, alignment: .leading)
+        Text(LocalizedFormat.kilometers(candidate.actualDrivingDistance.value))
+          .font(.title3.weight(.bold).monospacedDigit())
+          .foregroundStyle(.tint)
+      }
+
+      HStack(spacing: 14) {
+        Label("\(park.chargingPointCount)", systemImage: "ev.charger")
+        Label(LocalizedFormat.kilowatts(park.maximumPower.value), systemImage: "bolt.fill")
+      }
+      .font(.subheadline)
+
+      Text(verbatim: availabilityText(park.availability))
+        .font(.subheadline)
+        .foregroundStyle(.secondary)
+
+      if let foodPOI = result.matchingFoodPOI {
+        Label(foodPOI.name, systemImage: "fork.knife")
+          .font(.subheadline)
+      }
+
+      Button {
+        navigationLauncher.startNavigation(to: park)
+      } label: {
+        Label("ride.result.navigate", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.borderedProminent)
+    }
+  }
+
+  private func availabilityText(_ availability: ParkAvailability) -> String {
+    if availability.unknownCount == availability.totalCount {
+      return NSLocalizedString(
+        "ride.result.availability.unknown",
+        comment: "No live availability is known"
+      )
+    }
+    if availability.isComplete {
+      return String.localizedStringWithFormat(
+        NSLocalizedString(
+          "ride.result.availability.complete.format",
+          comment: "Known available charging points"
+        ),
+        Int64(availability.knownAvailableCount)
+      )
+    }
+    return String.localizedStringWithFormat(
+      NSLocalizedString(
+        "ride.result.availability.partial.format",
+        comment: "Known available and unknown charging points"
+      ),
+      Int64(availability.knownAvailableCount),
+      Int64(availability.unknownCount)
+    )
   }
 
   private func routeMap(_ preparedSearch: PreparedRideSearch) -> some View {

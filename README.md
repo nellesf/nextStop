@@ -8,8 +8,9 @@ park to Apple Maps. It does not provide turn-by-turn navigation.
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
 Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
-ride-preparation flow: precise current location, a canonical MapKit route, a route
-preview, and a privacy-scoped candidate-search request. The strict
+ride flow: precise current location, a canonical MapKit route, privacy-scoped
+candidate search, exact per-candidate MapKit driving distances, optional MapKit
+restaurant checks, distance-only ranking, and Apple Maps handoff. The strict
 TypeScript/Fastify backend now imports the official Bundesnetzagentur register,
 normalizes EVSEs, builds deterministic charging parks, publishes a versioned
 PostGIS projection atomically, and serves exact 5 km route-corridor candidates
@@ -126,7 +127,7 @@ Xcode Mac or in CI. See [`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Connect the prepared iPhone request to the candidate API and enrich candidates
-with exact MapKit driving distances. Then add the entitlement-independent CarPlay
-presenter and template adapter before the official Swiss live-data provider and
-broad European coverage.
+Verify the connected search flow interactively against the local real-data backend
+in the Xcode Simulator. Then add the entitlement-independent CarPlay presenter and
+template adapter before the official Swiss live-data provider and broad European
+coverage.

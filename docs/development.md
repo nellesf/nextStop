@@ -119,6 +119,31 @@ Apply migrations and import an approved Bundesnetzagentur snapshot with the
 commands in
 [`docs/operations/bundesnetzagentur-import.md`](operations/bundesnetzagentur-import.md).
 
+### Connected Simulator search
+
+The Debug build defaults to `http://127.0.0.1:3000`, so start the populated
+backend on the same Mac that runs the Simulator:
+
+```bash
+cd backend
+DATABASE_URL=postgresql://127.0.0.1/nextstop \
+SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
+npm run dev
+```
+
+If Xcode and the backend run on different Macs, set the scheme environment
+variable `NEXTSTOP_API_BASE_URL` to the backend's reachable base URL and start the
+server with an explicitly appropriate `HOST`. Use this only on a trusted local
+network; production configuration must use TLS. The checked-in Release placeholder
+is `https://api.example.invalid` so an archive cannot accidentally send routes to
+an unapproved host.
+
+After preparing a route, tap “Ladeparks suchen”. The app fetches a stable PostGIS
+candidate snapshot, asks MapKit for actual automobile distance to candidates in
+bounded groups of four, applies the exact configured range and optional 500 m food
+rule, sorts only by actual driving distance, and displays at most five. A result
+button hands the selected park to Apple Maps.
+
 ## Configuration and secrets
 
 - Commit `.env.example` with names and safe placeholder values only.
