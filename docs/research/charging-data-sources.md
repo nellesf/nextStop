@@ -1,8 +1,8 @@
 # Free charging data source research
 
-Research date: 2026-08-13. “Free/open” here is a technical screening, not legal
-advice. Re-check terms, attribution, caching, and redistribution before enabling a
-provider.
+Research date: 2026-08-13; Bundesnetzagentur evidence rechecked on 2026-08-14.
+“Free/open” here is a technical screening, not legal advice. Re-check terms,
+attribution, caching, and redistribution before enabling a provider.
 
 ## Regulatory and European access layer
 
@@ -133,3 +133,24 @@ the adapter. The inventory is a discovery mechanism, not a single harmonized fee
   terms must permit caching/redistribution.
 - A complete EU-27 endpoint/field audit belongs to provider rollout, not the first
   vertical slice. The NAP catalog supplies discovery while adapters remain isolated.
+
+## Implemented Bundesnetzagentur snapshot
+
+The first validated source snapshot is the official 2026-07-07 CSV. The source
+page labels the download as CC BY 4.0 and requires attribution as
+`bundesnetzagentur.de`. The adapter treats each numbered `SteckertypenN` /
+`EVSE-IDN` block as one EVSE; semicolon-separated connector types inside that
+block do not increase the count. Static register rows always normalize to unknown,
+non-live availability.
+
+The complete shadow import on 2026-08-14 produced 113,384 valid locations,
+204,076 normalized EVSE observations, 48,256 active charging parks, one quarantined
+coordinate, and 170 explicit conflicts where the same syntactically valid EVSE ID
+appeared more than 200 m apart. Conflicting observations remain distinct and are
+recorded for review rather than silently merged.
+
+The authority also announces a daily REST JSON/XML interface, but its OpenAPI
+material is currently supplied on request rather than through an anonymously
+reproducible public contract. The public versioned CSV remains the first adapter;
+the provider boundary allows replacing its transport after that interface is
+reviewed.

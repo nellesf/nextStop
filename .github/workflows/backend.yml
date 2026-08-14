@@ -17,6 +17,21 @@ jobs:
     runs-on: ubuntu-latest
     timeout-minutes: 15
 
+    services:
+      postgis:
+        image: postgis/postgis:17-3.5
+        env:
+          POSTGRES_DB: nextstop_test
+          POSTGRES_USER: nextstop_test
+          POSTGRES_PASSWORD: nextstop_test
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U nextstop_test -d nextstop_test"
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 10
+
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
@@ -47,3 +62,9 @@ jobs:
       - name: Unit tests
         working-directory: backend
         run: npm test
+
+      - name: PostGIS integration tests
+        working-directory: backend
+        env:
+          TEST_DATABASE_URL: postgresql://nextstop_test:nextstop_test@127.0.0.1:5432/nextstop_test
+        run: npm run test:integration

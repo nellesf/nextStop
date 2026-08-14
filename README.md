@@ -10,8 +10,10 @@ Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride-preparation flow: precise current location, a canonical MapKit route, a route
 preview, and a privacy-scoped candidate-search request. The strict
-TypeScript/Fastify backend now validates that versioned request and reports an
-honest unavailable state until a valid charging-data projection exists.
+TypeScript/Fastify backend now imports the official Bundesnetzagentur register,
+normalizes EVSEs, builds deterministic charging parks, publishes a versioned
+PostGIS projection atomically, and serves exact 5 km route-corridor candidates
+through signed stable snapshots.
 
 ## Non-negotiable product rules
 
@@ -124,7 +126,7 @@ Xcode Mac or in CI. See [`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Ingest the official Bundesnetzagentur register into the first PostGIS projection,
-connect the prepared iPhone request to it, and enrich candidates with exact MapKit
-driving distances. Then add the entitlement-independent CarPlay presenter and
-template adapter before broad European provider coverage.
+Connect the prepared iPhone request to the candidate API and enrich candidates
+with exact MapKit driving distances. Then add the entitlement-independent CarPlay
+presenter and template adapter before the official Swiss live-data provider and
+broad European coverage.

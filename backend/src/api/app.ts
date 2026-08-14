@@ -7,6 +7,7 @@ import {
   UnavailableCandidateSearch,
   type CandidateSearching,
 } from "../application/candidate-search.js";
+import { InvalidPaginationTokenError } from "../application/signed-pagination.js";
 import type { SearchRequest } from "../domain/candidate-search.js";
 import {
   InvalidSearchRequestError,
@@ -56,6 +57,16 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
       });
     }
 
+    if (error instanceof InvalidPaginationTokenError) {
+      return reply.status(409).type("application/problem+json").send({
+        type: "urn:nextstop:error:invalid-pagination-token",
+        title: "Invalid candidate snapshot",
+        status: 409,
+        detail: error.message,
+        errorId,
+      });
+    }
+
     request.log.error({ errorId, err: error }, "Request failed");
     return reply.status(500).type("application/problem+json").send({
       type: "urn:nextstop:error:internal",
@@ -75,6 +86,7 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
         response: {
           200: searchResponseSchema,
           400: problemSchema,
+          409: problemSchema,
           503: problemSchema,
         },
       },

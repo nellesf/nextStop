@@ -16,6 +16,7 @@ xcuserdata/
 node_modules/
 coverage/
 dist/
+backend/data/
 
 # Local configuration and secrets
 .env

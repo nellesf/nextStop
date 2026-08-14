@@ -3,6 +3,7 @@ import { randomUUID } from "node:crypto";
 import test from "node:test";
 
 import type { CandidateSearching } from "../../src/application/candidate-search.js";
+import { InvalidPaginationTokenError } from "../../src/application/signed-pagination.js";
 import { createApp } from "../../src/api/app.js";
 import type { SearchRequest, SearchResponse } from "../../src/domain/candidate-search.js";
 
@@ -114,6 +115,25 @@ void test("missing charging projection returns an honest retryable 503", async (
   assert.equal(response.statusCode, 503);
   assert.match(response.body, /Charging data unavailable/u);
   assert.match(response.body, /aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee/u);
+});
+
+void test("invalid snapshot is reported as a conflict without token details", async (context) => {
+  const app = createApp({
+    candidateSearch: {
+      search: () => Promise.reject(new InvalidPaginationTokenError()),
+    },
+    makeErrorId: () => "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  });
+  context.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/charging-parks/search",
+    payload: validRequest,
+  });
+
+  assert.equal(response.statusCode, 409);
+  assert.match(response.body, /Invalid candidate snapshot/u);
 });
 
 class CandidateSearchStub implements CandidateSearching {

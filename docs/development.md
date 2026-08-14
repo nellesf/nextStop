@@ -15,7 +15,8 @@ active developer directory is Command Line Tools rather than full Xcode. The loc
 Swift compiler and default macOS SDK have different build revisions. With the
 compatible macOS 15.4 SDK, production core sources compile, but these Command Line
 Tools do not include a compatible XCTest module. Node.js 24 LTS and npm are
-installed; PostgreSQL client tools and Docker/Podman are not installed.
+installed. PostgreSQL 17 and PostGIS 3.6 are installed through Homebrew for
+isolated local backend integration tests; Docker/Podman is not installed.
 
 As a local fallback, all core product sources compile successfully against the
 compatible macOS 15.4 SDK, all Swift tests pass the parser, and Swift format lint
@@ -93,18 +94,30 @@ running the still-supported iOS 18–25 versions.
 cd backend
 npm ci
 npm run lint
+npm run typecheck
+npm run build
 npm test
 npm run test:integration
 npm run dev
 ```
 
-The unit command currently verifies schema validation, privacy-field rejection,
-application-port delegation, and the explicit `503` response used before a valid
-projection exists. `npm run test:integration` records the PostGIS corridor test as
-skipped until the first migration and Bundesnetzagentur fixture land. At that
-point integration tests must start an isolated PostGIS database, apply migrations,
-load small deterministic fixtures, and tear it down without touching developer
-data.
+`npm run test:integration` uses a real database only when `TEST_DATABASE_URL` is
+set. Its database name must end in `_test`; otherwise the suite refuses to run.
+GitHub Actions supplies an ephemeral PostGIS service automatically. A local run
+looks like:
+
+```bash
+TEST_DATABASE_URL=postgresql://127.0.0.1/nextstop_test npm run test:integration
+```
+
+The suite recreates only the `nextstop` schema in that dedicated test database.
+It verifies the inclusive 5 km corridor boundary, a bounding-box false positive,
+the availability truth table, GiST index use, atomic fixture publication, and
+stable pagination across projection changes.
+
+Apply migrations and import an approved Bundesnetzagentur snapshot with the
+commands in
+[`docs/operations/bundesnetzagentur-import.md`](operations/bundesnetzagentur-import.md).
 
 ## Configuration and secrets
 

@@ -73,5 +73,5 @@ storage limits. This is easy to change but should be product-owned.
 - Apple must approve the EV-charging CarPlay entitlement before end-to-end CarPlay
   execution and distribution.
 - A full Xcode installation must be selected locally before iOS builds.
-- Backend and PostGIS tooling must be installed or provided through an approved
-  container workflow before integration tests.
+- A production EU/EEA hosting vendor, managed PostGIS service, and operational
+  secret manager still require owner selection before deployment.
