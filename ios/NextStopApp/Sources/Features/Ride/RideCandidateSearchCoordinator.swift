@@ -40,7 +40,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     policy: ChargingParkSearchPolicy = ChargingParkSearchPolicy(),
     enrichmentBatchSize: Int = 4
   ) {
-    precondition(enrichmentBatchSize > 0)
+    precondition((1...4).contains(enrichmentBatchSize))
     self.pageSearcher = pageSearcher
     self.enricher = enricher
     self.policy = policy
@@ -159,45 +159,78 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     origin: Coordinate,
     criteria: RideCriteria
   ) async throws -> EnrichmentBatchOutcome {
-    let enricher = self.enricher
-    return try await withThrowingTaskGroup(of: EnrichmentOutcome.self) { group in
-      for candidate in candidates {
-        group.addTask { @MainActor in
-          do {
-            return .candidate(
-              try await enricher.enrich(
-                candidate: candidate,
-                origin: origin,
-                criteria: criteria
-              )
-            )
-          } catch CandidateEnrichmentError.drivingRouteUnavailable {
-            return .routingFailure(candidate.straightLineLowerBound)
-          } catch CandidateEnrichmentError.foodSearchUnavailable {
-            throw RideCandidateSearchError.foodSearchUnavailable
-          } catch is CancellationError {
-            throw CancellationError()
-          } catch {
-            return .routingFailure(candidate.straightLineLowerBound)
-          }
-        }
-      }
-
-      var values: [EnrichedChargingParkCandidate] = []
-      var routingFailureLowerBounds: [Meters] = []
-      for try await outcome in group {
-        switch outcome {
-        case .candidate(let candidate):
-          values.append(candidate)
-        case .routingFailure(let lowerBound):
-          routingFailureLowerBounds.append(lowerBound)
-        }
-      }
-      return EnrichmentBatchOutcome(
-        candidates: values,
-        routingFailureLowerBounds: routingFailureLowerBounds
-      )
+    precondition(candidates.count <= 4)
+    switch candidates.count {
+    case 0:
+      return EnrichmentBatchOutcome(candidates: [], routingFailureLowerBounds: [])
+    case 1:
+      return makeBatchOutcome([
+        try await enrichOne(candidates[0], origin: origin, criteria: criteria)
+      ])
+    case 2:
+      async let first = enrichOne(candidates[0], origin: origin, criteria: criteria)
+      async let second = enrichOne(candidates[1], origin: origin, criteria: criteria)
+      let outcomes = try await (first, second)
+      return makeBatchOutcome([outcomes.0, outcomes.1])
+    case 3:
+      async let first = enrichOne(candidates[0], origin: origin, criteria: criteria)
+      async let second = enrichOne(candidates[1], origin: origin, criteria: criteria)
+      async let third = enrichOne(candidates[2], origin: origin, criteria: criteria)
+      let outcomes = try await (first, second, third)
+      return makeBatchOutcome([outcomes.0, outcomes.1, outcomes.2])
+    case 4:
+      async let first = enrichOne(candidates[0], origin: origin, criteria: criteria)
+      async let second = enrichOne(candidates[1], origin: origin, criteria: criteria)
+      async let third = enrichOne(candidates[2], origin: origin, criteria: criteria)
+      async let fourth = enrichOne(candidates[3], origin: origin, criteria: criteria)
+      let outcomes = try await (first, second, third, fourth)
+      return makeBatchOutcome([outcomes.0, outcomes.1, outcomes.2, outcomes.3])
+    default:
+      preconditionFailure("Candidate enrichment batches are limited to four items")
     }
+  }
+
+  private func enrichOne(
+    _ candidate: BackendCandidate,
+    origin: Coordinate,
+    criteria: RideCriteria
+  ) async throws -> EnrichmentOutcome {
+    do {
+      return .candidate(
+        try await enricher.enrich(
+          candidate: candidate,
+          origin: origin,
+          criteria: criteria
+        )
+      )
+    } catch CandidateEnrichmentError.drivingRouteUnavailable {
+      return .routingFailure(candidate.straightLineLowerBound)
+    } catch CandidateEnrichmentError.foodSearchUnavailable {
+      throw RideCandidateSearchError.foodSearchUnavailable
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch {
+      return .routingFailure(candidate.straightLineLowerBound)
+    }
+  }
+
+  private func makeBatchOutcome(
+    _ outcomes: [EnrichmentOutcome]
+  ) -> EnrichmentBatchOutcome {
+    var candidates: [EnrichedChargingParkCandidate] = []
+    var routingFailureLowerBounds: [Meters] = []
+    for outcome in outcomes {
+      switch outcome {
+      case .candidate(let candidate):
+        candidates.append(candidate)
+      case .routingFailure(let lowerBound):
+        routingFailureLowerBounds.append(lowerBound)
+      }
+    }
+    return EnrichmentBatchOutcome(
+      candidates: candidates,
+      routingFailureLowerBounds: routingFailureLowerBounds
+    )
   }
 }
 
