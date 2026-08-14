@@ -14,11 +14,15 @@
 		1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */; };
 		20EB8233A7F199507DEC2554 /* NextStopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */; };
 		216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */; };
+		27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */; };
 		385184661CFE7FFED13CB6A6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */; };
+		436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */; };
+		4ABA47A11E96BEAF29EA1FBD /* RidePreparationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93FD9DB740858C65ADE3EEA1 /* RidePreparationViewModel.swift */; };
 		52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */; };
 		572EB67B7AF9A67D585843DD /* LocalizedFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591141EC9A8DCA661E58575C /* LocalizedFormat.swift */; };
 		68A66498D44FD20880CEF9D2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B936DEF99FE1F507CA9B6722 /* InfoPlist.strings */; };
 		7CCFD3948C9340965D2EFFD0 /* ProfileFormState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3467548739E0E33D89EBB21 /* ProfileFormState.swift */; };
+		7CF4AD511312472F9BBC0A60 /* RidePreparationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */; };
 		7D31019D061455FEAE354542 /* NextStopCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2B1FD1A8B5FC0BB5C586FEDE /* NextStopCore */; };
 		7D7AB734B41947A50BBDC239 /* ProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */; };
 		836FF291D867CC66CC553C66 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */; };
@@ -31,6 +35,7 @@
 		D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */; };
 		D3DED96EB256A63F17E9BDE8 /* MapKitRoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
+		FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -47,8 +52,11 @@
 		074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlanning.swift; sourceTree = "<group>"; };
 		185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocationProvider.swift; sourceTree = "<group>"; };
+		3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchRequestDTO.swift; sourceTree = "<group>"; };
 		4272F18BB579FF235A8B9A23 /* StoredProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredProfile.swift; sourceTree = "<group>"; };
 		42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextStopApp.swift; sourceTree = "<group>"; };
+		4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationViewModelTests.swift; sourceTree = "<group>"; };
+		50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationView.swift; sourceTree = "<group>"; };
 		52BBCEDFD7E2DD4EBD37FA7B /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentLocationProviding.swift; sourceTree = "<group>"; };
 		591141EC9A8DCA661E58575C /* LocalizedFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedFormat.swift; sourceTree = "<group>"; };
@@ -60,10 +68,12 @@
 		884B6AE7AAAB9A9D190C255D /* MapKitDestinationSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitDestinationSearchService.swift; sourceTree = "<group>"; };
 		8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormStateTests.swift; sourceTree = "<group>"; };
 		8F676250C62DF04A9C781207 /* DestinationSearching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearching.swift; sourceTree = "<group>"; };
+		93FD9DB740858C65ADE3EEA1 /* RidePreparationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationViewModel.swift; sourceTree = "<group>"; };
 		9A67286539089D33E4CBEC3F /* ProfileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileListView.swift; sourceTree = "<group>"; };
 		A19B25042473CCB4F38697B2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A3467548739E0E33D89EBB21 /* ProfileFormState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormState.swift; sourceTree = "<group>"; };
 		AD868339BFFD12E7F0EB6EB1 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchRequestDTOTests.swift; sourceTree = "<group>"; };
 		C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NextStopApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearchView.swift; sourceTree = "<group>"; };
@@ -98,6 +108,7 @@
 			children = (
 				4BA0DDF672B1ABF672806EC4 /* Location */,
 				ABEAD0110AEEF55F24D8E2BD /* MapKit */,
+				6C5F496DF1E5FBBCAB4BCEE0 /* Networking */,
 				313A17400D56281233143419 /* Persistence */,
 			);
 			path = Infrastructure;
@@ -122,6 +133,15 @@
 				E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */,
 			);
 			path = Resources;
+			sourceTree = "<group>";
+		};
+		25B91FE874A7CAC34D5DB4D5 /* Ride */ = {
+			isa = PBXGroup;
+			children = (
+				50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */,
+				93FD9DB740858C65ADE3EEA1 /* RidePreparationViewModel.swift */,
+			);
+			path = Ride;
 			sourceTree = "<group>";
 		};
 		2BD15C362C23DF92E71B4B27 = {
@@ -174,11 +194,20 @@
 			path = Destinations;
 			sourceTree = "<group>";
 		};
+		6C5F496DF1E5FBBCAB4BCEE0 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
 		8A41B0156DE9B0AB7A08E27A /* Features */ = {
 			isa = PBXGroup;
 			children = (
 				5DCF6114F429BD14C228C009 /* Destinations */,
 				12D2400A23E88966FA158349 /* Profiles */,
+				25B91FE874A7CAC34D5DB4D5 /* Ride */,
 			);
 			path = Features;
 			sourceTree = "<group>";
@@ -186,8 +215,10 @@
 		8A4D78933B68333449C8A8F3 /* NextStopAppTests */ = {
 			isa = PBXGroup;
 			children = (
+				B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */,
 				8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */,
 				626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */,
+				4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */,
 			);
 			path = NextStopAppTests;
 			sourceTree = "<group>";
@@ -343,6 +374,7 @@
 			buildActionMask = 2147483647;
 			files = (
 				0A56B0796B8DFF4F5E47D319 /* AppleMapsNavigationLauncher.swift in Sources */,
+				436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */,
 				D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */,
 				52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */,
 				C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */,
@@ -355,6 +387,8 @@
 				7CCFD3948C9340965D2EFFD0 /* ProfileFormState.swift in Sources */,
 				B1634765022692F9CA56146F /* ProfileListView.swift in Sources */,
 				7D7AB734B41947A50BBDC239 /* ProfileRepository.swift in Sources */,
+				FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */,
+				4ABA47A11E96BEAF29EA1FBD /* RidePreparationViewModel.swift in Sources */,
 				216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */,
 				1942CF02A504CECE848B4902 /* StoredProfile.swift in Sources */,
 				E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */,
@@ -365,8 +399,10 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */,
 				13C12D2BDABBDCFBB8B88711 /* ProfileFormStateTests.swift in Sources */,
 				1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */,
+				7CF4AD511312472F9BBC0A60 /* RidePreparationViewModelTests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

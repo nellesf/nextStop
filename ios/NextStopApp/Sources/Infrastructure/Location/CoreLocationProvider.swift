@@ -3,8 +3,11 @@ import NextStopCore
 
 @MainActor
 final class CoreLocationProvider: NSObject, CurrentLocationProviding {
+  private static let temporaryFullAccuracyPurposeKey = "RouteSearch"
+
   private let locationManager: CLLocationManager
   private var authorizationContinuation: CheckedContinuation<Void, any Error>?
+  private var accuracyContinuation: CheckedContinuation<Void, any Error>?
   private var locationContinuation: CheckedContinuation<Coordinate, any Error>?
 
   override init() {
@@ -15,14 +18,50 @@ final class CoreLocationProvider: NSObject, CurrentLocationProviding {
   }
 
   func currentLocation() async throws -> Coordinate {
-    guard authorizationContinuation == nil, locationContinuation == nil else {
+    guard authorizationContinuation == nil, accuracyContinuation == nil,
+      locationContinuation == nil
+    else {
       throw CurrentLocationError.requestAlreadyInProgress
     }
 
     try await authorizeIfNeeded()
+    try await requestFullAccuracyIfNeeded()
     return try await withCheckedThrowingContinuation { continuation in
       locationContinuation = continuation
       locationManager.requestLocation()
+    }
+  }
+
+  private func requestFullAccuracyIfNeeded() async throws {
+    guard locationManager.accuracyAuthorization != .fullAccuracy else {
+      return
+    }
+
+    try await withCheckedThrowingContinuation { continuation in
+      accuracyContinuation = continuation
+      locationManager.requestTemporaryFullAccuracyAuthorization(
+        withPurposeKey: Self.temporaryFullAccuracyPurposeKey
+      ) { [weak self] error in
+        let requestFailed = error != nil
+        Task { @MainActor [weak self] in
+          self?.handleFullAccuracyResponse(requestFailed: requestFailed)
+        }
+      }
+    }
+  }
+
+  private func handleFullAccuracyResponse(requestFailed: Bool) {
+    guard let continuation = accuracyContinuation else {
+      return
+    }
+    accuracyContinuation = nil
+
+    if requestFailed {
+      continuation.resume(throwing: CurrentLocationError.reducedAccuracy)
+    } else if locationManager.accuracyAuthorization == .fullAccuracy {
+      continuation.resume()
+    } else {
+      continuation.resume(throwing: CurrentLocationError.reducedAccuracy)
     }
   }
 

@@ -46,6 +46,8 @@ targets:
         ITSAppUsesNonExemptEncryption: false
         LSApplicationCategoryType: public.app-category.navigation
         NSLocationWhenInUseUsageDescription: nextStop uses your location to calculate the driving route and find matching charging parks along it.
+        NSLocationTemporaryUsageDescriptionDictionary:
+          RouteSearch: nextStop needs your precise location to calculate the exact route corridor for charging-park search.
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: false
         UILaunchScreen: {}

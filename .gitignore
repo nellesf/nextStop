@@ -15,6 +15,7 @@ xcuserdata/
 # Node.js
 node_modules/
 coverage/
+dist/
 
 # Local configuration and secrets
 .env

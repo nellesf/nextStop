@@ -10,16 +10,16 @@
   EV-charging entitlement; running the CarPlay surface requires Apple's managed
   `com.apple.developer.carplay-charging` capability and matching provisioning.
 
-Observed on 2026-08-13: this machine has Swift 6.3 command-line tools, but the
+Observed on 2026-08-14: this machine has Swift 6.3 command-line tools, but the
 active developer directory is Command Line Tools rather than full Xcode. The local
-Swift compiler and macOS SDK also have different build revisions, so `swift test`
-cannot compile the package manifest here. Node.js, npm, PostgreSQL client tools,
-and Docker/Podman are not installed.
+Swift compiler and default macOS SDK have different build revisions. With the
+compatible macOS 15.4 SDK, production core sources compile, but these Command Line
+Tools do not include a compatible XCTest module. Node.js 24 LTS and npm are
+installed; PostgreSQL client tools and Docker/Podman are not installed.
 
-As a local fallback, all core product sources typecheck successfully against the
-compatible macOS 15.4 SDK, all 23 XCTest methods pass the Swift parser, and Swift
-format lint passes. These Command Line Tools do not contain a compatible XCTest
-module, so test typechecking and execution must happen on the Xcode Mac or in CI.
+As a local fallback, all core product sources compile successfully against the
+compatible macOS 15.4 SDK, all Swift tests pass the parser, and Swift format lint
+passes. XCTest typechecking and execution still happen on the Xcode Mac or in CI.
 
 ## Intended workflow after scaffolding
 
@@ -98,7 +98,11 @@ npm run test:integration
 npm run dev
 ```
 
-Integration tests should start an isolated PostGIS database, apply migrations,
+The unit command currently verifies schema validation, privacy-field rejection,
+application-port delegation, and the explicit `503` response used before a valid
+projection exists. `npm run test:integration` records the PostGIS corridor test as
+skipped until the first migration and Bundesnetzagentur fixture land. At that
+point integration tests must start an isolated PostGIS database, apply migrations,
 load small deterministic fixtures, and tear it down without touching developer
 data.
 

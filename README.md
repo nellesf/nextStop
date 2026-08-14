@@ -6,9 +6,12 @@ matching charging parks along the current MapKit route and hands the selected
 park to Apple Maps. It does not provide turn-by-turn navigation.
 
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
-Implementation includes the portable, entitlement-independent Swift core and the
-first iPhone vertical slice: a localized SwiftUI profile editor, local SwiftData
-persistence, destination lookup, and isolated MapKit/Core Location adapters.
+Implementation includes the portable, entitlement-independent Swift core, a
+localized SwiftUI profile editor with local SwiftData persistence, and the first
+ride-preparation flow: precise current location, a canonical MapKit route, a route
+preview, and a privacy-scoped candidate-search request. The strict
+TypeScript/Fastify backend now validates that versioned request and reports an
+honest unavailable state until a valid charging-data projection exists.
 
 ## Non-negotiable product rules
 
@@ -112,15 +115,16 @@ presentation model must be testable without the final CarPlay entitlement.
 ## Build and test status
 
 The checked-in `ios/NextStop.xcodeproj` opens the iPhone app and its local
-`NextStopCore` package directly. The core test suite was run successfully in Xcode
-on 2026-08-13. The checked-in GitHub workflows verify both the portable core and
-the iOS app after a push; the app build and all seven app tests pass with Xcode
-26.6 and an iOS 26.5 simulator. This machine has no active full Xcode installation,
-so interactive MapKit and signing checks still run on the separate Xcode Mac. See
-[`docs/development.md`](docs/development.md).
+`NextStopCore` package directly. The core and first profile-editor test suites ran
+successfully in CI and on the separate Xcode Mac on 2026-08-13. The checked-in
+GitHub workflows verify the portable core, iOS app, and backend after a push. This
+machine has Node.js 24 LTS for backend checks but no active full Xcode installation,
+so iOS execution, interactive MapKit, and signing checks still run on the separate
+Xcode Mac or in CI. See [`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Connect the iPhone route/search orchestration to the first official, free charging
-data source, then add the entitlement-independent CarPlay presenter and template
-adapter before broad European provider coverage.
+Ingest the official Bundesnetzagentur register into the first PostGIS projection,
+connect the prepared iPhone request to it, and enrich candidates with exact MapKit
+driving distances. Then add the entitlement-independent CarPlay presenter and
+template adapter before broad European provider coverage.

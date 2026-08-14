@@ -1,2 +1,3 @@
 "CFBundleDisplayName" = "nextStop";
 "NSLocationWhenInUseUsageDescription" = "nextStop uses your location to calculate the driving route and find matching charging parks along it.";
+"RouteSearch" = "nextStop needs your precise location to calculate the exact route corridor for charging-park search.";

@@ -26,6 +26,11 @@
 	<string>public.app-category.navigation</string>
 	<key>NSLocationWhenInUseUsageDescription</key>
 	<string>nextStop uses your location to calculate the driving route and find matching charging parks along it.</string>
+	<key>NSLocationTemporaryUsageDescriptionDictionary</key>
+	<dict>
+		<key>RouteSearch</key>
+		<string>nextStop needs your precise location to calculate the exact route corridor for charging-park search.</string>
+	</dict>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

@@ -273,6 +273,15 @@ public struct RoutePolyline: Hashable, Codable, Sendable {
     guard coordinates.count >= 2 else {
       throw DomainValidationError.routeRequiresAtLeastTwoCoordinates
     }
+    guard coordinates.count <= SearchConfiguration.maximumRouteCoordinateCount else {
+      throw DomainValidationError.routeHasTooManyCoordinates(
+        maximum: SearchConfiguration.maximumRouteCoordinateCount,
+        actual: coordinates.count
+      )
+    }
+    guard Set(coordinates).count >= 2 else {
+      throw DomainValidationError.routeRequiresDistinctCoordinates
+    }
     self.coordinates = coordinates
   }
 }

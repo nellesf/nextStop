@@ -10,6 +10,8 @@ public enum DomainValidationError: Error, Equatable, Sendable {
   case emptyName
   case emptySourceIdentifier
   case routeRequiresAtLeastTwoCoordinates
+  case routeRequiresDistinctCoordinates
+  case routeHasTooManyCoordinates(maximum: Int, actual: Int)
 }
 
 public struct Meters: Hashable, Comparable, Codable, Sendable {

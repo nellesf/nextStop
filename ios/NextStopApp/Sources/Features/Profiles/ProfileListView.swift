@@ -12,10 +12,17 @@ private struct ProfileEditorSelection: Identifiable {
   }
 }
 
+private struct RideSelection: Identifiable, Hashable {
+  let profile: UserProfile
+
+  var id: UUID { profile.id }
+}
+
 struct ProfileListView: View {
   @Environment(\.modelContext) private var modelContext
   @State private var profiles: [UserProfile] = []
   @State private var editorSelection: ProfileEditorSelection?
+  @State private var rideSelection: RideSelection?
   @State private var showsError = false
 
   var body: some View {
@@ -30,18 +37,35 @@ struct ProfileListView: View {
         } else {
           List {
             ForEach(profiles) { profile in
-              Button {
-                editorSelection = ProfileEditorSelection(profile: profile)
-              } label: {
-                VStack(alignment: .leading, spacing: 4) {
-                  Text(profile.name)
-                    .font(.headline)
-                    .foregroundStyle(.primary)
-                  Text(profile.destination.displayName)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
+              VStack(alignment: .leading, spacing: 12) {
+                Button {
+                  editorSelection = ProfileEditorSelection(profile: profile)
+                } label: {
+                  HStack {
+                    VStack(alignment: .leading, spacing: 4) {
+                      Text(profile.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                      Text(profile.destination.displayName)
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                    }
+                    Spacer()
+                    Image(systemName: "pencil")
+                      .foregroundStyle(.secondary)
+                      .accessibilityHidden(true)
+                  }
+                  .contentShape(Rectangle())
                 }
-                .frame(maxWidth: .infinity, alignment: .leading)
+
+                Button {
+                  rideSelection = RideSelection(profile: profile)
+                } label: {
+                  Label("ride.start", systemImage: "arrow.trianglehead.turn.up.right.circle.fill")
+                    .frame(maxWidth: .infinity)
+                }
+                .buttonStyle(.borderedProminent)
+                .tint(.green)
               }
               .swipeActions {
                 Button("action.delete", role: .destructive) {
@@ -67,6 +91,9 @@ struct ProfileListView: View {
           try repository.save(profile)
           try reload()
         }
+      }
+      .navigationDestination(item: $rideSelection) { selection in
+        RidePreparationView(profile: selection.profile)
       }
       .alert("error.generic", isPresented: $showsError) {
         Button("action.done", role: .cancel) {}

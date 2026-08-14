@@ -44,4 +44,28 @@ final class ChargingModelTests: XCTestCase {
       XCTAssertEqual(error as? DomainValidationError, .routeRequiresAtLeastTwoCoordinates)
     }
   }
+
+  func testRouteRejectsDegenerateCoordinates() throws {
+    let coordinate = try Coordinate(latitude: 52, longitude: 10)
+
+    XCTAssertThrowsError(try RoutePolyline(coordinates: [coordinate, coordinate])) { error in
+      XCTAssertEqual(error as? DomainValidationError, .routeRequiresDistinctCoordinates)
+    }
+  }
+
+  func testRouteRejectsMoreThanTransportMaximum() throws {
+    let coordinates = try (0...SearchConfiguration.maximumRouteCoordinateCount).map { index in
+      try Coordinate(latitude: 52, longitude: 10 + (Double(index) / 1_000_000))
+    }
+
+    XCTAssertThrowsError(try RoutePolyline(coordinates: coordinates)) { error in
+      XCTAssertEqual(
+        error as? DomainValidationError,
+        .routeHasTooManyCoordinates(
+          maximum: SearchConfiguration.maximumRouteCoordinateCount,
+          actual: SearchConfiguration.maximumRouteCoordinateCount + 1
+        )
+      )
+    }
+  }
 }

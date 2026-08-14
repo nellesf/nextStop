@@ -92,6 +92,7 @@ public enum SearchConfiguration {
   public static let maximumChargingParkClusterDistance = Meters(200)
   public static let maximumFoodDistance = Meters(500)
   public static let maximumResultCount = 5
+  public static let maximumRouteCoordinateCount = 20_000
   public static let recentDestinationLimit = 20
 
   public static let defaultCriteria = RideCriteria(
