@@ -14,7 +14,7 @@ enum CandidateEnrichmentError: Error, Equatable {
 }
 
 @MainActor
-protocol CandidateEnriching: AnyObject {
+protocol CandidateEnriching: AnyObject, Sendable {
   func enrich(
     candidate: BackendCandidate,
     origin: Coordinate,

@@ -64,22 +64,22 @@ final class MapKitCandidateEnricher: CandidateEnriching {
 
 @MainActor
 final class MapKitFoodPOISearchService: FoodPOISearching {
-  func foodPOIs(chain: FoodChain, near coordinate: Coordinate) async throws -> [FoodPOI] {
+  func foodPOIs(chain: FoodChain, near parkCoordinate: Coordinate) async throws -> [FoodPOI] {
     let request = MKLocalSearch.Request()
     request.naturalLanguageQuery = query(for: chain)
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
     request.region = MKCoordinateRegion(
       center: CLLocationCoordinate2D(
-        latitude: coordinate.latitude,
-        longitude: coordinate.longitude
+        latitude: parkCoordinate.latitude,
+        longitude: parkCoordinate.longitude
       ),
       latitudinalMeters: 1_200,
       longitudinalMeters: 1_200
     )
     let response = try await MKLocalSearch(request: request).start()
     let parkLocation = CLLocation(
-      latitude: coordinate.latitude,
-      longitude: coordinate.longitude
+      latitude: parkCoordinate.latitude,
+      longitude: parkCoordinate.longitude
     )
     return try response.mapItems.compactMap { mapItem in
       guard let name = mapItem.name,
