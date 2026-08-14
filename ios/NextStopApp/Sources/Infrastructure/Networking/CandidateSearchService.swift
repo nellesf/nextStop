@@ -29,6 +29,7 @@ protocol CandidatePageSearching: AnyObject {
 
 @MainActor
 final class HTTPCandidateSearchService: CandidatePageSearching {
+  private static let maximumResponseBytes = 2 * 1_024 * 1_024
   private let baseURL: URL?
   private let session: URLSession
   private let encoder: JSONEncoder
@@ -75,6 +76,9 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     }
     guard httpResponse.statusCode == 200 else {
       throw CandidateSearchServiceError.unavailable
+    }
+    guard data.count <= Self.maximumResponseBytes else {
+      throw CandidateSearchServiceError.invalidResponse
     }
     do {
       return try decoder.decode(CandidateSearchResponseDTO.self, from: data).domainPage()

@@ -63,6 +63,7 @@
 "ride.search.error.title" = "Charging parks could not be searched";
 "ride.search.progress.description" = "Candidates come from the 5 km route corridor. Apple Maps is now checking actual driving distance including the detour.";
 "ride.search.progress.title" = "Checking charging parks…";
+"ride.search.refresh" = "Refresh search";
 "ride.route.distance" = "Route to destination";
 "ride.route.duration" = "Estimated travel time";
 "ride.start" = "Prepare ride";

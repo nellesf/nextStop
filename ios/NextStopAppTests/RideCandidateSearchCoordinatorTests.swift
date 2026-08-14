@@ -130,6 +130,82 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       results.map(\.candidate.actualDrivingDistance.value), distances.map { $0 * 1_000 })
   }
 
+  func testRejectsChangedSnapshotAcrossPages() async throws {
+    let first = try makeBackendCandidate(index: 1, lowerBoundKilometers: 40)
+    let second = try makeBackendCandidate(index: 2, lowerBoundKilometers: 50)
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot-a",
+          nextCursor: "cursor-1",
+          candidates: [first]
+        ),
+        CandidateSearchPage(
+          snapshotToken: "snapshot-b",
+          nextCursor: nil,
+          candidates: [second]
+        ),
+      ]),
+      enricher: CandidateEnricherStub(
+        distances: [first.id: Meters(60_000), second.id: Meters(70_000)]
+      )
+    )
+
+    await assertInvalidResponse(from: coordinator)
+  }
+
+  func testRejectsSafeLowerBoundRegressionAcrossPages() async throws {
+    let first = try makeBackendCandidate(index: 1, lowerBoundKilometers: 50)
+    let second = try makeBackendCandidate(index: 2, lowerBoundKilometers: 40)
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot",
+          nextCursor: "cursor-1",
+          candidates: [first]
+        ),
+        CandidateSearchPage(
+          snapshotToken: "snapshot",
+          nextCursor: nil,
+          candidates: [second]
+        ),
+      ]),
+      enricher: CandidateEnricherStub(
+        distances: [first.id: Meters(60_000), second.id: Meters(70_000)]
+      )
+    )
+
+    await assertInvalidResponse(from: coordinator)
+  }
+
+  func testRejectsEmptyPageThatClaimsAnotherCursor() async throws {
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot",
+          nextCursor: "cursor-1",
+          candidates: []
+        )
+      ]),
+      enricher: CandidateEnricherStub(distances: [:])
+    )
+
+    await assertInvalidResponse(from: coordinator)
+  }
+
+  private func assertInvalidResponse(from coordinator: RideCandidateSearchCoordinator) async {
+    do {
+      _ = try await coordinator.search(
+        preparedRide: try preparedRide(distanceRange: .kilometers50To100)
+      )
+      XCTFail("Expected an invalid candidate response")
+    } catch let error as RideCandidateSearchError {
+      XCTAssertEqual(error, .candidateResponseInvalid)
+    } catch {
+      XCTFail("Expected an invalid candidate response, got \(error)")
+    }
+  }
+
   private func preparedRide(distanceRange: DistanceRangeOption) throws -> PreparedRideSearch {
     let origin = try Coordinate(latitude: 52, longitude: 10)
     let destination = try Coordinate(latitude: 53, longitude: 11)

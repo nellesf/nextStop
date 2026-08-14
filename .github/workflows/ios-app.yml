@@ -25,14 +25,29 @@ jobs:
         run: xcodebuild -version
 
       - name: Build and test iOS app
-        run: >-
-          xcodebuild
-          -project ios/NextStop.xcodeproj
-          -scheme NextStopApp
-          -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
-          -resultBundlePath TestResults.xcresult
-          CODE_SIGNING_ALLOWED=NO
-          test
+        run: |
+          set -o pipefail
+          xcodebuild \
+            -project ios/NextStop.xcodeproj \
+            -scheme NextStopApp \
+            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -resultBundlePath TestResults.xcresult \
+            CODE_SIGNING_ALLOWED=NO \
+            test | tee xcodebuild.log
+
+      - name: Publish Xcode diagnostics
+        if: failure()
+        run: |
+          diagnostics="$(grep -E '(^|[[:space:]])(error:|fatal error:|Testing failed:)|Test Case .* failed' xcodebuild.log | tail -50 || true)"
+          if [ -z "$diagnostics" ]; then
+            diagnostics="Xcode failed without a compiler or test diagnostic in its text log."
+          fi
+          while IFS= read -r diagnostic; do
+            diagnostic="${diagnostic//'%'/'%25'}"
+            diagnostic="${diagnostic//$'\r'/'%0D'}"
+            diagnostic="${diagnostic//$'\n'/'%0A'}"
+            echo "::error title=Xcode diagnostic::$diagnostic"
+          done <<< "$diagnostics"
 
       - name: Show failed test summary
         if: failure()

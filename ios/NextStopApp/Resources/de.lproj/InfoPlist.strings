@@ -1,3 +1,4 @@
 "CFBundleDisplayName" = "nextStop";
 "NSLocationWhenInUseUsageDescription" = "nextStop verwendet deinen Standort, um die Fahrroute zu berechnen und passende Ladeparks entlang der Route zu finden.";
+"NSLocalNetworkUsageDescription" = "nextStop verbindet sich beim Testen mit deinem lokalen Entwicklungsserver für die Ladeparksuche.";
 "RouteSearch" = "nextStop benötigt deinen genauen Standort, um den exakten Routenkorridor für die Ladeparksuche zu berechnen.";

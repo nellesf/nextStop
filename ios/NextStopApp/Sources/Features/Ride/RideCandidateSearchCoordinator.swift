@@ -52,6 +52,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     var enrichedCandidates: [EnrichedChargingParkCandidate] = []
     var routingFailureLowerBounds: [Meters] = []
     var seenPageIdentities = Set<String>()
+    var previousPageLastLowerBound: Meters?
 
     while true {
       let page: CandidateSearchPage
@@ -64,6 +65,22 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
       } catch {
         throw RideCandidateSearchError.candidateServiceUnavailable
       }
+      if let expectedSnapshot = request.snapshotToken,
+        page.snapshotToken != expectedSnapshot
+      {
+        throw RideCandidateSearchError.candidateResponseInvalid
+      }
+      if page.candidates.isEmpty, page.nextCursor != nil {
+        throw RideCandidateSearchError.candidateResponseInvalid
+      }
+      if let priorLowerBound = previousPageLastLowerBound,
+        let firstLowerBound = page.candidates.first?.straightLineLowerBound,
+        firstLowerBound < priorLowerBound
+      {
+        throw RideCandidateSearchError.candidateResponseInvalid
+      }
+      previousPageLastLowerBound =
+        page.candidates.last?.straightLineLowerBound ?? previousPageLastLowerBound
       let upperDistance = request.criteria.distanceRange.range.upperBound
       let candidatesToEnrich = page.candidates.filter {
         $0.straightLineLowerBound <= upperDistance

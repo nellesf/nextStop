@@ -1,3 +1,4 @@
 "CFBundleDisplayName" = "nextStop";
 "NSLocationWhenInUseUsageDescription" = "nextStop uses your location to calculate the driving route and find matching charging parks along it.";
+"NSLocalNetworkUsageDescription" = "nextStop connects to your local development server while testing charging-park search.";
 "RouteSearch" = "nextStop needs your precise location to calculate the exact route corridor for charging-park search.";

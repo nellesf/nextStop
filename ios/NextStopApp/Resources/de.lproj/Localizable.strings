@@ -63,6 +63,7 @@
 "ride.search.error.title" = "Ladeparks konnten nicht gesucht werden";
 "ride.search.progress.description" = "Kandidaten kommen aus dem 5-km-Routenkorridor. Apple Maps prüft jetzt die echte Fahrstrecke inklusive Abfahrt.";
 "ride.search.progress.title" = "Ladeparks werden geprüft …";
+"ride.search.refresh" = "Suche aktualisieren";
 "ride.route.distance" = "Route zum Fahrziel";
 "ride.route.duration" = "Voraussichtliche Fahrzeit";
 "ride.start" = "Fahrt vorbereiten";

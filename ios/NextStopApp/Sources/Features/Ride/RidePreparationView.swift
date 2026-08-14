@@ -256,6 +256,16 @@ struct RidePreparationView: View {
         .font(.caption)
         .foregroundStyle(.secondary)
         .frame(maxWidth: .infinity, alignment: .leading)
+
+      Button {
+        Task {
+          await viewModel.searchCandidates()
+        }
+      } label: {
+        Label("ride.search.refresh", systemImage: "arrow.clockwise")
+          .frame(maxWidth: .infinity)
+      }
+      .buttonStyle(.bordered)
     }
   }
 
