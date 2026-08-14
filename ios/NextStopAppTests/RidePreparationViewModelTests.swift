@@ -149,7 +149,7 @@ private final class LocationProviderStub: CurrentLocationProviding {
 
   func currentLocation() async throws -> Coordinate {
     requestCount += 1
-    try result.get()
+    return try result.get()
   }
 }
 
