@@ -4,6 +4,7 @@ import XCTest
 
 @testable import NextStopApp
 
+@MainActor
 final class CandidateSearchResponseDTOTests: XCTestCase {
   func testMapsCandidateResponseIntoValidatedDomainValues() throws {
     let page = try decodePage(candidates: [candidateJSON(lowerBound: 12_000)])
