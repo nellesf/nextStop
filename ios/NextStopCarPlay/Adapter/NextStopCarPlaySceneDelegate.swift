@@ -9,7 +9,7 @@ import UIKit
 @MainActor
 final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
   private var interfaceController: CPInterfaceController?
-  private var profileContainer: ModelContainer?
+  private var dataContainer: ModelContainer?
   private var rideSummaryTemplate: CPListTemplate?
   private var noResultsTemplate: CPListTemplate?
   private var searchTask: Task<Void, Never>?
@@ -58,14 +58,23 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   }
 
   private func makeProfilesTemplate() throws -> CPListTemplate {
-    let container = try ModelContainer(for: StoredProfile.self)
-    profileContainer = container
+    let container = try ModelContainer(for: StoredProfile.self, StoredDestinationRecord.self)
+    dataContainer = container
     let profiles = try SwiftDataProfileRepository(
       modelContext: container.mainContext
     ).fetchProfiles()
+    let destinationRepository = SwiftDataDestinationRepository(
+      modelContext: container.mainContext
+    )
+    let favorites = try destinationRepository.fetchFavorites()
+    let favoriteIDs = Set(favorites.map(\.id))
+    let recents = try destinationRepository.fetchRecents().filter {
+      !favoriteIDs.contains($0.id)
+    }
     let profileByID = Dictionary(uniqueKeysWithValues: profiles.map { ($0.id, $0) })
-    let items = presenter.profiles(profiles)
-      .prefix(CPListTemplate.maximumItemCount)
+    var remainingItemCount = CPListTemplate.maximumItemCount
+    let profileItems = presenter.profiles(profiles)
+      .prefix(remainingItemCount)
       .map { profile in
         let item = CPListItem(text: profile.title, detailText: profile.detail)
         item.accessoryType = .disclosureIndicator
@@ -78,19 +87,72 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         }
         return item
       }
-    let sections = items.isEmpty ? [] : [CPListSection(items: items)]
+    remainingItemCount -= profileItems.count
+    let favoriteItems = makeDestinationItems(
+      favorites.prefix(remainingItemCount)
+    )
+    remainingItemCount -= favoriteItems.count
+    let recentItems = makeDestinationItems(recents.prefix(remainingItemCount))
+
+    var sections: [CPListSection] = []
+    if !profileItems.isEmpty {
+      sections.append(
+        CPListSection(
+          items: profileItems,
+          header: localizer.text("carplay.profiles.title"),
+          sectionIndexTitle: nil
+        )
+      )
+    }
+    if !favoriteItems.isEmpty {
+      sections.append(
+        CPListSection(
+          items: favoriteItems,
+          header: localizer.text("destinations.favorites"),
+          sectionIndexTitle: nil
+        )
+      )
+    }
+    if !recentItems.isEmpty {
+      sections.append(
+        CPListSection(
+          items: recentItems,
+          header: localizer.text("destinations.recents"),
+          sectionIndexTitle: nil
+        )
+      )
+    }
     let template = CPListTemplate(
-      title: localizer.text("carplay.profiles.title"),
+      title: localizer.text("carplay.saved_rides.title"),
       sections: sections
     )
-    template.emptyViewTitleVariants = [localizer.text("carplay.profiles.empty.title")]
-    template.emptyViewSubtitleVariants = [localizer.text("carplay.profiles.empty.description")]
+    template.emptyViewTitleVariants = [localizer.text("carplay.saved_rides.empty.title")]
+    template.emptyViewSubtitleVariants = [
+      localizer.text("carplay.saved_rides.empty.description")
+    ]
     template.trailingNavigationBarButtons = [
       CPBarButton(title: localizer.text("carplay.refresh")) { [weak self] _ in
         self?.showProfiles(animated: false)
       }
     ]
     return template
+  }
+
+  private func makeDestinationItems<S: Sequence>(
+    _ records: S
+  ) -> [CPListItem] where S.Element == LocalDestinationRecord {
+    records.map { record in
+      let item = CPListItem(
+        text: record.destination.displayName,
+        detailText: record.destination.displayAddress
+      )
+      item.accessoryType = .disclosureIndicator
+      item.handler = { [weak self] _, completion in
+        self?.showRideSummary(destination: record.destination)
+        completion()
+      }
+      return item
+    }
   }
 
   private func makeProfileErrorTemplate() -> CPListTemplate {
@@ -103,13 +165,24 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       completion()
     }
     return CPListTemplate(
-      title: localizer.text("carplay.profiles.title"),
+      title: localizer.text("carplay.saved_rides.title"),
       sections: [CPListSection(items: [retry])]
     )
   }
 
   private func showRideSummary(profile: UserProfile) {
+    recordRecent(profile.destination)
     draftController.select(profile: profile)
+    showRideSummary()
+  }
+
+  private func showRideSummary(destination: SavedDestination) {
+    recordRecent(destination)
+    draftController.select(destination: destination)
+    showRideSummary()
+  }
+
+  private func showRideSummary() {
     guard let draft = draftController.draft else {
       return
     }
@@ -119,6 +192,14 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     )
     rideSummaryTemplate = template
     interfaceController?.pushTemplate(template, animated: true) { _, _ in }
+  }
+
+  private func recordRecent(_ destination: SavedDestination) {
+    guard let context = dataContainer?.mainContext else {
+      return
+    }
+    try? SwiftDataDestinationRepository(modelContext: context)
+      .recordRecent(destination, at: Date())
   }
 
   private func makeRideSummarySections(_ draft: RideSearchDraft) -> [CPListSection] {

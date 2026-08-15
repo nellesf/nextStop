@@ -59,7 +59,7 @@ struct ProfileListView: View {
                 }
 
                 Button {
-                  rideSelection = RideSelection(profile: profile)
+                  startRide(profile)
                 } label: {
                   Label("ride.start", systemImage: "arrow.trianglehead.turn.up.right.circle.fill")
                     .frame(maxWidth: .infinity)
@@ -78,6 +78,13 @@ struct ProfileListView: View {
       }
       .navigationTitle("profiles.title")
       .toolbar {
+        ToolbarItem(placement: .topBarLeading) {
+          NavigationLink {
+            DestinationLibraryView()
+          } label: {
+            Label("destinations.title", systemImage: "star")
+          }
+        }
         ToolbarItem(placement: .primaryAction) {
           Button {
             editorSelection = ProfileEditorSelection()
@@ -112,6 +119,10 @@ struct ProfileListView: View {
     SwiftDataProfileRepository(modelContext: modelContext)
   }
 
+  private var destinationRepository: SwiftDataDestinationRepository {
+    SwiftDataDestinationRepository(modelContext: modelContext)
+  }
+
   private func reload() throws {
     profiles = try repository.fetchProfiles()
   }
@@ -120,6 +131,15 @@ struct ProfileListView: View {
     do {
       try repository.delete(id: profile.id)
       try reload()
+    } catch {
+      showsError = true
+    }
+  }
+
+  private func startRide(_ profile: UserProfile) {
+    do {
+      try destinationRepository.recordRecent(profile.destination, at: Date())
+      rideSelection = RideSelection(profile: profile)
     } catch {
       showsError = true
     }

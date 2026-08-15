@@ -13,9 +13,11 @@
 		1876B6D704C1505302B39E18 /* RideCandidateSearchCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5A825E7AD85738EBD516CC46 /* RideCandidateSearchCoordinator.swift */; };
 		1942CF02A504CECE848B4902 /* StoredProfile.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4272F18BB579FF235A8B9A23 /* StoredProfile.swift */; };
 		1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */; };
+		1EDC3BA1EEB9C7D21BF81C72 /* DestinationRepositoryTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */; };
 		20EB8233A7F199507DEC2554 /* NextStopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */; };
 		216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */; };
 		27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */; };
+		3044D161FCAC30BE2275F286 /* DestinationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B572FEA58A55B29CC334EB61 /* DestinationRepository.swift */; };
 		385184661CFE7FFED13CB6A6 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */; };
 		436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */; };
 		44C079CF0EC3469C1E418E50 /* MapKitCandidateEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44A6EDA417E5623EB985402 /* MapKitCandidateEnricher.swift */; };
@@ -31,11 +33,13 @@
 		7D7AB734B41947A50BBDC239 /* ProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */; };
 		81741127CA7CFE1D5C9DA0C2 /* CandidateSearchResponseDTOTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */; };
 		836FF291D867CC66CC553C66 /* ProfileEditorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */; };
+		886DC64861CA1383E035A013 /* DestinationLibraryView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 47D60CB6E90125091339EDB9 /* DestinationLibraryView.swift */; };
 		8B0639F296A99367B2022597 /* CandidateSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C69FF29913A65843A6233AD /* CandidateSearchService.swift */; };
 		AA92E3B84AD755284A4FA227 /* MapKitDestinationSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884B6AE7AAAB9A9D190C255D /* MapKitDestinationSearchService.swift */; };
 		B1634765022692F9CA56146F /* ProfileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A67286539089D33E4CBEC3F /* ProfileListView.swift */; };
 		BBB65984984E1796B31E40E6 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5FC1596ABBD13CE9837EE992 /* Localizable.strings */; };
 		C293804B5F1E7EC8DE9823AE /* DestinationSearching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F676250C62DF04A9C781207 /* DestinationSearching.swift */; };
+		C512AE42B954FBFE8AE052A4 /* StoredDestinationRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3412315DA3F115378E73486A /* StoredDestinationRecord.swift */; };
 		C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */; };
 		CAB24ECC13A38EC7FD84189C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C708DEF31532E56B1BEEBC7 /* Assets.xcassets */; };
 		CE31254C4FB5B8379BD1EEA9 /* CarPlayRideSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */; };
@@ -46,6 +50,7 @@
 		DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
 		F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */; };
+		FDB1BC30410969AF967D7425 /* SwiftDataDestinationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4156FF115B754AA94F263515 /* SwiftDataDestinationRepository.swift */; };
 		FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */; };
 /* End PBXBuildFile section */
 
@@ -72,11 +77,15 @@
 		1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchResponseDTOTests.swift; sourceTree = "<group>"; };
 		185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocationProvider.swift; sourceTree = "<group>"; };
+		3412315DA3F115378E73486A /* StoredDestinationRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredDestinationRecord.swift; sourceTree = "<group>"; };
 		3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchRequestDTO.swift; sourceTree = "<group>"; };
+		4156FF115B754AA94F263515 /* SwiftDataDestinationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataDestinationRepository.swift; sourceTree = "<group>"; };
 		4272F18BB579FF235A8B9A23 /* StoredProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredProfile.swift; sourceTree = "<group>"; };
 		42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextStopApp.swift; sourceTree = "<group>"; };
+		47D60CB6E90125091339EDB9 /* DestinationLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationLibraryView.swift; sourceTree = "<group>"; };
 		4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationViewModelTests.swift; sourceTree = "<group>"; };
 		50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationView.swift; sourceTree = "<group>"; };
+		51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationRepositoryTests.swift; sourceTree = "<group>"; };
 		52BBCEDFD7E2DD4EBD37FA7B /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentLocationProviding.swift; sourceTree = "<group>"; };
 		591141EC9A8DCA661E58575C /* LocalizedFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedFormat.swift; sourceTree = "<group>"; };
@@ -102,6 +111,7 @@
 		AD868339BFFD12E7F0EB6EB1 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		B2ABDF371BB69CB13EF7857C /* CarPlayRideSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayRideSearchService.swift; sourceTree = "<group>"; };
 		B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchRequestDTOTests.swift; sourceTree = "<group>"; };
+		B572FEA58A55B29CC334EB61 /* DestinationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationRepository.swift; sourceTree = "<group>"; };
 		C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
 		C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextStopCarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NextStopApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -207,8 +217,11 @@
 		313A17400D56281233143419 /* Persistence */ = {
 			isa = PBXGroup;
 			children = (
+				B572FEA58A55B29CC334EB61 /* DestinationRepository.swift */,
 				F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */,
+				3412315DA3F115378E73486A /* StoredDestinationRecord.swift */,
 				4272F18BB579FF235A8B9A23 /* StoredProfile.swift */,
+				4156FF115B754AA94F263515 /* SwiftDataDestinationRepository.swift */,
 				FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */,
 			);
 			path = Persistence;
@@ -244,6 +257,7 @@
 		5DCF6114F429BD14C228C009 /* Destinations */ = {
 			isa = PBXGroup;
 			children = (
+				47D60CB6E90125091339EDB9 /* DestinationLibraryView.swift */,
 				8F676250C62DF04A9C781207 /* DestinationSearching.swift */,
 				E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */,
 			);
@@ -293,6 +307,7 @@
 			children = (
 				B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */,
 				1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */,
+				51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */,
 				8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */,
 				626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */,
 				6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */,
@@ -501,6 +516,8 @@
 				4E3D4BFA79D8588942540740 /* CarPlayRideSearchService.swift in Sources */,
 				D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */,
 				52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */,
+				886DC64861CA1383E035A013 /* DestinationLibraryView.swift in Sources */,
+				3044D161FCAC30BE2275F286 /* DestinationRepository.swift in Sources */,
 				C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */,
 				C293804B5F1E7EC8DE9823AE /* DestinationSearching.swift in Sources */,
 				572EB67B7AF9A67D585843DD /* LocalizedFormat.swift in Sources */,
@@ -517,7 +534,9 @@
 				FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */,
 				4ABA47A11E96BEAF29EA1FBD /* RidePreparationViewModel.swift in Sources */,
 				216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */,
+				C512AE42B954FBFE8AE052A4 /* StoredDestinationRecord.swift in Sources */,
 				1942CF02A504CECE848B4902 /* StoredProfile.swift in Sources */,
+				FDB1BC30410969AF967D7425 /* SwiftDataDestinationRepository.swift in Sources */,
 				E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
@@ -528,6 +547,7 @@
 			files = (
 				27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */,
 				81741127CA7CFE1D5C9DA0C2 /* CandidateSearchResponseDTOTests.swift in Sources */,
+				1EDC3BA1EEB9C7D21BF81C72 /* DestinationRepositoryTests.swift in Sources */,
 				13C12D2BDABBDCFBB8B88711 /* ProfileFormStateTests.swift in Sources */,
 				1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */,
 				DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */,

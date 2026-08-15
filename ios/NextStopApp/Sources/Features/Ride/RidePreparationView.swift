@@ -10,7 +10,16 @@ struct RidePreparationView: View {
 
   @MainActor
   init(profile: UserProfile) {
-    let draft = RideSearchDraft(profile: profile)
+    self.init(draft: RideSearchDraft(profile: profile))
+  }
+
+  @MainActor
+  init(destination: SavedDestination) {
+    self.init(draft: RideSearchDraft(destination: destination))
+  }
+
+  @MainActor
+  private init(draft: RideSearchDraft) {
     let candidateSearcher = RideCandidateSearchCoordinator(
       pageSearcher: HTTPCandidateSearchService(),
       enricher: MapKitCandidateEnricher()

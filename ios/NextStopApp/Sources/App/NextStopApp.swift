@@ -7,6 +7,6 @@ struct NextStopApp: App {
     WindowGroup {
       ProfileListView()
     }
-    .modelContainer(for: StoredProfile.self)
+    .modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])
   }
 }

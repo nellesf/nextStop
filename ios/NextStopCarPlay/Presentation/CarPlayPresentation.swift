@@ -314,6 +314,10 @@ final class CarPlayRideDraftController {
     draft = RideSearchDraft(profile: profile)
   }
 
+  func select(destination: SavedDestination) {
+    draft = RideSearchDraft(destination: destination)
+  }
+
   func apply(_ selection: CarPlayCriteriaSelection) {
     guard var current = draft else {
       return

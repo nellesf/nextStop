@@ -6,6 +6,20 @@ import XCTest
 
 @MainActor
 final class CarPlayPresentationTests: XCTestCase {
+  func testDestinationSelectionUsesDefaultsWithoutAProfileReference() throws {
+    let destination = try SavedDestination(
+      displayName: "Hamburg",
+      coordinate: Coordinate(latitude: 53.5511, longitude: 9.9937)
+    )
+    let controller = CarPlayRideDraftController()
+
+    controller.select(destination: destination)
+
+    XCTAssertEqual(controller.draft?.destination, destination)
+    XCTAssertEqual(controller.draft?.criteria, SearchConfiguration.defaultCriteria)
+    XCTAssertNil(controller.draft?.sourceProfileID)
+  }
+
   func testProfileSelectionCreatesAnIndependentRideDraft() throws {
     var profile = try makeProfile()
     let originalCriteria = profile.criteria
