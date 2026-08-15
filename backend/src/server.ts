@@ -1,7 +1,9 @@
 import { createApp } from "./api/app.js";
 import { PostGISCandidateSearch } from "./application/postgis-candidate-search.js";
 import { SignedPaginationCodec } from "./application/signed-pagination.js";
+import { ProviderIngestionCoordinator } from "./jobs/provider-ingestion-coordinator.js";
 import { createDatabasePool } from "./persistence/database.js";
+import { applyMigrations } from "./persistence/migrate.js";
 
 function parsePort(value: string | undefined): number {
   if (value === undefined) {
@@ -21,17 +23,41 @@ if ((databaseURL === undefined) !== (signingKey === undefined)) {
   throw new Error("DATABASE_URL and SNAPSHOT_SIGNING_KEY must be configured together.");
 }
 const pool = databaseURL === undefined ? undefined : createDatabasePool(databaseURL);
+if (pool !== undefined) {
+  await applyMigrations(pool);
+}
 const candidateSearch =
   pool === undefined || signingKey === undefined
     ? undefined
     : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey));
 const app = createApp(candidateSearch === undefined ? {} : { candidateSearch });
+const ingestionCoordinator =
+  pool !== undefined && parseBoolean(process.env.INGESTION_ENABLED, true)
+    ? new ProviderIngestionCoordinator(pool, app.log)
+    : undefined;
 
 if (pool !== undefined) {
-  app.addHook("onClose", async () => pool.end());
+  app.addHook("onClose", async () => {
+    ingestionCoordinator?.stop();
+    await pool.end();
+  });
 }
 
 await app.listen({
   host: process.env.HOST ?? "127.0.0.1",
   port: parsePort(process.env.PORT),
 });
+ingestionCoordinator?.start();
+
+function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
+  if (value === undefined) {
+    return defaultValue;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  throw new Error("INGESTION_ENABLED must be true or false.");
+}

@@ -2,11 +2,12 @@
 
 - The Apple EV-charging CarPlay entitlement has not been shown to be available for
   this project. CarPlay runtime behavior cannot be claimed as verified.
-- The portable Swift domain core and initial SwiftUI/SwiftData/MapKit iPhone app
-  target are implemented. Backend search, App Intents, recent destinations,
-  favorites, and the CarPlay target are not yet implemented.
-- The current machine lacks an active full Xcode installation and backend runtime/
-  database tooling. Its standalone Swift compiler and SDK revisions also mismatch,
+- The portable Swift domain core, SwiftUI/SwiftData/MapKit iPhone app, connected
+  PostGIS search, automatic German/Swiss authority ingestion, and Swiss live
+  availability are implemented. App Intents, recent destinations, favorites, and
+  the CarPlay target are not yet implemented.
+- The current machine lacks an active full Xcode installation. Its standalone
+  Swift compiler and SDK revisions also mismatch,
   so the executed core test suite must run on the Xcode Mac or in CI. Product and
   core sources pass a direct compiler typecheck against the compatible local macOS
   15.4 SDK. The iPhone target is built and tested with the current Xcode iOS SDK in
@@ -17,7 +18,10 @@
   establishes access obligations but does not guarantee every field is present or
   operationally reliable in every country.
 - Bundesnetzagentur data is authoritative static data but does not provide the live
-  availability needed for a complete German live-status experience.
+  availability needed for a complete German live-status experience. Current live
+  status is available for Swiss `ich-tanke-strom` EVSEs; German results therefore
+  honestly retain unknown availability unless a later validated live source covers
+  them.
 - MapKit local search can identify nearby named fast-food POIs, but the public
   `MKMapItem` API does not expose a stable programmatic opening-status value. The
   MVP therefore omits opening status unless a later reliable provider supplies it.

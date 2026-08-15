@@ -112,11 +112,16 @@ TEST_DATABASE_URL=postgresql://127.0.0.1/nextstop_test npm run test:integration
 
 The suite recreates only the `nextstop` schema in that dedicated test database.
 It verifies the inclusive 5 km corridor boundary, a bounding-box false positive,
-the availability truth table, GiST index use, atomic fixture publication, and
-stable pagination across projection changes.
+the availability truth table, GiST index use, automatic authority-feed refresh,
+Swiss live-status joins, atomic publication, and stable pagination across
+projection changes.
 
-Apply migrations and import an approved Bundesnetzagentur snapshot with the
-commands in
+With `DATABASE_URL` configured, the server applies pending migrations and starts
+the provider coordinator automatically. It immediately discovers and downloads
+the current official Bundesnetzagentur CSV, downloads Swiss static data, publishes
+the combined projection, and refreshes Swiss live availability every minute. Set
+`INGESTION_ENABLED=false` only for a deliberately API-only process role. The
+manual import command remains a recovery tool documented in
 [`docs/operations/bundesnetzagentur-import.md`](operations/bundesnetzagentur-import.md).
 
 ### Connected Simulator search
@@ -130,6 +135,12 @@ DATABASE_URL=postgresql://127.0.0.1/nextstop \
 SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
 npm run dev
 ```
+
+No charging rows need to be entered manually. `GET /health` reports process
+liveness immediately; candidate search honestly returns `503` until the first
+background projection has published. The first real import downloads roughly
+80 MB of source data before decompression and can take around a minute depending
+on the machine and connection.
 
 If Xcode and the backend run on different Macs, set the scheme environment
 variable `NEXTSTOP_API_BASE_URL` to the backend's reachable base URL and start the

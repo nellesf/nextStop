@@ -2,15 +2,17 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export interface SnapshotPayload {
   readonly kind: "snapshot";
-  readonly version: 1;
+  readonly version: 2;
   readonly projectionId: string;
+  readonly availabilitySnapshotIds: readonly string[];
   readonly requestFingerprint: string;
 }
 
 export interface CursorPayload {
   readonly kind: "cursor";
-  readonly version: 1;
+  readonly version: 2;
   readonly projectionId: string;
+  readonly availabilitySnapshotIds: readonly string[];
   readonly requestFingerprint: string;
   readonly lowerBoundMeters: number;
   readonly parkId: string;
@@ -43,6 +45,7 @@ export class SignedPaginationCodec {
     if (
       value.kind !== "snapshot" ||
       !isUUID(value.projectionId) ||
+      !isSnapshotIds(value.availabilitySnapshotIds) ||
       !isFingerprint(value.requestFingerprint)
     ) {
       throw new InvalidPaginationTokenError();
@@ -55,6 +58,7 @@ export class SignedPaginationCodec {
     if (
       value.kind !== "cursor" ||
       !isUUID(value.projectionId) ||
+      !isSnapshotIds(value.availabilitySnapshotIds) ||
       !isFingerprint(value.requestFingerprint) ||
       !Number.isSafeInteger(value.lowerBoundMeters) ||
       value.lowerBoundMeters < 0 ||
@@ -80,7 +84,7 @@ export class SignedPaginationCodec {
     }
     try {
       const parsed: unknown = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
-      if (!isTokenObject(parsed) || parsed.version !== 1) {
+      if (!isTokenObject(parsed) || parsed.version !== 2) {
         throw new InvalidPaginationTokenError();
       }
       return parsed;
@@ -104,11 +108,22 @@ function isTokenObject(value: unknown): value is SnapshotPayload | CursorPayload
     "kind" in value &&
     (value.kind === "snapshot" || value.kind === "cursor") &&
     "version" in value &&
-    value.version === 1 &&
+    value.version === 2 &&
     "projectionId" in value &&
     typeof value.projectionId === "string" &&
+    "availabilitySnapshotIds" in value &&
+    Array.isArray(value.availabilitySnapshotIds) &&
     "requestFingerprint" in value &&
     typeof value.requestFingerprint === "string"
+  );
+}
+
+function isSnapshotIds(value: readonly string[]): boolean {
+  return (
+    value.length <= 32 &&
+    value.every(isUUID) &&
+    new Set(value).size === value.length &&
+    value.toSorted().every((item, index) => item === value[index])
   );
 }
 

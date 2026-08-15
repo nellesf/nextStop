@@ -24,6 +24,7 @@ export interface NormalizedChargingConnector {
 export interface NormalizedChargingPoint {
   readonly id: string;
   readonly nativeIdentity?: string;
+  readonly providerEVSEKey?: string;
   readonly canonicalEVSEIdentity?: string;
   readonly identityDecision: IdentityDecision;
   readonly connectors: readonly NormalizedChargingConnector[];
@@ -58,7 +59,7 @@ export interface NormalizedChargingLocation {
 
 export interface NormalizedLocationObservation {
   readonly location: NormalizedChargingLocation;
-  readonly rawPayload: Readonly<Record<string, string>>;
+  readonly rawPayload: Readonly<Record<string, unknown>>;
 }
 
 export interface QuarantinedProviderRecord {

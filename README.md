@@ -11,10 +11,11 @@ localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, optional MapKit
 restaurant checks, distance-only ranking, and Apple Maps handoff. The strict
-TypeScript/Fastify backend now imports the official Bundesnetzagentur register,
-normalizes EVSEs, builds deterministic charging parks, publishes a versioned
-PostGIS projection atomically, and serves exact 5 km route-corridor candidates
-through signed stable snapshots.
+TypeScript/Fastify backend now discovers and imports the current official
+Bundesnetzagentur register automatically, joins the official Swiss
+`ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic
+charging parks, publishes versioned PostGIS static/live snapshots atomically, and
+serves exact 5 km route-corridor candidates through signed stable snapshots.
 
 ## Non-negotiable product rules
 
@@ -127,7 +128,6 @@ Xcode Mac or in CI. See [`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Verify the connected search flow interactively against the local real-data backend
-in the Xcode Simulator. Then add the entitlement-independent CarPlay presenter and
-template adapter before the official Swiss live-data provider and broad European
-coverage.
+Implement and verify the entitlement-independent CarPlay presenter and thin system
+template adapter. The next user acceptance build is intentionally deferred until
+that surface and the automatic authority-provider pipeline work together.

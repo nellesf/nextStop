@@ -1,6 +1,6 @@
 # Bundesnetzagentur import runbook
 
-Status: implemented and locally verified on 2026-08-14.
+Status: automatic ingestion implemented and locally verified on 2026-08-15.
 
 ## Source and license
 
@@ -10,11 +10,11 @@ The page publishes the register under CC BY 4.0 and specifies the attribution
 `bundesnetzagentur.de`. Keep that attribution in product/legal surfaces that use
 the data.
 
-The verified initial file is `Ladesaeulenregister_BNetzA_2026-07-07.csv` with:
+The currently verified file is `Ladesaeulenregister_BNetzA_2026-07-28.csv` with:
 
 ```text
-sha256 dbc3a36f48b23759778addb5f7ef2a922e81a3924cca285a78838ecce99fdcc6
-size   53114117 bytes
+sha256 18e10299d7af901854a043b03595263dd2beb67cb9d66a8a0be0101ce47780d5
+size   54596908 bytes
 ```
 
 Provider files are operational inputs, not source artifacts. Keep them outside
@@ -29,23 +29,38 @@ the repository; `backend/data/` is ignored as a defensive backstop.
   checked against the official page before import.
 - At least the currently active projection retained until the new one publishes.
 
-## Migrate
-
-```bash
-cd backend
-DATABASE_URL=postgresql://127.0.0.1/nextstop npm run db:migrate
-```
-
-## Import and publish
+## Normal automatic operation
 
 ```bash
 cd backend
 DATABASE_URL=postgresql://127.0.0.1/nextstop \
-BUNDESNETZAGENTUR_CSV_PATH=/absolute/path/Ladesaeulenregister_BNetzA_2026-07-07.csv \
-BUNDESNETZAGENTUR_DATASET_OBSERVED_AT=2026-07-07T00:00:00.000Z \
-BUNDESNETZAGENTUR_EXPECTED_SHA256=dbc3a36f48b23759778addb5f7ef2a922e81a3924cca285a78838ecce99fdcc6 \
+SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
+npm run dev
+```
+
+Server startup applies migrations and immediately runs the combined German/Swiss
+static import plus the Swiss live refresh. No provider file or database row is
+entered manually. A failed refresh retains the last complete active projection.
+
+For an explicit one-shot worker run:
+
+```bash
+DATABASE_URL=postgresql://127.0.0.1/nextstop npm run refresh:providers
+```
+
+## Manual recovery import
+
+```bash
+cd backend
+DATABASE_URL=postgresql://127.0.0.1/nextstop \
+BUNDESNETZAGENTUR_CSV_PATH=/absolute/path/Ladesaeulenregister_BNetzA_2026-07-28.csv \
+BUNDESNETZAGENTUR_DATASET_OBSERVED_AT=2026-07-28T00:00:00.000Z \
+BUNDESNETZAGENTUR_EXPECTED_SHA256=18e10299d7af901854a043b03595263dd2beb67cb9d66a8a0be0101ce47780d5 \
 npm run import:bnetza
 ```
+
+This single-source path is retained for incident recovery and forensic replay; it
+is not the development setup path.
 
 The job refuses a hash mismatch, validates the exact 47-column schema, enforces a
 100 MiB input limit and 64 KiB record limit, quarantines invalid records, writes
@@ -58,14 +73,14 @@ and activates the new one in the same transaction. API readers therefore see
 either the complete prior version or the complete new version. Failed builds are
 marked `failed` and never replace the active projection.
 
-## Expected initial shadow counts
+## Latest combined shadow counts
 
 ```text
-locations           113384
-EVSE observations   204076
-charging parks       48256
-quarantined rows         1
-identity conflicts     170
+locations           133206
+EVSE observations   224995
+charging parks       53571
+quarantined rows      1068
+identity conflicts     181
 ```
 
 Treat count changes as a review signal, not a hard eternal invariant: first check

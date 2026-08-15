@@ -9,8 +9,9 @@ import {
 const codec = new SignedPaginationCodec("unit-test-signing-key-with-at-least-32-bytes");
 const snapshot = {
   kind: "snapshot",
-  version: 1,
+  version: 2,
   projectionId: "11111111-1111-4111-8111-111111111111",
+  availabilitySnapshotIds: ["22222222-2222-4222-8222-222222222222"],
   requestFingerprint: "a".repeat(64),
 } as const;
 

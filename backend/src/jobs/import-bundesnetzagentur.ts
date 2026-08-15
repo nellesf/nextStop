@@ -69,6 +69,7 @@ async function main(): Promise<void> {
       } else {
         quarantineCount += 1;
         quarantines.push({
+          providerId: bundesnetzagenturDescriptor.id,
           summary: result.quarantine,
           rawPayload: result.rawPayload,
         });

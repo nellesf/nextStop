@@ -13,6 +13,10 @@ import type {
   QuarantinedProviderRecord,
   SourceReference,
 } from "../../domain/normalized-charging.js";
+import {
+  normalizeOICPEVSEIdentity,
+  normalizeProviderEVSEKey,
+} from "../../domain/evse-identity.js";
 import { stableId } from "../../domain/stable-id.js";
 import {
   bundesnetzagenturHeaders,
@@ -199,7 +203,8 @@ function mapChargingPoint(
   const maximumPower = Math.max(...validPowers);
   const maximumPowerKW = Math.max(1, Math.floor(maximumPower));
   const connectors = mapConnectors(connectorTypes, validPowers);
-  const canonicalEVSEIdentity = normalizeStandardEVSEIdentity(nativeIdentityValue);
+  const providerEVSEKey = normalizeProviderEVSEKey(nativeIdentityValue);
+  const canonicalEVSEIdentity = normalizeOICPEVSEIdentity(nativeIdentityValue);
 
   return {
     id: stableId("charging-point", [
@@ -208,6 +213,7 @@ function mapChargingPoint(
       String(slot),
     ]),
     ...(nativeIdentityValue.length > 0 ? { nativeIdentity: nativeIdentityValue } : {}),
+    ...(providerEVSEKey === undefined ? {} : { providerEVSEKey }),
     ...(canonicalEVSEIdentity === undefined ? {} : { canonicalEVSEIdentity }),
     identityDecision: canonicalEVSEIdentity === undefined ? "unresolved" : "exact",
     connectors,
@@ -232,11 +238,6 @@ function mapConnectors(
       ...(power === undefined ? {} : { maximumPowerKW: Math.max(1, Math.floor(power)) }),
     };
   });
-}
-
-function normalizeStandardEVSEIdentity(value: string): string | undefined {
-  const normalized = value.toUpperCase().replaceAll(/[^A-Z0-9]/gu, "");
-  return /^DE[A-Z0-9]{3}E[A-Z0-9]{1,48}$/u.test(normalized) ? normalized : undefined;
 }
 
 function parseStatus(value: string, issues: string[]): boolean | undefined {

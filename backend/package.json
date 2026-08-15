@@ -10,6 +10,7 @@
     "build": "tsc -p tsconfig.build.json",
     "db:migrate": "tsx src/persistence/migrate.ts",
     "import:bnetza": "tsx src/jobs/import-bundesnetzagentur.ts",
+    "refresh:providers": "tsx src/jobs/refresh-providers.ts",
     "dev": "tsx watch src/server.ts",
     "lint": "eslint . --max-warnings 0",
     "start": "node dist/src/server.js",

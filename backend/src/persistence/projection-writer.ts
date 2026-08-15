@@ -8,6 +8,7 @@ import type {
   SourceReference,
 } from "../domain/normalized-charging.js";
 import { bundesnetzagenturDescriptor } from "../providers/bundesnetzagentur/descriptor.js";
+import { ichTankeStromDescriptor } from "../providers/ich-tanke-strom/descriptor.js";
 
 export interface ProjectionMetadata {
   readonly id: string;
@@ -20,8 +21,9 @@ export interface ProjectionMetadata {
 }
 
 export interface QuarantineInput {
+  readonly providerId: string;
   readonly summary: QuarantinedProviderRecord;
-  readonly rawPayload: Readonly<Record<string, string>>;
+  readonly rawPayload: Readonly<Record<string, unknown>>;
 }
 
 export interface ProjectionCounts {
@@ -34,6 +36,23 @@ export interface ProjectionCounts {
 
 export class ProjectionWriter {
   constructor(private readonly pool: Pool) {}
+
+  async activeProjectionId(): Promise<string | undefined> {
+    const result = await this.pool.query<{ readonly id: string }>(
+      "SELECT id FROM nextstop.projection_versions WHERE status = 'active'",
+    );
+    return result.rows[0]?.id;
+  }
+
+  async activeProjectionIdForHash(sourceDatasetHash: string): Promise<string | undefined> {
+    const result = await this.pool.query<{ readonly id: string }>(
+      `SELECT id
+       FROM nextstop.projection_versions
+       WHERE status = 'active' AND source_dataset_hash = $1`,
+      [sourceDatasetHash],
+    );
+    return result.rows[0]?.id;
+  }
 
   async create(metadata: ProjectionMetadata): Promise<void> {
     await this.pool.query(
@@ -84,10 +103,11 @@ export class ProjectionWriter {
     }
     await this.pool.query(
       `INSERT INTO nextstop.provider_quarantine (
-         projection_id, row_number, source_record_id, issue_codes, raw_payload
+         projection_id, provider_id, row_number, source_record_id, issue_codes, raw_payload
        )
-       SELECT $1, row_number, source_record_id, issue_codes, raw_payload
+       SELECT $1, provider_id, row_number, source_record_id, issue_codes, raw_payload
        FROM jsonb_to_recordset($2::jsonb) AS item(
+         provider_id text,
          row_number integer,
          source_record_id text,
          issue_codes text[],
@@ -96,7 +116,8 @@ export class ProjectionWriter {
       [
         projectionId,
         JSON.stringify(
-          quarantines.map(({ summary, rawPayload }) => ({
+          quarantines.map(({ providerId, summary, rawPayload }) => ({
+            provider_id: providerId,
             row_number: summary.rowNumber,
             source_record_id: summary.sourceRecordId ?? null,
             issue_codes: summary.issueCodes,
@@ -377,7 +398,9 @@ export class ProjectionWriter {
       location.chargingPoints.map((point) => ({
         charging_point_id: point.id,
         location_id: location.id,
+        provider_id: point.sourceReference.providerId,
         native_identity: point.nativeIdentity ?? null,
+        provider_evse_key: point.providerEVSEKey ?? null,
         canonical_evse_identity: point.canonicalEVSEIdentity ?? null,
         identity_decision: point.identityDecision,
         connectors: point.connectors,
@@ -391,7 +414,7 @@ export class ProjectionWriter {
     await client.query(
       `INSERT INTO nextstop.normalized_charging_points (
          projection_id, charging_point_id, location_id, native_identity,
-         canonical_evse_identity, identity_decision, connectors, maximum_power_kw,
+         provider_id, provider_evse_key, canonical_evse_identity, identity_decision, connectors, maximum_power_kw,
          availability_state, availability_is_live, availability_observed_at,
          source_reference
        )
@@ -399,6 +422,8 @@ export class ProjectionWriter {
               charging_point_id,
               location_id,
               native_identity,
+              provider_id,
+              provider_evse_key,
               canonical_evse_identity,
               identity_decision,
               connectors,
@@ -411,6 +436,8 @@ export class ProjectionWriter {
          charging_point_id uuid,
          location_id uuid,
          native_identity text,
+         provider_id text,
+         provider_evse_key text,
          canonical_evse_identity text,
          identity_decision text,
          connectors jsonb,
@@ -458,14 +485,25 @@ function sourceSummaries(references: readonly SourceReference[]) {
   return [...observedByProvider.entries()]
     .toSorted(([first], [second]) => first.localeCompare(second))
     .map(([providerId, staticObservedAt]) => {
-      if (providerId !== bundesnetzagenturDescriptor.id) {
+      const descriptor = sourceDescriptors.get(providerId);
+      if (descriptor === undefined) {
         throw new Error(`Unknown source descriptor: ${providerId}`);
       }
       return {
         id: providerId,
-        name: bundesnetzagenturDescriptor.name,
-        qualityTier: bundesnetzagenturDescriptor.qualityTier,
+        name: descriptor.name,
+        qualityTier: descriptor.qualityTier,
         staticObservedAt,
       };
     });
 }
+
+const sourceDescriptors: ReadonlyMap<
+  string,
+  Readonly<{ name: string; qualityTier: SourceReference["qualityTier"] }>
+> = new Map(
+  [bundesnetzagenturDescriptor, ichTankeStromDescriptor].map((descriptor) => [
+    descriptor.id,
+    descriptor,
+  ]),
+);

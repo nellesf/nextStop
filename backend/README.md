@@ -13,10 +13,14 @@ candidate API.
   never represented as an empty successful result.
 - `GET /health` reports process health only. It does not claim provider or
   projection readiness.
-
-There is intentionally no charging provider or PostGIS repository in this slice.
-The next slice adds the Bundesnetzagentur adapter, migrations, and exact
-`ST_DWithin` corridor query.
+- With database configuration present, pending migrations run at startup and the
+  provider coordinator immediately refreshes the official Bundesnetzagentur and
+  Swiss `ich-tanke-strom` feeds without manual seed data.
+- Static data is published as an atomic combined PostGIS projection. Swiss live
+  status is published independently as an atomic, freshness-limited snapshot.
+- Search joins live state by provider EVSE identity, applies the explicit
+  three-valued availability rule, and uses exact geography `ST_DWithin` for the
+  inclusive 5 km route corridor.
 
 ## Commands
 
@@ -27,8 +31,13 @@ npm run typecheck
 npm run build
 npm test
 npm run test:integration
+npm run refresh:providers
 npm run dev
 ```
+
+`npm run refresh:providers` is an explicit operational run; normal server startup
+performs the same refresh in the background. `INGESTION_ENABLED=false` disables
+that coordinator for a separately managed API process role.
 
 Node.js 24 LTS is pinned through `package.json`; exact package versions are locked
 in `package-lock.json`.
