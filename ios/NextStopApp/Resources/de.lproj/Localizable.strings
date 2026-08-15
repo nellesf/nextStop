@@ -7,6 +7,12 @@
 "action.retry" = "Erneut versuchen";
 "action.save" = "Sichern";
 "action.search" = "Suchen";
+"Destination" = "Fahrziel";
+"Destination found. Opening ride preparation." = "Fahrziel gefunden. Die Fahrtvorbereitung wird geöffnet.";
+"Destination search is currently unavailable." = "Die Fahrzielsuche ist gerade nicht verfügbar.";
+"No matching destination was found." = "Es wurde kein passendes Fahrziel gefunden.";
+"Prepare a ride" = "Fahrt vorbereiten";
+"Searches for a destination and opens the ride preparation." = "Sucht ein Fahrziel und öffnet die Fahrtvorbereitung.";
 "availability.any" = "egal";
 "carplay.ride.title" = "Fahrt";
 "carplay.result.route_distance.format" = "%lld km von der Route";
@@ -36,8 +42,13 @@
 "destinations.empty.title" = "Noch keine Ziele";
 "destinations.favorite.add" = "Als Favorit sichern";
 "destinations.favorite.remove" = "Favorit entfernen";
+"destinations.clear.confirm.title" = "Lokale Ziele wirklich löschen?";
+"destinations.clear.favorites" = "Alle Favoriten entfernen";
+"destinations.clear.recents" = "Alle zuletzt verwendeten Ziele löschen";
 "destinations.favorites" = "Favoriten";
 "destinations.recents" = "Zuletzt";
+"destinations.recent.remove" = "Aus „Zuletzt“ löschen";
+"destinations.manage" = "Ziele verwalten";
 "destinations.title" = "Ziele";
 "error.generic" = "Etwas ist schiefgelaufen.";
 "food.any" = "egal";

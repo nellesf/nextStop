@@ -78,10 +78,12 @@ unbekannt”. Opening status is added only from reliable explicit data.
 
 ## Siri / App Intents
 
-Use App Intents for an app action that accepts a destination phrase and optionally
-a saved profile entity. Siri/system services perform speech recognition. The
-intent resolves the destination with MapKit and opens/continues the same ride
-summary/search use case. No custom microphone or speech-to-text stack is in scope.
+The implemented foreground App Intent accepts a destination phrase. Siri/system
+services perform speech recognition, MapKit resolves the phrase on the iPhone,
+and an injected ride router opens the same default-criteria ride preparation used
+by other destination entry points. No custom microphone or speech-to-text stack is
+in scope. A saved profile entity remains an optional future Siri parameter; it is
+not required for the destination-phrase MVP path.
 
 ## Driving safety behavior
 
@@ -104,11 +106,13 @@ summary/search use case. No custom microphone or speech-to-text stack is in scop
 
 ## Implemented adapter flow
 
-The app-binary CarPlay scene reads the same local SwiftData profiles as the iPhone
-UI. Selecting one creates a value-copy ride draft. Each criterion opens only its
-centrally defined fixed options. Search delegates to the same location, MapKit
-route, signed backend candidate, exact MapKit distance, food check, filtering, and
-distance-only ranking components as the iPhone flow.
+The app-binary CarPlay scene reads the same local SwiftData profiles, favorites,
+and recent destinations as the iPhone UI. Selecting a profile creates a value-copy
+ride draft; selecting a saved destination creates a draft from the central
+defaults. Each criterion opens only its centrally defined fixed options. Search
+delegates to the same location, MapKit route, signed backend candidate, exact
+MapKit distance, food check, filtering, and distance-only ranking components as
+the iPhone flow.
 
 Results use `CPPointOfInterestTemplate`; its picker and map receive the same stable
 zero-to-five result snapshot. Partial or unavailable live coverage remains visible

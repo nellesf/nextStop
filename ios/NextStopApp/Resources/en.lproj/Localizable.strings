@@ -7,6 +7,12 @@
 "action.retry" = "Try Again";
 "action.save" = "Save";
 "action.search" = "Search";
+"Destination" = "Destination";
+"Destination found. Opening ride preparation." = "Destination found. Opening ride preparation.";
+"Destination search is currently unavailable." = "Destination search is currently unavailable.";
+"No matching destination was found." = "No matching destination was found.";
+"Prepare a ride" = "Prepare a ride";
+"Searches for a destination and opens the ride preparation." = "Searches for a destination and opens the ride preparation.";
 "availability.any" = "any";
 "carplay.ride.title" = "Ride";
 "carplay.result.route_distance.format" = "%lld km from route";
@@ -36,8 +42,13 @@
 "destinations.empty.title" = "No destinations yet";
 "destinations.favorite.add" = "Add to favorites";
 "destinations.favorite.remove" = "Remove favorite";
+"destinations.clear.confirm.title" = "Delete local destinations?";
+"destinations.clear.favorites" = "Remove all favorites";
+"destinations.clear.recents" = "Delete all recent destinations";
 "destinations.favorites" = "Favorites";
 "destinations.recents" = "Recents";
+"destinations.recent.remove" = "Remove from Recents";
+"destinations.manage" = "Manage destinations";
 "destinations.title" = "Destinations";
 "error.generic" = "Something went wrong.";
 "food.any" = "any";

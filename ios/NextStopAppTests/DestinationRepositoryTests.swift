@@ -76,6 +76,31 @@ final class DestinationRepositoryTests: XCTestCase {
     XCTAssertEqual(try repository.fetchFavorites().map(\.destination), [favorite])
   }
 
+  func testRecentAndFavoriteCollectionsCanBeClearedIndependently() throws {
+    let (container, repository) = try makeRepository()
+    defer { withExtendedLifetime(container) {} }
+    let favoriteAndRecent = try destination(name: "Both", index: 4)
+    let recentOnly = try destination(name: "Recent", index: 5)
+
+    try repository.recordRecent(favoriteAndRecent, at: Date(timeIntervalSince1970: 100))
+    try repository.setFavorite(
+      favoriteAndRecent,
+      isFavorite: true,
+      at: Date(timeIntervalSince1970: 100)
+    )
+    try repository.recordRecent(recentOnly, at: Date(timeIntervalSince1970: 200))
+
+    try repository.clearRecents()
+    XCTAssertTrue(try repository.fetchRecents().isEmpty)
+    XCTAssertEqual(
+      try repository.fetchFavorites().map(\.destination),
+      [favoriteAndRecent]
+    )
+
+    try repository.clearFavorites()
+    XCTAssertTrue(try repository.fetchFavorites().isEmpty)
+  }
+
   private func makeRepository() throws -> (ModelContainer, SwiftDataDestinationRepository) {
     let schema = Schema([StoredDestinationRecord.self])
     let configuration = ModelConfiguration(

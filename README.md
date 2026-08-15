@@ -12,8 +12,11 @@ ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, optional MapKit
 restaurant checks, distance-only ranking, and Apple Maps handoff. The same
 application flow is connected to a template-native CarPlay scene with profile
-selection, ride-scoped fixed filter choices, stable maximum-five POI results,
-explicit refresh, no-result relaxation, and Apple Maps handoff. The strict
+and saved-destination selection, ride-scoped fixed filter choices, stable
+maximum-five POI results, explicit refresh, no-result relaxation, and Apple Maps
+handoff. Local favorites and the capped recent-destination list are shared by the
+iPhone and CarPlay surfaces. A localized App Intent lets Siri resolve a spoken
+destination through MapKit and open the same ride preparation. The strict
 TypeScript/Fastify backend now discovers and imports the current official
 Bundesnetzagentur register automatically, joins the official Swiss
 `ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic

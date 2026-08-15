@@ -12,18 +12,27 @@ private struct ProfileEditorSelection: Identifiable {
   }
 }
 
-private struct RideSelection: Identifiable, Hashable {
-  let profile: UserProfile
+private enum RideSelectionSource: Hashable {
+  case profile(UserProfile)
+  case destination(SavedDestination)
+}
 
-  var id: UUID { profile.id }
+private struct RideSelection: Identifiable, Hashable {
+  let id: UUID
+  let source: RideSelectionSource
 }
 
 struct ProfileListView: View {
   @Environment(\.modelContext) private var modelContext
+  @ObservedObject private var rideIntentRouter: RideIntentRouter
   @State private var profiles: [UserProfile] = []
   @State private var editorSelection: ProfileEditorSelection?
   @State private var rideSelection: RideSelection?
   @State private var showsError = false
+
+  init(rideIntentRouter: RideIntentRouter) {
+    self.rideIntentRouter = rideIntentRouter
+  }
 
   var body: some View {
     NavigationStack {
@@ -100,7 +109,12 @@ struct ProfileListView: View {
         }
       }
       .navigationDestination(item: $rideSelection) { selection in
-        RidePreparationView(profile: selection.profile)
+        switch selection.source {
+        case .profile(let profile):
+          RidePreparationView(profile: profile)
+        case .destination(let destination):
+          RidePreparationView(destination: destination)
+        }
       }
       .alert("error.generic", isPresented: $showsError) {
         Button("action.done", role: .cancel) {}
@@ -108,9 +122,13 @@ struct ProfileListView: View {
       .task {
         do {
           try reload()
+          openPendingIntentDestination()
         } catch {
           showsError = true
         }
+      }
+      .onChange(of: rideIntentRouter.pendingDestination) {
+        openPendingIntentDestination()
       }
     }
   }
@@ -139,7 +157,20 @@ struct ProfileListView: View {
   private func startRide(_ profile: UserProfile) {
     do {
       try destinationRepository.recordRecent(profile.destination, at: Date())
-      rideSelection = RideSelection(profile: profile)
+      rideSelection = RideSelection(id: profile.id, source: .profile(profile))
+    } catch {
+      showsError = true
+    }
+  }
+
+  private func openPendingIntentDestination() {
+    guard let destination = rideIntentRouter.pendingDestination else {
+      return
+    }
+    do {
+      try destinationRepository.recordRecent(destination, at: Date())
+      rideSelection = RideSelection(id: UUID(), source: .destination(destination))
+      rideIntentRouter.consumePendingDestination()
     } catch {
       showsError = true
     }

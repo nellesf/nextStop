@@ -6,8 +6,11 @@
   PostGIS search, automatic German/Swiss authority ingestion, and Swiss live
   availability are implemented. The entitlement-independent CarPlay presenter,
   ride search, and system-template scene adapter are implemented, but cannot be
-  claimed as runtime-verified until the managed capability is provisioned. App
-  Intents, recent destinations, and favorites are not yet implemented.
+  claimed as runtime-verified until the managed capability is provisioned. Local
+  recent destinations and favorites are implemented for iPhone and CarPlay. A
+  foreground App Intent resolves a spoken destination with MapKit and opens the
+  same ride preparation; selecting a saved profile as an optional Siri parameter
+  is not implemented.
 - The current machine lacks an active full Xcode installation. Its standalone
   Swift compiler and SDK revisions also mismatch,
   so the executed core test suite must run on the Xcode Mac or in CI. Product and

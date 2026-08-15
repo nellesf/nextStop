@@ -7,6 +7,11 @@ private struct DestinationRideSelection: Identifiable, Hashable {
   let destination: SavedDestination
 }
 
+private enum DestinationClearSelection: Equatable {
+  case favorites
+  case recents
+}
+
 struct DestinationLibraryView: View {
   @Environment(\.modelContext) private var modelContext
   @State private var favorites: [LocalDestinationRecord] = []
@@ -14,6 +19,7 @@ struct DestinationLibraryView: View {
   @State private var rideSelection: DestinationRideSelection?
   @State private var showsSearch = false
   @State private var showsError = false
+  @State private var clearSelection: DestinationClearSelection?
 
   var body: some View {
     Group {
@@ -45,6 +51,20 @@ struct DestinationLibraryView: View {
     }
     .navigationTitle("destinations.title")
     .toolbar {
+      ToolbarItem(placement: .secondaryAction) {
+        Menu {
+          Button("destinations.clear.recents", role: .destructive) {
+            clearSelection = .recents
+          }
+          .disabled(recents.isEmpty)
+          Button("destinations.clear.favorites", role: .destructive) {
+            clearSelection = .favorites
+          }
+          .disabled(favorites.isEmpty)
+        } label: {
+          Label("destinations.manage", systemImage: "ellipsis.circle")
+        }
+      }
       ToolbarItem(placement: .primaryAction) {
         Button {
           showsSearch = true
@@ -63,6 +83,31 @@ struct DestinationLibraryView: View {
     }
     .alert("error.generic", isPresented: $showsError) {
       Button("action.done", role: .cancel) {}
+    }
+    .confirmationDialog(
+      "destinations.clear.confirm.title",
+      isPresented: Binding(
+        get: { clearSelection != nil },
+        set: { isPresented in
+          if !isPresented {
+            clearSelection = nil
+          }
+        }
+      )
+    ) {
+      if clearSelection == .recents {
+        Button("destinations.clear.recents", role: .destructive) {
+          clear(.recents)
+        }
+      }
+      if clearSelection == .favorites {
+        Button("destinations.clear.favorites", role: .destructive) {
+          clear(.favorites)
+        }
+      }
+      Button("action.cancel", role: .cancel) {
+        clearSelection = nil
+      }
     }
     .task {
       reloadOrShowError()
@@ -113,6 +158,13 @@ struct DestinationLibraryView: View {
       }
       .tint(record.isFavorite ? .gray : .yellow)
     }
+    .swipeActions(edge: .trailing) {
+      if record.lastUsedAt != nil {
+        Button("destinations.recent.remove", role: .destructive) {
+          removeRecent(record)
+        }
+      }
+    }
   }
 
   private func startRide(to destination: SavedDestination) {
@@ -136,6 +188,30 @@ struct DestinationLibraryView: View {
 
   private func reloadOrShowError() {
     do {
+      try reload()
+    } catch {
+      showsError = true
+    }
+  }
+
+  private func removeRecent(_ record: LocalDestinationRecord) {
+    do {
+      try repository.removeRecent(record.destination)
+      try reload()
+    } catch {
+      showsError = true
+    }
+  }
+
+  private func clear(_ selection: DestinationClearSelection) {
+    do {
+      switch selection {
+      case .favorites:
+        try repository.clearFavorites()
+      case .recents:
+        try repository.clearRecents()
+      }
+      clearSelection = nil
       try reload()
     } catch {
       showsError = true
