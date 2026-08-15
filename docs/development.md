@@ -156,6 +156,35 @@ bounded groups of four, applies the exact configured range and optional 500 m fo
 rule, sorts only by actual driving distance, and displays at most five. A result
 button hands the selected park to Apple Maps.
 
+### CarPlay acceptance gate
+
+Do not add or sign an unapproved CarPlay capability. The app-binary scene,
+system-template flow, saved destination entry points, and search use case compile
+and pass entitlement-independent Xcode tests, but the CarPlay app cannot appear in
+the Simulator or a vehicle until Apple grants the managed EV-charging entitlement
+for `de.nextstop.app` and the development provisioning profile contains it.
+
+After approval, enable the granted capability for the App ID and `NextStopApp`
+target, refresh signing assets, and run one integrated acceptance pass:
+
+1. Start PostgreSQL and the backend with ingestion enabled; wait for the initial
+   authority projection instead of entering charging rows manually.
+2. Launch the iPhone app once, grant precise location, create a profile, and use a
+   searched destination so Profile, Favorites, and Recents are populated.
+3. Invoke “Plane eine Fahrt mit nextStop” through Siri and confirm that the spoken
+   destination opens the same ride preparation with visible default criteria.
+4. Connect the CarPlay Simulator and confirm that “Fahrt wählen” lists profiles,
+   favorites, and recent destinations.
+5. Search a route, verify at most five distance-sorted system-template results,
+   refresh once, and hand one result to Apple Maps.
+6. Use a Swiss route to verify current `ich-tanke-strom` availability. On German
+   Bundesnetzagentur-only records, verify the honest “unbekannt” state; the static
+   German authority feed does not contain nationwide live availability.
+
+This is the single user acceptance build requested for the integrated milestone;
+CI builds before entitlement approval are verification runs, not user acceptance
+builds.
+
 ## Configuration and secrets
 
 - Commit `.env.example` with names and safe placeholder values only.

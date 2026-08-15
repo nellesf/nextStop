@@ -126,15 +126,18 @@ requires Apple's managed capability and matching provisioning.
 ## Build and test status
 
 The checked-in `ios/NextStop.xcodeproj` opens the iPhone app and its local
-`NextStopCore` package directly. The core and first profile-editor test suites ran
-successfully in CI and on the separate Xcode Mac on 2026-08-13. The checked-in
-GitHub workflows verify the portable core, iOS app, and backend after a push. This
-machine has Node.js 24 LTS for backend checks but no active full Xcode installation,
-so iOS execution, interactive MapKit, and signing checks still run on the separate
-Xcode Mac or in CI. See [`docs/development.md`](docs/development.md).
+`NextStopCore` package directly. On 2026-08-15, the Xcode 26 CI suite compiled and
+tested the iPhone app, CarPlay adapter, local destination persistence, and App
+Intent metadata successfully; the Swift core and backend/PostGIS workflows were
+also green. This machine has Node.js 24 LTS for backend checks but no active full
+Xcode installation, so interactive MapKit, signing, and provisioned CarPlay checks
+still run on the separate Xcode Mac. See
+[`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Verify the integrated CarPlay and automatic authority-provider pipeline in Xcode
-CI, then complete the remaining local destination entry surfaces before the next
-user acceptance build.
+Obtain Apple's managed EV-charging CarPlay entitlement for the App ID and matching
+provisioning. After that external gate is satisfied, perform one integrated
+acceptance run with the automatic authority-provider pipeline. German authority
+records currently have no official nationwide live state; Swiss
+`ich-tanke-strom` results do and German results remain explicitly unknown.

@@ -1,4 +1,4 @@
-# Known limitations at the architecture gate
+# Known limitations
 
 - The Apple EV-charging CarPlay entitlement has not been shown to be available for
   this project. CarPlay runtime behavior cannot be claimed as verified.
