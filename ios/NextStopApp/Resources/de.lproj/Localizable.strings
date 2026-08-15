@@ -11,6 +11,7 @@
 "Destination found. Opening ride preparation." = "Fahrziel gefunden. Die Fahrtvorbereitung wird geöffnet.";
 "Destination search is currently unavailable." = "Die Fahrzielsuche ist gerade nicht verfügbar.";
 "No matching destination was found." = "Es wurde kein passendes Fahrziel gefunden.";
+"Open ride preparation" = "Fahrtvorbereitung öffnen";
 "Prepare a ride" = "Fahrt vorbereiten";
 "Searches for a destination and opens the ride preparation." = "Sucht ein Fahrziel und öffnet die Fahrtvorbereitung.";
 "availability.any" = "egal";

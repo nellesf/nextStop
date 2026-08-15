@@ -1,4 +1,5 @@
 import AppIntents
+import Foundation
 import NextStopCore
 
 @MainActor
@@ -31,8 +32,6 @@ struct PrepareRideIntent: AppIntent {
   static let description = IntentDescription(
     "Searches for a destination and opens the ride preparation."
   )
-  static let supportedModes: IntentModes = [.foreground(.immediate)]
-
   @Parameter(title: "Destination")
   var destination: String
 
@@ -40,14 +39,45 @@ struct PrepareRideIntent: AppIntent {
   private var handler: RideIntentHandler
 
   @MainActor
-  func perform() async throws -> some IntentResult & ProvidesDialog {
+  func perform() async throws -> some IntentResult & ProvidesDialog & OpensIntent {
     do {
       guard try await handler.prepareRide(destinationQuery: destination) != nil else {
-        return .result(dialog: IntentDialog("No matching destination was found."))
+        throw PrepareRideIntentError.destinationNotFound
       }
-      return .result(dialog: IntentDialog("Destination found. Opening ride preparation."))
+      return .result(
+        opensIntent: OpenPreparedRideIntent(),
+        dialog: IntentDialog("Destination found. Opening ride preparation.")
+      )
+    } catch let error as PrepareRideIntentError {
+      throw error
     } catch {
-      return .result(dialog: IntentDialog("Destination search is currently unavailable."))
+      throw PrepareRideIntentError.searchUnavailable
+    }
+  }
+}
+
+private struct OpenPreparedRideIntent: AppIntent {
+  static let title: LocalizedStringResource = "Open ride preparation"
+  static let isDiscoverable = false
+
+  func perform() async throws -> some IntentResult {
+    .result()
+  }
+}
+
+private enum PrepareRideIntentError: LocalizedError {
+  case destinationNotFound
+  case searchUnavailable
+
+  var errorDescription: String? {
+    switch self {
+    case .destinationNotFound:
+      NSLocalizedString("No matching destination was found.", comment: "Siri destination error")
+    case .searchUnavailable:
+      NSLocalizedString(
+        "Destination search is currently unavailable.",
+        comment: "Siri destination service error"
+      )
     }
   }
 }
@@ -66,5 +96,5 @@ struct NextStopAppShortcuts: AppShortcutsProvider {
     )
   }
 
-  static let shortcutTileColor: ShortcutTileColor = .green
+  static let shortcutTileColor: ShortcutTileColor = .lime
 }

@@ -11,6 +11,7 @@
 "Destination found. Opening ride preparation." = "Destination found. Opening ride preparation.";
 "Destination search is currently unavailable." = "Destination search is currently unavailable.";
 "No matching destination was found." = "No matching destination was found.";
+"Open ride preparation" = "Open ride preparation";
 "Prepare a ride" = "Prepare a ride";
 "Searches for a destination and opens the ride preparation." = "Searches for a destination and opens the ride preparation.";
 "availability.any" = "any";
