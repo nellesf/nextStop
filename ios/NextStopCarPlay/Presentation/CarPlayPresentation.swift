@@ -189,32 +189,32 @@ struct CarPlayPresenter {
     let criteria = draft.criteria
     switch field {
     case .distanceRange:
-      CarPlayCriterionPresentation(
+      return CarPlayCriterionPresentation(
         field: field,
         title: localizer.text("profile.distance_range"),
         value: localizer.text(criteria.distanceRange.localizationKey)
       )
     case .minimumChargingPoints:
-      CarPlayCriterionPresentation(
+      return CarPlayCriterionPresentation(
         field: field,
         title: localizer.text("profile.minimum_charging_points"),
         value: minimumCount(criteria.minimumChargingPoints.rawValue)
       )
     case .minimumAvailablePoints:
-      CarPlayCriterionPresentation(
+      return CarPlayCriterionPresentation(
         field: field,
         title: localizer.text("profile.minimum_available"),
         value: criteria.minimumAvailablePoints.map { minimumCount($0.rawValue) }
           ?? localizer.text("availability.any")
       )
     case .minimumPower:
-      CarPlayCriterionPresentation(
+      return CarPlayCriterionPresentation(
         field: field,
         title: localizer.text("profile.minimum_power"),
         value: kilowatts(criteria.minimumPower.rawValue)
       )
     case .foodChain:
-      CarPlayCriterionPresentation(
+      return CarPlayCriterionPresentation(
         field: field,
         title: localizer.text("profile.fast_food"),
         value: criteria.foodChain.map { localizer.text($0.localizationKey) }
