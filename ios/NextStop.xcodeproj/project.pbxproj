@@ -20,9 +20,11 @@
 		436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */; };
 		44C079CF0EC3469C1E418E50 /* MapKitCandidateEnricher.swift in Sources */ = {isa = PBXBuildFile; fileRef = A44A6EDA417E5623EB985402 /* MapKitCandidateEnricher.swift */; };
 		4ABA47A11E96BEAF29EA1FBD /* RidePreparationViewModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = 93FD9DB740858C65ADE3EEA1 /* RidePreparationViewModel.swift */; };
+		4E3D4BFA79D8588942540740 /* CarPlayRideSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = B2ABDF371BB69CB13EF7857C /* CarPlayRideSearchService.swift */; };
 		52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */; };
 		572EB67B7AF9A67D585843DD /* LocalizedFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591141EC9A8DCA661E58575C /* LocalizedFormat.swift */; };
 		68A66498D44FD20880CEF9D2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B936DEF99FE1F507CA9B6722 /* InfoPlist.strings */; };
+		7389907E5C7023E358518CDE /* CarPlayPresentation.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FF889C48517143932D2C5BC /* CarPlayPresentation.swift */; };
 		7CCFD3948C9340965D2EFFD0 /* ProfileFormState.swift in Sources */ = {isa = PBXBuildFile; fileRef = A3467548739E0E33D89EBB21 /* ProfileFormState.swift */; };
 		7CF4AD511312472F9BBC0A60 /* RidePreparationViewModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */; };
 		7D31019D061455FEAE354542 /* NextStopCore in Frameworks */ = {isa = PBXBuildFile; productRef = 2B1FD1A8B5FC0BB5C586FEDE /* NextStopCore */; };
@@ -36,10 +38,14 @@
 		C293804B5F1E7EC8DE9823AE /* DestinationSearching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F676250C62DF04A9C781207 /* DestinationSearching.swift */; };
 		C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */; };
 		CAB24ECC13A38EC7FD84189C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C708DEF31532E56B1BEEBC7 /* Assets.xcassets */; };
+		CE31254C4FB5B8379BD1EEA9 /* CarPlayRideSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */; };
+		CE485031E939B6094BBA693B /* NextStopCore in Frameworks */ = {isa = PBXBuildFile; productRef = 49D48C6030DDF6CE9D69DB5A /* NextStopCore */; };
+		D33A00266C7B4DA6A85DF623 /* CarPlayPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F4998D881644FBB33F53061 /* CarPlayPresentationTests.swift */; };
 		D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */; };
 		D3DED96EB256A63F17E9BDE8 /* MapKitRoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */; };
 		DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
+		F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */; };
 		FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */; };
 /* End PBXBuildFile section */
 
@@ -51,10 +57,18 @@
 			remoteGlobalIDString = BED25C39656ADD572FA4F827;
 			remoteInfo = NextStopApp;
 		};
+		6168F6A59496177D23C07D01 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = 66BF7E08A702838ECEBB6CA5 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = BED25C39656ADD572FA4F827;
+			remoteInfo = NextStopApp;
+		};
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
 		074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlanning.swift; sourceTree = "<group>"; };
+		0FF889C48517143932D2C5BC /* CarPlayPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayPresentation.swift; sourceTree = "<group>"; };
 		1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchResponseDTOTests.swift; sourceTree = "<group>"; };
 		185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocationProvider.swift; sourceTree = "<group>"; };
@@ -67,6 +81,7 @@
 		58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CurrentLocationProviding.swift; sourceTree = "<group>"; };
 		591141EC9A8DCA661E58575C /* LocalizedFormat.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LocalizedFormat.swift; sourceTree = "<group>"; };
 		5A825E7AD85738EBD516CC46 /* RideCandidateSearchCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideCandidateSearchCoordinator.swift; sourceTree = "<group>"; };
+		5F4998D881644FBB33F53061 /* CarPlayPresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayPresentationTests.swift; sourceTree = "<group>"; };
 		626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileRepositoryTests.swift; sourceTree = "<group>"; };
 		6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitRoutePlanner.swift; sourceTree = "<group>"; };
 		6C69FF29913A65843A6233AD /* CandidateSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchService.swift; sourceTree = "<group>"; };
@@ -82,9 +97,13 @@
 		A19B25042473CCB4F38697B2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A3467548739E0E33D89EBB21 /* ProfileFormState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormState.swift; sourceTree = "<group>"; };
 		A44A6EDA417E5623EB985402 /* MapKitCandidateEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitCandidateEnricher.swift; sourceTree = "<group>"; };
+		A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayRideSearchServiceTests.swift; sourceTree = "<group>"; };
+		A7FB416E577738CAF4A0AFE1 /* NextStopCarPlayTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopCarPlayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD868339BFFD12E7F0EB6EB1 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
+		B2ABDF371BB69CB13EF7857C /* CarPlayRideSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayRideSearchService.swift; sourceTree = "<group>"; };
 		B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchRequestDTOTests.swift; sourceTree = "<group>"; };
 		C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
+		C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextStopCarPlaySceneDelegate.swift; sourceTree = "<group>"; };
 		D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NextStopApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearchView.swift; sourceTree = "<group>"; };
 		E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
@@ -107,6 +126,14 @@
 			buildActionMask = 2147483647;
 			files = (
 				7D31019D061455FEAE354542 /* NextStopCore in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		9FF94979E8F91CA366E54F30 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				CE485031E939B6094BBA693B /* NextStopCore in Frameworks */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -145,6 +172,14 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		22D7193B6352A44AA4A9A967 /* Application */ = {
+			isa = PBXGroup;
+			children = (
+				B2ABDF371BB69CB13EF7857C /* CarPlayRideSearchService.swift */,
+			);
+			path = Application;
+			sourceTree = "<group>";
+		};
 		25B91FE874A7CAC34D5DB4D5 /* Ride */ = {
 			isa = PBXGroup;
 			children = (
@@ -160,6 +195,8 @@
 			children = (
 				AB54FB826B6C7A6417C9525C /* NextStopApp */,
 				8A4D78933B68333449C8A8F3 /* NextStopAppTests */,
+				6D02AE3C7E70861F3524B622 /* NextStopCarPlay */,
+				6F6AFB72FF2DA3BA3727D46D /* NextStopCarPlayTests */,
 				A7E23D20B666E59F803F2D29 /* Packages */,
 				CF53C57AC8B4C48E25A9674A /* Products */,
 			);
@@ -175,6 +212,14 @@
 				FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */,
 			);
 			path = Persistence;
+			sourceTree = "<group>";
+		};
+		3299CFB993EF282A59239626 /* Presentation */ = {
+			isa = PBXGroup;
+			children = (
+				0FF889C48517143932D2C5BC /* CarPlayPresentation.swift */,
+			);
+			path = Presentation;
 			sourceTree = "<group>";
 		};
 		3D82E9BFDFC293C67B2D53FD /* Sources */ = {
@@ -214,6 +259,25 @@
 			path = Networking;
 			sourceTree = "<group>";
 		};
+		6D02AE3C7E70861F3524B622 /* NextStopCarPlay */ = {
+			isa = PBXGroup;
+			children = (
+				8FB8C5D4E6574818ADD0DB20 /* Adapter */,
+				22D7193B6352A44AA4A9A967 /* Application */,
+				3299CFB993EF282A59239626 /* Presentation */,
+			);
+			path = NextStopCarPlay;
+			sourceTree = "<group>";
+		};
+		6F6AFB72FF2DA3BA3727D46D /* NextStopCarPlayTests */ = {
+			isa = PBXGroup;
+			children = (
+				5F4998D881644FBB33F53061 /* CarPlayPresentationTests.swift */,
+				A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */,
+			);
+			path = NextStopCarPlayTests;
+			sourceTree = "<group>";
+		};
 		8A41B0156DE9B0AB7A08E27A /* Features */ = {
 			isa = PBXGroup;
 			children = (
@@ -235,6 +299,14 @@
 				4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */,
 			);
 			path = NextStopAppTests;
+			sourceTree = "<group>";
+		};
+		8FB8C5D4E6574818ADD0DB20 /* Adapter */ = {
+			isa = PBXGroup;
+			children = (
+				C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */,
+			);
+			path = Adapter;
 			sourceTree = "<group>";
 		};
 		A7E23D20B666E59F803F2D29 /* Packages */ = {
@@ -271,6 +343,7 @@
 			children = (
 				D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */,
 				185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */,
+				A7FB416E577738CAF4A0AFE1 /* NextStopCarPlayTests.xctest */,
 			);
 			name = Products;
 			sourceTree = "<group>";
@@ -287,6 +360,26 @@
 /* End PBXGroup section */
 
 /* Begin PBXNativeTarget section */
+		3A99D4069C91037F685FFDBB /* NextStopCarPlayTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D4F202ACBDC9AE4DAD1DA733 /* Build configuration list for PBXNativeTarget "NextStopCarPlayTests" */;
+			buildPhases = (
+				3926FDFC58DCC0E1EF986944 /* Sources */,
+				9FF94979E8F91CA366E54F30 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				D7DE53133221E70DE16192E1 /* PBXTargetDependency */,
+			);
+			name = NextStopCarPlayTests;
+			packageProductDependencies = (
+				49D48C6030DDF6CE9D69DB5A /* NextStopCore */,
+			);
+			productName = NextStopCarPlayTests;
+			productReference = A7FB416E577738CAF4A0AFE1 /* NextStopCarPlayTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
 		BC15AA4D28A8EB63090DB6A0 /* NextStopAppTests */ = {
 			isa = PBXNativeTarget;
 			buildConfigurationList = 25EFA881985F46D1A08787E5 /* Build configuration list for PBXNativeTarget "NextStopAppTests" */;
@@ -336,6 +429,9 @@
 				BuildIndependentTargetsInParallel = YES;
 				LastUpgradeCheck = 2600;
 				TargetAttributes = {
+					3A99D4069C91037F685FFDBB = {
+						DevelopmentTeam = "";
+					};
 					BC15AA4D28A8EB63090DB6A0 = {
 						DevelopmentTeam = "";
 					};
@@ -365,6 +461,7 @@
 			targets = (
 				BED25C39656ADD572FA4F827 /* NextStopApp */,
 				BC15AA4D28A8EB63090DB6A0 /* NextStopAppTests */,
+				3A99D4069C91037F685FFDBB /* NextStopCarPlayTests */,
 			);
 		};
 /* End PBXProject section */
@@ -384,6 +481,15 @@
 /* End PBXResourcesBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
+		3926FDFC58DCC0E1EF986944 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D33A00266C7B4DA6A85DF623 /* CarPlayPresentationTests.swift in Sources */,
+				CE31254C4FB5B8379BD1EEA9 /* CarPlayRideSearchServiceTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
 		AAED34EC24FBC26DFF040848 /* Sources */ = {
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
@@ -391,6 +497,8 @@
 				0A56B0796B8DFF4F5E47D319 /* AppleMapsNavigationLauncher.swift in Sources */,
 				436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */,
 				8B0639F296A99367B2022597 /* CandidateSearchService.swift in Sources */,
+				7389907E5C7023E358518CDE /* CarPlayPresentation.swift in Sources */,
+				4E3D4BFA79D8588942540740 /* CarPlayRideSearchService.swift in Sources */,
 				D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */,
 				52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */,
 				C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */,
@@ -400,6 +508,7 @@
 				AA92E3B84AD755284A4FA227 /* MapKitDestinationSearchService.swift in Sources */,
 				D3DED96EB256A63F17E9BDE8 /* MapKitRoutePlanner.swift in Sources */,
 				20EB8233A7F199507DEC2554 /* NextStopApp.swift in Sources */,
+				F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */,
 				836FF291D867CC66CC553C66 /* ProfileEditorView.swift in Sources */,
 				7CCFD3948C9340965D2EFFD0 /* ProfileFormState.swift in Sources */,
 				B1634765022692F9CA56146F /* ProfileListView.swift in Sources */,
@@ -433,6 +542,11 @@
 			isa = PBXTargetDependency;
 			target = BED25C39656ADD572FA4F827 /* NextStopApp */;
 			targetProxy = 0C462F02B03F90E2B91B7D75 /* PBXContainerItemProxy */;
+		};
+		D7DE53133221E70DE16192E1 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = BED25C39656ADD572FA4F827 /* NextStopApp */;
+			targetProxy = 6168F6A59496177D23C07D01 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
 
@@ -556,6 +670,23 @@
 			};
 			name = Release;
 		};
+		841D35FF7CCEAE481345C67E /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app.carplay.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NextStopApp.app/NextStopApp";
+			};
+			name = Debug;
+		};
 		90F5F0218377F46A1DBF8CF0 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
@@ -622,6 +753,23 @@
 				SWIFT_VERSION = 6.0;
 			};
 			name = Debug;
+		};
+		BB46E5F58D850797888E1A85 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app.carplay.tests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/NextStopApp.app/NextStopApp";
+			};
+			name = Release;
 		};
 		DA9C319B9E4E362139C18179 /* Debug */ = {
 			isa = XCBuildConfiguration;
@@ -691,6 +839,15 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Debug;
 		};
+		D4F202ACBDC9AE4DAD1DA733 /* Build configuration list for PBXNativeTarget "NextStopCarPlayTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				841D35FF7CCEAE481345C67E /* Debug */,
+				BB46E5F58D850797888E1A85 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
 /* End XCConfigurationList section */
 
 /* Begin XCLocalSwiftPackageReference section */
@@ -702,6 +859,10 @@
 
 /* Begin XCSwiftPackageProductDependency section */
 		2B1FD1A8B5FC0BB5C586FEDE /* NextStopCore */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = NextStopCore;
+		};
+		49D48C6030DDF6CE9D69DB5A /* NextStopCore */ = {
 			isa = XCSwiftPackageProductDependency;
 			productName = NextStopCore;
 		};

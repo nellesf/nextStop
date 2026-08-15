@@ -65,6 +65,17 @@
                ReferencedContainer = "container:NextStop.xcodeproj">
             </BuildableReference>
          </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "3A99D4069C91037F685FFDBB"
+               BuildableName = "NextStopCarPlayTests.xctest"
+               BlueprintName = "NextStopCarPlayTests"
+               ReferencedContainer = "container:NextStop.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
       </Testables>
       <CommandLineArguments>
       </CommandLineArguments>

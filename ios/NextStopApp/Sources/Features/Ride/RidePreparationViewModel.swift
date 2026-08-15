@@ -49,15 +49,21 @@ enum RidePreparationState: Equatable {
 }
 
 enum RideCandidateSearchFailure: Equatable {
+  case dataPreparing
   case serviceUnavailable
+  case snapshotExpired
   case responseInvalid
   case drivingDistancesUnavailable
   case foodSearchUnavailable
 
   var localizationKey: String {
     switch self {
+    case .dataPreparing:
+      "ride.search.error.preparing"
     case .serviceUnavailable:
       "ride.search.error.service"
+    case .snapshotExpired:
+      "ride.search.error.snapshot"
     case .responseInvalid:
       "ride.search.error.response"
     case .drivingDistancesUnavailable:
@@ -71,8 +77,8 @@ enum RideCandidateSearchFailure: Equatable {
 enum RideCandidateSearchState: Equatable {
   case idle
   case searching
-  case results([RouteSearchResult])
-  case noResults
+  case results(RideCandidateSearchOutcome)
+  case noResults(CandidateSearchCoverage)
   case failed(RideCandidateSearchFailure)
 }
 
@@ -111,9 +117,10 @@ final class RidePreparationViewModel: ObservableObject {
     }
     candidateSearchState = .searching
     do {
-      let results = try await candidateSearcher.search(preparedRide: preparedRide)
+      let outcome = try await candidateSearcher.search(preparedRide: preparedRide)
       try Task.checkCancellation()
-      candidateSearchState = results.isEmpty ? .noResults : .results(results)
+      candidateSearchState =
+        outcome.results.isEmpty ? .noResults(outcome.coverage) : .results(outcome)
     } catch is CancellationError {
       candidateSearchState = .idle
     } catch let error as RideCandidateSearchError {
@@ -179,8 +186,12 @@ final class RidePreparationViewModel: ObservableObject {
     _ error: RideCandidateSearchError
   ) -> RideCandidateSearchFailure {
     switch error {
+    case .candidateDataPreparing:
+      .dataPreparing
     case .candidateServiceUnavailable:
       .serviceUnavailable
+    case .candidateSnapshotExpired:
+      .snapshotExpired
     case .candidateResponseInvalid:
       .responseInvalid
     case .drivingDistancesUnavailable:

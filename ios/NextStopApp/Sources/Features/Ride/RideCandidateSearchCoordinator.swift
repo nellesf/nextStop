@@ -2,10 +2,17 @@ import Foundation
 import NextStopCore
 
 enum RideCandidateSearchError: Error, Equatable {
+  case candidateDataPreparing
   case candidateServiceUnavailable
+  case candidateSnapshotExpired
   case candidateResponseInvalid
   case drivingDistancesUnavailable
   case foodSearchUnavailable
+}
+
+struct RideCandidateSearchOutcome: Equatable, Sendable {
+  let results: [RouteSearchResult]
+  let coverage: CandidateSearchCoverage
 }
 
 enum CandidateEnrichmentError: Error, Equatable {
@@ -24,7 +31,7 @@ protocol CandidateEnriching: AnyObject, Sendable {
 
 @MainActor
 protocol RideCandidateSearching: AnyObject {
-  func search(preparedRide: PreparedRideSearch) async throws -> [RouteSearchResult]
+  func search(preparedRide: PreparedRideSearch) async throws -> RideCandidateSearchOutcome
 }
 
 @MainActor
@@ -47,12 +54,13 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     self.enrichmentBatchSize = enrichmentBatchSize
   }
 
-  func search(preparedRide: PreparedRideSearch) async throws -> [RouteSearchResult] {
+  func search(preparedRide: PreparedRideSearch) async throws -> RideCandidateSearchOutcome {
     var request = preparedRide.request
     var enrichedCandidates: [EnrichedChargingParkCandidate] = []
     var routingFailureLowerBounds: [Meters] = []
     var seenPageIdentities = Set<String>()
     var previousPageLastLowerBound: Meters?
+    var searchCoverage: CandidateSearchCoverage?
 
     while true {
       let page: CandidateSearchPage
@@ -60,6 +68,10 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         page = try await pageSearcher.search(request: request)
       } catch is CancellationError {
         throw CancellationError()
+      } catch CandidateSearchServiceError.dataPreparing {
+        throw RideCandidateSearchError.candidateDataPreparing
+      } catch CandidateSearchServiceError.snapshotExpired {
+        throw RideCandidateSearchError.candidateSnapshotExpired
       } catch CandidateSearchServiceError.invalidResponse {
         throw RideCandidateSearchError.candidateResponseInvalid
       } catch {
@@ -69,6 +81,13 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         page.snapshotToken != expectedSnapshot
       {
         throw RideCandidateSearchError.candidateResponseInvalid
+      }
+      if let searchCoverage {
+        guard searchCoverage == page.coverage else {
+          throw RideCandidateSearchError.candidateResponseInvalid
+        }
+      } else {
+        searchCoverage = page.coverage
       }
       if page.candidates.isEmpty, page.nextCursor != nil {
         throw RideCandidateSearchError.candidateResponseInvalid
@@ -101,25 +120,28 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         criteria: request.criteria
       )
       guard let nextCursor = page.nextCursor else {
-        return try validatedResults(
-          selectedResults,
-          routingFailureLowerBounds: routingFailureLowerBounds
+        return try outcome(
+          results: selectedResults,
+          routingFailureLowerBounds: routingFailureLowerBounds,
+          coverage: searchCoverage
         )
       }
       if let lastLowerBound = page.candidates.last?.straightLineLowerBound {
         if lastLowerBound > upperDistance {
-          return try validatedResults(
-            selectedResults,
-            routingFailureLowerBounds: routingFailureLowerBounds
+          return try outcome(
+            results: selectedResults,
+            routingFailureLowerBounds: routingFailureLowerBounds,
+            coverage: searchCoverage
           )
         }
         if selectedResults.count == SearchConfiguration.maximumResultCount,
           let fifthDistance = selectedResults.last?.candidate.actualDrivingDistance,
           lastLowerBound > fifthDistance
         {
-          return try validatedResults(
-            selectedResults,
-            routingFailureLowerBounds: routingFailureLowerBounds
+          return try outcome(
+            results: selectedResults,
+            routingFailureLowerBounds: routingFailureLowerBounds,
+            coverage: searchCoverage
           )
         }
       }
@@ -136,6 +158,23 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         cursor: nextCursor
       )
     }
+  }
+
+  private func outcome(
+    results: [RouteSearchResult],
+    routingFailureLowerBounds: [Meters],
+    coverage: CandidateSearchCoverage?
+  ) throws -> RideCandidateSearchOutcome {
+    guard let coverage else {
+      throw RideCandidateSearchError.candidateResponseInvalid
+    }
+    return RideCandidateSearchOutcome(
+      results: try validatedResults(
+        results,
+        routingFailureLowerBounds: routingFailureLowerBounds
+      ),
+      coverage: coverage
+    )
   }
 
   private func validatedResults(

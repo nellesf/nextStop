@@ -1,0 +1,181 @@
+import Foundation
+import NextStopCore
+import XCTest
+
+@testable import NextStopApp
+
+@MainActor
+final class CarPlayPresentationTests: XCTestCase {
+  func testProfileSelectionCreatesAnIndependentRideDraft() throws {
+    var profile = try makeProfile()
+    let originalCriteria = profile.criteria
+    let controller = CarPlayRideDraftController()
+
+    controller.select(profile: profile)
+    controller.apply(.minimumPower(.threeHundredFifty))
+    profile.criteria.minimumPower = .eleven
+
+    XCTAssertEqual(controller.draft?.criteria.minimumPower, .threeHundredFifty)
+    XCTAssertEqual(originalCriteria.minimumPower, .oneHundredFifty)
+  }
+
+  func testGermanSummaryUsesOnlyFixedCriteriaOptions() throws {
+    let profile = try makeProfile()
+    let draft = RideSearchDraft(profile: profile)
+    let presenter = CarPlayPresenter(localizer: germanLocalizer())
+
+    let summary = presenter.rideSummary(draft)
+
+    XCTAssertEqual(summary.title, "Fahrt")
+    XCTAssertEqual(summary.destination, "Berlin Hauptbahnhof")
+    XCTAssertEqual(summary.criteria.count, 5)
+    XCTAssertEqual(summary.criteria[0].value, "100–150 km")
+    XCTAssertEqual(summary.criteria[2].value, "mindestens 2")
+    XCTAssertEqual(summary.criteria[3].value, "150 kW")
+    XCTAssertEqual(summary.criteria[4].value, "McDonald's")
+    XCTAssertEqual(
+      presenter.options(for: .minimumPower, draft: draft).filter(\.selected).count,
+      1
+    )
+  }
+
+  func testResultsKeepDistanceOrderAndDescribePartialAvailabilityHonestly() throws {
+    let first = try makeResult(
+      id: "10000000-0000-4000-8000-000000000001",
+      name: "Ladepark Eins",
+      drivingMeters: 80_000,
+      knownAvailable: 2,
+      unknown: 2
+    )
+    let second = try makeResult(
+      id: "10000000-0000-4000-8000-000000000002",
+      name: "Ladepark Zwei",
+      drivingMeters: 90_000,
+      knownAvailable: 0,
+      unknown: 4
+    )
+    let outcome = RideCandidateSearchOutcome(
+      results: [first, second],
+      coverage: CandidateSearchCoverage(
+        status: .degraded,
+        activeSourceIDs: ["bundesnetzagentur_ladesaeulenregister", "ich_tanke_strom"],
+        unavailableSourceIDs: ["ich_tanke_strom:live"],
+        projectionUpdatedAt: Date(timeIntervalSince1970: 0)
+      )
+    )
+
+    let presentation = CarPlayPresenter(localizer: germanLocalizer()).results(outcome)
+
+    XCTAssertEqual(presentation.points.map(\.title), ["Ladepark Eins", "Ladepark Zwei"])
+    XCTAssertEqual(presentation.points[0].subtitle, "80 km · 1 km von der Route")
+    XCTAssertEqual(
+      presentation.points[0].summary,
+      "4 Ladepunkte · 2 sicher frei, 2 unbekannt · bis 150 kW"
+    )
+    XCTAssertEqual(
+      presentation.points[1].summary,
+      "4 Ladepunkte · Live-Verfügbarkeit unbekannt · bis 150 kW"
+    )
+    XCTAssertEqual(
+      presentation.points[0].detailSummary,
+      "4 Ladepunkte · 2 sicher frei, 2 unbekannt · bis 150 kW"
+    )
+    XCTAssertEqual(presentation.coverageMessage, "Live-Daten teilweise verfügbar")
+  }
+
+  private func makeProfile() throws -> UserProfile {
+    try UserProfile(
+      id: UUID(uuidString: "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE")!,
+      name: "Langstrecke",
+      destination: SavedDestination(
+        displayName: "Berlin Hauptbahnhof",
+        coordinate: Coordinate(latitude: 52.5251, longitude: 13.3694)
+      ),
+      criteria: RideCriteria(
+        distanceRange: .kilometers100To150,
+        minimumChargingPoints: .eight,
+        minimumAvailablePoints: .two,
+        minimumPower: .oneHundredFifty,
+        foodChain: .mcdonalds
+      ),
+      createdAt: Date(timeIntervalSince1970: 0),
+      updatedAt: Date(timeIntervalSince1970: 0)
+    )
+  }
+
+  private func makeResult(
+    id: String,
+    name: String,
+    drivingMeters: Int,
+    knownAvailable: Int,
+    unknown: Int
+  ) throws -> RouteSearchResult {
+    let coordinate = try Coordinate(latitude: 52, longitude: 10)
+    let availability = try ParkAvailability(
+      knownAvailableCount: knownAvailable,
+      knownUnavailableCount: 4 - knownAvailable - unknown,
+      unknownCount: unknown,
+      totalCount: 4
+    )
+    let source = try DataSourceReference(
+      sourceID: "authority",
+      sourceRecordID: id,
+      qualityTier: .authority,
+      observedAt: Date(timeIntervalSince1970: 0),
+      fetchedAt: Date(timeIntervalSince1970: 0)
+    )
+    let park = try ChargingPark(
+      id: UUID(uuidString: id)!,
+      name: name,
+      coordinate: coordinate,
+      navigationCoordinate: coordinate,
+      operators: ["Operator"],
+      chargingPointCount: 4,
+      availability: availability,
+      maximumPower: Kilowatts(150),
+      sourceReferences: [source]
+    )
+    return RouteSearchResult(
+      candidate: EnrichedChargingParkCandidate(
+        park: park,
+        distanceFromRoute: Meters(1_000),
+        actualDrivingDistance: Meters(drivingMeters),
+        foodPOIs: []
+      ),
+      availabilityEvaluation: availability.evaluate(minimum: nil),
+      matchingFoodPOI: nil
+    )
+  }
+
+  private func germanLocalizer() -> CarPlayLocalizer {
+    let values = [
+      "carplay.ride.title": "Fahrt",
+      "ride.search.action": "Ladeparks suchen",
+      "profile.distance_range": "Ladestopp",
+      "profile.minimum_charging_points": "Mindestens Ladepunkte",
+      "profile.minimum_available": "Mindestens frei",
+      "profile.minimum_power": "Mindestleistung",
+      "profile.fast_food": "Fast Food",
+      "search.distance_range.100_150_km": "100–150 km",
+      "unit.minimum_count.format": "mindestens %lld",
+      "unit.kilowatts.format": "%lld kW",
+      "unit.kilometers.format": "%lld km",
+      "search.food_chain.mcdonalds": "McDonald's",
+      "carplay.result.route_distance.format": "%lld km von der Route",
+      "carplay.result.charging_summary.format": "%lld Ladepunkte · %@ · bis %lld kW",
+      "carplay.result.food.format": "%@ · %lld m",
+      "ride.result.availability.complete.format": "%lld Ladepunkte frei",
+      "ride.result.availability.partial.format": "%lld sicher frei, %lld unbekannt",
+      "ride.result.availability.unknown": "Live-Verfügbarkeit unbekannt",
+      "ride.result.navigate": "In Apple Maps öffnen",
+      "ride.results.title": "Passende Ladeparks",
+      "carplay.coverage.degraded": "Live-Daten teilweise verfügbar",
+      "carplay.coverage.stale": "Ladedaten nicht aktuell",
+      "availability.any": "egal",
+      "food.any": "egal",
+    ]
+    return CarPlayLocalizer(locale: Locale(identifier: "de_DE")) { key in
+      values[key] ?? key
+    }
+  }
+}

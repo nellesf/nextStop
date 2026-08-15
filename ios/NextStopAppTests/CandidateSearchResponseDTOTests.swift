@@ -10,6 +10,8 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
 
     XCTAssertEqual(page.snapshotToken, "snapshot-token")
     XCTAssertNil(page.nextCursor)
+    XCTAssertEqual(page.coverage.status, .degraded)
+    XCTAssertEqual(page.coverage.unavailableSourceIDs, ["ich_tanke_strom:live"])
     XCTAssertEqual(page.candidates.count, 1)
     let candidate = try XCTUnwrap(page.candidates.first)
     XCTAssertEqual(candidate.park.name, "Autohof Nord")
@@ -37,13 +39,38 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     )
   }
 
+  func testMapsKnownProblemTypesToActionableFailures() {
+    let preparing = Data(
+      #"{"type":"urn:nextstop:error:projection-unavailable","status":503}"#.utf8
+    )
+    let expired = Data(
+      #"{"type":"urn:nextstop:error:invalid-pagination-token","status":409}"#.utf8
+    )
+
+    XCTAssertEqual(
+      HTTPCandidateSearchService.error(for: 503, data: preparing),
+      .dataPreparing
+    )
+    XCTAssertEqual(
+      HTTPCandidateSearchService.error(for: 409, data: expired),
+      .snapshotExpired
+    )
+  }
+
   private func decodePage(candidates: [String]) throws -> CandidateSearchPage {
     let data = Data(
       """
       {
         "snapshotToken": "snapshot-token",
         "nextCursor": null,
-        "candidates": [\(candidates.joined(separator: ","))]
+        "generatedAt": "2026-08-15T13:33:35.000Z",
+        "candidates": [\(candidates.joined(separator: ","))],
+        "coverage": {
+          "status": "degraded",
+          "activeSources": ["bundesnetzagentur_ladesaeulenregister", "ich_tanke_strom"],
+          "unavailableSources": ["ich_tanke_strom:live"],
+          "projectionUpdatedAt": "2026-08-15T13:33:34.000Z"
+        }
       }
       """.utf8
     )

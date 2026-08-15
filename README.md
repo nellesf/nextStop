@@ -10,7 +10,10 @@ Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, optional MapKit
-restaurant checks, distance-only ranking, and Apple Maps handoff. The strict
+restaurant checks, distance-only ranking, and Apple Maps handoff. The same
+application flow is connected to a template-native CarPlay scene with profile
+selection, ride-scoped fixed filter choices, stable maximum-five POI results,
+explicit refresh, no-result relaxation, and Apple Maps handoff. The strict
 TypeScript/Fastify backend now discovers and imports the current official
 Bundesnetzagentur register automatically, joins the official Swiss
 `ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic
@@ -70,9 +73,9 @@ ios/
   project.yml              # Reproducible XcodeGen project definition
   NextStopCore/             # Pure Swift package: domain and use cases
   NextStopApp/              # SwiftUI app, MapKit, persistence, App Intents
-  NextStopCarPlay/          # Planned entitlement-gated CarPlay adapter
+  NextStopCarPlay/          # Presenter, shared ride use case, and thin CarPlay adapter
   NextStopAppTests/
-  NextStopCarPlayTests/     # Planned
+  NextStopCarPlayTests/     # Entitlement-independent CarPlay tests
 backend/
   src/
     domain/
@@ -92,8 +95,9 @@ docs/
   research/
 ```
 
-The CarPlay adapter is deliberately thin. The complete search flow and its
-presentation model must be testable without the final CarPlay entitlement.
+The CarPlay adapter is deliberately thin. Its presentation and search flow are
+testable without the final CarPlay entitlement; launching the vehicle scene still
+requires Apple's managed capability and matching provisioning.
 
 ## Documentation map
 
@@ -128,6 +132,6 @@ Xcode Mac or in CI. See [`docs/development.md`](docs/development.md).
 
 ## Current next step
 
-Implement and verify the entitlement-independent CarPlay presenter and thin system
-template adapter. The next user acceptance build is intentionally deferred until
-that surface and the automatic authority-provider pipeline work together.
+Verify the integrated CarPlay and automatic authority-provider pipeline in Xcode
+CI, then complete the remaining local destination entry surfaces before the next
+user acceptance build.

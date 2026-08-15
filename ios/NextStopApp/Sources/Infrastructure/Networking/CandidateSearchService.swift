@@ -13,12 +13,28 @@ struct CandidateSearchPage: Hashable, Sendable {
   let snapshotToken: String
   let nextCursor: String?
   let candidates: [BackendCandidate]
+  let coverage: CandidateSearchCoverage
+}
+
+enum CandidateCoverageStatus: String, Decodable, Hashable, Sendable {
+  case complete
+  case degraded
+  case stale
+}
+
+struct CandidateSearchCoverage: Hashable, Sendable {
+  let status: CandidateCoverageStatus
+  let activeSourceIDs: [String]
+  let unavailableSourceIDs: [String]
+  let projectionUpdatedAt: Date
 }
 
 enum CandidateSearchServiceError: Error, Equatable {
   case invalidConfiguration
   case invalidRequest
   case invalidResponse
+  case dataPreparing
+  case snapshotExpired
   case unavailable
 }
 
@@ -74,11 +90,11 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     guard let httpResponse = response as? HTTPURLResponse else {
       throw CandidateSearchServiceError.invalidResponse
     }
-    guard httpResponse.statusCode == 200 else {
-      throw CandidateSearchServiceError.unavailable
-    }
     guard data.count <= Self.maximumResponseBytes else {
       throw CandidateSearchServiceError.invalidResponse
+    }
+    guard httpResponse.statusCode == 200 else {
+      throw Self.error(for: httpResponse.statusCode, data: data, decoder: decoder)
     }
     do {
       return try decoder.decode(CandidateSearchResponseDTO.self, from: data).domainPage()
@@ -103,15 +119,38 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     return URL(string: value)
   }
 
+  static func error(
+    for statusCode: Int,
+    data: Data,
+    decoder: JSONDecoder = JSONDecoder()
+  ) -> CandidateSearchServiceError {
+    guard let problem = try? decoder.decode(ProblemDTO.self, from: data),
+      problem.status == statusCode
+    else {
+      return statusCode >= 500 ? .unavailable : .invalidResponse
+    }
+    switch (statusCode, problem.type) {
+    case (503, "urn:nextstop:error:projection-unavailable"):
+      return .dataPreparing
+    case (409, "urn:nextstop:error:invalid-pagination-token"):
+      return .snapshotExpired
+    default:
+      return statusCode >= 500 ? .unavailable : .invalidResponse
+    }
+  }
 }
 
 struct CandidateSearchResponseDTO: Decodable, Equatable {
   let snapshotToken: String
   let nextCursor: String?
+  let generatedAt: String
   let candidates: [CandidateDTO]
+  let coverage: CoverageDTO
 
   func domainPage() throws -> CandidateSearchPage {
-    guard !snapshotToken.isEmpty else {
+    guard !snapshotToken.isEmpty,
+      parseServerDate(generatedAt) != nil
+    else {
       throw CandidateSearchServiceError.invalidResponse
     }
     let mappedCandidates = try candidates.map { try $0.domainCandidate() }
@@ -125,7 +164,8 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
     return CandidateSearchPage(
       snapshotToken: snapshotToken,
       nextCursor: nextCursor,
-      candidates: mappedCandidates
+      candidates: mappedCandidates,
+      coverage: try coverage.domainCoverage()
     )
   }
 
@@ -175,7 +215,8 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
       let sourceReferences = try sources.map { source in
         guard !source.id.isEmpty,
           !source.name.isEmpty,
-          let staticObservedAt = parseServerDate(source.staticObservedAt)
+          let staticObservedAt = parseServerDate(source.staticObservedAt),
+          source.liveObservedAt == nil || parseServerDate(source.liveObservedAt ?? "") != nil
         else {
           throw CandidateSearchServiceError.invalidResponse
         }
@@ -229,7 +270,37 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
     let name: String
     let qualityTier: DataQualityTier
     let staticObservedAt: String
+    let liveObservedAt: String?
   }
+
+  struct CoverageDTO: Decodable, Equatable {
+    let status: CandidateCoverageStatus
+    let activeSources: [String]
+    let unavailableSources: [String]
+    let projectionUpdatedAt: String
+
+    func domainCoverage() throws -> CandidateSearchCoverage {
+      guard let projectionUpdatedAt = parseServerDate(projectionUpdatedAt),
+        !activeSources.contains(where: \.isEmpty),
+        !unavailableSources.contains(where: \.isEmpty),
+        Set(activeSources).count == activeSources.count,
+        Set(unavailableSources).count == unavailableSources.count
+      else {
+        throw CandidateSearchServiceError.invalidResponse
+      }
+      return CandidateSearchCoverage(
+        status: status,
+        activeSourceIDs: activeSources,
+        unavailableSourceIDs: unavailableSources,
+        projectionUpdatedAt: projectionUpdatedAt
+      )
+    }
+  }
+}
+
+private struct ProblemDTO: Decodable {
+  let type: String
+  let status: Int
 }
 
 private func parseServerDate(_ value: String) -> Date? {

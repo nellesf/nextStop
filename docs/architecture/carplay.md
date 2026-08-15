@@ -10,8 +10,9 @@ matching provisioning, and the CarPlay entitlement addendum. Requesting and
 receiving it is an external prerequisite, not something code can bypass.
 
 Build configurations keep `NextStopCore`, the iPhone app, routing/search services,
-and presentation models testable without the capability. The CarPlay scene and
-entitlement file are a thin optional target/configuration.
+presentation models, and scene adapter buildable without the capability. The
+scene configuration is present in the app manifest, while the managed entitlement
+file is intentionally not fabricated or checked into an unapproved signing setup.
 
 ## Template selection
 
@@ -100,3 +101,21 @@ summary/search use case. No custom microphone or speech-to-text stack is in scop
   cancellation, and Maps handoff requests.
 - The actual CarPlay adapter is covered by small mapping tests and manual CarPlay
   Simulator runs once entitlement/provisioning and full Xcode are available.
+
+## Implemented adapter flow
+
+The app-binary CarPlay scene reads the same local SwiftData profiles as the iPhone
+UI. Selecting one creates a value-copy ride draft. Each criterion opens only its
+centrally defined fixed options. Search delegates to the same location, MapKit
+route, signed backend candidate, exact MapKit distance, food check, filtering, and
+distance-only ranking components as the iPhone flow.
+
+Results use `CPPointOfInterestTemplate`; its picker and map receive the same stable
+zero-to-five result snapshot. Partial or unavailable live coverage remains visible
+in detail text, a manual refresh creates a new snapshot, and panning never changes
+or re-ranks the result. No-results keeps all five criteria available for an
+explicit user change. The primary POI action sends the park to Apple Maps.
+
+CarPlay performs a location-readiness preflight and never triggers first-time or
+reduced-accuracy permission UI while driving. Missing setup is explained on the
+CarPlay screen and must be completed in the iPhone app.

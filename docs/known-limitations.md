@@ -4,8 +4,10 @@
   this project. CarPlay runtime behavior cannot be claimed as verified.
 - The portable Swift domain core, SwiftUI/SwiftData/MapKit iPhone app, connected
   PostGIS search, automatic German/Swiss authority ingestion, and Swiss live
-  availability are implemented. App Intents, recent destinations, favorites, and
-  the CarPlay target are not yet implemented.
+  availability are implemented. The entitlement-independent CarPlay presenter,
+  ride search, and system-template scene adapter are implemented, but cannot be
+  claimed as runtime-verified until the managed capability is provisioned. App
+  Intents, recent destinations, and favorites are not yet implemented.
 - The current machine lacks an active full Xcode installation. Its standalone
   Swift compiler and SDK revisions also mismatch,
   so the executed core test suite must run on the Xcode Mac or in CI. Product and

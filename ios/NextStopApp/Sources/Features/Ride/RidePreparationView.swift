@@ -201,16 +201,19 @@ struct RidePreparationView: View {
           .frame(maxWidth: .infinity)
           .multilineTextAlignment(.center)
       }
-    case .results(let results):
-      resultsContent(results)
-    case .noResults:
-      Card {
-        Label("ride.search.empty.title", systemImage: "bolt.slash")
-          .font(.headline)
-        Text("ride.search.empty.description")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-        searchButton
+    case .results(let outcome):
+      resultsContent(outcome)
+    case .noResults(let coverage):
+      VStack(spacing: 12) {
+        coverageNotice(coverage)
+        Card {
+          Label("ride.search.empty.title", systemImage: "bolt.slash")
+            .font(.headline)
+          Text("ride.search.empty.description")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+          searchButton
+        }
       }
     case .failed(let failure):
       Card {
@@ -237,8 +240,11 @@ struct RidePreparationView: View {
     .buttonStyle(.borderedProminent)
   }
 
-  private func resultsContent(_ results: [RouteSearchResult]) -> some View {
-    VStack(spacing: 12) {
+  private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
+    let results = outcome.results
+    return VStack(spacing: 12) {
+      coverageNotice(outcome.coverage)
+
       HStack {
         Label("ride.results.title", systemImage: "bolt.car.fill")
           .font(.title3.weight(.semibold))
@@ -266,6 +272,32 @@ struct RidePreparationView: View {
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
+    }
+  }
+
+  @ViewBuilder
+  private func coverageNotice(_ coverage: CandidateSearchCoverage) -> some View {
+    switch coverage.status {
+    case .complete:
+      EmptyView()
+    case .degraded:
+      Card {
+        Label("ride.coverage.degraded.title", systemImage: "exclamationmark.circle")
+          .font(.headline)
+          .foregroundStyle(.orange)
+        Text("ride.coverage.degraded.description")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+      }
+    case .stale:
+      Card {
+        Label("ride.coverage.stale.title", systemImage: "clock.badge.exclamationmark")
+          .font(.headline)
+          .foregroundStyle(.orange)
+        Text("ride.coverage.stale.description")
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+      }
     }
   }
 

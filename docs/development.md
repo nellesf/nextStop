@@ -45,7 +45,8 @@ open ios/NextStop.xcodeproj
 
 The checked-in project references `NextStopCore` as a local package and contains
 the `NextStopApp` and `NextStopAppTests` targets. Select a personal development
-team only when installing on a device; simulator tests need no CarPlay entitlement.
+team only when installing on a device. Unit tests for the CarPlay presenter and
+ride flow do not require the managed entitlement; launching the CarPlay scene does.
 The package can still be opened directly at `ios/NextStopCore/Package.swift` for
 the fastest domain-only test loop.
 

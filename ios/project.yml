@@ -31,6 +31,7 @@ targets:
     platform: iOS
     sources:
       - path: NextStopApp/Sources
+      - path: NextStopCarPlay
       - path: NextStopApp/Resources
         buildPhase: resources
         excludes:
@@ -53,7 +54,12 @@ targets:
           NSAllowsLocalNetworking: true
         NextStopAPIBaseURL: $(NEXTSTOP_API_BASE_URL)
         UIApplicationSceneManifest:
-          UIApplicationSupportsMultipleScenes: false
+          UIApplicationSupportsMultipleScenes: true
+          UISceneConfigurations:
+            CPTemplateApplicationSceneSessionRoleApplication:
+              - UISceneClassName: CPTemplateApplicationScene
+                UISceneConfigurationName: NextStopCarPlay
+                UISceneDelegateClassName: $(PRODUCT_MODULE_NAME).NextStopCarPlaySceneDelegate
         UILaunchScreen: {}
         UISupportedInterfaceOrientations:
           - UIInterfaceOrientationPortrait
@@ -89,6 +95,19 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: de.nextstop.app.tests
 
+  NextStopCarPlayTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: NextStopCarPlayTests
+    dependencies:
+      - target: NextStopApp
+      - package: NextStopCore
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: de.nextstop.app.carplay.tests
+
 schemes:
   NextStopApp:
     build:
@@ -102,6 +121,9 @@ schemes:
       gatherCoverageData: true
       targets:
         - name: NextStopAppTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopCarPlayTests
           parallelizable: false
           randomExecutionOrder: false
     profile:

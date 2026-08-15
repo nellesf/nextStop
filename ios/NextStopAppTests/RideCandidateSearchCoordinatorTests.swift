@@ -20,7 +20,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       CandidateSearchPage(
         snapshotToken: "snapshot",
         nextCursor: nil,
-        candidates: candidates
+        candidates: candidates,
+        coverage: coverage
       )
     ])
     let coordinator = RideCandidateSearchCoordinator(
@@ -29,12 +30,12 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       enrichmentBatchSize: 2
     )
 
-    let results = try await coordinator.search(
+    let outcome = try await coordinator.search(
       preparedRide: try preparedRide(distanceRange: .kilometers100To150)
     )
 
     XCTAssertEqual(
-      results.map(\.candidate.actualDrivingDistance.value),
+      outcome.results.map(\.candidate.actualDrivingDistance.value),
       [112_000, 124_000, 139_000, 145_000, 147_000]
     )
   }
@@ -46,12 +47,14 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       CandidateSearchPage(
         snapshotToken: "snapshot",
         nextCursor: "cursor-1",
-        candidates: [first]
+        candidates: [first],
+        coverage: coverage
       ),
       CandidateSearchPage(
         snapshotToken: "snapshot",
         nextCursor: nil,
-        candidates: [second]
+        candidates: [second],
+        coverage: coverage
       ),
     ])
     let coordinator = RideCandidateSearchCoordinator(
@@ -61,11 +64,11 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       )
     )
 
-    let results = try await coordinator.search(
+    let outcome = try await coordinator.search(
       preparedRide: try preparedRide(distanceRange: .kilometers50To100)
     )
 
-    XCTAssertEqual(results.map(\.candidate.actualDrivingDistance.value), [60_000, 70_000])
+    XCTAssertEqual(outcome.results.map(\.candidate.actualDrivingDistance.value), [60_000, 70_000])
     XCTAssertEqual(pageSearcher.requests.count, 2)
     XCTAssertEqual(pageSearcher.requests[1].snapshotToken, "snapshot")
     XCTAssertEqual(pageSearcher.requests[1].cursor, "cursor-1")
@@ -78,7 +81,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         CandidateSearchPage(
           snapshotToken: "snapshot",
           nextCursor: nil,
-          candidates: [candidate]
+          candidates: [candidate],
+          coverage: coverage
         )
       ]),
       enricher: CandidateEnricherStub(distances: [:], failedIDs: [candidate.id])
@@ -108,7 +112,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         CandidateSearchPage(
           snapshotToken: "snapshot",
           nextCursor: nil,
-          candidates: candidates
+          candidates: candidates,
+          coverage: coverage
         )
       ]),
       enricher: CandidateEnricherStub(
@@ -122,12 +127,14 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       )
     )
 
-    let results = try await coordinator.search(
+    let outcome = try await coordinator.search(
       preparedRide: try preparedRide(distanceRange: .kilometers50To100)
     )
 
     XCTAssertEqual(
-      results.map(\.candidate.actualDrivingDistance.value), distances.map { $0 * 1_000 })
+      outcome.results.map(\.candidate.actualDrivingDistance.value),
+      distances.map { $0 * 1_000 }
+    )
   }
 
   func testRejectsChangedSnapshotAcrossPages() async throws {
@@ -138,12 +145,14 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         CandidateSearchPage(
           snapshotToken: "snapshot-a",
           nextCursor: "cursor-1",
-          candidates: [first]
+          candidates: [first],
+          coverage: coverage
         ),
         CandidateSearchPage(
           snapshotToken: "snapshot-b",
           nextCursor: nil,
-          candidates: [second]
+          candidates: [second],
+          coverage: coverage
         ),
       ]),
       enricher: CandidateEnricherStub(
@@ -162,12 +171,14 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         CandidateSearchPage(
           snapshotToken: "snapshot",
           nextCursor: "cursor-1",
-          candidates: [first]
+          candidates: [first],
+          coverage: coverage
         ),
         CandidateSearchPage(
           snapshotToken: "snapshot",
           nextCursor: nil,
-          candidates: [second]
+          candidates: [second],
+          coverage: coverage
         ),
       ]),
       enricher: CandidateEnricherStub(
@@ -184,7 +195,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         CandidateSearchPage(
           snapshotToken: "snapshot",
           nextCursor: "cursor-1",
-          candidates: []
+          candidates: [],
+          coverage: coverage
         )
       ]),
       enricher: CandidateEnricherStub(distances: [:])
@@ -204,6 +216,15 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
     } catch {
       XCTFail("Expected an invalid candidate response, got \(error)")
     }
+  }
+
+  private var coverage: CandidateSearchCoverage {
+    CandidateSearchCoverage(
+      status: .complete,
+      activeSourceIDs: ["bundesnetzagentur_ladesaeulenregister"],
+      unavailableSourceIDs: [],
+      projectionUpdatedAt: Date(timeIntervalSince1970: 0)
+    )
   }
 
   private func preparedRide(distanceRange: DistanceRangeOption) throws -> PreparedRideSearch {
