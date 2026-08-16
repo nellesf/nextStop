@@ -6,15 +6,15 @@ import SwiftUI
 struct NextStopApp: App {
   @StateObject private var rideIntentRouter: RideIntentRouter
 
+  @MainActor
   init() {
     let router = RideIntentRouter()
     _rideIntentRouter = StateObject(wrappedValue: router)
-    AppDependencyManager.shared.add(
-      dependency: RideIntentHandler(
-        destinationSearcher: MapKitDestinationSearchService(),
-        router: router
-      )
+    let rideIntentHandler = RideIntentHandler(
+      destinationSearcher: MapKitDestinationSearchService(),
+      router: router
     )
+    AppDependencyManager.shared.add(dependency: rideIntentHandler)
     NextStopAppShortcuts.updateAppShortcutParameters()
   }
 
