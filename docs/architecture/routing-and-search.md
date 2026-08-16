@@ -86,10 +86,14 @@ new destination creates a new route, new candidate snapshot, and new results.
 
 ## Apple Maps handoff
 
-Create an `MKMapItem` using the chosen park access coordinate and display name,
-then call the current `openInMaps`/`openMaps` API with automobile directions. Do
-not claim navigation has begun until the completion/success result confirms the
-handoff. The app does not render maneuvers or request the navigation entitlement.
+When a result has a matched restaurant, open Apple's documented unified Maps
+`/directions` URL with that restaurant as a waypoint and the ride's original
+destination as the final destination. This multistop handoff is available on iOS
+18.4 and later. On iOS 18.0–18.3, open automobile directions to the restaurant as
+the safe documented fallback. Without a food match, create an `MKMapItem` from the
+chosen park access coordinate and open automobile directions to the park. Do not
+claim navigation has begun until the handoff succeeds. The app does not render
+maneuvers or request the navigation entitlement.
 
 ## Error mapping
 

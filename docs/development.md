@@ -153,8 +153,10 @@ an unapproved host.
 After preparing a route, tap “Ladeparks suchen”. The app fetches a stable PostGIS
 candidate snapshot, asks MapKit for actual automobile distance to candidates in
 bounded groups of four, applies the exact configured range and optional 500 m food
-rule, sorts only by actual driving distance, and displays at most five. A result
-button hands the selected park to Apple Maps.
+rule, sorts only by actual driving distance, and displays at most five. Each result
+shows the deduplicated EVSE count for every operator. With a selected restaurant,
+the result button opens Apple Maps with the restaurant as a waypoint before the
+original ride destination; otherwise it opens the selected park.
 
 ### CarPlay acceptance gate
 
@@ -175,8 +177,10 @@ target, refresh signing assets, and run one integrated acceptance pass:
    destination opens the same ride preparation with visible default criteria.
 4. Connect the CarPlay Simulator and confirm that “Fahrt wählen” lists profiles,
    favorites, and recent destinations.
-5. Search a route, verify at most five distance-sorted system-template results,
-   refresh once, and hand one result to Apple Maps.
+5. Search a route, verify at most five distance-sorted system-template results and
+   the EVSE count for each operator, refresh once, and hand one result to Apple
+   Maps. For a food-filtered result, verify the restaurant is a waypoint and the
+   original ride destination remains the final destination.
 6. Use a Swiss route to verify current `ich-tanke-strom` availability. On German
    Bundesnetzagentur-only records, verify the honest “unbekannt” state; the static
    German authority feed does not contain nationwide live availability.

@@ -136,6 +136,7 @@ const candidateSchema = {
     "availability",
     "maximumPowerKW",
     "operators",
+    "operatorChargingPoints",
     "sources",
     "dataUpdatedAt",
   ],
@@ -151,6 +152,19 @@ const candidateSchema = {
     availability: availabilitySchema,
     maximumPowerKW: { type: "integer", minimum: 1 },
     operators: { type: "array", uniqueItems: true, items: { type: "string" } },
+    operatorChargingPoints: {
+      type: "array",
+      minItems: 1,
+      items: {
+        type: "object",
+        additionalProperties: false,
+        required: ["name", "chargingPoints"],
+        properties: {
+          name: { type: "string", minLength: 1 },
+          chargingPoints: { type: "integer", minimum: 1 },
+        },
+      },
+    },
     sources: { type: "array", minItems: 1, items: sourceSummarySchema },
     dataUpdatedAt: { type: "string", format: "date-time" },
   },

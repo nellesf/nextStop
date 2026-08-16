@@ -92,7 +92,7 @@ final class CarPlayPresentationTests: XCTestCase {
     )
     XCTAssertEqual(
       presentation.points[0].detailSummary,
-      "4 Ladepunkte · 2 sicher frei, 2 unbekannt · bis 150 kW"
+      "Operator · 4 Ladepunkte\n4 Ladepunkte · 2 sicher frei, 2 unbekannt · bis 150 kW"
     )
     XCTAssertEqual(presentation.coverageMessage, "Live-Daten teilweise verfügbar")
   }
@@ -143,7 +143,9 @@ final class CarPlayPresentationTests: XCTestCase {
       name: name,
       coordinate: coordinate,
       navigationCoordinate: coordinate,
-      operators: ["Operator"],
+      operatorChargingPoints: [
+        try OperatorChargingPointSummary(name: "Operator", chargingPointCount: 4)
+      ],
       chargingPointCount: 4,
       availability: availability,
       maximumPower: Kilowatts(150),
@@ -178,6 +180,7 @@ final class CarPlayPresentationTests: XCTestCase {
       "carplay.result.route_distance.format": "%lld km von der Route",
       "carplay.result.charging_summary.format": "%lld Ladepunkte · %@ · bis %lld kW",
       "carplay.result.food.format": "%@ · %lld m",
+      "carplay.result.operator.format": "%@ · %lld Ladepunkte",
       "ride.result.availability.complete.format": "%lld Ladepunkte frei",
       "ride.result.availability.partial.format": "%lld sicher frei, %lld unbekannt",
       "ride.result.availability.unknown": "Live-Verfügbarkeit unbekannt",

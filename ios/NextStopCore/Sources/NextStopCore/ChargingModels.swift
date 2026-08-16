@@ -176,6 +176,7 @@ public enum OpeningStatus: String, Codable, Sendable {
 
 public struct FoodPOI: Hashable, Codable, Sendable {
   public let id: String
+  public let applePlaceIdentifier: String?
   public let chain: FoodChain
   public let name: String
   public let coordinate: Coordinate
@@ -184,6 +185,7 @@ public struct FoodPOI: Hashable, Codable, Sendable {
 
   public init(
     id: String,
+    applePlaceIdentifier: String? = nil,
     chain: FoodChain,
     name: String,
     coordinate: Coordinate,
@@ -194,6 +196,7 @@ public struct FoodPOI: Hashable, Codable, Sendable {
       throw DomainValidationError.emptyName
     }
     self.id = id
+    self.applePlaceIdentifier = applePlaceIdentifier
     self.chain = chain
     self.name = name
     self.coordinate = coordinate
@@ -202,12 +205,30 @@ public struct FoodPOI: Hashable, Codable, Sendable {
   }
 }
 
+public struct OperatorChargingPointSummary: Identifiable, Hashable, Codable, Sendable {
+  public var id: String { name }
+
+  public let name: String
+  public let chargingPointCount: Int
+
+  public init(name: String, chargingPointCount: Int) throws {
+    guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw DomainValidationError.emptyName
+    }
+    guard chargingPointCount > 0 else {
+      throw DomainValidationError.nonPositiveChargingPointCount(chargingPointCount)
+    }
+    self.name = name
+    self.chargingPointCount = chargingPointCount
+  }
+}
+
 public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
   public let id: UUID
   public let name: String
   public let coordinate: Coordinate
   public let navigationCoordinate: Coordinate
-  public let operators: [String]
+  public let operatorChargingPoints: [OperatorChargingPointSummary]
   public let chargingPointCount: Int
   public let availability: ParkAvailability
   public let maximumPower: Kilowatts
@@ -218,7 +239,7 @@ public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
     name: String,
     coordinate: Coordinate,
     navigationCoordinate: Coordinate,
-    operators: [String],
+    operatorChargingPoints: [OperatorChargingPointSummary],
     chargingPointCount: Int,
     availability: ParkAvailability,
     maximumPower: Kilowatts,
@@ -233,11 +254,26 @@ public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
         actual: availability.totalCount
       )
     }
+    let uniqueOperatorNames = Set(operatorChargingPoints.map(\.name))
+    guard !operatorChargingPoints.isEmpty,
+      uniqueOperatorNames.count == operatorChargingPoints.count
+    else {
+      throw DomainValidationError.emptyName
+    }
+    let attributedChargingPointCount = operatorChargingPoints.reduce(0) {
+      $0 + $1.chargingPointCount
+    }
+    guard attributedChargingPointCount == chargingPointCount else {
+      throw DomainValidationError.operatorChargingPointTotalMismatch(
+        expected: chargingPointCount,
+        actual: attributedChargingPointCount
+      )
+    }
     self.id = id
     self.name = name
     self.coordinate = coordinate
     self.navigationCoordinate = navigationCoordinate
-    self.operators = Array(Set(operators)).sorted()
+    self.operatorChargingPoints = operatorChargingPoints.sorted { $0.name < $1.name }
     self.chargingPointCount = chargingPointCount
     self.availability = availability
     self.maximumPower = maximumPower

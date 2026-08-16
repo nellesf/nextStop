@@ -138,7 +138,7 @@ export class ProjectionWriter {
     await this.pool.query(
       `INSERT INTO nextstop.charging_park_projection (
          projection_id, park_id, name, centroid, navigation_coordinate,
-         member_location_ids, operators, charging_point_count,
+         member_location_ids, operators, operator_charging_point_counts, charging_point_count,
          known_available_count, known_unavailable_count, unknown_count,
          availability_complete, last_live_observation_at, maximum_power_kw,
          source_summaries, data_updated_at
@@ -150,6 +150,7 @@ export class ProjectionWriter {
               ST_SetSRID(ST_MakePoint(navigation_longitude, navigation_latitude), 4326)::geography,
               member_location_ids,
               operators,
+              operator_charging_point_counts,
               charging_point_count,
               known_available_count,
               known_unavailable_count,
@@ -168,6 +169,7 @@ export class ProjectionWriter {
          navigation_longitude double precision,
          member_location_ids uuid[],
          operators text[],
+         operator_charging_point_counts jsonb,
          charging_point_count integer,
          known_available_count integer,
          known_unavailable_count integer,
@@ -462,6 +464,7 @@ function storedPark(park: ChargingParkProjection): Readonly<Record<string, unkno
     navigation_longitude: park.navigationCoordinate.longitude,
     member_location_ids: park.memberLocationIds,
     operators: park.operators,
+    operator_charging_point_counts: park.operatorChargingPointCounts,
     charging_point_count: park.chargingPointCount,
     known_available_count: park.availability.knownAvailableCount,
     known_unavailable_count: park.availability.knownUnavailableCount,

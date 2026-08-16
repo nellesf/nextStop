@@ -15,6 +15,13 @@ enum LocalizedFormat {
     )
   }
 
+  static func chargingPoints(_ value: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString("unit.charging_points.format", comment: "Number of charging points"),
+      Int64(value)
+    )
+  }
+
   static func kilometers(_ meters: Int) -> String {
     String.localizedStringWithFormat(
       NSLocalizedString("unit.kilometers.format", comment: "Distance in rounded kilometers"),

@@ -17,6 +17,10 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     let candidate = try XCTUnwrap(page.candidates.first)
     XCTAssertEqual(candidate.park.name, "Autohof Nord")
     XCTAssertEqual(candidate.park.chargingPointCount, 4)
+    XCTAssertEqual(
+      candidate.park.operatorChargingPoints,
+      [try OperatorChargingPointSummary(name: "Operator", chargingPointCount: 4)]
+    )
     XCTAssertEqual(candidate.park.availability.unknownCount, 4)
     XCTAssertEqual(candidate.park.maximumPower, Kilowatts(150))
     XCTAssertEqual(candidate.distanceFromRoute, Meters(321))
@@ -27,6 +31,13 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
   func testRejectsAvailabilityCompletenessContradiction() throws {
     let invalid = candidateJSON(lowerBound: 12_000)
       .replacingOccurrences(of: #""complete": false"#, with: #""complete": true"#)
+
+    XCTAssertThrowsError(try decodePage(candidates: [invalid]))
+  }
+
+  func testRejectsOperatorCountsThatDoNotMatchParkTotal() throws {
+    let invalid = candidateJSON(lowerBound: 12_000)
+      .replacingOccurrences(of: #""chargingPoints": 4}]"#, with: #""chargingPoints": 3}]"#)
 
     XCTAssertThrowsError(try decodePage(candidates: [invalid]))
   }
@@ -99,6 +110,7 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
         },
         "maximumPowerKW": 150,
         "operators": ["Operator"],
+        "operatorChargingPoints": [{"name": "Operator", "chargingPoints": 4}],
         "sources": [{
           "id": "bundesnetzagentur",
           "name": "Bundesnetzagentur Ladesäulenregister",

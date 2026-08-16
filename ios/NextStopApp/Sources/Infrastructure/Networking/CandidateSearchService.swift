@@ -180,6 +180,7 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
     let availability: AvailabilityDTO
     let maximumPowerKW: Int
     let operators: [String]
+    let operatorChargingPoints: [OperatorChargingPointsDTO]
     let sources: [SourceDTO]
     let dataUpdatedAt: String
 
@@ -190,6 +191,13 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
         straightLineLowerBoundMeters >= 0,
         chargingPoints > 0,
         maximumPowerKW > 0,
+        !operators.isEmpty,
+        !operators.contains(where: { $0.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty }),
+        Set(operators).count == operators.count,
+        !operatorChargingPoints.isEmpty,
+        Set(operatorChargingPoints.map(\.name)).count == operatorChargingPoints.count,
+        operatorChargingPoints.reduce(0, { $0 + $1.chargingPoints }) == chargingPoints,
+        Set(operatorChargingPoints.map(\.name)) == Set(operators),
         !sources.isEmpty,
         availability.complete == (availability.unknown == 0),
         let updatedAt = parseServerDate(dataUpdatedAt)
@@ -233,7 +241,12 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
         name: name,
         coordinate: try coordinate.domainCoordinate(),
         navigationCoordinate: try navigationCoordinate.domainCoordinate(),
-        operators: operators,
+        operatorChargingPoints: try operatorChargingPoints.map {
+          try OperatorChargingPointSummary(
+            name: $0.name,
+            chargingPointCount: $0.chargingPoints
+          )
+        },
         chargingPointCount: chargingPoints,
         availability: parkAvailability,
         maximumPower: Kilowatts(maximumPowerKW),
@@ -245,6 +258,11 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
         straightLineLowerBound: Meters(straightLineLowerBoundMeters)
       )
     }
+  }
+
+  struct OperatorChargingPointsDTO: Decodable, Equatable {
+    let name: String
+    let chargingPoints: Int
   }
 
   struct CoordinateDTO: Decodable, Equatable {

@@ -23,7 +23,8 @@ analytics SDKs are permitted in MVP.
 
 - MapKit destination search and directions.
 - Siri/App Intents system processing when invoked.
-- Apple Maps handoff for the selected park.
+- Apple Maps handoff for the selected park or, when food is selected, for a route
+  containing the matched restaurant waypoint and the original ride destination.
 
 Apple's current privacy disclosures and SDK behavior must be reflected accurately
 in App Store privacy answers at release.

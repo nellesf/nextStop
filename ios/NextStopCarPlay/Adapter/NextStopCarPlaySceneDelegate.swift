@@ -426,7 +426,12 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
 
   private func startNavigation(to resultID: UUID) {
     guard let result = resultsByID[resultID],
-      navigationLauncher.startNavigation(to: result.candidate.park)
+      let destination = draftController.draft?.destination,
+      navigationLauncher.startNavigation(
+        to: result.candidate.park,
+        via: result.matchingFoodPOI,
+        finalDestination: destination
+      )
     else {
       showNavigationFailure()
       return

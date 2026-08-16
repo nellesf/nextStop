@@ -6,6 +6,45 @@ import XCTest
 
 @MainActor
 final class RidePreparationViewModelTests: XCTestCase {
+  func testAppleMapsURLKeepsDestinationAndAddsRestaurantWaypoint() throws {
+    let destination = try SavedDestination(
+      displayName: "Berlin Hauptbahnhof",
+      coordinate: Coordinate(latitude: 52.5251, longitude: 13.3694),
+      applePlaceIdentifier: "destination-place"
+    )
+    let restaurant = try FoodPOI(
+      id: "restaurant",
+      applePlaceIdentifier: "restaurant-place",
+      chain: .mcdonalds,
+      name: "McDonald's",
+      coordinate: Coordinate(latitude: 52.1, longitude: 10.2),
+      distanceFromPark: Meters(120),
+      openingStatus: .unknown
+    )
+
+    let url = try XCTUnwrap(
+      AppleMapsNavigationLauncher.multistopDirectionsURL(
+        waypoint: restaurant,
+        finalDestination: destination
+      )
+    )
+    let components = try XCTUnwrap(URLComponents(url: url, resolvingAgainstBaseURL: false))
+    let values = Dictionary(
+      uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+        item.value.map { (item.name, $0) }
+      }
+    )
+
+    XCTAssertEqual(components.scheme, "https")
+    XCTAssertEqual(components.host, "maps.apple.com")
+    XCTAssertEqual(components.path, "/directions")
+    XCTAssertEqual(values["destination"], "52.5251,13.3694")
+    XCTAssertEqual(values["destination-place-id"], "destination-place")
+    XCTAssertEqual(values["waypoint"], "52.1,10.2")
+    XCTAssertEqual(values["waypoint-place-id"], "restaurant-place")
+    XCTAssertEqual(values["mode"], "driving")
+  }
+
   func testPreparationUsesCurrentLocationAndCreatesPrivacyScopedRequest() async throws {
     let origin = try Coordinate(latitude: 48.1372, longitude: 11.5756)
     let destination = try SavedDestination(

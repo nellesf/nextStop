@@ -98,6 +98,7 @@ final class MapKitFoodPOISearchService: FoodPOISearching {
       }
       return try FoodPOI(
         id: stablePOIID(name: name, coordinate: itemCoordinate),
+        applePlaceIdentifier: mapItem.identifier?.rawValue,
         chain: chain,
         name: name,
         coordinate: itemCoordinate,

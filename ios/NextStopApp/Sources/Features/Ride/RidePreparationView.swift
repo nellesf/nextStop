@@ -315,19 +315,30 @@ struct RidePreparationView: View {
     let park = candidate.park
     return Card {
       HStack(alignment: .firstTextBaseline) {
-        Text(park.name)
-          .font(.headline)
+        Text("ride.result.operators")
+          .font(.caption.weight(.semibold))
+          .foregroundStyle(.secondary)
           .frame(maxWidth: .infinity, alignment: .leading)
         Text(LocalizedFormat.kilometers(candidate.actualDrivingDistance.value))
           .font(.title3.weight(.bold).monospacedDigit())
           .foregroundStyle(.tint)
       }
 
-      HStack(spacing: 14) {
-        Label("\(park.chargingPointCount)", systemImage: "ev.charger")
-        Label(LocalizedFormat.kilowatts(park.maximumPower.value), systemImage: "bolt.fill")
+      ForEach(park.operatorChargingPoints) { chargingOperator in
+        HStack(alignment: .firstTextBaseline, spacing: 12) {
+          Text(chargingOperator.name)
+            .font(.headline)
+            .frame(maxWidth: .infinity, alignment: .leading)
+          Label(
+            LocalizedFormat.chargingPoints(chargingOperator.chargingPointCount),
+            systemImage: "ev.charger"
+          )
+          .font(.subheadline.monospacedDigit())
+        }
       }
-      .font(.subheadline)
+
+      Label(LocalizedFormat.kilowatts(park.maximumPower.value), systemImage: "bolt.fill")
+        .font(.subheadline)
 
       Text(verbatim: availabilityText(park.availability))
         .font(.subheadline)
@@ -339,7 +350,11 @@ struct RidePreparationView: View {
       }
 
       Button {
-        navigationLauncher.startNavigation(to: park)
+        navigationLauncher.startNavigation(
+          to: park,
+          via: result.matchingFoodPOI,
+          finalDestination: viewModel.draft.destination
+        )
       } label: {
         Label("ride.result.navigate", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
           .frame(maxWidth: .infinity)

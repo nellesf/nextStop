@@ -10,7 +10,9 @@ Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, optional MapKit
-restaurant checks, distance-only ranking, and Apple Maps handoff. The same
+restaurant checks, distance-only ranking, per-operator EVSE counts, and Apple Maps
+handoff. When a restaurant is selected, the handoff keeps the original ride
+destination and inserts that restaurant as a waypoint. The same
 application flow is connected to a template-native CarPlay scene with profile
 and saved-destination selection, ride-scoped fixed filter choices, stable
 maximum-five POI results, explicit refresh, no-result relaxation, and Apple Maps

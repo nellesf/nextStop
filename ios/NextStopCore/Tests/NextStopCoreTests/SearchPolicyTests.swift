@@ -204,7 +204,9 @@ final class SearchPolicyTests: XCTestCase {
       name: name,
       coordinate: coordinate,
       navigationCoordinate: coordinate,
-      operators: ["Operator"],
+      operatorChargingPoints: [
+        try OperatorChargingPointSummary(name: "Operator", chargingPointCount: chargingPoints)
+      ],
       chargingPointCount: chargingPoints,
       availability: resolvedAvailability,
       maximumPower: Kilowatts(maximumPower),

@@ -245,7 +245,15 @@ struct CarPlayPresenter {
         Int64(food.distanceFromPark.value)
       )
     }
-    let detailSummary = [summary, foodSummary]
+    let operatorSummary = park.operatorChargingPoints.map { chargingOperator in
+      localizer.format(
+        "carplay.result.operator.format",
+        chargingOperator.name,
+        Int64(chargingOperator.chargingPointCount)
+      )
+    }
+    .joined(separator: "\n")
+    let detailSummary = [operatorSummary, summary, foodSummary]
       .compactMap { $0 }
       .joined(separator: "\n")
     return CarPlayResultPresentation(

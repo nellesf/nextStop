@@ -19,6 +19,7 @@
 "carplay.result.route_distance.format" = "%lld km from route";
 "carplay.result.charging_summary.format" = "%lld charging points · %@ · up to %lld kW";
 "carplay.result.food.format" = "%@ · %lld m";
+"carplay.result.operator.format" = "%@ · %lld charging points";
 "carplay.coverage.degraded" = "Live data partially available";
 "carplay.coverage.stale" = "Charging data is not current";
 "carplay.alert.ok" = "OK";
@@ -89,6 +90,7 @@
 "ride.result.availability.partial.format" = "%lld known available, %lld unknown";
 "ride.result.availability.unknown" = "Live availability unknown";
 "ride.result.navigate" = "Open in Apple Maps";
+"ride.result.operators" = "Charging providers";
 "ride.results.attribution" = "Charging data: bundesnetzagentur.de · CC BY 4.0 and Swiss Federal Office of Energy SFOE · ich-tanke-strom.ch";
 "ride.results.title" = "Matching charging parks";
 "ride.coverage.degraded.title" = "Live data partially available";
@@ -120,6 +122,7 @@
 "search.food_chain.kfc" = "KFC";
 "search.food_chain.subway" = "Subway";
 "unit.kilowatts.format" = "%lld kW";
+"unit.charging_points.format" = "%lld charging points";
 "unit.kilometers.format" = "%lld km";
 "unit.duration.hours_minutes.format" = "%lld hr %lld min";
 "unit.duration.minutes.format" = "%lld min";

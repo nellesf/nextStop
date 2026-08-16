@@ -50,8 +50,14 @@ export interface ChargingParkCandidate {
   readonly availability: ParkAvailability;
   readonly maximumPowerKW: number;
   readonly operators: readonly string[];
+  readonly operatorChargingPoints: readonly OperatorChargingPoints[];
   readonly sources: readonly SourceSummary[];
   readonly dataUpdatedAt: string;
+}
+
+export interface OperatorChargingPoints {
+  readonly name: string;
+  readonly chargingPoints: number;
 }
 
 export interface Coordinate {

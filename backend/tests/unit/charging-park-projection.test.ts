@@ -19,6 +19,10 @@ void test("clusters different operators at 100 m and aggregates distinct EVSEs",
   assert.equal(parks.length, 1);
   assert.deepEqual(parks[0]?.memberLocationIds, ["a", "b"]);
   assert.deepEqual(parks[0]?.operators, ["Alpha", "Beta"]);
+  assert.deepEqual(parks[0]?.operatorChargingPointCounts, [
+    { operatorName: "Alpha", chargingPointCount: 2 },
+    { operatorName: "Beta", chargingPointCount: 1 },
+  ]);
   assert.equal(parks[0]?.chargingPointCount, 3);
   assert.equal(parks[0]?.maximumPowerKW, 300);
   assert.equal(parks[0]?.availability.unknownCount, 3);
@@ -79,6 +83,10 @@ void test("deduplicates an exact EVSE identity but not distinct EVSEs at one coo
   ]);
 
   assert.equal(parks[0]?.chargingPointCount, 2);
+  assert.deepEqual(parks[0]?.operatorChargingPointCounts, [
+    { operatorName: "Alpha", chargingPointCount: 1 },
+    { operatorName: "Beta", chargingPointCount: 1 },
+  ]);
   assert.equal(parks[0]?.maximumPowerKW, 300);
 });
 

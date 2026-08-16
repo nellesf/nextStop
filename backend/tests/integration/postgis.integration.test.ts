@@ -117,6 +117,10 @@ void test(
       ]));
       assert.equal(response.candidates.length, 1);
       assert.equal(response.candidates[0]?.chargingPoints, 4);
+      assert.deepEqual(response.candidates[0]?.operatorChargingPoints, [
+        { name: "Energie Nord GmbH", chargingPoints: 2 },
+        { name: "Energie Süd GmbH", chargingPoints: 2 },
+      ]);
       assert.equal(response.candidates[0]?.availability.unknown, 4);
       assert.deepEqual(response.coverage.activeSources, [bundesnetzagenturDescriptor.id]);
     });
@@ -548,14 +552,15 @@ async function insertPointPark(
   await pool.query(
     `INSERT INTO nextstop.charging_park_projection (
        projection_id, park_id, name, centroid, navigation_coordinate,
-       member_location_ids, operators, charging_point_count,
+       member_location_ids, operators, operator_charging_point_counts, charging_point_count,
        known_available_count, known_unavailable_count, unknown_count,
        availability_complete, maximum_power_kw, source_summaries, data_updated_at
      ) VALUES (
        $1, $2, 'Fixture Park',
        ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
        ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
-       ARRAY[$2]::uuid[], ARRAY['Fixture Operator'], 4,
+       ARRAY[$2]::uuid[], ARRAY['Fixture Operator'],
+       '[{"operatorName":"Fixture Operator","chargingPointCount":4}]'::jsonb, 4,
        $5, $6, $7, $7 = 0, 150, $8::jsonb, '2026-07-07T00:00:00Z'
      )`,
     [

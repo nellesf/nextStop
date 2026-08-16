@@ -271,7 +271,9 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       name: "Park \(index)",
       coordinate: coordinate,
       navigationCoordinate: coordinate,
-      operators: ["Operator"],
+      operatorChargingPoints: [
+        try OperatorChargingPointSummary(name: "Operator", chargingPointCount: 4)
+      ],
       chargingPointCount: 4,
       availability: ParkAvailability(
         knownAvailableCount: 0,

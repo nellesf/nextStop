@@ -16,6 +16,8 @@ An aggregate search/display entity, not an operator.
 - `centroid`
 - `memberLocationIDs`
 - `operators: [Operator]`
+- `operatorChargingPointCounts` (deduplicated EVSE count for each operator; sums
+  to `chargingPointCount`)
 - `chargingPointCount` (deduplicated EVSE count)
 - `availability: ParkAvailability`
 - `maximumPowerKW`

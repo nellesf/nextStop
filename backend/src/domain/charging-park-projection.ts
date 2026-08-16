@@ -8,6 +8,7 @@ import type {
   EVSEIdentityConflict,
   NormalizedChargingLocation,
   NormalizedChargingPoint,
+  OperatorChargingPointCount,
   SourceReference,
 } from "./normalized-charging.js";
 import { stableId } from "./stable-id.js";
@@ -206,7 +207,15 @@ function aggregatePark(
   members: readonly NormalizedChargingLocation[],
 ): ChargingParkProjection {
   const sortedMembers = members.toSorted((first, second) => first.id.localeCompare(second.id));
-  const points = deduplicatePoints(sortedMembers.flatMap((member) => member.chargingPoints));
+  const pointMemberships = deduplicatePointMemberships(
+    sortedMembers.flatMap((member) =>
+      member.chargingPoints.map((point) => ({
+        operatorName: member.operatorName,
+        point,
+      })),
+    ),
+  );
+  const points = pointMemberships.map(({ point }) => point);
   if (points.length === 0) {
     throw new Error("An active charging location must contain at least one EVSE.");
   }
@@ -219,7 +228,8 @@ function aggregatePark(
   const availability = aggregateAvailability(points);
   const memberLocationIds = sortedMembers.map((member) => member.id);
   const names = sortedDistinct(sortedMembers.map((member) => member.name));
-  const operators = sortedDistinct(sortedMembers.map((member) => member.operatorName));
+  const operatorChargingPointCounts = aggregateOperatorChargingPointCounts(pointMemberships);
+  const operators = operatorChargingPointCounts.map(({ operatorName }) => operatorName);
 
   return {
     id: stableId("charging-park-v1", memberLocationIds),
@@ -228,6 +238,7 @@ function aggregatePark(
     navigationCoordinate: medoid(sortedMembers).coordinate,
     memberLocationIds,
     operators,
+    operatorChargingPointCounts,
     chargingPointCount: points.length,
     availability,
     maximumPowerKW: Math.max(...points.map((point) => point.maximumPowerKW)),
@@ -238,19 +249,53 @@ function aggregatePark(
   };
 }
 
-function deduplicatePoints(
-  points: readonly NormalizedChargingPoint[],
-): readonly NormalizedChargingPoint[] {
-  const groups = new Map<string, NormalizedChargingPoint[]>();
-  for (const point of points) {
-    const key = point.canonicalEVSEIdentity ?? point.id;
+interface PointMembership {
+  readonly operatorName: string;
+  readonly point: NormalizedChargingPoint;
+}
+
+function deduplicatePointMemberships(
+  memberships: readonly PointMembership[],
+): readonly PointMembership[] {
+  const groups = new Map<string, PointMembership[]>();
+  for (const membership of memberships) {
+    const key = membership.point.canonicalEVSEIdentity ?? membership.point.id;
     const group = groups.get(key) ?? [];
-    group.push(point);
+    group.push(membership);
     groups.set(key, group);
   }
   return [...groups.entries()]
     .toSorted(([first], [second]) => first.localeCompare(second))
-    .map(([, group]) => mergeExactPointGroup(group));
+    .map(([, group]) => {
+      const sorted = group.toSorted(
+        (first, second) =>
+          first.point.id.localeCompare(second.point.id) ||
+          first.operatorName.localeCompare(second.operatorName),
+      );
+      const selected = sorted[0];
+      if (selected === undefined) {
+        throw new Error("Cannot merge an empty EVSE membership group.");
+      }
+      return {
+        operatorName: selected.operatorName,
+        point: mergeExactPointGroup(sorted.map(({ point }) => point)),
+      };
+    });
+}
+
+function aggregateOperatorChargingPointCounts(
+  memberships: readonly PointMembership[],
+): readonly OperatorChargingPointCount[] {
+  const counts = new Map<string, number>();
+  for (const { operatorName } of memberships) {
+    counts.set(operatorName, (counts.get(operatorName) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .toSorted(([first], [second]) => first.localeCompare(second))
+    .map(([operatorName, chargingPointCount]) => ({
+      operatorName,
+      chargingPointCount,
+    }));
 }
 
 function mergeExactPointGroup(

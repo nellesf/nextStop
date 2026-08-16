@@ -68,6 +68,11 @@ export interface QuarantinedProviderRecord {
   readonly issueCodes: readonly string[];
 }
 
+export interface OperatorChargingPointCount {
+  readonly operatorName: string;
+  readonly chargingPointCount: number;
+}
+
 export interface ChargingParkProjection {
   readonly id: string;
   readonly name: string;
@@ -81,6 +86,7 @@ export interface ChargingParkProjection {
   }>;
   readonly memberLocationIds: readonly string[];
   readonly operators: readonly string[];
+  readonly operatorChargingPointCounts: readonly OperatorChargingPointCount[];
   readonly chargingPointCount: number;
   readonly availability: Readonly<{
     knownAvailableCount: number;

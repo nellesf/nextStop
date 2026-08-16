@@ -60,7 +60,9 @@ PostgreSQL + PostGIS <---- official NAP/operator/open-data providers
 - Resolves actual automobile routes from current location to candidate parks.
 - Resolves the selected fast-food chain near a park and verifies the result's
   geodesic distance is no more than 500 m.
-- Opens the selected park in Apple Maps with driving directions.
+- Opens Apple Maps with driving directions. A matched restaurant is inserted as a
+  waypoint before the original ride destination; without a food match, the park
+  remains the navigation destination.
 
 ### CarPlay adapter
 

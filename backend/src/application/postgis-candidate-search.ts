@@ -50,6 +50,10 @@ interface CandidateRow {
   readonly lastLiveObservationAt: Date | null;
   readonly maximumPowerKW: number;
   readonly operators: string[];
+  readonly operatorChargingPoints: {
+    readonly name: string;
+    readonly chargingPoints: number;
+  }[];
   readonly sources: SourceSummary[];
   readonly dataUpdatedAt: Date;
 }
@@ -307,6 +311,16 @@ SELECT park_id AS id,
        resolved_last_live_observation_at AS "lastLiveObservationAt",
        maximum_power_kw AS "maximumPowerKW",
        operators,
+       (
+         SELECT jsonb_agg(
+           jsonb_build_object(
+             'name', item->>'operatorName',
+             'chargingPoints', (item->>'chargingPointCount')::integer
+           )
+           ORDER BY item->>'operatorName'
+         )
+         FROM jsonb_array_elements(operator_charging_point_counts) AS item
+       ) AS "operatorChargingPoints",
        source_summaries AS sources,
        data_updated_at AS "dataUpdatedAt"
 FROM filtered
@@ -392,6 +406,7 @@ function mapCandidate(
     },
     maximumPowerKW: row.maximumPowerKW,
     operators: row.operators,
+    operatorChargingPoints: row.operatorChargingPoints,
     sources: row.sources.map((source) => {
       const liveObservedAt = liveObservedByProvider.get(source.id);
       return liveObservedAt === undefined ? source : { ...source, liveObservedAt };

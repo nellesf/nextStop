@@ -191,6 +191,7 @@ components:
         - availability
         - maximumPowerKW
         - operators
+        - operatorChargingPoints
         - sources
         - dataUpdatedAt
       properties:
@@ -211,11 +212,24 @@ components:
           type: array
           uniqueItems: true
           items: { type: string }
+        operatorChargingPoints:
+          type: array
+          minItems: 1
+          description: Deduplicated EVSE count per operator; the sum equals chargingPoints.
+          items:
+            $ref: '#/components/schemas/OperatorChargingPoints'
         sources:
           type: array
           minItems: 1
           items: { $ref: '#/components/schemas/SourceSummary' }
         dataUpdatedAt: { type: string, format: date-time }
+    OperatorChargingPoints:
+      type: object
+      additionalProperties: false
+      required: [name, chargingPoints]
+      properties:
+        name: { type: string, minLength: 1 }
+        chargingPoints: { type: integer, minimum: 1 }
     Coordinate:
       type: object
       additionalProperties: false
