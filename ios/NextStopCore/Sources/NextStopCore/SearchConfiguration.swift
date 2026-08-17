@@ -32,15 +32,6 @@ public enum MinimumChargingPointsOption: Int, CaseIterable, Codable, Sendable {
   case twenty = 20
 }
 
-public enum MinimumAvailablePointsOption: Int, CaseIterable, Codable, Sendable {
-  case one = 1
-  case two = 2
-  case four = 4
-  case six = 6
-  case eight = 8
-  case ten = 10
-}
-
 public enum MinimumPowerOption: Int, CaseIterable, Codable, Sendable {
   case eleven = 11
   case twentyTwo = 22
@@ -68,20 +59,17 @@ public enum FoodChain: String, CaseIterable, Codable, Sendable {
 public struct RideCriteria: Hashable, Codable, Sendable {
   public var distanceRange: DistanceRangeOption
   public var minimumChargingPoints: MinimumChargingPointsOption
-  public var minimumAvailablePoints: MinimumAvailablePointsOption?
   public var minimumPower: MinimumPowerOption
   public var foodChain: FoodChain?
 
   public init(
     distanceRange: DistanceRangeOption,
     minimumChargingPoints: MinimumChargingPointsOption,
-    minimumAvailablePoints: MinimumAvailablePointsOption?,
     minimumPower: MinimumPowerOption,
     foodChain: FoodChain?
   ) {
     self.distanceRange = distanceRange
     self.minimumChargingPoints = minimumChargingPoints
-    self.minimumAvailablePoints = minimumAvailablePoints
     self.minimumPower = minimumPower
     self.foodChain = foodChain
   }
@@ -98,7 +86,6 @@ public enum SearchConfiguration {
   public static let defaultCriteria = RideCriteria(
     distanceRange: .kilometers50To100,
     minimumChargingPoints: .four,
-    minimumAvailablePoints: nil,
     minimumPower: .oneHundred,
     foodChain: nil
   )

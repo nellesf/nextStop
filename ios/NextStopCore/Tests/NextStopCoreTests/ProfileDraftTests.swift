@@ -12,7 +12,6 @@ final class ProfileDraftTests: XCTestCase {
     let profileCriteria = RideCriteria(
       distanceRange: .kilometers100To150,
       minimumChargingPoints: .eight,
-      minimumAvailablePoints: .four,
       minimumPower: .oneHundredFifty,
       foodChain: .mcdonalds
     )

@@ -14,7 +14,6 @@
 "Open ride preparation" = "Open ride preparation";
 "Prepare a ride" = "Prepare a ride";
 "Searches for a destination and opens the ride preparation." = "Searches for a destination and opens the ride preparation.";
-"availability.any" = "any";
 "carplay.ride.title" = "Ride";
 "carplay.result.route_distance.format" = "%lld km from route";
 "carplay.result.charging_summary.format" = "%lld charging points · %@ · up to %lld kW";
@@ -57,7 +56,6 @@
 "profile.destination" = "Destination";
 "profile.distance_range" = "Charging stop";
 "profile.fast_food" = "Fast food";
-"profile.minimum_available" = "Minimum available";
 "profile.minimum_charging_points" = "Minimum charging points";
 "profile.minimum_power" = "Minimum power";
 "profile.name" = "Profile name";

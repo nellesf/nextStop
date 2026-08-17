@@ -23,8 +23,7 @@ decision still require the explicit approval described at the end of this file.
    the charging park, including the exit/detour. Never label straight-line or
    main-route progress as driving distance.
 3. Count EVSEs, not cabinets and not connectors.
-4. Unknown availability does not fail the availability filter. Partial
-   availability uses the explicit three-valued rule in the data-model document.
+4. Availability is informational only and never affects candidate inclusion.
 5. The selected food chain must be within 500 m geodesic distance. Opening status
    is informational and missing hours never fail a filter.
 6. Apply all filters first, sort only by actual driving distance ascending, and
@@ -113,7 +112,7 @@ with `README.md`, CI, and `docs/development.md`.
 - Domain search policy and central search option catalog.
 - Route geometry and exact-driving-distance orchestration.
 - EVSE identity/deduplication and park clustering.
-- Availability truth-table implementation.
+- Availability aggregation and informational presentation.
 - Database migrations and spatial indexes.
 - Versioned OpenAPI contract.
 - CarPlay scene manifest and entitlement files.

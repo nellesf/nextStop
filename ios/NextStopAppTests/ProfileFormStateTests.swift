@@ -13,10 +13,6 @@ final class ProfileFormStateTests: XCTestCase {
       state.minimumChargingPoints,
       SearchConfiguration.defaultCriteria.minimumChargingPoints
     )
-    XCTAssertEqual(
-      state.minimumAvailablePoints,
-      SearchConfiguration.defaultCriteria.minimumAvailablePoints
-    )
     XCTAssertEqual(state.minimumPower, SearchConfiguration.defaultCriteria.minimumPower)
     XCTAssertEqual(state.foodChain, SearchConfiguration.defaultCriteria.foodChain)
   }

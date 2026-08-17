@@ -13,7 +13,7 @@ final class MapKitCandidateEnricher: CandidateEnriching {
   private let foodSearcher: any FoodPOISearching
 
   init(
-    routePlanner: any RoutePlanning = MapKitRoutePlanner(),
+    routePlanner: any RoutePlanning = RetryingRoutePlanner(base: MapKitRoutePlanner()),
     foodSearcher: any FoodPOISearching = MapKitFoodPOISearchService()
   ) {
     self.routePlanner = routePlanner

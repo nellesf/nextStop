@@ -39,7 +39,7 @@ PostgreSQL + PostGIS <---- official NAP/operator/open-data providers
 
 - Domain value types and central option catalog.
 - Ride-scoped search draft copied from an optional profile.
-- Three-valued availability filtering.
+- Availability validation and informational presentation without filtering.
 - Candidate enrichment orchestration, exact-distance filtering, sorting, and
   five-result cap.
 - Error taxonomy independent of UIKit, SwiftUI, CarPlay, MapKit, and URLSession.
@@ -130,8 +130,9 @@ never import provider DTOs or UI frameworks.
 
 ## Search ownership
 
-The backend returns a paginated, stable candidate snapshot after static/live
-charging filters and exact route-corridor geometry. The iOS application performs
+The backend returns a paginated, stable candidate snapshot after EVSE count/power
+filters and exact route-corridor geometry. Live availability remains informational.
+The iOS application performs
 the operations that only MapKit can truthfully provide:
 
 1. exact automobile distance from the current location to each candidate;

@@ -17,7 +17,6 @@ final class CandidateSearchRequestDTOTests: XCTestCase {
       criteria: RideCriteria(
         distanceRange: .kilometers100To150,
         minimumChargingPoints: .eight,
-        minimumAvailablePoints: nil,
         minimumPower: .oneHundredFifty,
         foodChain: .burgerKing
       )

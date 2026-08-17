@@ -24,7 +24,6 @@ struct ProfileFormState: Equatable {
   var destination: SavedDestination?
   var distanceRange: DistanceRangeOption
   var minimumChargingPoints: MinimumChargingPointsOption
-  var minimumAvailablePoints: MinimumAvailablePointsOption?
   var minimumPower: MinimumPowerOption
   var foodChain: FoodChain?
 
@@ -38,9 +37,6 @@ struct ProfileFormState: Equatable {
     minimumChargingPoints =
       profile?.criteria.minimumChargingPoints
       ?? SearchConfiguration.defaultCriteria.minimumChargingPoints
-    minimumAvailablePoints =
-      profile?.criteria.minimumAvailablePoints
-      ?? SearchConfiguration.defaultCriteria.minimumAvailablePoints
     minimumPower =
       profile?.criteria.minimumPower ?? SearchConfiguration.defaultCriteria.minimumPower
     foodChain = profile?.criteria.foodChain ?? SearchConfiguration.defaultCriteria.foodChain
@@ -62,7 +58,6 @@ struct ProfileFormState: Equatable {
       criteria: RideCriteria(
         distanceRange: distanceRange,
         minimumChargingPoints: minimumChargingPoints,
-        minimumAvailablePoints: minimumAvailablePoints,
         minimumPower: minimumPower,
         foodChain: foodChain
       ),

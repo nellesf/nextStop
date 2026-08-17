@@ -41,7 +41,6 @@ Ride summary (ride-scoped copy)
   Destination
   Charging stop range -> fixed-choice list
   Minimum EVSEs      -> fixed-choice list
-  Minimum available  -> fixed-choice list
   Minimum power      -> fixed-choice list
   Fast food          -> fixed-choice list
   [Search]
@@ -117,7 +116,7 @@ the iPhone flow.
 Results use `CPPointOfInterestTemplate`; its picker and map receive the same stable
 zero-to-five result snapshot. Partial or unavailable live coverage remains visible
 in detail text, a manual refresh creates a new snapshot, and panning never changes
-or re-ranks the result. No-results keeps all five criteria available for an
+or re-ranks the result. No-results keeps all four criteria available for an
 explicit user change. The primary POI action sends the park to Apple Maps.
 
 CarPlay performs a location-readiness preflight and never triggers first-time or

@@ -42,11 +42,11 @@ final class CarPlayPresentationTests: XCTestCase {
 
     XCTAssertEqual(summary.title, "Fahrt")
     XCTAssertEqual(summary.destination, "Berlin Hauptbahnhof")
-    XCTAssertEqual(summary.criteria.count, 5)
+    XCTAssertEqual(summary.criteria.count, 4)
     XCTAssertEqual(summary.criteria[0].value, "100–150 km")
-    XCTAssertEqual(summary.criteria[2].value, "mindestens 2")
-    XCTAssertEqual(summary.criteria[3].value, "150 kW")
-    XCTAssertEqual(summary.criteria[4].value, "McDonald's")
+    XCTAssertEqual(summary.criteria[1].value, "mindestens 8")
+    XCTAssertEqual(summary.criteria[2].value, "150 kW")
+    XCTAssertEqual(summary.criteria[3].value, "McDonald's")
     XCTAssertEqual(
       presenter.options(for: .minimumPower, draft: draft).filter(\.selected).count,
       1
@@ -108,7 +108,6 @@ final class CarPlayPresentationTests: XCTestCase {
       criteria: RideCriteria(
         distanceRange: .kilometers100To150,
         minimumChargingPoints: .eight,
-        minimumAvailablePoints: .two,
         minimumPower: .oneHundredFifty,
         foodChain: .mcdonalds
       ),
@@ -158,7 +157,6 @@ final class CarPlayPresentationTests: XCTestCase {
         actualDrivingDistance: Meters(drivingMeters),
         foodPOIs: []
       ),
-      availabilityEvaluation: availability.evaluate(minimum: nil),
       matchingFoodPOI: nil
     )
   }
@@ -169,7 +167,6 @@ final class CarPlayPresentationTests: XCTestCase {
       "ride.search.action": "Ladeparks suchen",
       "profile.distance_range": "Ladestopp",
       "profile.minimum_charging_points": "Mindestens Ladepunkte",
-      "profile.minimum_available": "Mindestens frei",
       "profile.minimum_power": "Mindestleistung",
       "profile.fast_food": "Fast Food",
       "search.distance_range.100_150_km": "100–150 km",
@@ -188,7 +185,6 @@ final class CarPlayPresentationTests: XCTestCase {
       "ride.results.title": "Passende Ladeparks",
       "carplay.coverage.degraded": "Live-Daten teilweise verfügbar",
       "carplay.coverage.stale": "Ladedaten nicht aktuell",
-      "availability.any": "egal",
       "food.any": "egal",
     ]
     return CarPlayLocalizer(locale: Locale(identifier: "de_DE")) { key in

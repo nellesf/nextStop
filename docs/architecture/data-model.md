@@ -79,8 +79,8 @@ an MVP filter.
 - `sourceReference`
 - `freshness`: `fresh | stale | expired | unknown`
 
-An expired value is treated as unknown for search, while the last observation may
-remain visible only with an explicit stale label.
+An expired value is treated as unknown for presentation, while the last observation
+may remain visible only with an explicit stale label.
 
 ### `ParkAvailability`
 
@@ -91,20 +91,9 @@ remain visible only with an explicit stale label.
 - `complete`: all deduplicated EVSEs have fresh usable live state
 - `lastLiveObservationAt?`
 
-#### Minimum-availability truth table
-
-For requested minimum `m`:
-
-- `m == nil` (German UI “egal”): pass.
-- `knownAvailableCount >= m`: pass.
-- `knownAvailableCount + unknownCount < m`: fail (even every unknown EVSE could not
-  satisfy the request).
-- Otherwise: pass with `uncertain` evidence, because unknown EVSEs may satisfy the
-  request.
-
-Thus missing or partial live data never excludes a park merely because it is
-unknown, but known facts can still prove a requirement impossible. UI copy must
-distinguish complete counts from partial/unknown availability.
+Availability is informational only. Neither complete nor partial live state can
+include or exclude a candidate. UI copy must distinguish complete counts from
+partial/unknown availability.
 
 ### `PowerCapability`
 
@@ -157,7 +146,6 @@ Unknown opening status does not affect matching.
 
 - `distanceRange: DistanceRange`
 - `minimumChargingPoints`
-- `minimumAvailablePoints?`
 - `minimumPowerKW`
 - `foodChain?`
 - fixed `maximumDistanceFromRouteMeters = 5_000`

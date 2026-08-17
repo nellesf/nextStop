@@ -74,6 +74,50 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
     XCTAssertEqual(pageSearcher.requests[1].cursor, "cursor-1")
   }
 
+  func testRestartsOnceFromTheFirstPageWhenSnapshotExpires() async throws {
+    let staleCandidate = try makeBackendCandidate(index: 1, lowerBoundKilometers: 40)
+    let freshCandidate = try makeBackendCandidate(index: 2, lowerBoundKilometers: 50)
+    let pageSearcher = CandidatePageSearcherStub(responses: [
+      .success(
+        CandidateSearchPage(
+          snapshotToken: "stale-snapshot",
+          nextCursor: "stale-cursor",
+          candidates: [staleCandidate],
+          coverage: coverage
+        )
+      ),
+      .failure(.snapshotExpired),
+      .success(
+        CandidateSearchPage(
+          snapshotToken: "fresh-snapshot",
+          nextCursor: nil,
+          candidates: [freshCandidate],
+          coverage: coverage
+        )
+      ),
+    ])
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: pageSearcher,
+      enricher: CandidateEnricherStub(
+        distances: [
+          staleCandidate.id: Meters(60_000),
+          freshCandidate.id: Meters(70_000),
+        ]
+      )
+    )
+
+    let outcome = try await coordinator.search(
+      preparedRide: try preparedRide(distanceRange: .kilometers50To100)
+    )
+
+    XCTAssertEqual(outcome.results.map(\.id), [freshCandidate.id])
+    XCTAssertEqual(pageSearcher.requests.count, 3)
+    XCTAssertEqual(pageSearcher.requests[1].snapshotToken, "stale-snapshot")
+    XCTAssertEqual(pageSearcher.requests[1].cursor, "stale-cursor")
+    XCTAssertNil(pageSearcher.requests[2].snapshotToken)
+    XCTAssertNil(pageSearcher.requests[2].cursor)
+  }
+
   func testDoesNotClaimNoMatchesWhenAnUnresolvedRouteCouldStillQualify() async throws {
     let candidate = try makeBackendCandidate(index: 1, lowerBoundKilometers: 50)
     let coordinator = RideCandidateSearchCoordinator(
@@ -233,7 +277,6 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
     let criteria = RideCriteria(
       distanceRange: distanceRange,
       minimumChargingPoints: .four,
-      minimumAvailablePoints: nil,
       minimumPower: .oneHundred,
       foodChain: nil
     )
@@ -294,19 +337,23 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
 
 @MainActor
 private final class CandidatePageSearcherStub: CandidatePageSearching {
-  private var pages: [CandidateSearchPage]
+  private var responses: [Result<CandidateSearchPage, CandidateSearchServiceError>]
   private(set) var requests: [RouteSearchRequest] = []
 
   init(pages: [CandidateSearchPage]) {
-    self.pages = pages
+    responses = pages.map { .success($0) }
+  }
+
+  init(responses: [Result<CandidateSearchPage, CandidateSearchServiceError>]) {
+    self.responses = responses
   }
 
   func search(request: RouteSearchRequest) async throws -> CandidateSearchPage {
     requests.append(request)
-    guard !pages.isEmpty else {
+    guard !responses.isEmpty else {
       throw CandidateSearchServiceError.invalidResponse
     }
-    return pages.removeFirst()
+    return try responses.removeFirst().get()
   }
 }
 

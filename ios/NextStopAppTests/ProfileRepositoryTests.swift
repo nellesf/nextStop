@@ -28,7 +28,6 @@ final class ProfileRepositoryTests: XCTestCase {
       criteria: RideCriteria(
         distanceRange: .kilometers100To150,
         minimumChargingPoints: .eight,
-        minimumAvailablePoints: .four,
         minimumPower: .oneHundredFifty,
         foodChain: .mcdonalds
       ),
@@ -57,6 +56,21 @@ final class ProfileRepositoryTests: XCTestCase {
     let repository = InMemoryProfileRepository(profiles: [older, newer])
 
     XCTAssertEqual(repository.fetchProfiles().map(\.id), [newer.id, older.id])
+  }
+
+  func testLegacyAvailabilityValueIsIgnoredWhenLoadingAProfile() throws {
+    let (container, repository) = try makeRepository()
+    let profile = try makeProfile(
+      id: UUID(uuidString: "AAAAAAAA-BBBB-CCCC-DDDD-EEEEEEEEEEEE")!,
+      name: "Legacy",
+      timestamp: Date(timeIntervalSince1970: 1_700_000_000)
+    )
+    let stored = StoredProfile(profile: profile)
+    stored.minimumAvailablePointsRawValue = 999
+    container.mainContext.insert(stored)
+    try container.mainContext.save()
+
+    XCTAssertEqual(try repository.fetchProfiles(), [profile])
   }
 
   private func makeRepository() throws -> (ModelContainer, SwiftDataProfileRepository) {

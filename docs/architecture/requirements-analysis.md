@@ -29,7 +29,7 @@ distance range. Selecting one opens Apple Maps navigation.
 | Provider ingestion/normalization | Backend |
 | EVSE deduplication and park clustering | Backend |
 | Exact <=5 km route corridor | PostGIS backend |
-| Charging count/power/availability filter | Backend/domain |
+| Charging count/power filter | Backend/domain |
 | Actual driving distance to park | MapKit on iPhone |
 | Exact distance-range filter and ranking | iPhone domain use case |
 | Fast-food <=500 m | MapKit POI adapter on iPhone (MVP) |
@@ -47,7 +47,7 @@ filter, ratings, reservations, live re-ranking, or paid data source.
 - Thresholds/options are centrally modeled and versioned.
 - `ChargingPoint` means EVSE; connectors do not inflate counts.
 - A park may contain several operators.
-- Absence of live availability is not negative evidence.
+- Availability is informational and never affects inclusion.
 - POI opening status cannot affect inclusion.
 - No score exists after filtering; actual distance is the only visible order.
 - No result is invented/padded and no filter changes without user action.
@@ -55,7 +55,7 @@ filter, ratings, reservations, live re-ranking, or paid data source.
 
 ## Ambiguities resolved by the architecture
 
-- Partial availability uses explicit possible/impossible three-valued semantics.
+- Partial availability is displayed honestly but is not a search criterion.
 - Actual distance is a per-candidate MapKit route distance.
 - Park navigation uses a validated access/member coordinate, not cluster centroid.
 - POI service failure is different from a confirmed no-match.

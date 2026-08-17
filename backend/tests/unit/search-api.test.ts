@@ -19,7 +19,6 @@ const validRequest = {
   criteria: {
     distanceRangeMeters: { minimum: 50_000, maximum: 100_000 },
     minimumChargingPoints: 4,
-    minimumAvailablePoints: null,
     minimumPowerKW: 100,
     foodChain: null,
   },
@@ -74,6 +73,24 @@ void test("profile and destination fields are rejected instead of stripped", asy
   assert.equal(response.headers["content-type"], "application/problem+json; charset=utf-8");
   assert.equal(candidateSearch.requests.length, 0);
   assert.doesNotMatch(response.body, /must stay local/u);
+});
+
+void test("removed availability filter is rejected instead of silently applied", async (context) => {
+  const candidateSearch = new CandidateSearchStub(emptyResponse);
+  const app = createApp({ candidateSearch });
+  context.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/charging-parks/search",
+    payload: {
+      ...validRequest,
+      criteria: { ...validRequest.criteria, minimumAvailablePoints: 4 },
+    },
+  });
+
+  assert.equal(response.statusCode, 400);
+  assert.equal(candidateSearch.requests.length, 0);
 });
 
 void test("degenerate route is rejected by semantic validation", async (context) => {

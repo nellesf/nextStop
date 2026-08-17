@@ -10,17 +10,16 @@
   EV-charging entitlement; running the CarPlay surface requires Apple's managed
   `com.apple.developer.carplay-charging` capability and matching provisioning.
 
-Observed on 2026-08-14: this machine has Swift 6.3 command-line tools, but the
+Observed on 2026-08-17: this machine has Swift 6.3 command-line tools, but the
 active developer directory is Command Line Tools rather than full Xcode. The local
-Swift compiler and default macOS SDK have different build revisions. With the
-compatible macOS 15.4 SDK, production core sources compile, but these Command Line
-Tools do not include a compatible XCTest module. Node.js 24 LTS and npm are
+Swift compiler and installed macOS SDKs have incompatible build revisions, and the
+Command Line Tools do not provide a usable XCTest setup. Node.js 24 LTS and npm are
 installed. PostgreSQL 17 and PostGIS 3.6 are installed through Homebrew for
 isolated local backend integration tests; Docker/Podman is not installed.
 
-As a local fallback, all core product sources compile successfully against the
-compatible macOS 15.4 SDK, all Swift tests pass the parser, and Swift format lint
-passes. XCTest typechecking and execution still happen on the Xcode Mac or in CI.
+As a local fallback, all Swift sources and tests pass the parser and Swift format
+lint passes. Full Swift typechecking and XCTest execution happen on the Xcode Mac
+or in CI.
 
 ## Intended workflow after scaffolding
 
@@ -113,7 +112,7 @@ TEST_DATABASE_URL=postgresql://127.0.0.1/nextstop_test npm run test:integration
 
 The suite recreates only the `nextstop` schema in that dedicated test database.
 It verifies the inclusive 5 km corridor boundary, a bounding-box false positive,
-the availability truth table, GiST index use, automatic authority-feed refresh,
+informational availability behavior, GiST index use, automatic authority-feed refresh,
 Swiss live-status joins, atomic publication, and stable pagination across
 projection changes.
 

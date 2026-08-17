@@ -200,7 +200,6 @@ export class PostGISCandidateSearch implements CandidateSearching {
         origin[1],
         request.criteria.minimumChargingPoints,
         request.criteria.minimumPowerKW,
-        request.criteria.minimumAvailablePoints ?? null,
         request.criteria.distanceRangeMeters.maximum,
         cursor?.lowerBoundMeters ?? null,
         cursor?.parkId ?? null,
@@ -363,10 +362,10 @@ WITH parameters AS (
   FROM eligible_base AS base
   JOIN eligible_point_memberships AS membership USING (park_id)
   JOIN nextstop.availability_observations AS observation
-    ON observation.snapshot_id = ANY($12::uuid[])
+    ON observation.snapshot_id = ANY($11::uuid[])
    AND observation.provider_id = membership.provider_id
    AND observation.provider_evse_key = membership.provider_evse_key
-  WHERE cardinality($12::uuid[]) > 0
+  WHERE cardinality($11::uuid[]) > 0
   GROUP BY base.park_id, membership.evse_key
 ), live_aggregates AS (
   SELECT park_id,
@@ -380,31 +379,26 @@ WITH parameters AS (
   GROUP BY park_id
 ), availability AS (
   SELECT base.*,
-         CASE WHEN cardinality($12::uuid[]) = 0
+         CASE WHEN cardinality($11::uuid[]) = 0
            THEN base.eligible_known_available_count
            ELSE coalesce(live.known_available_count, 0)
          END AS resolved_known_available_count,
-         CASE WHEN cardinality($12::uuid[]) = 0
+         CASE WHEN cardinality($11::uuid[]) = 0
            THEN base.eligible_known_unavailable_count
            ELSE coalesce(live.known_unavailable_count, 0)
          END AS resolved_known_unavailable_count,
-         CASE WHEN cardinality($12::uuid[]) = 0
+         CASE WHEN cardinality($11::uuid[]) = 0
            THEN base.eligible_unknown_count
            ELSE base.eligible_charging_point_count
              - coalesce(live.known_available_count, 0)
              - coalesce(live.known_unavailable_count, 0)
          END AS resolved_unknown_count,
-         CASE WHEN cardinality($12::uuid[]) = 0
+         CASE WHEN cardinality($11::uuid[]) = 0
            THEN base.eligible_last_live_observation_at
            ELSE live.last_live_observation_at
          END AS resolved_last_live_observation_at
   FROM eligible_base AS base
   LEFT JOIN live_aggregates AS live USING (park_id)
-), filtered AS (
-  SELECT *
-  FROM availability
-  WHERE $7::integer IS NULL
-     OR resolved_known_available_count + resolved_unknown_count >= $7
 )
 SELECT park_id AS id,
        CASE cardinality(eligible_operators)
@@ -429,14 +423,14 @@ SELECT park_id AS id,
        operator_charging_points AS "operatorChargingPoints",
        source_summaries AS sources,
        data_updated_at AS "dataUpdatedAt"
-FROM filtered
-WHERE straight_line_lower_bound_meters <= $8
+FROM availability
+WHERE straight_line_lower_bound_meters <= $7
   AND (
-    $9::integer IS NULL
-    OR (straight_line_lower_bound_meters, park_id) > ($9, $10::uuid)
+    $8::integer IS NULL
+    OR (straight_line_lower_bound_meters, park_id) > ($8, $9::uuid)
   )
 ORDER BY straight_line_lower_bound_meters ASC, park_id ASC
-LIMIT $11`;
+LIMIT $10`;
 
 function resolvePage(
   request: SearchRequest,

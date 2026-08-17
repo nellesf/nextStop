@@ -77,33 +77,4 @@ public struct ParkAvailability: Hashable, Codable, Sendable {
     self.totalCount = totalCount
     self.lastLiveObservationAt = lastLiveObservationAt
   }
-
-  public func evaluate(
-    minimum: MinimumAvailablePointsOption?
-  ) -> AvailabilityEvaluation {
-    guard let minimum else {
-      return .notRequired
-    }
-
-    if knownAvailableCount >= minimum.rawValue {
-      return .satisfiedByKnownAvailability
-    }
-
-    if knownAvailableCount + unknownCount < minimum.rawValue {
-      return .impossible
-    }
-
-    return .satisfiedWithUncertainty
-  }
-}
-
-public enum AvailabilityEvaluation: String, Codable, Sendable {
-  case notRequired = "not_required"
-  case satisfiedByKnownAvailability = "satisfied_known"
-  case satisfiedWithUncertainty = "satisfied_uncertain"
-  case impossible
-
-  public var passes: Bool {
-    self != .impossible
-  }
 }

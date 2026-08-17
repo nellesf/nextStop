@@ -55,14 +55,20 @@ editable before search:
 
 - charging stop: 50–100 km;
 - minimum charging points: 4 EVSEs;
-- minimum available points: any;
 - minimum power: 100 kW;
 - fast food: any.
 
 See accepted ADR 0012. These defaults are not persisted back into a profile and
 are never automatically relaxed.
 
-## 6. Recent-destination limit
+## 6. Availability semantics
+
+**Decision: availability is informational and never filters candidates.** The MVP
+does not expose a minimum-free-EVSE criterion in profiles, ride drafts, CarPlay, or
+the backend API. Live data remains visible wherever an authorized provider supplies
+it. See ADR 0013.
+
+## 7. Recent-destination limit
 
 **Decision: 20, centrally configured, with newest-first de-duplication.**
 Favorites and profiles need no low arbitrary limit for MVP beyond defensive local

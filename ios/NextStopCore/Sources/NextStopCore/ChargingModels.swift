@@ -348,16 +348,13 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
   public var id: UUID { candidate.id }
 
   public let candidate: EnrichedChargingParkCandidate
-  public let availabilityEvaluation: AvailabilityEvaluation
   public let matchingFoodPOI: FoodPOI?
 
   public init(
     candidate: EnrichedChargingParkCandidate,
-    availabilityEvaluation: AvailabilityEvaluation,
     matchingFoodPOI: FoodPOI?
   ) {
     self.candidate = candidate
-    self.availabilityEvaluation = availabilityEvaluation
     self.matchingFoodPOI = matchingFoodPOI
   }
 }

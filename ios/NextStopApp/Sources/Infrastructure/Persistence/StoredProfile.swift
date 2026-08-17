@@ -17,6 +17,7 @@ final class StoredProfile {
   var destinationDisplayAddress: String?
   var distanceRangeRawValue: String
   var minimumChargingPointsRawValue: Int
+  // Retained for lightweight compatibility with profiles saved before 2026-08-17.
   var minimumAvailablePointsRawValue: Int?
   var minimumPowerRawValue: Int
   var foodChainRawValue: String?
@@ -33,7 +34,7 @@ final class StoredProfile {
     destinationDisplayAddress = profile.destination.displayAddress
     distanceRangeRawValue = profile.criteria.distanceRange.rawValue
     minimumChargingPointsRawValue = profile.criteria.minimumChargingPoints.rawValue
-    minimumAvailablePointsRawValue = profile.criteria.minimumAvailablePoints?.rawValue
+    minimumAvailablePointsRawValue = nil
     minimumPowerRawValue = profile.criteria.minimumPower.rawValue
     foodChainRawValue = profile.criteria.foodChain?.rawValue
     createdAt = profile.createdAt
@@ -49,7 +50,7 @@ final class StoredProfile {
     destinationDisplayAddress = profile.destination.displayAddress
     distanceRangeRawValue = profile.criteria.distanceRange.rawValue
     minimumChargingPointsRawValue = profile.criteria.minimumChargingPoints.rawValue
-    minimumAvailablePointsRawValue = profile.criteria.minimumAvailablePoints?.rawValue
+    minimumAvailablePointsRawValue = nil
     minimumPowerRawValue = profile.criteria.minimumPower.rawValue
     foodChainRawValue = profile.criteria.foodChain?.rawValue
     createdAt = profile.createdAt
@@ -73,7 +74,6 @@ final class StoredProfile {
         value: String(minimumChargingPointsRawValue)
       )
     }
-    let minimumAvailablePoints = try optionalMinimumAvailablePoints()
     guard let minimumPower = MinimumPowerOption(rawValue: minimumPowerRawValue) else {
       throw ProfilePersistenceError.invalidStoredValue(
         field: "minimumPower",
@@ -99,26 +99,12 @@ final class StoredProfile {
       criteria: RideCriteria(
         distanceRange: distanceRange,
         minimumChargingPoints: minimumChargingPoints,
-        minimumAvailablePoints: minimumAvailablePoints,
         minimumPower: minimumPower,
         foodChain: foodChain
       ),
       createdAt: createdAt,
       updatedAt: updatedAt
     )
-  }
-
-  private func optionalMinimumAvailablePoints() throws -> MinimumAvailablePointsOption? {
-    guard let minimumAvailablePointsRawValue else {
-      return nil
-    }
-    guard let value = MinimumAvailablePointsOption(rawValue: minimumAvailablePointsRawValue) else {
-      throw ProfilePersistenceError.invalidStoredValue(
-        field: "minimumAvailablePoints",
-        value: String(minimumAvailablePointsRawValue)
-      )
-    }
-    return value
   }
 
   private func optionalFoodChain() throws -> FoodChain? {

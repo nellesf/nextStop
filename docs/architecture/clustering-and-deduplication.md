@@ -72,7 +72,7 @@ product interprets 200 m as an edge/link distance rather than maximum park span.
   operator composition/location label.
 - Operators: sorted distinct canonical operators.
 - EVSE count: distinct canonical charging-point IDs.
-- Free count: availability truth table over current deduplicated EVSEs.
+- Availability counts: informational aggregation over current deduplicated EVSEs.
 - Maximum power: maximum valid EVSE capability.
 - Sources/timestamps/quality: union with field-level selected observations.
 

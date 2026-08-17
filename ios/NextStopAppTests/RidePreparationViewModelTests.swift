@@ -160,6 +160,29 @@ final class RidePreparationViewModelTests: XCTestCase {
     }
   }
 
+  func testRetryingRoutePlannerRecoversFromOneTransientFailure() async throws {
+    let origin = try Coordinate(latitude: 53.5511, longitude: 9.9937)
+    let destination = try Coordinate(latitude: 53.0793, longitude: 8.8017)
+    let expected = PlannedRoute(
+      polyline: try RoutePolyline(coordinates: [origin, destination]),
+      actualDrivingDistance: Meters(120_000),
+      expectedTravelTimeSeconds: 5_400
+    )
+    let base = SequencedRoutePlannerStub(responses: [
+      .failure(RoutePlanningError.noRoute),
+      .success(expected),
+    ])
+    let planner = RetryingRoutePlanner(
+      base: base,
+      retryDelay: .zero
+    )
+
+    let route = try await planner.automobileRoute(from: origin, to: destination)
+
+    XCTAssertEqual(route, expected)
+    XCTAssertEqual(base.requestCount, 2)
+  }
+
   private func makeProfile(name: String, destination: SavedDestination) throws -> UserProfile {
     try UserProfile(
       name: name,
@@ -167,7 +190,6 @@ final class RidePreparationViewModelTests: XCTestCase {
       criteria: RideCriteria(
         distanceRange: .kilometers100To150,
         minimumChargingPoints: .eight,
-        minimumAvailablePoints: .two,
         minimumPower: .oneHundredFifty,
         foodChain: .mcdonalds
       ),
@@ -210,5 +232,27 @@ private final class RoutePlannerStub: RoutePlanning {
     receivedOrigin = origin
     receivedDestination = destination
     return try result.get()
+  }
+}
+
+@MainActor
+private final class SequencedRoutePlannerStub: RoutePlanning {
+  private var responses: [Result<PlannedRoute, any Error>]
+  private(set) var requestCount = 0
+
+  init(responses: [Result<PlannedRoute, any Error>]) {
+    self.responses = responses
+  }
+
+  func automobileRoute(from origin: Coordinate, to destination: Coordinate) async throws
+    -> PlannedRoute
+  {
+    _ = origin
+    _ = destination
+    requestCount += 1
+    guard !responses.isEmpty else {
+      throw RoutePlanningError.noRoute
+    }
+    return try responses.removeFirst().get()
   }
 }

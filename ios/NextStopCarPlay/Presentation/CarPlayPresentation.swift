@@ -34,7 +34,6 @@ struct CarPlayProfilePresentation: Equatable, Sendable {
 enum CarPlayCriteriaField: String, CaseIterable, Hashable, Sendable {
   case distanceRange
   case minimumChargingPoints
-  case minimumAvailablePoints
   case minimumPower
   case foodChain
 }
@@ -42,7 +41,6 @@ enum CarPlayCriteriaField: String, CaseIterable, Hashable, Sendable {
 enum CarPlayCriteriaSelection: Hashable, Sendable {
   case distanceRange(DistanceRangeOption)
   case minimumChargingPoints(MinimumChargingPointsOption)
-  case minimumAvailablePoints(MinimumAvailablePointsOption?)
   case minimumPower(MinimumPowerOption)
   case foodChain(FoodChain?)
 }
@@ -132,21 +130,6 @@ struct CarPlayPresenter {
           selected: value == draft.criteria.minimumChargingPoints
         )
       }
-    case .minimumAvailablePoints:
-      [
-        CarPlayCriteriaOptionPresentation(
-          selection: .minimumAvailablePoints(nil),
-          title: localizer.text("availability.any"),
-          selected: draft.criteria.minimumAvailablePoints == nil
-        )
-      ]
-        + MinimumAvailablePointsOption.allCases.map { value in
-          CarPlayCriteriaOptionPresentation(
-            selection: .minimumAvailablePoints(value),
-            title: minimumCount(value.rawValue),
-            selected: value == draft.criteria.minimumAvailablePoints
-          )
-        }
     case .minimumPower:
       MinimumPowerOption.allCases.map { value in
         CarPlayCriteriaOptionPresentation(
@@ -199,13 +182,6 @@ struct CarPlayPresenter {
         field: field,
         title: localizer.text("profile.minimum_charging_points"),
         value: minimumCount(criteria.minimumChargingPoints.rawValue)
-      )
-    case .minimumAvailablePoints:
-      return CarPlayCriterionPresentation(
-        field: field,
-        title: localizer.text("profile.minimum_available"),
-        value: criteria.minimumAvailablePoints.map { minimumCount($0.rawValue) }
-          ?? localizer.text("availability.any")
       )
     case .minimumPower:
       return CarPlayCriterionPresentation(
@@ -335,8 +311,6 @@ final class CarPlayRideDraftController {
       current.criteria.distanceRange = value
     case .minimumChargingPoints(let value):
       current.criteria.minimumChargingPoints = value
-    case .minimumAvailablePoints(let value):
-      current.criteria.minimumAvailablePoints = value
     case .minimumPower(let value):
       current.criteria.minimumPower = value
     case .foodChain(let value):

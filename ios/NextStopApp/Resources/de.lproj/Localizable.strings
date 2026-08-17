@@ -14,7 +14,6 @@
 "Open ride preparation" = "Fahrtvorbereitung öffnen";
 "Prepare a ride" = "Fahrt vorbereiten";
 "Searches for a destination and opens the ride preparation." = "Sucht ein Fahrziel und öffnet die Fahrtvorbereitung.";
-"availability.any" = "egal";
 "carplay.ride.title" = "Fahrt";
 "carplay.result.route_distance.format" = "%lld km von der Route";
 "carplay.result.charging_summary.format" = "%lld Ladepunkte · %@ · bis %lld kW";
@@ -57,7 +56,6 @@
 "profile.destination" = "Fahrziel";
 "profile.distance_range" = "Ladestopp";
 "profile.fast_food" = "Fast Food";
-"profile.minimum_available" = "Mindestens frei";
 "profile.minimum_charging_points" = "Mindestens Ladepunkte";
 "profile.minimum_power" = "Mindestleistung";
 "profile.name" = "Profilname";

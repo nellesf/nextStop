@@ -55,6 +55,17 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
   }
 
   func search(preparedRide: PreparedRideSearch) async throws -> RideCandidateSearchOutcome {
+    do {
+      return try await searchOnce(preparedRide: preparedRide)
+    } catch RideCandidateSearchError.candidateSnapshotExpired {
+      try Task.checkCancellation()
+      return try await searchOnce(preparedRide: preparedRide)
+    }
+  }
+
+  private func searchOnce(
+    preparedRide: PreparedRideSearch
+  ) async throws -> RideCandidateSearchOutcome {
     var request = preparedRide.request
     var enrichedCandidates: [EnrichedChargingParkCandidate] = []
     var routingFailureLowerBounds: [Meters] = []

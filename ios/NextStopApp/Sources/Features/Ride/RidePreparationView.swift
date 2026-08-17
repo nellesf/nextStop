@@ -28,7 +28,7 @@ struct RidePreparationView: View {
       wrappedValue: RidePreparationViewModel(
         draft: draft,
         locationProvider: CoreLocationProvider(),
-        routePlanner: MapKitRoutePlanner(),
+        routePlanner: RetryingRoutePlanner(base: MapKitRoutePlanner()),
         candidateSearcher: candidateSearcher
       )
     )
@@ -97,24 +97,12 @@ struct RidePreparationView: View {
       LabeledContent("profile.minimum_charging_points") {
         Text(LocalizedFormat.minimumCount(viewModel.draft.criteria.minimumChargingPoints.rawValue))
       }
-      LabeledContent("profile.minimum_available") {
-        minimumAvailabilityText
-      }
       LabeledContent("profile.minimum_power") {
         Text(LocalizedFormat.kilowatts(viewModel.draft.criteria.minimumPower.rawValue))
       }
       LabeledContent("profile.fast_food") {
         foodChainText
       }
-    }
-  }
-
-  @ViewBuilder
-  private var minimumAvailabilityText: some View {
-    if let minimum = viewModel.draft.criteria.minimumAvailablePoints {
-      Text(LocalizedFormat.minimumCount(minimum.rawValue))
-    } else {
-      Text("availability.any")
     }
   }
 

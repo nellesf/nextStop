@@ -56,7 +56,7 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
     locationReadiness: any CarPlayLocationReadinessChecking =
       SystemCarPlayLocationReadinessChecker(),
     locationProvider: any CurrentLocationProviding = CoreLocationProvider(),
-    routePlanner: any RoutePlanning = MapKitRoutePlanner(),
+    routePlanner: any RoutePlanning = RetryingRoutePlanner(base: MapKitRoutePlanner()),
     candidateSearcher: any RideCandidateSearching = RideCandidateSearchCoordinator(
       pageSearcher: HTTPCandidateSearchService(),
       enricher: MapKitCandidateEnricher()

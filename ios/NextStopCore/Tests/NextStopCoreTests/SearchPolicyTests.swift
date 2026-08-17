@@ -26,7 +26,6 @@ final class SearchPolicyTests: XCTestCase {
     let criteria = RideCriteria(
       distanceRange: .kilometers100To150,
       minimumChargingPoints: .four,
-      minimumAvailablePoints: nil,
       minimumPower: .oneHundred,
       foodChain: nil
     )
@@ -39,11 +38,11 @@ final class SearchPolicyTests: XCTestCase {
     )
   }
 
-  func testUnknownAvailabilityDoesNotExcludePark() throws {
+  func testAvailabilityIsInformationalAndNeverExcludesPark() throws {
     let availability = try ParkAvailability(
       knownAvailableCount: 0,
-      knownUnavailableCount: 0,
-      unknownCount: 8,
+      knownUnavailableCount: 8,
+      unknownCount: 0,
       totalCount: 8
     )
     let candidate = try makeCandidate(
@@ -52,32 +51,12 @@ final class SearchPolicyTests: XCTestCase {
       chargingPoints: 8,
       availability: availability
     )
-    var criteria = SearchConfiguration.defaultCriteria
-    criteria.minimumAvailablePoints = .four
-
-    let results = policy.selectResults(from: [candidate], criteria: criteria)
+    let results = policy.selectResults(
+      from: [candidate],
+      criteria: SearchConfiguration.defaultCriteria
+    )
 
     XCTAssertEqual(results.count, 1)
-    XCTAssertEqual(results.first?.availabilityEvaluation, .satisfiedWithUncertainty)
-  }
-
-  func testKnownImpossibleAvailabilityExcludesPark() throws {
-    let availability = try ParkAvailability(
-      knownAvailableCount: 1,
-      knownUnavailableCount: 5,
-      unknownCount: 2,
-      totalCount: 8
-    )
-    let candidate = try makeCandidate(
-      name: "impossible",
-      drivingKilometers: 60,
-      chargingPoints: 8,
-      availability: availability
-    )
-    var criteria = SearchConfiguration.defaultCriteria
-    criteria.minimumAvailablePoints = .four
-
-    XCTAssertTrue(policy.selectResults(from: [candidate], criteria: criteria).isEmpty)
   }
 
   func testChargingPointAndPowerFilters() throws {
@@ -102,7 +81,6 @@ final class SearchPolicyTests: XCTestCase {
     let criteria = RideCriteria(
       distanceRange: .kilometers50To100,
       minimumChargingPoints: .eight,
-      minimumAvailablePoints: nil,
       minimumPower: .oneHundredFifty,
       foodChain: nil
     )

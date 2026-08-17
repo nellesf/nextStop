@@ -34,7 +34,6 @@ struct CandidateSearchRequestDTO: Encodable, Equatable {
   struct SearchCriteriaDTO: Encodable, Equatable {
     let distanceRangeMeters: DistanceRangeDTO
     let minimumChargingPoints: Int
-    let minimumAvailablePoints: Int?
     let minimumPowerKW: Int
     let foodChain: String?
 
@@ -44,7 +43,6 @@ struct CandidateSearchRequestDTO: Encodable, Equatable {
         maximum: criteria.distanceRange.range.upperBound.value
       )
       minimumChargingPoints = criteria.minimumChargingPoints.rawValue
-      minimumAvailablePoints = criteria.minimumAvailablePoints?.rawValue
       minimumPowerKW = criteria.minimumPower.rawValue
       foodChain = criteria.foodChain?.rawValue
     }

@@ -157,7 +157,7 @@ struct ProfileListView: View {
   private func startRide(_ profile: UserProfile) {
     do {
       try destinationRepository.recordRecent(profile.destination, at: Date())
-      rideSelection = RideSelection(id: profile.id, source: .profile(profile))
+      rideSelection = RideSelection(id: UUID(), source: .profile(profile))
     } catch {
       showsError = true
     }

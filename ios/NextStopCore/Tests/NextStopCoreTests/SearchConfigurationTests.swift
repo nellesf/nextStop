@@ -17,10 +17,6 @@ final class SearchConfigurationTests: XCTestCase {
       [2, 4, 6, 8, 10, 12, 16, 20]
     )
     XCTAssertEqual(
-      MinimumAvailablePointsOption.allCases.map(\.rawValue),
-      [1, 2, 4, 6, 8, 10]
-    )
-    XCTAssertEqual(
       MinimumPowerOption.allCases.map(\.rawValue),
       [11, 22, 50, 100, 150, 200, 250, 300, 350, 400]
     )
@@ -43,7 +39,6 @@ final class SearchConfigurationTests: XCTestCase {
 
     XCTAssertEqual(defaults.distanceRange, .kilometers50To100)
     XCTAssertEqual(defaults.minimumChargingPoints, .four)
-    XCTAssertNil(defaults.minimumAvailablePoints)
     XCTAssertEqual(defaults.minimumPower, .oneHundred)
     XCTAssertNil(defaults.foodChain)
   }

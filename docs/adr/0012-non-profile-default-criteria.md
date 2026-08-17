@@ -2,11 +2,12 @@
 
 - Status: Accepted
 - Date: 2026-08-13
+- Amended: 2026-08-17
 
 ## Context
 
 The allowed filter values are fixed, but a destination selected without a profile
-still needs an efficient starting state in CarPlay. Requiring five first-time
+still needs an efficient starting state in CarPlay. Requiring four first-time
 selections would add avoidable driving interaction.
 
 ## Decision
@@ -16,7 +17,6 @@ defaults:
 
 - distance range: 50–100 km;
 - minimum charging points: 4 EVSEs;
-- minimum available points: any (`nil`);
 - minimum power: 100 kW;
 - food chain: any (`nil`).
 
@@ -32,7 +32,8 @@ value for the current ride. Defaults and ride edits never mutate saved profiles.
 
 ## Consequences
 
-The broad defaults avoid excluding parks based on uncertain availability or food
+Availability was removed as a filter by owner approval on 2026-08-17 and remains
+informational. The broad defaults avoid excluding parks based on uncertain food
 data while still favoring meaningful park size and fast charging. Product changes
 to these values require updating this ADR, the central catalog, tests, and German
 summary localization.

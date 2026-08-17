@@ -53,13 +53,6 @@ struct ProfileEditorView: View {
             }
           }
 
-          Picker("profile.minimum_available", selection: $form.minimumAvailablePoints) {
-            Text("availability.any").tag(nil as MinimumAvailablePointsOption?)
-            ForEach(MinimumAvailablePointsOption.allCases, id: \.self) { option in
-              Text(LocalizedFormat.minimumCount(option.rawValue)).tag(Optional(option))
-            }
-          }
-
           Picker("profile.minimum_power", selection: $form.minimumPower) {
             ForEach(MinimumPowerOption.allCases, id: \.self) { option in
               Text(LocalizedFormat.kilowatts(option.rawValue)).tag(option)

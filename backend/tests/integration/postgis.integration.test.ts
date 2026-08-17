@@ -392,23 +392,9 @@ void test(
         "2026-08-14T08:59:00.000Z",
       );
 
-      const minimumFour = await search.search({
-        ...searchRequest([
-          [10, 52],
-          [10.2, 52],
-        ]),
-        criteria: {
-          ...searchRequest([
-            [10, 52],
-            [10.2, 52],
-          ]).criteria,
-          minimumAvailablePoints: 4,
-        },
-      });
-      assert.equal(minimumFour.candidates.length, 0);
     });
 
-    await context.test("applies the three-valued availability rule", async () => {
+    await context.test("keeps availability informational instead of filtering", async () => {
       await resetDatabase(pool);
       const projectionId = await insertActiveProjection(pool);
       await insertProjectedPark(pool, projectionId, {
@@ -420,26 +406,31 @@ void test(
       await insertProjectedPark(pool, projectionId, {
         northMeters: 200,
         parkId: "30000000-0000-4000-8000-000000000002",
-        knownUnavailable: 1,
-        unknown: 3,
+        knownUnavailable: 4,
+        unknown: 0,
       });
 
-      const response = await candidateSearch(pool).search({
-        ...searchRequest([
+      const response = await candidateSearch(pool).search(
+        searchRequest([
           [10, 52],
           [10.2, 52],
         ]),
-        criteria: {
-          ...searchRequest([
-            [10, 52],
-            [10.2, 52],
-          ]).criteria,
-          minimumAvailablePoints: 4,
-        },
+      );
+      assert.deepEqual(
+        response.candidates.map((candidate) => candidate.id),
+        [
+          "30000000-0000-4000-8000-000000000001",
+          "30000000-0000-4000-8000-000000000002",
+        ],
+      );
+      assert.deepEqual(response.candidates[1]?.availability, {
+        knownAvailable: 0,
+        knownUnavailable: 4,
+        unknown: 0,
+        total: 4,
+        complete: true,
+        observedAt: null,
       });
-      assert.deepEqual(response.candidates.map((candidate) => candidate.id), [
-        "30000000-0000-4000-8000-000000000001",
-      ]);
     });
 
     await context.test("keeps an old snapshot stable after a newer publish", async () => {

@@ -12,11 +12,11 @@
   same ride preparation; selecting a saved profile as an optional Siri parameter
   is not implemented.
 - The current machine lacks an active full Xcode installation. Its standalone
-  Swift compiler and SDK revisions also mismatch,
-  so the executed core test suite must run on the Xcode Mac or in CI. Product and
-  core sources pass a direct compiler typecheck against the compatible local macOS
-  15.4 SDK. The iPhone target is built and tested with the current Xcode iOS SDK in
-  GitHub Actions and can be run interactively on the separate development Mac.
+  Swift compiler and SDK revisions also mismatch, so Swift typechecking and the
+  executed test suites must run on the Xcode Mac or in CI. All Swift files pass
+  local syntax and format checks. The iPhone target is built and tested with the
+  current Xcode iOS SDK in GitHub Actions and can be run interactively on the
+  separate development Mac.
 - CEAP is due by 2026-12-31 and was not discoverable as a production data gateway
   during research on 2026-08-13. National and operator feeds remain necessary.
 - European national-access-point coverage and data quality are heterogeneous. AFIR

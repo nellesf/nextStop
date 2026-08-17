@@ -32,13 +32,6 @@ public struct ChargingParkSearchPolicy: Sendable {
       return nil
     }
 
-    let availabilityEvaluation = candidate.park.availability.evaluate(
-      minimum: criteria.minimumAvailablePoints
-    )
-    guard availabilityEvaluation.passes else {
-      return nil
-    }
-
     let matchingFoodPOI: FoodPOI?
     if let requiredFoodChain = criteria.foodChain {
       matchingFoodPOI = candidate.foodPOIs
@@ -62,7 +55,6 @@ public struct ChargingParkSearchPolicy: Sendable {
 
     return RouteSearchResult(
       candidate: candidate,
-      availabilityEvaluation: availabilityEvaluation,
       matchingFoodPOI: matchingFoodPOI
     )
   }
