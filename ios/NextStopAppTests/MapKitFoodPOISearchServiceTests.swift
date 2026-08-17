@@ -20,4 +20,22 @@ final class MapKitFoodPOISearchServiceTests: XCTestCase {
     XCTAssertEqual(request.region.center.latitude, parkCoordinate.latitude, accuracy: 0.000_001)
     XCTAssertEqual(request.region.center.longitude, parkCoordinate.longitude, accuracy: 0.000_001)
   }
+
+  func testPlacemarkNotFoundIsAConfirmedLocalNoMatch() {
+    let error = NSError(
+      domain: MKError.errorDomain,
+      code: Int(MKError.Code.placemarkNotFound.rawValue)
+    )
+
+    XCTAssertTrue(MapKitFoodPOISearchService.isConfirmedNoMatch(error))
+  }
+
+  func testServerFailureIsNotAConfirmedLocalNoMatch() {
+    let error = NSError(
+      domain: MKError.errorDomain,
+      code: Int(MKError.Code.serverFailure.rawValue)
+    )
+
+    XCTAssertFalse(MapKitFoodPOISearchService.isConfirmedNoMatch(error))
+  }
 }

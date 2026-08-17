@@ -99,12 +99,21 @@ final class MapKitCandidateEnricher: CandidateEnriching {
 final class MapKitFoodPOISearchService: FoodPOISearching {
   func foodPOIs(chain: FoodChain, near parkCoordinate: Coordinate) async throws -> [FoodPOI] {
     let request = Self.makeRequest(chain: chain, near: parkCoordinate)
-    let response = try await MKLocalSearch(request: request).start()
+    let mapItems: [MKMapItem]
+    do {
+      let response = try await MKLocalSearch(request: request).start()
+      mapItems = response.mapItems
+    } catch {
+      if Self.isConfirmedNoMatch(error) {
+        return []
+      }
+      throw error
+    }
     let parkLocation = CLLocation(
       latitude: parkCoordinate.latitude,
       longitude: parkCoordinate.longitude
     )
-    return try response.mapItems.compactMap { mapItem in
+    return try mapItems.compactMap { mapItem in
       guard let name = mapItem.name,
         matches(name: name, chain: chain),
         let itemCoordinate = coordinate(for: mapItem)
@@ -155,6 +164,12 @@ final class MapKitFoodPOISearchService: FoodPOISearching {
     )
     request.regionPriority = .required
     return request
+  }
+
+  static func isConfirmedNoMatch(_ error: any Error) -> Bool {
+    let error = error as NSError
+    return error.domain == MKError.errorDomain
+      && error.code == Int(MKError.Code.placemarkNotFound.rawValue)
   }
 
   private static func query(for chain: FoodChain) -> String {
