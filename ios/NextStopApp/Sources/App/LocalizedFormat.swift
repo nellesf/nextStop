@@ -8,6 +8,16 @@ enum LocalizedFormat {
     )
   }
 
+  static func minimumKilowatts(_ value: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "unit.minimum_kilowatts.format",
+        comment: "Minimum charging power or higher"
+      ),
+      Int64(value)
+    )
+  }
+
   static func minimumCount(_ value: Int) -> String {
     String.localizedStringWithFormat(
       NSLocalizedString("unit.minimum_count.format", comment: "Minimum number of charging points"),

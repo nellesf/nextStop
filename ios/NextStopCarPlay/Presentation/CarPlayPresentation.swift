@@ -156,11 +156,14 @@ struct CarPlayPresenter {
     }
   }
 
-  func results(_ outcome: RideCandidateSearchOutcome) -> CarPlayResultsPresentation {
+  func results(
+    _ outcome: RideCandidateSearchOutcome,
+    criteria: RideCriteria
+  ) -> CarPlayResultsPresentation {
     precondition(outcome.results.count <= SearchConfiguration.maximumResultCount)
     return CarPlayResultsPresentation(
       title: localizer.text("ride.results.title"),
-      points: outcome.results.map(result),
+      points: outcome.results.map { result($0, criteria: criteria) },
       coverageMessage: coverageMessage(outcome.coverage)
     )
   }
@@ -199,7 +202,10 @@ struct CarPlayPresenter {
     }
   }
 
-  private func result(_ routeResult: RouteSearchResult) -> CarPlayResultPresentation {
+  private func result(
+    _ routeResult: RouteSearchResult,
+    criteria: RideCriteria
+  ) -> CarPlayResultPresentation {
     let candidate = routeResult.candidate
     let park = candidate.park
     let drivingDistance = kilometers(candidate.actualDrivingDistance.value)
@@ -208,12 +214,14 @@ struct CarPlayPresenter {
       Int64(roundedKilometers(candidate.distanceFromRoute.value))
     )
     let availability = availabilityText(park.availability)
-    let summary = localizer.format(
+    let chargingSummary = localizer.format(
       "carplay.result.charging_summary.format",
       Int64(park.chargingPointCount),
-      availability,
-      Int64(park.maximumPower.value)
+      minimumKilowatts(criteria.minimumPower.rawValue)
     )
+    let summary = [chargingSummary, availability]
+      .compactMap { $0 }
+      .joined(separator: " · ")
     let foodSummary = routeResult.matchingFoodPOI.map { food in
       localizer.format(
         "carplay.result.food.format",
@@ -239,7 +247,8 @@ struct CarPlayPresenter {
       subtitle: "\(drivingDistance) · \(routeDistance)",
       summary: summary,
       detailTitle: park.name,
-      detailSubtitle: "\(drivingDistance) · \(availability)",
+      detailSubtitle: availability.map { "\(drivingDistance) · \($0)" }
+        ?? drivingDistance,
       detailSummary: detailSummary,
       navigationActionTitle: localizer.text("ride.result.navigate")
     )
@@ -256,9 +265,9 @@ struct CarPlayPresenter {
     }
   }
 
-  private func availabilityText(_ availability: ParkAvailability) -> String {
+  private func availabilityText(_ availability: ParkAvailability) -> String? {
     if availability.unknownCount == availability.totalCount {
-      return localizer.text("ride.result.availability.unknown")
+      return nil
     }
     if availability.isComplete {
       return localizer.format(
@@ -279,6 +288,10 @@ struct CarPlayPresenter {
 
   private func kilowatts(_ value: Int) -> String {
     localizer.format("unit.kilowatts.format", Int64(value))
+  }
+
+  private func minimumKilowatts(_ value: Int) -> String {
+    localizer.format("unit.minimum_kilowatts.format", Int64(value))
   }
 
   private func kilometers(_ value: Int) -> String {

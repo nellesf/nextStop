@@ -364,7 +364,10 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   }
 
   private func showResults(_ outcome: RideCandidateSearchOutcome) {
-    let presentation = presenter.results(outcome)
+    guard let criteria = draftController.draft?.criteria else {
+      return
+    }
+    let presentation = presenter.results(outcome, criteria: criteria)
     resultsByID = Dictionary(
       uniqueKeysWithValues: outcome.results.map { ($0.candidate.park.id, $0) }
     )

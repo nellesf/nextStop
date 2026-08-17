@@ -340,12 +340,17 @@ struct RidePreparationView: View {
         }
       }
 
-      Label(LocalizedFormat.kilowatts(park.maximumPower.value), systemImage: "bolt.fill")
-        .font(.subheadline)
+      Label(
+        LocalizedFormat.minimumKilowatts(viewModel.draft.criteria.minimumPower.rawValue),
+        systemImage: "bolt.fill"
+      )
+      .font(.subheadline)
 
-      Text(verbatim: availabilityText(park.availability))
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
+      if let availability = availabilityText(park.availability) {
+        Text(verbatim: availability)
+          .font(.subheadline)
+          .foregroundStyle(.secondary)
+      }
 
       if let foodPOI = result.matchingFoodPOI {
         Label(foodPOI.name, systemImage: "fork.knife")
@@ -366,12 +371,9 @@ struct RidePreparationView: View {
     }
   }
 
-  private func availabilityText(_ availability: ParkAvailability) -> String {
+  private func availabilityText(_ availability: ParkAvailability) -> String? {
     if availability.unknownCount == availability.totalCount {
-      return NSLocalizedString(
-        "ride.result.availability.unknown",
-        comment: "No live availability is known"
-      )
+      return nil
     }
     if availability.isComplete {
       return String.localizedStringWithFormat(

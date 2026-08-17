@@ -78,22 +78,26 @@ final class CarPlayPresentationTests: XCTestCase {
       )
     )
 
-    let presentation = CarPlayPresenter(localizer: germanLocalizer()).results(outcome)
+    let presentation = CarPlayPresenter(localizer: germanLocalizer()).results(
+      outcome,
+      criteria: try makeProfile().criteria
+    )
 
     XCTAssertEqual(presentation.points.map(\.title), ["Ladepark Eins", "Ladepark Zwei"])
     XCTAssertEqual(presentation.points[0].subtitle, "80 km · 1 km von der Route")
     XCTAssertEqual(
       presentation.points[0].summary,
-      "4 Ladepunkte · 2 sicher frei, 2 unbekannt · bis 150 kW"
+      "4 Ladepunkte · 150 kW oder höher · 2 sicher frei, 2 unbekannt"
     )
     XCTAssertEqual(
       presentation.points[1].summary,
-      "4 Ladepunkte · Live-Verfügbarkeit unbekannt · bis 150 kW"
+      "4 Ladepunkte · 150 kW oder höher"
     )
     XCTAssertEqual(
       presentation.points[0].detailSummary,
-      "Operator · 4 Ladepunkte\n4 Ladepunkte · 2 sicher frei, 2 unbekannt · bis 150 kW"
+      "Operator · 4 Ladepunkte\n4 Ladepunkte · 150 kW oder höher · 2 sicher frei, 2 unbekannt"
     )
+    XCTAssertEqual(presentation.points[1].detailSubtitle, "90 km")
     XCTAssertEqual(presentation.coverageMessage, "Live-Daten teilweise verfügbar")
   }
 
@@ -172,15 +176,15 @@ final class CarPlayPresentationTests: XCTestCase {
       "search.distance_range.100_150_km": "100–150 km",
       "unit.minimum_count.format": "mindestens %lld",
       "unit.kilowatts.format": "%lld kW",
+      "unit.minimum_kilowatts.format": "%lld kW oder höher",
       "unit.kilometers.format": "%lld km",
       "search.food_chain.mcdonalds": "McDonald's",
       "carplay.result.route_distance.format": "%lld km von der Route",
-      "carplay.result.charging_summary.format": "%lld Ladepunkte · %@ · bis %lld kW",
+      "carplay.result.charging_summary.format": "%lld Ladepunkte · %@",
       "carplay.result.food.format": "%@ · %lld m",
       "carplay.result.operator.format": "%@ · %lld Ladepunkte",
       "ride.result.availability.complete.format": "%lld Ladepunkte frei",
       "ride.result.availability.partial.format": "%lld sicher frei, %lld unbekannt",
-      "ride.result.availability.unknown": "Live-Verfügbarkeit unbekannt",
       "ride.result.navigate": "In Apple Maps öffnen",
       "ride.results.title": "Passende Ladeparks",
       "carplay.coverage.degraded": "Live-Daten teilweise verfügbar",

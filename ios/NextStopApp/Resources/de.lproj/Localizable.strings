@@ -16,7 +16,7 @@
 "Searches for a destination and opens the ride preparation." = "Sucht ein Fahrziel und öffnet die Fahrtvorbereitung.";
 "carplay.ride.title" = "Fahrt";
 "carplay.result.route_distance.format" = "%lld km von der Route";
-"carplay.result.charging_summary.format" = "%lld Ladepunkte · %@ · bis %lld kW";
+"carplay.result.charging_summary.format" = "%lld Ladepunkte · %@";
 "carplay.result.food.format" = "%@ · %lld m";
 "carplay.result.operator.format" = "%@ · %lld Ladepunkte";
 "carplay.coverage.degraded" = "Live-Daten teilweise verfügbar";
@@ -86,7 +86,6 @@
 "ride.ready.title" = "Route bereit";
 "ride.result.availability.complete.format" = "%lld Ladepunkte frei";
 "ride.result.availability.partial.format" = "%lld sicher frei, %lld unbekannt";
-"ride.result.availability.unknown" = "Live-Verfügbarkeit unbekannt";
 "ride.result.navigate" = "In Apple Maps öffnen";
 "ride.result.operators" = "Ladeanbieter";
 "ride.results.attribution" = "Ladedaten: bundesnetzagentur.de · CC BY 4.0 sowie Bundesamt für Energie BFE · ich-tanke-strom.ch";
@@ -120,6 +119,7 @@
 "search.food_chain.kfc" = "KFC";
 "search.food_chain.subway" = "Subway";
 "unit.kilowatts.format" = "%lld kW";
+"unit.minimum_kilowatts.format" = "%lld kW oder höher";
 "unit.charging_points.format" = "%lld Ladepunkte";
 "unit.kilometers.format" = "%lld km";
 "unit.duration.hours_minutes.format" = "%lld Std. %lld Min.";

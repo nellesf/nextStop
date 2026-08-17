@@ -119,6 +119,12 @@ in detail text, a manual refresh creates a new snapshot, and panning never chang
 or re-ranks the result. No-results keeps all four criteria available for an
 explicit user change. The primary POI action sends the park to Apple Maps.
 
+Each result labels the applied minimum-power criterion as “N kW or higher”; it does
+not present the park's highest observed EVSE power as though every EVSE provided
+that value. Known complete or partial live availability remains informational.
+When every EVSE has unknown availability, the result omits the redundant unknown
+status line.
+
 CarPlay performs a location-readiness preflight and never triggers first-time or
 reduced-accuracy permission UI while driving. Missing setup is explained on the
 CarPlay screen and must be completed in the iPhone app.

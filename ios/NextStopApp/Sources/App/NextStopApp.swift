@@ -17,7 +17,6 @@ struct NextStopApp: App {
       router: router
     )
     AppDependencyManager.shared.add(dependency: rideIntentHandler)
-    NextStopAppShortcuts.updateAppShortcutParameters()
   }
 
   var body: some Scene {
