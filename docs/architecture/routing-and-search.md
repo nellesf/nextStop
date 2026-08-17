@@ -31,9 +31,11 @@ different road graphs/options could rank a different “next five” than Apple 
    `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
    departure from the main route.
 9. Discard exact distances outside the selected range.
-10. If a food chain is selected, query MapKit near each remaining candidate and
-    accept only matching chain results whose geodesic point-to-park distance is at
-    most 500 m. Opening information is optional and not a predicate.
+10. If a food chain is selected, query MapKit for points of interest inside a
+    required local search region around each remaining candidate. Accept only
+    matching chain results whose geodesic point-to-park distance is at most 500 m;
+    the search region does not replace that exact check. Opening information is
+    optional and not a predicate.
 11. Sort matches only by actual driving distance ascending, with stable park ID as
     a non-user-visible deterministic tie-breaker.
 12. Return the first five. If fewer exist, return fewer. If pagination is not

@@ -98,17 +98,7 @@ final class MapKitCandidateEnricher: CandidateEnriching {
 @MainActor
 final class MapKitFoodPOISearchService: FoodPOISearching {
   func foodPOIs(chain: FoodChain, near parkCoordinate: Coordinate) async throws -> [FoodPOI] {
-    let request = MKLocalSearch.Request()
-    request.naturalLanguageQuery = query(for: chain)
-    request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
-    request.region = MKCoordinateRegion(
-      center: CLLocationCoordinate2D(
-        latitude: parkCoordinate.latitude,
-        longitude: parkCoordinate.longitude
-      ),
-      latitudinalMeters: 1_200,
-      longitudinalMeters: 1_200
-    )
+    let request = Self.makeRequest(chain: chain, near: parkCoordinate)
     let response = try await MKLocalSearch(request: request).start()
     let parkLocation = CLLocation(
       latitude: parkCoordinate.latitude,
@@ -147,7 +137,27 @@ final class MapKitFoodPOISearchService: FoodPOISearching {
     }
   }
 
-  private func query(for chain: FoodChain) -> String {
+  static func makeRequest(
+    chain: FoodChain,
+    near parkCoordinate: Coordinate
+  ) -> MKLocalSearch.Request {
+    let request = MKLocalSearch.Request()
+    request.naturalLanguageQuery = query(for: chain)
+    request.resultTypes = .pointOfInterest
+    request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
+    request.region = MKCoordinateRegion(
+      center: CLLocationCoordinate2D(
+        latitude: parkCoordinate.latitude,
+        longitude: parkCoordinate.longitude
+      ),
+      latitudinalMeters: 1_200,
+      longitudinalMeters: 1_200
+    )
+    request.regionPriority = .required
+    return request
+  }
+
+  private static func query(for chain: FoodChain) -> String {
     switch chain {
     case .mcdonalds:
       "McDonald's"
