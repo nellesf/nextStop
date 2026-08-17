@@ -149,13 +149,15 @@ network; production configuration must use TLS. The checked-in Release placehold
 is `https://api.example.invalid` so an archive cannot accidentally send routes to
 an unapproved host.
 
-After preparing a route, tap “Ladeparks suchen”. The app fetches a stable PostGIS
-candidate snapshot, asks MapKit for actual automobile distance to candidates in
-bounded groups of four, applies the exact configured range and optional 500 m food
-rule, sorts only by actual driving distance, and displays at most five. Each result
-shows the deduplicated EVSE count for every operator. With a selected restaurant,
-the result button opens Apple Maps with the restaurant as a waypoint before the
-original ride destination; otherwise it opens the selected park.
+Tap “Ladestationen finden” for a profile or saved destination. The app calculates
+the MapKit route and then starts the charging-park search automatically as one
+flow. It fetches a stable PostGIS candidate snapshot, asks MapKit for actual
+automobile distance to candidates in bounded groups of four, applies the exact
+configured range and optional 500 m food rule, sorts only by actual driving
+distance, and displays at most five. Each result shows the deduplicated EVSE count
+for every operator. With a selected restaurant, the result button opens Apple Maps
+with the restaurant as a waypoint before the original ride destination; otherwise
+it opens the selected park.
 
 ### CarPlay acceptance gate
 

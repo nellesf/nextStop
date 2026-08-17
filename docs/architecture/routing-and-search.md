@@ -10,6 +10,10 @@ different road graphs/options could rank a different “next five” than Apple 
 
 ## End-to-end algorithm
 
+On iPhone, choosing “Ladestationen finden” starts this entire algorithm as one
+user action. Re-entering an already prepared view does not implicitly refresh its
+stable snapshot; retry and refresh remain explicit after an error or result.
+
 1. Obtain a current location only after explicit in-use authorization.
 2. Resolve the destination to an `MKMapItem`.
 3. Request automobile directions with alternate routes disabled; use the selected

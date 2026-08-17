@@ -82,7 +82,7 @@
 "ride.progress.description" = "Die Route kommt direkt von Apple Maps.";
 "ride.progress.location" = "Aktueller Standort wird bestimmt …";
 "ride.progress.route" = "Fahrroute wird berechnet …";
-"ride.ready.description" = "Die Route und der datensparsame Suchauftrag sind bereit. Starte jetzt die Prüfung passender Ladeparks.";
+"ride.ready.description" = "Die Route wurde berechnet und die Suche nach passenden Ladestationen automatisch gestartet.";
 "ride.ready.title" = "Route bereit";
 "ride.result.availability.complete.format" = "%lld Ladepunkte frei";
 "ride.result.availability.partial.format" = "%lld sicher frei, %lld unbekannt";
@@ -109,7 +109,7 @@
 "ride.search.refresh" = "Suche aktualisieren";
 "ride.route.distance" = "Route zum Fahrziel";
 "ride.route.duration" = "Voraussichtliche Fahrzeit";
-"ride.start" = "Fahrt vorbereiten";
+"ride.start" = "Ladestationen finden";
 "ride.title" = "Fahrt vorbereiten";
 "search.distance_range.15_50_km" = "15–50 km";
 "search.distance_range.50_100_km" = "50–100 km";

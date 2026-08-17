@@ -108,6 +108,17 @@ final class RidePreparationViewModel: ObservableObject {
     self.makeRequestID = makeRequestID
   }
 
+  func prepareRouteAndSearch() async {
+    guard state.canPrepare else {
+      return
+    }
+    await prepareRoute()
+    guard case .ready = state else {
+      return
+    }
+    await searchCandidates()
+  }
+
   func searchCandidates() async {
     guard case .ready(let preparedRide) = state,
       candidateSearchState.canSearch,

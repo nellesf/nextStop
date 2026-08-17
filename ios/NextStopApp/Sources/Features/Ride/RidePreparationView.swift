@@ -77,7 +77,7 @@ struct RidePreparationView: View {
     .navigationTitle("ride.title")
     .navigationBarTitleDisplayMode(.inline)
     .task {
-      await viewModel.prepareRoute()
+      await viewModel.prepareRouteAndSearch()
     }
   }
 
@@ -445,7 +445,7 @@ struct RidePreparationView: View {
 
       Button("action.retry") {
         Task {
-          await viewModel.prepareRoute()
+          await viewModel.prepareRouteAndSearch()
         }
       }
       .buttonStyle(.borderedProminent)
