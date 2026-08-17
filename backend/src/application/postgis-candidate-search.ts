@@ -465,8 +465,19 @@ function fingerprintRequest(request: SearchRequest): string {
   return createHash("sha256")
     .update(
       JSON.stringify({
-        route: request.route,
-        criteria: request.criteria,
+        route: {
+          type: "LineString",
+          coordinates: request.route.coordinates,
+        },
+        criteria: {
+          distanceRangeMeters: {
+            minimum: request.criteria.distanceRangeMeters.minimum,
+            maximum: request.criteria.distanceRangeMeters.maximum,
+          },
+          minimumChargingPoints: request.criteria.minimumChargingPoints,
+          minimumPowerKW: request.criteria.minimumPowerKW,
+          foodChain: request.criteria.foodChain ?? null,
+        },
       }),
     )
     .digest("hex");

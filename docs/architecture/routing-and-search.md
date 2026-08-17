@@ -82,7 +82,9 @@ Actual driving-distance and MapKit food predicates remain on-device.
 
 The search uses a route fingerprint and a stable candidate snapshot. It does not
 continuously track/re-route or change result order. A user-initiated refresh or a
-new destination creates a new route, new candidate snapshot, and new results.
+new destination creates a new route, new candidate snapshot, and new results. The
+fingerprint is built from a canonical field order so semantically identical JSON
+requests remain compatible across pages regardless of serializer key order.
 
 ## Apple Maps handoff
 

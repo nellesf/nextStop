@@ -433,50 +433,62 @@ void test(
       });
     });
 
-    await context.test("keeps an old snapshot stable after a newer publish", async () => {
-      await resetDatabase(pool);
-      const oldProjectionId = await insertActiveProjection(pool);
-      for (let index = 0; index < 55; index += 1) {
-        await insertProjectedPark(pool, oldProjectionId, {
-          northMeters: 0,
-          eastMeters: index * 100,
-          parkId: indexedUUID(4, index),
+    await context.test(
+      "keeps an old snapshot stable after a newer publish and JSON key reordering",
+      async () => {
+        await resetDatabase(pool);
+        const oldProjectionId = await insertActiveProjection(pool);
+        for (let index = 0; index < 55; index += 1) {
+          await insertProjectedPark(pool, oldProjectionId, {
+            northMeters: 0,
+            eastMeters: index * 100,
+            parkId: indexedUUID(4, index),
+          });
+        }
+        const search = candidateSearch(pool);
+        const request = searchRequest([
+          [10, 52],
+          [10.2, 52],
+        ]);
+        const firstPage = await search.search(request);
+        assert.equal(firstPage.candidates.length, 50);
+        assert.ok(firstPage.nextCursor);
+
+        const newProjectionId = randomUUID();
+        await pool.query("BEGIN");
+        try {
+          await pool.query(
+            "UPDATE nextstop.projection_versions SET status = 'retired' WHERE id = $1",
+            [oldProjectionId],
+          );
+          await insertProjection(pool, newProjectionId, "active");
+          await pool.query("COMMIT");
+        } catch (error) {
+          await pool.query("ROLLBACK");
+          throw error;
+        }
+
+        const secondPage = await search.search({
+          requestId: request.requestId,
+          criteria: {
+            minimumPowerKW: 100,
+            minimumChargingPoints: 4,
+            distanceRangeMeters: { maximum: 100_000, minimum: 50_000 },
+          },
+          route: {
+            coordinates: request.route.coordinates,
+            type: "LineString",
+          },
+          page: {
+            snapshotToken: firstPage.snapshotToken,
+            cursor: firstPage.nextCursor,
+          },
         });
-      }
-      const search = candidateSearch(pool);
-      const request = searchRequest([
-        [10, 52],
-        [10.2, 52],
-      ]);
-      const firstPage = await search.search(request);
-      assert.equal(firstPage.candidates.length, 50);
-      assert.ok(firstPage.nextCursor);
-
-      const newProjectionId = randomUUID();
-      await pool.query("BEGIN");
-      try {
-        await pool.query(
-          "UPDATE nextstop.projection_versions SET status = 'retired' WHERE id = $1",
-          [oldProjectionId],
-        );
-        await insertProjection(pool, newProjectionId, "active");
-        await pool.query("COMMIT");
-      } catch (error) {
-        await pool.query("ROLLBACK");
-        throw error;
-      }
-
-      const secondPage = await search.search({
-        ...request,
-        page: {
-          snapshotToken: firstPage.snapshotToken,
-          cursor: firstPage.nextCursor,
-        },
-      });
-      assert.equal(secondPage.candidates.length, 5);
-      assert.equal(secondPage.nextCursor, null);
-      assert.equal(secondPage.snapshotToken, firstPage.snapshotToken);
-    });
+        assert.equal(secondPage.candidates.length, 5);
+        assert.equal(secondPage.nextCursor, null);
+        assert.equal(secondPage.snapshotToken, firstPage.snapshotToken);
+      },
+    );
 
     await context.test("creates and uses the GiST spatial index", async () => {
       const indexes = await pool.query<{ readonly indexname: string }>(
