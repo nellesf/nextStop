@@ -41,6 +41,8 @@ surplus power, availability count, and restaurant distance do not change order.
 - Candidate displayed distance uses the candidate `MKRoute.distance` adapter result,
   not route progress or geodesic distance.
 - Candidate pagination continues until safe lower-bound stopping is proven.
+- Candidate enrichment re-evaluates safe stopping after every bounded batch and
+  shares a rolling MapKit directions budget across retries and subsequent rides.
 
 MapKit network behavior should be abstracted for deterministic tests; a small set of
 manual/integration routes validates assumptions against the real SDK.

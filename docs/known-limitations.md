@@ -31,9 +31,10 @@
   `MKMapItem` API does not expose a stable programmatic opening-status value. The
   MVP therefore omits opening status unless a later reliable provider supplies it.
 - Exact driving distance requires MapKit directions per candidate. Candidate
-  pagination, bounded concurrency, caching within a ride, and safe lower-bound
-  stopping are required to keep latency acceptable without replacing MapKit with
-  a server-side router.
+  pagination, bounded concurrency, per-ride caching, batch-level safe lower-bound
+  stopping, and a rolling directions budget reduce load, but unusually dense
+  corridors may still take longer without replacing MapKit with a server-side
+  router.
 - Cross-source deduplication without a common EVSE identifier is inherently
   probabilistic. The accepted policy favors under-merging over silently reducing
   the reported number of distinct EVSEs.

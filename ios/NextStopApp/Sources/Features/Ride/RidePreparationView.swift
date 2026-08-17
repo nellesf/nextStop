@@ -9,26 +9,41 @@ struct RidePreparationView: View {
   private let navigationLauncher: any NavigationLaunching
 
   @MainActor
-  init(profile: UserProfile) {
-    self.init(draft: RideSearchDraft(profile: profile))
+  init(profile: UserProfile, directionsRequestGate: DirectionsRequestGate) {
+    self.init(
+      draft: RideSearchDraft(profile: profile),
+      directionsRequestGate: directionsRequestGate
+    )
   }
 
   @MainActor
-  init(destination: SavedDestination) {
-    self.init(draft: RideSearchDraft(destination: destination))
+  init(destination: SavedDestination, directionsRequestGate: DirectionsRequestGate) {
+    self.init(
+      draft: RideSearchDraft(destination: destination),
+      directionsRequestGate: directionsRequestGate
+    )
   }
 
   @MainActor
-  private init(draft: RideSearchDraft) {
+  private init(
+    draft: RideSearchDraft,
+    directionsRequestGate: DirectionsRequestGate
+  ) {
+    let routePlanner = RetryingRoutePlanner(
+      base: RateLimitedRoutePlanner(
+        base: MapKitRoutePlanner(),
+        gate: directionsRequestGate
+      )
+    )
     let candidateSearcher = RideCandidateSearchCoordinator(
       pageSearcher: HTTPCandidateSearchService(),
-      enricher: MapKitCandidateEnricher()
+      enricher: MapKitCandidateEnricher(routePlanner: routePlanner)
     )
     _viewModel = StateObject(
       wrappedValue: RidePreparationViewModel(
         draft: draft,
         locationProvider: CoreLocationProvider(),
-        routePlanner: RetryingRoutePlanner(base: MapKitRoutePlanner()),
+        routePlanner: routePlanner,
         candidateSearcher: candidateSearcher
       )
     )

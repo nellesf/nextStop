@@ -124,6 +124,24 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         )
         enrichedCandidates.append(contentsOf: outcome.candidates)
         routingFailureLowerBounds.append(contentsOf: outcome.routingFailureLowerBounds)
+
+        guard end < page.candidates.count else {
+          continue
+        }
+        let nextLowerBound = page.candidates[end].straightLineLowerBound
+        let batchResults = policy.selectResults(
+          from: enrichedCandidates,
+          criteria: request.criteria
+        )
+        if nextLowerBound > upperDistance
+          || safeToStop(results: batchResults, nextLowerBound: nextLowerBound)
+        {
+          return try self.outcome(
+            results: batchResults,
+            routingFailureLowerBounds: routingFailureLowerBounds,
+            coverage: searchCoverage
+          )
+        }
       }
 
       let selectedResults = policy.selectResults(
@@ -145,10 +163,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
             coverage: searchCoverage
           )
         }
-        if selectedResults.count == SearchConfiguration.maximumResultCount,
-          let fifthDistance = selectedResults.last?.candidate.actualDrivingDistance,
-          lastLowerBound > fifthDistance
-        {
+        if safeToStop(results: selectedResults, nextLowerBound: lastLowerBound) {
           return try outcome(
             results: selectedResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
@@ -169,6 +184,16 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         cursor: nextCursor
       )
     }
+  }
+
+  private func safeToStop(
+    results: [RouteSearchResult],
+    nextLowerBound: Meters
+  ) -> Bool {
+    results.count == SearchConfiguration.maximumResultCount
+      && results.last.map {
+        nextLowerBound > $0.candidate.actualDrivingDistance
+      } == true
   }
 
   private func outcome(

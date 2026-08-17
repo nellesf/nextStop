@@ -20,6 +20,11 @@ struct DestinationLibraryView: View {
   @State private var showsSearch = false
   @State private var showsError = false
   @State private var clearSelection: DestinationClearSelection?
+  private let directionsRequestGate: DirectionsRequestGate
+
+  init(directionsRequestGate: DirectionsRequestGate) {
+    self.directionsRequestGate = directionsRequestGate
+  }
 
   var body: some View {
     Group {
@@ -79,7 +84,10 @@ struct DestinationLibraryView: View {
       }
     }
     .navigationDestination(item: $rideSelection) { selection in
-      RidePreparationView(destination: selection.destination)
+      RidePreparationView(
+        destination: selection.destination,
+        directionsRequestGate: directionsRequestGate
+      )
     }
     .alert("error.generic", isPresented: $showsError) {
       Button("action.done", role: .cancel) {}

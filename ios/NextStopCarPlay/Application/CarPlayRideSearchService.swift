@@ -52,15 +52,29 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
   private let candidateSearcher: any RideCandidateSearching
   private let makeRequestID: () -> UUID
 
+  convenience init() {
+    let routePlanner = RetryingRoutePlanner(
+      base: RateLimitedRoutePlanner(
+        base: MapKitRoutePlanner(),
+        gate: DirectionsRequestGate()
+      )
+    )
+    self.init(
+      locationReadiness: SystemCarPlayLocationReadinessChecker(),
+      locationProvider: CoreLocationProvider(),
+      routePlanner: routePlanner,
+      candidateSearcher: RideCandidateSearchCoordinator(
+        pageSearcher: HTTPCandidateSearchService(),
+        enricher: MapKitCandidateEnricher(routePlanner: routePlanner)
+      )
+    )
+  }
+
   init(
-    locationReadiness: any CarPlayLocationReadinessChecking =
-      SystemCarPlayLocationReadinessChecker(),
-    locationProvider: any CurrentLocationProviding = CoreLocationProvider(),
-    routePlanner: any RoutePlanning = RetryingRoutePlanner(base: MapKitRoutePlanner()),
-    candidateSearcher: any RideCandidateSearching = RideCandidateSearchCoordinator(
-      pageSearcher: HTTPCandidateSearchService(),
-      enricher: MapKitCandidateEnricher()
-    ),
+    locationReadiness: any CarPlayLocationReadinessChecking,
+    locationProvider: any CurrentLocationProviding,
+    routePlanner: any RoutePlanning,
+    candidateSearcher: any RideCandidateSearching,
     makeRequestID: @escaping () -> UUID = UUID.init
   ) {
     self.locationReadiness = locationReadiness

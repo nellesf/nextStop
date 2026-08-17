@@ -29,9 +29,14 @@ struct ProfileListView: View {
   @State private var editorSelection: ProfileEditorSelection?
   @State private var rideSelection: RideSelection?
   @State private var showsError = false
+  private let directionsRequestGate: DirectionsRequestGate
 
-  init(rideIntentRouter: RideIntentRouter) {
+  init(
+    rideIntentRouter: RideIntentRouter,
+    directionsRequestGate: DirectionsRequestGate
+  ) {
     self.rideIntentRouter = rideIntentRouter
+    self.directionsRequestGate = directionsRequestGate
   }
 
   var body: some View {
@@ -89,7 +94,7 @@ struct ProfileListView: View {
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
           NavigationLink {
-            DestinationLibraryView()
+            DestinationLibraryView(directionsRequestGate: directionsRequestGate)
           } label: {
             Label("destinations.title", systemImage: "star")
           }
@@ -111,9 +116,15 @@ struct ProfileListView: View {
       .navigationDestination(item: $rideSelection) { selection in
         switch selection.source {
         case .profile(let profile):
-          RidePreparationView(profile: profile)
+          RidePreparationView(
+            profile: profile,
+            directionsRequestGate: directionsRequestGate
+          )
         case .destination(let destination):
-          RidePreparationView(destination: destination)
+          RidePreparationView(
+            destination: destination,
+            directionsRequestGate: directionsRequestGate
+          )
         }
       }
       .alert("error.generic", isPresented: $showsError) {

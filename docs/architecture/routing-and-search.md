@@ -26,8 +26,10 @@ different road graphs/options could rank a different “next five” than Apple 
    measure, applies filters that it can prove from normalized charging data, and
    returns a stable paginated candidate snapshot.
 8. iOS requests MapKit automobile directions from the current location to each
-   candidate in bounded batches. `MKRoute.distance` becomes
-   `actualDrivingDistanceMeters` and includes the departure from the main route.
+   candidate in bounded batches behind a shared rolling request gate. After every
+   batch it applies safe lower-bound stopping before requesting more routes.
+   `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
+   departure from the main route.
 9. Discard exact distances outside the selected range.
 10. If a food chain is selected, query MapKit near each remaining candidate and
     accept only matching chain results whose geodesic point-to-park distance is at
@@ -50,7 +52,9 @@ rank. The client may stop only when:
 
 Straight-line origin-to-park distance is a safe lower bound for road distance.
 Preliminary route progress is useful for batching but is not, by itself, a proof
-of actual driving distance.
+of actual driving distance. The iPhone process keeps all ride-preparation and
+candidate `MKDirections` requests below Apple's observed short-window throttle;
+retries consume the same shared request budget.
 
 ## PostGIS strategy
 

@@ -183,6 +183,32 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(base.requestCount, 2)
   }
 
+  func testDirectionsRequestGateWaitsBeforeExceedingTheRollingLimit() async throws {
+    let origin = try Coordinate(latitude: 53.5511, longitude: 9.9937)
+    let destination = try Coordinate(latitude: 53.0793, longitude: 8.8017)
+    let route = PlannedRoute(
+      polyline: try RoutePolyline(coordinates: [origin, destination]),
+      actualDrivingDistance: Meters(120_000),
+      expectedTravelTimeSeconds: 5_400
+    )
+    let clock = DirectionsRequestGateClock()
+    let gate = DirectionsRequestGate(
+      maximumRequests: 2,
+      windowSeconds: 60,
+      now: { clock.now },
+      sleep: { seconds in clock.advance(by: seconds) }
+    )
+    let base = RoutePlannerStub(result: .success(route))
+    let planner = RateLimitedRoutePlanner(base: base, gate: gate)
+
+    _ = try await planner.automobileRoute(from: origin, to: destination)
+    _ = try await planner.automobileRoute(from: origin, to: destination)
+    _ = try await planner.automobileRoute(from: origin, to: destination)
+
+    XCTAssertEqual(base.requestCount, 3)
+    XCTAssertEqual(clock.sleepDurations, [60])
+  }
+
   private func makeProfile(name: String, destination: SavedDestination) throws -> UserProfile {
     try UserProfile(
       name: name,
@@ -254,5 +280,16 @@ private final class SequencedRoutePlannerStub: RoutePlanning {
       throw RoutePlanningError.noRoute
     }
     return try responses.removeFirst().get()
+  }
+}
+
+@MainActor
+private final class DirectionsRequestGateClock {
+  private(set) var now = Date(timeIntervalSince1970: 0)
+  private(set) var sleepDurations: [TimeInterval] = []
+
+  func advance(by seconds: TimeInterval) {
+    sleepDurations.append(seconds)
+    now = now.addingTimeInterval(seconds)
   }
 }

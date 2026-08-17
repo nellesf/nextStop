@@ -11,9 +11,10 @@ protocol FoodPOISearching: AnyObject {
 final class MapKitCandidateEnricher: CandidateEnriching {
   private let routePlanner: any RoutePlanning
   private let foodSearcher: any FoodPOISearching
+  private var cache: [CacheKey: CachedEnrichment] = [:]
 
   init(
-    routePlanner: any RoutePlanning = RetryingRoutePlanner(base: MapKitRoutePlanner()),
+    routePlanner: any RoutePlanning,
     foodSearcher: any FoodPOISearching = MapKitFoodPOISearchService()
   ) {
     self.routePlanner = routePlanner
@@ -25,6 +26,21 @@ final class MapKitCandidateEnricher: CandidateEnriching {
     origin: Coordinate,
     criteria: RideCriteria
   ) async throws -> EnrichedChargingParkCandidate {
+    let cacheKey = CacheKey(
+      candidateID: candidate.id,
+      origin: origin,
+      navigationCoordinate: candidate.park.navigationCoordinate,
+      criteria: criteria
+    )
+    if let cached = cache[cacheKey] {
+      return EnrichedChargingParkCandidate(
+        park: candidate.park,
+        distanceFromRoute: candidate.distanceFromRoute,
+        actualDrivingDistance: cached.actualDrivingDistance,
+        foodPOIs: cached.foodPOIs
+      )
+    }
+
     let drivingRoute: PlannedRoute
     do {
       drivingRoute = try await routePlanner.automobileRoute(
@@ -53,12 +69,29 @@ final class MapKitCandidateEnricher: CandidateEnriching {
       }
     }
 
-    return EnrichedChargingParkCandidate(
+    let result = EnrichedChargingParkCandidate(
       park: candidate.park,
       distanceFromRoute: candidate.distanceFromRoute,
       actualDrivingDistance: drivingRoute.actualDrivingDistance,
       foodPOIs: foodPOIs
     )
+    cache[cacheKey] = CachedEnrichment(
+      actualDrivingDistance: result.actualDrivingDistance,
+      foodPOIs: result.foodPOIs
+    )
+    return result
+  }
+
+  private struct CacheKey: Hashable {
+    let candidateID: UUID
+    let origin: Coordinate
+    let navigationCoordinate: Coordinate
+    let criteria: RideCriteria
+  }
+
+  private struct CachedEnrichment {
+    let actualDrivingDistance: Meters
+    let foodPOIs: [FoodPOI]
   }
 }
 

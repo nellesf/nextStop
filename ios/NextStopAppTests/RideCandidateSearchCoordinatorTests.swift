@@ -6,6 +6,46 @@ import XCTest
 
 @MainActor
 final class RideCandidateSearchCoordinatorTests: XCTestCase {
+  func testStopsEnrichmentAsSoonAsTheRemainingLowerBoundsCannotBeatTheTopFive() async throws {
+    let lowerBounds = [10, 15, 20, 25, 30, 35, 40, 45] + Array(stride(from: 60, to: 84, by: 2))
+    let candidates = try lowerBounds.enumerated().map { offset, lowerBound in
+      try makeBackendCandidate(
+        index: offset + 1,
+        lowerBoundKilometers: lowerBound
+      )
+    }
+    let enricher = CandidateEnricherStub(
+      distances: Dictionary(
+        uniqueKeysWithValues: zip(candidates, lowerBounds).enumerated().map {
+          offset, pair in
+          (pair.0.id, Meters(max(offset + 51, pair.1) * 1_000))
+        }
+      )
+    )
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot",
+          nextCursor: "unused-next-page",
+          candidates: candidates,
+          coverage: coverage
+        )
+      ]),
+      enricher: enricher,
+      enrichmentBatchSize: 4
+    )
+
+    let outcome = try await coordinator.search(
+      preparedRide: try preparedRide(distanceRange: .kilometers50To100)
+    )
+
+    XCTAssertEqual(
+      outcome.results.map(\.candidate.actualDrivingDistance.value),
+      [51_000, 52_000, 53_000, 54_000, 55_000]
+    )
+    XCTAssertEqual(enricher.requestedIDs.count, 8)
+  }
+
   func testUsesExactDrivingDistanceForFilteringRankingAndMaximumFive() async throws {
     let candidates = try (1...6).map { index in
       try makeBackendCandidate(index: index, lowerBoundKilometers: index * 10)
@@ -361,6 +401,7 @@ private final class CandidatePageSearcherStub: CandidatePageSearching {
 private final class CandidateEnricherStub: CandidateEnriching {
   let distances: [UUID: Meters]
   let failedIDs: Set<UUID>
+  private(set) var requestedIDs: [UUID] = []
 
   init(distances: [UUID: Meters], failedIDs: Set<UUID> = []) {
     self.distances = distances
@@ -374,6 +415,7 @@ private final class CandidateEnricherStub: CandidateEnriching {
   ) async throws -> EnrichedChargingParkCandidate {
     _ = origin
     _ = criteria
+    requestedIDs.append(candidate.id)
     if failedIDs.contains(candidate.id) {
       throw CandidateEnrichmentError.drivingRouteUnavailable
     }
