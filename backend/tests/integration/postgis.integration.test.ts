@@ -111,19 +111,97 @@ void test(
         quarantines: 1,
       });
       const search = candidateSearch(pool);
-      const response = await search.search(searchRequest([
+      const baseRequest = searchRequest([
         [9.99, 53.55],
         [10.01, 53.55],
-      ]));
+      ]);
+      const response = await search.search({
+        ...baseRequest,
+        criteria: { ...baseRequest.criteria, minimumChargingPoints: 2 },
+      });
       assert.equal(response.candidates.length, 1);
-      assert.equal(response.candidates[0]?.chargingPoints, 4);
+      assert.equal(response.candidates[0]?.name, "Energie Nord GmbH");
+      assert.equal(response.candidates[0]?.chargingPoints, 2);
       assert.deepEqual(response.candidates[0]?.operatorChargingPoints, [
         { name: "Energie Nord GmbH", chargingPoints: 2 },
-        { name: "Energie Süd GmbH", chargingPoints: 2 },
       ]);
-      assert.equal(response.candidates[0]?.availability.unknown, 4);
+      assert.equal(response.candidates[0]?.availability.unknown, 2);
+      assert.equal(response.candidates[0]?.maximumPowerKW, 300);
       assert.deepEqual(response.coverage.activeSources, [bundesnetzagenturDescriptor.id]);
     });
+
+    await context.test(
+      "filters EVSE power before operator counts and minimum park size",
+      async () => {
+        await resetDatabase(pool);
+        const projectionId = "12111111-1111-4111-8111-111111111111";
+        const writer = new ProjectionWriter(pool);
+        const observations = mixedPowerObservations();
+        const locations = observations.map(({ location }) => location);
+        const parks = buildChargingParkProjection(locations);
+        await writer.create({
+          id: projectionId,
+          sourceDatasetHash: "9".repeat(64),
+          sourceObservedAt: "2026-07-07T00:00:00.000Z",
+          builtAt: "2026-08-14T07:00:00.000Z",
+          coverageStatus: "complete",
+          activeSources: [bundesnetzagenturDescriptor.id],
+          unavailableSources: [],
+        });
+        await writer.writeObservations(projectionId, observations);
+        await writer.writeParks(projectionId, parks);
+        await writer.publish(
+          projectionId,
+          {
+            locationCount: 2,
+            chargingPointCount: 5,
+            parkCount: 1,
+            quarantineCount: 0,
+            conflictCount: 0,
+          },
+          "2026-08-14T08:00:00.000Z",
+        );
+
+        const baseRequest = searchRequest([
+          [10, 52],
+          [10.2, 52],
+        ]);
+        const matching = await candidateSearch(pool).search({
+          ...baseRequest,
+          criteria: {
+            ...baseRequest.criteria,
+            minimumChargingPoints: 2,
+            minimumPowerKW: 300,
+          },
+        });
+        assert.equal(matching.candidates.length, 1);
+        assert.equal(matching.candidates[0]?.chargingPoints, 2);
+        assert.equal(matching.candidates[0]?.maximumPowerKW, 300);
+        assert.deepEqual(matching.candidates[0]?.availability, {
+          knownAvailable: 0,
+          knownUnavailable: 0,
+          unknown: 2,
+          total: 2,
+          complete: false,
+          observedAt: null,
+        });
+        assert.deepEqual(matching.candidates[0]?.operators, ["Fast Charge GmbH"]);
+        assert.deepEqual(matching.candidates[0]?.operatorChargingPoints, [
+          { name: "Fast Charge GmbH", chargingPoints: 2 },
+        ]);
+        assert.equal(matching.candidates[0]?.navigationCoordinate.latitude, 52);
+
+        const tooFew = await candidateSearch(pool).search({
+          ...baseRequest,
+          criteria: {
+            ...baseRequest.criteria,
+            minimumChargingPoints: 4,
+            minimumPowerKW: 300,
+          },
+        });
+        assert.equal(tooFew.candidates.length, 0);
+      },
+    );
 
     await context.test("uses exact inclusive 5 km geography instead of a bounding box", async () => {
       await resetDatabase(pool);
@@ -550,6 +628,60 @@ async function insertPointPark(
   const unknown = input.unknown ?? 4;
   const knownAvailable = 4 - knownUnavailable - unknown;
   await pool.query(
+    `INSERT INTO nextstop.normalized_charging_locations (
+       projection_id, location_id, name, operator_name, coordinate,
+       address, active, source_reference
+     ) VALUES (
+       $1, $2, 'Fixture Park', 'Fixture Operator',
+       ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+       '{}'::jsonb, true, '{}'::jsonb
+     )`,
+    [projectionId, input.parkId, input.longitude, input.latitude],
+  );
+  const pointRows = Array.from({ length: 4 }, (_, index) => {
+    const state =
+      index < knownAvailable
+        ? "available"
+        : index < knownAvailable + knownUnavailable
+          ? "occupied"
+          : "unknown";
+    return {
+      charging_point_id: randomUUID(),
+      provider_id: bundesnetzagenturDescriptor.id,
+      provider_evse_key: `${input.parkId}-${index}`,
+      maximum_power_kw: 150,
+      availability_state: state,
+      availability_is_live: state !== "unknown",
+    };
+  });
+  await pool.query(
+    `INSERT INTO nextstop.normalized_charging_points (
+       projection_id, charging_point_id, location_id, provider_id,
+       provider_evse_key, identity_decision, connectors, maximum_power_kw,
+       availability_state, availability_is_live, source_reference
+     )
+     SELECT $1,
+            charging_point_id,
+            $2,
+            provider_id,
+            provider_evse_key,
+            'unresolved',
+            '[{"sourceValue":"fixture","maximumPowerKW":150}]'::jsonb,
+            maximum_power_kw,
+            availability_state,
+            availability_is_live,
+            '{}'::jsonb
+     FROM jsonb_to_recordset($3::jsonb) AS item(
+       charging_point_id uuid,
+       provider_id text,
+       provider_evse_key text,
+       maximum_power_kw integer,
+       availability_state text,
+       availability_is_live boolean
+     )`,
+    [projectionId, input.parkId, JSON.stringify(pointRows)],
+  );
+  await pool.query(
     `INSERT INTO nextstop.charging_park_projection (
        projection_id, park_id, name, centroid, navigation_coordinate,
        member_location_ids, operators, operator_charging_point_counts, charging_point_count,
@@ -585,6 +717,66 @@ async function insertPointPark(
 
 function indexedUUID(prefix: number, index: number): string {
   return `${prefix}0000000-0000-4000-8000-${index.toString(16).padStart(12, "0")}`;
+}
+
+function mixedPowerObservations(): NormalizedLocationObservation[] {
+  const makeLocation = (
+    locationID: string,
+    operatorName: string,
+    powers: readonly number[],
+    latitude: number,
+  ): NormalizedLocationObservation => {
+    const locationSource = {
+      providerId: bundesnetzagenturDescriptor.id,
+      sourceRecordId: `location-${locationID}`,
+      qualityTier: "authority" as const,
+      observedAt: "2026-07-07T00:00:00.000Z",
+      fetchedAt: "2026-08-14T07:00:00.000Z",
+      contentHash: locationID.replaceAll("-", "").padEnd(64, "0").slice(0, 64),
+    };
+    return {
+      location: {
+        id: locationID,
+        name: operatorName,
+        operatorName,
+        coordinate: { latitude, longitude: 10.01 },
+        address: {},
+        chargingPoints: powers.map((maximumPowerKW, index) => {
+          const id = indexedUUID(operatorName === "Fast Charge GmbH" ? 8 : 9, index + 1);
+          return {
+            id,
+            providerEVSEKey: `${locationID}-${index}`,
+            identityDecision: "unresolved" as const,
+            connectors: [{ sourceValue: "fixture", maximumPowerKW }],
+            maximumPowerKW,
+            availability: { state: "unknown" as const, isLive: false },
+            sourceReference: {
+              ...locationSource,
+              sourceRecordId: `point-${id}`,
+              contentHash: id.replaceAll("-", "").padEnd(64, "0").slice(0, 64),
+            },
+          };
+        }),
+        active: true,
+        sourceReference: locationSource,
+      },
+      rawPayload: { fixture: operatorName },
+    };
+  };
+  return [
+    makeLocation(
+      "81000000-0000-4000-8000-000000000001",
+      "Fast Charge GmbH",
+      [50, 300, 300, 50],
+      52,
+    ),
+    makeLocation(
+      "91000000-0000-4000-8000-000000000001",
+      "Slow Charge GmbH",
+      [50],
+      52.0005,
+    ),
+  ];
 }
 
 function swissStaticObservations(): NormalizedLocationObservation[] {

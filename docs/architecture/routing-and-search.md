@@ -71,9 +71,9 @@ An initial SQL plan should reduce work in this order, subject to query planning:
 
 1. supported/active park projection and data-expiry policy;
 2. exact 5 km spatial predicate via GiST;
-3. total deduplicated EVSE minimum;
-4. maximum power minimum;
-5. availability truth table;
+3. discard individual EVSEs below the requested minimum power;
+4. deduplicate the remaining EVSEs and apply the minimum EVSE count;
+5. apply the availability truth table to that same filtered EVSE set;
 6. broad progress/lower-bound window for batching.
 
 Actual driving-distance and MapKit food predicates remain on-device.

@@ -40,8 +40,7 @@ distance range. Selecting one opens Apple Maps navigation.
 
 No own turn-by-turn navigation, vehicle/SOC profile, automatic battery planning,
 payments, charging cards, accounts, cloud sync, ads/analytics profiles, connector
-filter, ratings, reservations, restaurant navigation, live re-ranking, or paid data
-source.
+filter, ratings, reservations, live re-ranking, or paid data source.
 
 ## Invariants
 

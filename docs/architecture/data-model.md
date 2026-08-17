@@ -1,6 +1,7 @@
 # Normalized domain data model
 
 Status: Accepted on 2026-08-13.
+Amended on 2026-08-16 for request-scoped per-EVSE power filtering.
 
 All IDs below are internal opaque UUIDs unless an explicit source/native identifier
 is named. Quantities use integer meters and kilowatts. Instants are UTC.
@@ -108,11 +109,15 @@ distinguish complete counts from partial/unknown availability.
 ### `PowerCapability`
 
 - `maximumPowerKW`
-- optional future `chargingPointCountAtOrAbovePower`
+- request-scoped `chargingPointCountAtOrAbovePower`
 - provenance and observation time
 
-MVP passes when at least one deduplicated EVSE supports the requested minimum
-power. It does not require all EVSEs, or a minimum number of them, to support it.
+For each search, discard EVSEs below `minimumPowerKW` before building the candidate
+summary. Per-operator counts, `chargingPointCount`, availability, the minimum-point
+filter, display/navigation coordinates, and the candidate name are all derived
+from the remaining deduplicated EVSEs. An operator with no qualifying EVSE is not
+part of that candidate. If only two of an operator's four EVSEs qualify, its
+request-scoped count is two.
 
 ### `DataSource` / `SourceReference`
 

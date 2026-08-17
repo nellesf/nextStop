@@ -126,6 +126,7 @@ components:
         minimumChargingPoints:
           type: integer
           enum: [2, 4, 6, 8, 10, 12, 16, 20]
+          description: Applied after EVSEs below minimumPowerKW are removed and the remainder is deduplicated.
         minimumAvailablePoints:
           type: [integer, 'null']
           enum: [null, 1, 2, 4, 6, 8, 10]
@@ -133,6 +134,7 @@ components:
         minimumPowerKW:
           type: integer
           enum: [11, 22, 50, 100, 150, 200, 250, 300, 350, 400]
+          description: Applied to each EVSE before operator counts, availability, and minimumChargingPoints.
         foodChain:
           type: [string, 'null']
           enum: [null, mcdonalds, burger_king, kfc, subway]
@@ -205,9 +207,15 @@ components:
           minimum: 0
           description: Never display or treat as actual driving distance.
         straightLineLowerBoundMeters: { type: integer, minimum: 0 }
-        chargingPoints: { type: integer, minimum: 1 }
+        chargingPoints:
+          type: integer
+          minimum: 1
+          description: Deduplicated EVSEs meeting the request's minimumPowerKW.
         availability: { $ref: '#/components/schemas/ParkAvailability' }
-        maximumPowerKW: { type: integer, minimum: 1 }
+        maximumPowerKW:
+          type: integer
+          minimum: 1
+          description: Maximum power among the EVSEs included in this request-scoped candidate.
         operators:
           type: array
           uniqueItems: true
@@ -215,7 +223,7 @@ components:
         operatorChargingPoints:
           type: array
           minItems: 1
-          description: Deduplicated EVSE count per operator; the sum equals chargingPoints.
+          description: Deduplicated EVSEs meeting minimumPowerKW per included operator; the sum equals chargingPoints.
           items:
             $ref: '#/components/schemas/OperatorChargingPoints'
         sources:

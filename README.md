@@ -33,6 +33,8 @@ serves exact 5 km route-corridor candidates through signed stable snapshots.
   clustering rule permits it within 200 m.
 - EVSEs (simultaneously usable charging positions), not cabinets or connectors,
   are counted.
+- The minimum-power filter is applied to individual EVSEs before per-operator
+  counts, minimum park size, and availability are evaluated.
 - Unknown availability never excludes a park by itself.
 - A selected food chain must be within 500 m geodesic distance of the park.
 - Opening hours are informational only.
