@@ -1,6 +1,20 @@
 # Deployment architecture
 
-Status: Accepted architecture; no deployment artifacts exist yet.
+Status: Accepted target architecture with an owner-approved single-VM staging
+exception implemented on 2026-08-18. See ADR 0014.
+
+## Private staging exception
+
+The two-to-three-user TestFlight phase runs the complete modular monolith and
+PostgreSQL/PostGIS on one `e2-standard-2` Compute Engine VM in Frankfurt. The API,
+charging ingestion, Swiss live refresh, and exactly one OSM importer are one
+process, matching local behavior. A separately attached persistent disk holds the
+database and OSM cache. Nginx terminates TLS at `api.nextstop.tech`; PostgreSQL is
+not publicly reachable and SSH uses Google IAP.
+
+The owner explicitly declined scheduled backups for this disposable staging
+corpus. This exception does not satisfy the production availability or recovery
+target below and must be replaced or re-approved before public production.
 
 ## Topology
 

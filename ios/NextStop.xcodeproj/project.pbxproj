@@ -669,7 +669,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				NEXTSTOP_API_BASE_URL = "https://api.example.invalid";
+				NEXTSTOP_API_BASE_URL = "https://api.nextstop.tech";
 				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";
@@ -868,7 +868,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				NEXTSTOP_API_BASE_URL = "http://127.0.0.1:3000";
+				NEXTSTOP_API_BASE_URL = "https://api.nextstop.tech";
 				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
 				SDKROOT = iphoneos;
 				TARGETED_DEVICE_FAMILY = "1,2";

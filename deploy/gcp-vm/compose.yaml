@@ -1,0 +1,73 @@
+services:
+  database:
+    image: postgis/postgis:17-3.5
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: nextstop
+      POSTGRES_USER: nextstop_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U nextstop_app -d nextstop"]
+      interval: 10s
+      timeout: 5s
+      retries: 12
+    shm_size: 256mb
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  cache-initializer:
+    image: busybox:1.37
+    restart: "no"
+    command: ["chown", "-R", "1000:1000", "/var/lib/nextstop/osm-cache"]
+    volumes:
+      - osm-cache:/var/lib/nextstop/osm-cache
+
+  backend:
+    build:
+      context: ../../backend
+      dockerfile: Dockerfile
+    restart: unless-stopped
+    init: true
+    depends_on:
+      database:
+        condition: service_healthy
+      cache-initializer:
+        condition: service_completed_successfully
+    environment:
+      DATABASE_URL: postgresql://nextstop_app:${POSTGRES_PASSWORD}@database:5432/nextstop
+      SNAPSHOT_SIGNING_KEY: ${SNAPSHOT_SIGNING_KEY:?SNAPSHOT_SIGNING_KEY is required}
+      HOST: 0.0.0.0
+      PORT: "3000"
+      INGESTION_ENABLED: "true"
+      OSM_INGESTION_ENABLED: "true"
+      OSM_GEOFABRIK_PBF_URLS: https://download.geofabrik.de/europe/germany-latest.osm.pbf,https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
+      OSM_CACHE_DIRECTORY: /var/lib/nextstop/osm-cache
+      NODE_OPTIONS: --max-old-space-size=4608
+    ports:
+      - 127.0.0.1:3000:3000
+    volumes:
+      - osm-cache:/var/lib/nextstop/osm-cache
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3000/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+volumes:
+  postgres-data:
+  osm-cache:

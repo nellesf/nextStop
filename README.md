@@ -127,6 +127,7 @@ requires Apple's managed capability and matching provisioning.
 - [Privacy data flow](docs/privacy/data-flow.md)
 - [Testing strategy](docs/testing.md)
 - [Deployment architecture](docs/deployment.md)
+- [Google Cloud single-VM staging](deploy/gcp-vm/README.md)
 - [Known limitations](docs/known-limitations.md)
 - [OpenStreetMap food-POI import runbook](docs/operations/openstreetmap-food-poi-import.md)
 - [Approved decisions and remaining external blockers](docs/open-decisions.md)
