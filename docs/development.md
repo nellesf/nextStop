@@ -98,6 +98,7 @@ npm run typecheck
 npm run build
 npm test
 npm run test:integration
+npm run refresh:osm
 npm run dev
 ```
 
@@ -124,6 +125,15 @@ the combined projection, and refreshes Swiss live availability every minute. Set
 manual import command remains a recovery tool documented in
 [`docs/operations/bundesnetzagentur-import.md`](operations/bundesnetzagentur-import.md).
 
+With `OSM_INGESTION_ENABLED=true` (the default), a separate daily job downloads
+the configured Geofabrik OSM PBF extracts, keeps them in `OSM_CACHE_DIRECTORY`,
+and publishes supported restaurant POIs atomically. Default coverage is Germany
+and Switzerland. The first Germany download is several gigabytes and the streaming
+import reads the PBF more than once; allow substantial disk space and time. Later
+runs send ETag/Last-Modified validators and reuse unchanged cached files.
+Production should run this resource-heavy job in one designated process.
+`npm run refresh:osm` is the manual recovery/validation command.
+
 ### Connected Simulator search
 
 The Debug build defaults to `http://127.0.0.1:3000`, so start the populated
@@ -136,11 +146,11 @@ SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
 npm run dev
 ```
 
-No charging rows need to be entered manually. `GET /health` reports process
+No charging or restaurant rows need to be entered manually. `GET /health` reports process
 liveness immediately; candidate search honestly returns `503` until the first
 background projection has published. The first real import downloads roughly
-80 MB of source data before decompression and can take around a minute depending
-on the machine and connection.
+80 MB of charging source data before decompression; the independent first OSM
+import is much larger and can take considerably longer.
 
 If Xcode and the backend run on different Macs, set the scheme environment
 variable `NEXTSTOP_API_BASE_URL` to the backend's reachable base URL and start the
@@ -153,7 +163,7 @@ Tap “Ladestationen finden” for a profile or saved destination. The app calcu
 the MapKit route and then starts the charging-park search automatically as one
 flow. It fetches a stable PostGIS candidate snapshot, asks MapKit for actual
 automobile distance to candidates in bounded groups of four, applies the exact
-configured range and optional 500 m food rule, sorts only by actual driving
+configured range after the backend's exact optional 500 m OSM food rule, sorts only by actual driving
 distance, and displays at most five. Each result shows the deduplicated EVSE count
 for every operator. With a selected restaurant, the result button opens Apple Maps
 with the restaurant as a waypoint before the original ride destination; otherwise

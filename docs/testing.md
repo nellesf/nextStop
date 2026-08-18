@@ -16,6 +16,10 @@ Run without Xcode entitlements through `ios/NextStopCore`.
   partial mathematically impossible fail.
 - Selected chain at 0/500 m passes; over 500 m fails; unknown opening status passes.
 - No selected chain does not require a POI.
+- A selected chain uses the pinned OSM POI projection; exact 500 m is included and
+  501 m is excluded even when both are present in the 700 m broad match cache.
+- Missing active OSM data is a retryable provider error, not an empty result.
+- OSM attribution is present for both non-empty and empty food-filtered responses.
 
 ### Ranking
 

@@ -4,6 +4,7 @@ import Fastify, { type FastifyInstance } from "fastify";
 
 import {
   NoProjectionAvailableError,
+  FoodPOIDataUnavailableError,
   UnavailableCandidateSearch,
   type CandidateSearching,
 } from "../application/candidate-search.js";
@@ -51,6 +52,16 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
       return reply.status(503).type("application/problem+json").send({
         type: "urn:nextstop:error:projection-unavailable",
         title: "Charging data unavailable",
+        status: 503,
+        detail: error.message,
+        errorId,
+      });
+    }
+
+    if (error instanceof FoodPOIDataUnavailableError) {
+      return reply.status(503).type("application/problem+json").send({
+        type: "urn:nextstop:error:food-poi-unavailable",
+        title: "Restaurant data unavailable",
         status: 503,
         detail: error.message,
         errorId,

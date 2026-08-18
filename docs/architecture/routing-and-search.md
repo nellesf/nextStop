@@ -27,21 +27,19 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    LineString using index-aware `ST_DWithin` on WGS84 geography. A bounding box may
    prefilter but is never the final corridor predicate.
 7. Backend computes geodesic distance to the line and a preliminary route-progress
-   measure, applies filters that it can prove from normalized charging data, and
-   returns a stable paginated candidate snapshot.
+   measure, applies normalized charging filters, and, when selected, joins the
+   pinned OSM restaurant projection. It uses a cached 700 m broad pair followed by
+   an exact inclusive 500 m geography check against the power-filtered park access
+   coordinate. It returns the selected restaurant and attribution in the stable
+   paginated snapshot.
 8. iOS requests MapKit automobile directions from the current location to each
    candidate in bounded batches behind a shared rolling request gate. After every
    batch it applies safe lower-bound stopping before requesting more routes.
    `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
    departure from the main route.
 9. Discard exact distances outside the selected range.
-10. If a food chain is selected, query MapKit for points of interest inside a
-    required local search region around each remaining candidate. Accept only
-    matching chain results whose geodesic point-to-park distance is at most 500 m;
-    the search region does not replace that exact check. Opening information is
-    optional and not a predicate. MapKit's `placemarkNotFound` response for that
-    required region is a confirmed local no-match; server and throttling errors
-    remain provider failures and fail the search with a retry path.
+10. If a food chain is selected, require the backend-provided OSM match. Opening
+    information is optional and not a predicate.
 11. Sort matches only by actual driving distance ascending, with stable park ID as
     a non-user-visible deterministic tie-breaker.
 12. Return the first five. If fewer exist, return fewer. If pagination is not
@@ -86,9 +84,11 @@ An initial SQL plan should reduce work in this order, subject to query planning:
 3. discard individual EVSEs below the requested minimum power;
 4. deduplicate the remaining EVSEs and apply the minimum EVSE count;
 5. aggregate availability for informational presentation only;
-6. broad progress/lower-bound window for batching.
+6. broad cached park/POI pair and exact 500 m OSM restaurant predicate;
+7. broad progress/lower-bound window for batching.
 
-Actual driving-distance and MapKit food predicates remain on-device.
+Actual driving-distance predicates remain on-device. Food proximity is exact
+PostGIS geography and remains pinned across pagination with the POI projection ID.
 
 ## Route changes and refresh
 

@@ -163,6 +163,38 @@ const candidateSchema = {
     },
     sources: { type: "array", minItems: 1, items: sourceSummarySchema },
     dataUpdatedAt: { type: "string", format: "date-time" },
+    foodPOI: {
+      type: ["object", "null"],
+      additionalProperties: false,
+      required: [
+        "id", "chain", "name", "coordinate",
+        "distanceFromChargingParkMeters", "sourceRecordURL",
+      ],
+      properties: {
+        id: { type: "string", minLength: 1 },
+        chain: { type: "string", enum: ["mcdonalds", "burger_king", "kfc", "subway"] },
+        name: { type: "string", minLength: 1, maxLength: 200 },
+        coordinate: coordinateSchema,
+        distanceFromChargingParkMeters: { type: "integer", minimum: 0, maximum: 500 },
+        openingHours: { type: ["string", "null"] },
+        sourceRecordURL: { type: "string", format: "uri" },
+      },
+    },
+  },
+} as const;
+
+const attributionSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "name", "notice", "licenseName", "licenseURL"],
+  properties: {
+    id: { type: "string", minLength: 1 },
+    name: { type: "string", minLength: 1 },
+    notice: { type: "string", minLength: 1 },
+    licenseName: { type: "string", minLength: 1 },
+    licenseURL: { type: "string", format: "uri" },
+    transportName: { type: ["string", "null"] },
+    transportURL: { type: ["string", "null"], format: "uri" },
   },
 } as const;
 
@@ -181,13 +213,14 @@ const coverageSchema = {
 export const searchResponseSchema = {
   type: "object",
   additionalProperties: false,
-  required: ["snapshotToken", "candidates", "coverage", "generatedAt"],
+  required: ["snapshotToken", "candidates", "coverage", "generatedAt", "attributions"],
   properties: {
     snapshotToken: { type: "string" },
     nextCursor: { type: ["string", "null"] },
     generatedAt: { type: "string", format: "date-time" },
     candidates: { type: "array", maxItems: 50, items: candidateSchema },
     coverage: coverageSchema,
+    attributions: { type: "array", uniqueItems: true, items: attributionSchema },
   },
 } as const;
 

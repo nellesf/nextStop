@@ -2,16 +2,18 @@ import { createHmac, timingSafeEqual } from "node:crypto";
 
 export interface SnapshotPayload {
   readonly kind: "snapshot";
-  readonly version: 2;
+  readonly version: 3;
   readonly projectionId: string;
+  readonly foodProjectionId: string | null;
   readonly availabilitySnapshotIds: readonly string[];
   readonly requestFingerprint: string;
 }
 
 export interface CursorPayload {
   readonly kind: "cursor";
-  readonly version: 2;
+  readonly version: 3;
   readonly projectionId: string;
+  readonly foodProjectionId: string | null;
   readonly availabilitySnapshotIds: readonly string[];
   readonly requestFingerprint: string;
   readonly lowerBoundMeters: number;
@@ -45,6 +47,7 @@ export class SignedPaginationCodec {
     if (
       value.kind !== "snapshot" ||
       !isUUID(value.projectionId) ||
+      !isOptionalUUID(value.foodProjectionId) ||
       !isSnapshotIds(value.availabilitySnapshotIds) ||
       !isFingerprint(value.requestFingerprint)
     ) {
@@ -58,6 +61,7 @@ export class SignedPaginationCodec {
     if (
       value.kind !== "cursor" ||
       !isUUID(value.projectionId) ||
+      !isOptionalUUID(value.foodProjectionId) ||
       !isSnapshotIds(value.availabilitySnapshotIds) ||
       !isFingerprint(value.requestFingerprint) ||
       !Number.isSafeInteger(value.lowerBoundMeters) ||
@@ -84,7 +88,7 @@ export class SignedPaginationCodec {
     }
     try {
       const parsed: unknown = JSON.parse(Buffer.from(encodedPayload, "base64url").toString("utf8"));
-      if (!isTokenObject(parsed) || parsed.version !== 2) {
+      if (!isTokenObject(parsed) || parsed.version !== 3) {
         throw new InvalidPaginationTokenError();
       }
       return parsed;
@@ -108,14 +112,20 @@ function isTokenObject(value: unknown): value is SnapshotPayload | CursorPayload
     "kind" in value &&
     (value.kind === "snapshot" || value.kind === "cursor") &&
     "version" in value &&
-    value.version === 2 &&
+    value.version === 3 &&
     "projectionId" in value &&
     typeof value.projectionId === "string" &&
+    "foodProjectionId" in value &&
+    (value.foodProjectionId === null || typeof value.foodProjectionId === "string") &&
     "availabilitySnapshotIds" in value &&
     Array.isArray(value.availabilitySnapshotIds) &&
     "requestFingerprint" in value &&
     typeof value.requestFingerprint === "string"
   );
+}
+
+function isOptionalUUID(value: string | null): boolean {
+  return value === null || isUUID(value);
 }
 
 function isSnapshotIds(value: readonly string[]): boolean {

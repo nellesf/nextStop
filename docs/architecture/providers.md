@@ -51,6 +51,16 @@ with a half-loaded dataset.
 - data retention and redistribution constraints;
 - field coverage and known quality limitations.
 
+## OpenStreetMap food POIs
+
+Restaurant POIs use a dedicated adapter and projection rather than the charging
+provider interface. OpenStreetMap is the source; Geofabrik transports daily
+regional PBF extracts. Downloads are conditional (ETag/Last-Modified), bounded,
+hashed, cached on disk, parsed without user requests, and atomically published.
+Supported chains are identified by `brand:wikidata`, then conservative brand/name
+aliases. Malformed target records are quarantined. Charging and food projections
+share an advisory publication lock so their derived match cache is never partial.
+
 ## Conflict resolution
 
 Resolve per field, not whole object:

@@ -80,6 +80,7 @@ struct CarPlayResultsPresentation: Equatable, Sendable {
   let title: String
   let points: [CarPlayResultPresentation]
   let coverageMessage: String?
+  let attributionMessage: String?
 }
 
 @MainActor
@@ -164,7 +165,10 @@ struct CarPlayPresenter {
     return CarPlayResultsPresentation(
       title: localizer.text("ride.results.title"),
       points: outcome.results.map { result($0, criteria: criteria) },
-      coverageMessage: coverageMessage(outcome.coverage)
+      coverageMessage: coverageMessage(outcome.coverage),
+      attributionMessage: outcome.attributions.isEmpty
+        ? nil
+        : outcome.attributions.map(\.notice).joined(separator: " · ")
     )
   }
 

@@ -11,6 +11,13 @@ export class NoProjectionAvailableError extends Error {
   }
 }
 
+export class FoodPOIDataUnavailableError extends Error {
+  constructor() {
+    super("No valid OpenStreetMap food-POI projection is available.");
+    this.name = "FoodPOIDataUnavailableError";
+  }
+}
+
 export class UnavailableCandidateSearch implements CandidateSearching {
   search(request: SearchRequest): Promise<SearchResponse> {
     void request;

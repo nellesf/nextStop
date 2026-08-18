@@ -39,6 +39,7 @@
 		8B0639F296A99367B2022597 /* CandidateSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6C69FF29913A65843A6233AD /* CandidateSearchService.swift */; };
 		9242972C65DD48842F8577EA /* AppShortcuts.strings in Resources */ = {isa = PBXBuildFile; fileRef = 1D4EAE0DA41D82178D6BD9FB /* AppShortcuts.strings */; };
 		AA92E3B84AD755284A4FA227 /* MapKitDestinationSearchService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 884B6AE7AAAB9A9D190C255D /* MapKitDestinationSearchService.swift */; };
+		ADD976102177F5C5ED48BEEF /* DataSourcesView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1C592FFD0890EFF9E6ECCF5 /* DataSourcesView.swift */; };
 		B1634765022692F9CA56146F /* ProfileListView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9A67286539089D33E4CBEC3F /* ProfileListView.swift */; };
 		BBB65984984E1796B31E40E6 /* Localizable.strings in Resources */ = {isa = PBXBuildFile; fileRef = 5FC1596ABBD13CE9837EE992 /* Localizable.strings */; };
 		C293804B5F1E7EC8DE9823AE /* DestinationSearching.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8F676250C62DF04A9C781207 /* DestinationSearching.swift */; };
@@ -127,6 +128,7 @@
 		E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearchView.swift; sourceTree = "<group>"; };
 		E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E45715BD4F1FED50FC352F93 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
+		F1C592FFD0890EFF9E6ECCF5 /* DataSourcesView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DataSourcesView.swift; sourceTree = "<group>"; };
 		F95AE94CAF423F9423F77C70 /* ProfileRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileRepository.swift; sourceTree = "<group>"; };
 		FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SwiftDataProfileRepository.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -295,6 +297,14 @@
 			path = NextStopCarPlay;
 			sourceTree = "<group>";
 		};
+		6F01676C79AAC71B352A6150 /* About */ = {
+			isa = PBXGroup;
+			children = (
+				F1C592FFD0890EFF9E6ECCF5 /* DataSourcesView.swift */,
+			);
+			path = About;
+			sourceTree = "<group>";
+		};
 		6F6AFB72FF2DA3BA3727D46D /* NextStopCarPlayTests */ = {
 			isa = PBXGroup;
 			children = (
@@ -307,6 +317,7 @@
 		8A41B0156DE9B0AB7A08E27A /* Features */ = {
 			isa = PBXGroup;
 			children = (
+				6F01676C79AAC71B352A6150 /* About */,
 				5DCF6114F429BD14C228C009 /* Destinations */,
 				12D2400A23E88966FA158349 /* Profiles */,
 				25B91FE874A7CAC34D5DB4D5 /* Ride */,
@@ -538,6 +549,7 @@
 				4E3D4BFA79D8588942540740 /* CarPlayRideSearchService.swift in Sources */,
 				D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */,
 				52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */,
+				ADD976102177F5C5ED48BEEF /* DataSourcesView.swift in Sources */,
 				886DC64861CA1383E035A013 /* DestinationLibraryView.swift in Sources */,
 				3044D161FCAC30BE2275F286 /* DestinationRepository.swift in Sources */,
 				C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */,

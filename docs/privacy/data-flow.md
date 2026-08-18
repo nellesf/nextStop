@@ -15,6 +15,7 @@ analytics SDKs are permitted in MVP.
 | Route geometry | Backend request + memory | Exact 5 km corridor query | Request lifetime; no application log or durable route table |
 | Ride criteria | iPhone and backend request | Candidate filtering | Request/snapshot TTL; no user association |
 | Charging corpus | Backend database | Search and freshness | Per source/license and operational policy |
+| OSM restaurant corpus | Backend database | Selected-chain proximity filter | Versioned daily projection; per ODbL policy |
 | Aggregate telemetry | Backend metrics | Reliability/performance | Short operational window; no route or persistent user ID |
 
 ## Network flows
@@ -53,7 +54,9 @@ minimum functional disclosure; a coarse bounding box would violate correctness.
 
 Ingestion is independent of user requests. Never proxy a user's route to national
 or operator providers. Scheduled jobs fetch/cache regional provider data, and
-searches use the local normalized PostGIS projection.
+searches use the local normalized PostGIS projection. Restaurant ingestion likewise
+downloads Geofabrik-hosted OSM extracts on a schedule. No route, location,
+criteria, or other request data is sent to OpenStreetMap or Geofabrik.
 
 ## Retention and logging
 

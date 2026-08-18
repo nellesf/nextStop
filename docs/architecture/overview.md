@@ -30,7 +30,7 @@ Backend modular monolith
   | provider ingestion -> validation -> normalization -> dedup -> clustering
   | candidate search -> provider-health-aware response
   v
-PostgreSQL + PostGIS <---- official NAP/operator/open-data providers
+PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 ```
 
 ## Components and responsibilities
@@ -58,8 +58,8 @@ PostgreSQL + PostGIS <---- official NAP/operator/open-data providers
 - Calculates the canonical route from current location to destination.
 - Exports the detailed route polyline as a validated GeoJSON LineString.
 - Resolves actual automobile routes from current location to candidate parks.
-- Resolves the selected fast-food chain near a park and verifies the result's
-  geodesic distance is no more than 500 m.
+- Consumes the backend's validated restaurant match; it does not perform local POI
+  discovery.
 - Opens Apple Maps with driving directions. A matched restaurant is inserted as a
   waypoint before the original ride destination; without a food match, the park
   remains the navigation destination.
@@ -103,6 +103,7 @@ services:
 - Normalized relational charging model with field-level observations.
 - Current authoritative projection and conflict records.
 - GiST-indexed `geography(Point, 4326)` park locations.
+- Separately versioned OSM restaurant POIs plus cached broad park/POI pairs.
 - Search projection for total EVSEs, known-free state, maximum power, operators,
   quality, freshness, and live coverage.
 
@@ -130,15 +131,19 @@ never import provider DTOs or UI frameworks.
 
 ## Search ownership
 
-The backend returns a paginated, stable candidate snapshot after EVSE count/power
-filters and exact route-corridor geometry. Live availability remains informational.
-The iOS application performs
-the operations that only MapKit can truthfully provide:
+The backend returns a paginated, stable candidate snapshot after EVSE count/power,
+restaurant, and exact route-corridor filtering. Live availability remains
+informational. The iOS application performs the operations that only MapKit can
+truthfully provide:
 
 1. exact automobile distance from the current location to each candidate;
 2. final distance-range filter;
-3. selected-chain lookup and 500 m check;
-4. final distance-only sort and five-result cap.
+3. final distance-only sort and five-result cap.
+
+The backend's restaurant predicate uses an OSM snapshot pinned into the same
+signed pagination token. A 700 m materialized pair cache reduces work, but the
+candidate query still applies exact geography `ST_DWithin(..., 500)` against the
+navigation coordinate derived after the request's power filter.
 
 This split avoids a second router that could disagree with Apple Maps. It also
 means an API field named `actualDrivingDistance` must never be populated by route
@@ -155,8 +160,8 @@ a new snapshot after explicit confirmation.
 
 - Provider failure: use non-expired cached data and report degraded source health.
 - Partial live data: retain the park with explicit coverage/unknown state.
-- POI lookup failure: distinguish “provider unavailable” from “no matching POI.”
-  A transient provider failure must not be misrepresented as a confirmed no-match.
+- POI projection failure: retain the previous active projection. If none exists,
+  return a retryable error instead of misrepresenting it as a confirmed no-match.
 - MapKit route failure: no search; offer retry/destination change.
 - Backend failure: no stale local European corpus is assumed. Show a clear retry
   path and preserve the ride draft.

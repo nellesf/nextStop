@@ -21,6 +21,7 @@
 "carplay.result.operator.format" = "%@ · %lld charging points";
 "carplay.coverage.degraded" = "Live data partially available";
 "carplay.coverage.stale" = "Charging data is not current";
+"carplay.attribution.detail" = "License details in the iPhone app";
 "carplay.alert.ok" = "OK";
 "carplay.navigation.error" = "Apple Maps could not be opened.";
 "carplay.profiles.empty.description" = "First create a profile with a destination in the iPhone app.";
@@ -68,6 +69,15 @@
 "profiles.empty.description" = "Create a profile to prepare a destination and charging criteria for CarPlay.";
 "profiles.empty.title" = "No profiles yet";
 "profiles.title" = "Profiles";
+"licenses.title" = "Data Sources & Licenses";
+"licenses.restaurant.title" = "Restaurants";
+"licenses.restaurant.description" = "Restaurant locations come from OpenStreetMap. The nextStop backend imports the data daily via Geofabrik extracts.";
+"licenses.license" = "License";
+"licenses.geofabrik" = "Geofabrik download page";
+"licenses.charging.title" = "Charging stations";
+"licenses.charging.description" = "German charging data comes from the Bundesnetzagentur charging-station register (CC BY 4.0); Swiss data comes from the Swiss Federal Office of Energy via ich-tanke-strom.ch.";
+"licenses.maps.title" = "Route & Navigation";
+"licenses.maps.description" = "Apple MapKit calculates the route and actual driving distances. Apple Maps provides navigation.";
 "ride.criteria" = "Criteria for this ride";
 "ride.destination" = "Destination";
 "ride.error.location_denied" = "Location access is off. Allow it in Settings so nextStop can calculate the route.";

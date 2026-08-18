@@ -78,7 +78,7 @@ enum RideCandidateSearchState: Equatable {
   case idle
   case searching
   case results(RideCandidateSearchOutcome)
-  case noResults(CandidateSearchCoverage)
+  case noResults(RideCandidateSearchOutcome)
   case failed(RideCandidateSearchFailure)
 }
 
@@ -131,7 +131,7 @@ final class RidePreparationViewModel: ObservableObject {
       let outcome = try await candidateSearcher.search(preparedRide: preparedRide)
       try Task.checkCancellation()
       candidateSearchState =
-        outcome.results.isEmpty ? .noResults(outcome.coverage) : .results(outcome)
+        outcome.results.isEmpty ? .noResults(outcome) : .results(outcome)
     } catch is CancellationError {
       candidateSearchState = .idle
     } catch let error as RideCandidateSearchError {

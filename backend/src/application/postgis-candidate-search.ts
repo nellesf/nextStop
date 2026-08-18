@@ -3,7 +3,10 @@ import { createHash } from "node:crypto";
 import type { Pool } from "pg";
 
 import type { CandidateSearching } from "./candidate-search.js";
-import { NoProjectionAvailableError } from "./candidate-search.js";
+import {
+  FoodPOIDataUnavailableError,
+  NoProjectionAvailableError,
+} from "./candidate-search.js";
 import {
   InvalidPaginationTokenError,
   type CursorPayload,
@@ -22,6 +25,7 @@ import {
   type AvailabilitySnapshotRow,
 } from "../persistence/availability-snapshot-writer.js";
 import { ichTankeStromDescriptor } from "../providers/ich-tanke-strom/descriptor.js";
+import { openStreetMapFoodPOIDescriptor } from "../providers/openstreetmap/descriptor.js";
 
 const pageSize = 50;
 
@@ -56,6 +60,15 @@ interface CandidateRow {
   }[];
   readonly sources: SourceSummary[];
   readonly dataUpdatedAt: Date;
+  readonly foodOSMType: "node" | "way" | "relation" | null;
+  readonly foodOSMId: string | null;
+  readonly foodChain: "mcdonalds" | "burger_king" | "kfc" | "subway" | null;
+  readonly foodName: string | null;
+  readonly foodLatitude: number | null;
+  readonly foodLongitude: number | null;
+  readonly foodDistanceMeters: number | null;
+  readonly foodOpeningHours: string | null;
+  readonly foodSourceRecordURL: string | null;
 }
 
 export class PostGISCandidateSearch implements CandidateSearching {
@@ -79,6 +92,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
     if (projection === undefined) {
       throw new NoProjectionAvailableError();
     }
+    const foodProjectionId = await this.resolveFoodProjectionId(request, page.snapshot);
     const availabilitySnapshots = await this.resolveAvailabilitySnapshots(
       projection,
       page.snapshot,
@@ -88,8 +102,9 @@ export class PostGISCandidateSearch implements CandidateSearching {
       .toSorted();
     const snapshot: SnapshotPayload = page.snapshot ?? {
       kind: "snapshot",
-      version: 2,
+      version: 3,
       projectionId: projection.id,
+      foodProjectionId,
       availabilitySnapshotIds,
       requestFingerprint,
     };
@@ -98,6 +113,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
       availabilitySnapshotIds,
       request,
       page.cursor,
+      foodProjectionId,
     );
     const hasNextPage = rows.length > pageSize;
     const visibleRows = rows.slice(0, pageSize);
@@ -106,8 +122,9 @@ export class PostGISCandidateSearch implements CandidateSearching {
       hasNextPage && last !== undefined
         ? this.pagination.encode({
             kind: "cursor",
-            version: 2,
+            version: 3,
             projectionId: projection.id,
+            foodProjectionId,
             availabilitySnapshotIds,
             requestFingerprint,
             lowerBoundMeters: last.straightLineLowerBoundMeters,
@@ -121,7 +138,36 @@ export class PostGISCandidateSearch implements CandidateSearching {
       generatedAt: this.now().toISOString(),
       candidates: visibleRows.map((row) => mapCandidate(row, availabilitySnapshots)),
       coverage: mapCoverage(projection, availabilitySnapshots),
+      attributions: request.criteria.foodChain == null
+        ? []
+        : [{
+            id: openStreetMapFoodPOIDescriptor.id,
+            name: openStreetMapFoodPOIDescriptor.name,
+            notice: openStreetMapFoodPOIDescriptor.attributionNotice,
+            licenseName: openStreetMapFoodPOIDescriptor.licenseName,
+            licenseURL: openStreetMapFoodPOIDescriptor.licenseURL,
+            transportName: openStreetMapFoodPOIDescriptor.transportName,
+            transportURL: openStreetMapFoodPOIDescriptor.transportURL,
+          }],
     };
+  }
+
+  private async resolveFoodProjectionId(
+    request: SearchRequest,
+    snapshot: SnapshotPayload | undefined,
+  ): Promise<string | null> {
+    if (request.criteria.foodChain == null) return null;
+    const expectedId = snapshot?.foodProjectionId;
+    const result = await this.pool.query<{ readonly id: string }>(
+      expectedId === undefined
+        ? "SELECT id FROM nextstop.food_poi_projection_versions WHERE status = 'active'"
+        : `SELECT id FROM nextstop.food_poi_projection_versions
+           WHERE id = $1 AND status IN ('active', 'retired')`,
+      expectedId === undefined ? [] : [expectedId],
+    );
+    const id = result.rows[0]?.id;
+    if (id === undefined) throw new FoodPOIDataUnavailableError();
+    return id;
   }
 
   private async resolveAvailabilitySnapshots(
@@ -186,6 +232,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
     availabilitySnapshotIds: readonly string[],
     request: SearchRequest,
     cursor: CursorPayload | undefined,
+    foodProjectionId: string | null,
   ): Promise<readonly CandidateRow[]> {
     const origin = request.route.coordinates[0];
     if (origin === undefined) {
@@ -205,6 +252,8 @@ export class PostGISCandidateSearch implements CandidateSearching {
         cursor?.parkId ?? null,
         pageSize + 1,
         availabilitySnapshotIds,
+        foodProjectionId,
+        request.criteria.foodChain ?? null,
       ],
     );
     return result.rows;
@@ -422,9 +471,42 @@ SELECT park_id AS id,
        eligible_operators AS operators,
        operator_charging_points AS "operatorChargingPoints",
        source_summaries AS sources,
-       data_updated_at AS "dataUpdatedAt"
+       data_updated_at AS "dataUpdatedAt",
+       food.osm_type AS "foodOSMType",
+       food.osm_id::text AS "foodOSMId",
+       food.chain AS "foodChain",
+       food.name AS "foodName",
+       ST_Y(food.coordinate::geometry) AS "foodLatitude",
+       ST_X(food.coordinate::geometry) AS "foodLongitude",
+       food.distance_meters AS "foodDistanceMeters",
+       food.opening_hours AS "foodOpeningHours",
+       food.source_record_url AS "foodSourceRecordURL"
 FROM availability
+LEFT JOIN LATERAL (
+  SELECT poi.osm_type, poi.osm_id, poi.chain, poi.name, poi.coordinate,
+         poi.opening_hours, poi.source_record_url,
+         round(ST_Distance(poi.coordinate, availability.eligible_navigation_coordinate))::integer
+           AS distance_meters
+  FROM nextstop.charging_park_food_poi_matches AS match
+  JOIN nextstop.food_poi_projection AS poi
+    ON poi.projection_id = match.food_projection_id
+   AND poi.osm_type = match.osm_type
+   AND poi.osm_id = match.osm_id
+  WHERE match.charging_projection_id = $1
+    AND match.food_projection_id = $12::uuid
+    AND match.park_id = availability.park_id
+    AND poi.chain = $13::text
+    AND ST_DWithin(
+      poi.coordinate,
+      availability.eligible_navigation_coordinate,
+      500
+    )
+  ORDER BY ST_Distance(poi.coordinate, availability.eligible_navigation_coordinate),
+           poi.osm_type, poi.osm_id
+  LIMIT 1
+) AS food ON $13::text IS NOT NULL
 WHERE straight_line_lower_bound_meters <= $7
+  AND ($13::text IS NULL OR food.osm_id IS NOT NULL)
   AND (
     $8::integer IS NULL
     OR (straight_line_lower_bound_meters, park_id) > ($8, $9::uuid)
@@ -451,6 +533,7 @@ function resolvePage(
     snapshot.requestFingerprint !== requestFingerprint ||
     cursor.requestFingerprint !== requestFingerprint ||
     snapshot.projectionId !== cursor.projectionId ||
+    snapshot.foodProjectionId !== cursor.foodProjectionId ||
     !sameStrings(
       snapshot.availabilitySnapshotIds,
       cursor.availabilitySnapshotIds,
@@ -523,6 +606,28 @@ function mapCandidate(
       return liveObservedAt === undefined ? source : { ...source, liveObservedAt };
     }),
     dataUpdatedAt: row.dataUpdatedAt.toISOString(),
+    foodPOI:
+      row.foodOSMType === null ||
+      row.foodOSMId === null ||
+      row.foodChain === null ||
+      row.foodName === null ||
+      row.foodLatitude === null ||
+      row.foodLongitude === null ||
+      row.foodDistanceMeters === null ||
+      row.foodSourceRecordURL === null
+        ? null
+        : {
+            id: `osm:${row.foodOSMType}:${row.foodOSMId}`,
+            chain: row.foodChain,
+            name: row.foodName,
+            coordinate: {
+              latitude: row.foodLatitude,
+              longitude: row.foodLongitude,
+            },
+            distanceFromChargingParkMeters: row.foodDistanceMeters,
+            openingHours: row.foodOpeningHours,
+            sourceRecordURL: row.foodSourceRecordURL,
+          },
   };
 }
 

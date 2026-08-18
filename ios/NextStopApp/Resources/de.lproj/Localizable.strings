@@ -21,6 +21,7 @@
 "carplay.result.operator.format" = "%@ · %lld Ladepunkte";
 "carplay.coverage.degraded" = "Live-Daten teilweise verfügbar";
 "carplay.coverage.stale" = "Ladedaten nicht aktuell";
+"carplay.attribution.detail" = "Lizenzdetails in der iPhone-App";
 "carplay.alert.ok" = "OK";
 "carplay.navigation.error" = "Apple Maps konnte nicht geöffnet werden.";
 "carplay.profiles.empty.description" = "Lege zuerst in der iPhone-App ein Profil mit Fahrziel an.";
@@ -68,6 +69,15 @@
 "profiles.empty.description" = "Lege ein Profil an, um Fahrziel und Ladekriterien für CarPlay vorzubereiten.";
 "profiles.empty.title" = "Noch keine Profile";
 "profiles.title" = "Profile";
+"licenses.title" = "Datenquellen & Lizenzen";
+"licenses.restaurant.title" = "Restaurants";
+"licenses.restaurant.description" = "Restaurantstandorte stammen aus OpenStreetMap. Die Daten werden täglich über Geofabrik-Auszüge in das nextStop-Backend übernommen.";
+"licenses.license" = "Lizenz";
+"licenses.geofabrik" = "Geofabrik-Downloadseite";
+"licenses.charging.title" = "Ladestationen";
+"licenses.charging.description" = "Deutsche Ladedaten stammen aus dem Ladesäulenregister der Bundesnetzagentur (CC BY 4.0), Schweizer Daten vom Bundesamt für Energie BFE über ich-tanke-strom.ch.";
+"licenses.maps.title" = "Route & Navigation";
+"licenses.maps.description" = "Apple MapKit berechnet Route und echte Fahrstrecken. Apple Maps übernimmt die Navigation.";
 "ride.criteria" = "Kriterien für diese Fahrt";
 "ride.destination" = "Fahrziel";
 "ride.error.location_denied" = "Der Standortzugriff ist ausgeschaltet. Erlaube ihn in den Einstellungen, damit nextStop die Route berechnen kann.";

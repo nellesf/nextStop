@@ -215,9 +215,9 @@ struct RidePreparationView: View {
       }
     case .results(let outcome):
       resultsContent(outcome)
-    case .noResults(let coverage):
+    case .noResults(let outcome):
       VStack(spacing: 12) {
-        coverageNotice(coverage)
+        coverageNotice(outcome.coverage)
         Card {
           Label("ride.search.empty.title", systemImage: "bolt.slash")
             .font(.headline)
@@ -226,6 +226,7 @@ struct RidePreparationView: View {
             .foregroundStyle(.secondary)
           searchButton
         }
+        attributionContent(outcome.attributions)
       }
     case .failed(let failure):
       Card {
@@ -270,10 +271,7 @@ struct RidePreparationView: View {
         resultCard(result)
       }
 
-      Text("ride.results.attribution")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity, alignment: .leading)
+      attributionContent(outcome.attributions)
 
       Button {
         Task {
@@ -285,6 +283,19 @@ struct RidePreparationView: View {
       }
       .buttonStyle(.bordered)
     }
+  }
+
+  @ViewBuilder
+  private func attributionContent(_ attributions: [DataAttribution]) -> some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text("ride.results.attribution")
+      ForEach(attributions) { attribution in
+        Link(attribution.notice, destination: attribution.licenseURL)
+      }
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+    .frame(maxWidth: .infinity, alignment: .leading)
   }
 
   @ViewBuilder

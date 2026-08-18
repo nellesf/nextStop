@@ -33,7 +33,11 @@ const candidateSearch =
 const app = createApp(candidateSearch === undefined ? {} : { candidateSearch });
 const ingestionCoordinator =
   pool !== undefined && parseBoolean(process.env.INGESTION_ENABLED, true)
-    ? new ProviderIngestionCoordinator(pool, app.log)
+    ? new ProviderIngestionCoordinator(
+        pool,
+        app.log,
+        parseBoolean(process.env.OSM_INGESTION_ENABLED, true, "OSM_INGESTION_ENABLED"),
+      )
     : undefined;
 
 if (pool !== undefined) {
@@ -49,7 +53,11 @@ await app.listen({
 });
 ingestionCoordinator?.start();
 
-function parseBoolean(value: string | undefined, defaultValue: boolean): boolean {
+function parseBoolean(
+  value: string | undefined,
+  defaultValue: boolean,
+  name = "INGESTION_ENABLED",
+): boolean {
   if (value === undefined) {
     return defaultValue;
   }
@@ -59,5 +67,5 @@ function parseBoolean(value: string | undefined, defaultValue: boolean): boolean
   if (value === "false") {
     return false;
   }
-  throw new Error("INGESTION_ENABLED must be true or false.");
+  throw new Error(`${name} must be true or false.`);
 }

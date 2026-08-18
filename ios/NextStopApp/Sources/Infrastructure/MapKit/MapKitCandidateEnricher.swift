@@ -1,24 +1,13 @@
-import CoreLocation
-import MapKit
+import Foundation
 import NextStopCore
-
-@MainActor
-protocol FoodPOISearching: AnyObject {
-  func foodPOIs(chain: FoodChain, near coordinate: Coordinate) async throws -> [FoodPOI]
-}
 
 @MainActor
 final class MapKitCandidateEnricher: CandidateEnriching {
   private let routePlanner: any RoutePlanning
-  private let foodSearcher: any FoodPOISearching
-  private var cache: [CacheKey: CachedEnrichment] = [:]
+  private var cache: [CacheKey: Meters] = [:]
 
-  init(
-    routePlanner: any RoutePlanning,
-    foodSearcher: any FoodPOISearching = MapKitFoodPOISearchService()
-  ) {
+  init(routePlanner: any RoutePlanning) {
     self.routePlanner = routePlanner
-    self.foodSearcher = foodSearcher
   }
 
   func enrich(
@@ -29,203 +18,35 @@ final class MapKitCandidateEnricher: CandidateEnriching {
     let cacheKey = CacheKey(
       candidateID: candidate.id,
       origin: origin,
-      navigationCoordinate: candidate.park.navigationCoordinate,
-      criteria: criteria
+      navigationCoordinate: candidate.park.navigationCoordinate
     )
+    let actualDrivingDistance: Meters
     if let cached = cache[cacheKey] {
-      return EnrichedChargingParkCandidate(
-        park: candidate.park,
-        distanceFromRoute: candidate.distanceFromRoute,
-        actualDrivingDistance: cached.actualDrivingDistance,
-        foodPOIs: cached.foodPOIs
-      )
-    }
-
-    let drivingRoute: PlannedRoute
-    do {
-      drivingRoute = try await routePlanner.automobileRoute(
-        from: origin,
-        to: candidate.park.navigationCoordinate
-      )
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch {
-      throw CandidateEnrichmentError.drivingRouteUnavailable
-    }
-
-    var foodPOIs: [FoodPOI] = []
-    if criteria.distanceRange.range.contains(drivingRoute.actualDrivingDistance),
-      let foodChain = criteria.foodChain
-    {
+      actualDrivingDistance = cached
+    } else {
       do {
-        foodPOIs = try await foodSearcher.foodPOIs(
-          chain: foodChain,
-          near: candidate.park.navigationCoordinate
-        )
+        actualDrivingDistance = try await routePlanner.automobileRoute(
+          from: origin,
+          to: candidate.park.navigationCoordinate
+        ).actualDrivingDistance
       } catch is CancellationError {
         throw CancellationError()
       } catch {
-        throw CandidateEnrichmentError.foodSearchUnavailable
+        throw CandidateEnrichmentError.drivingRouteUnavailable
       }
+      cache[cacheKey] = actualDrivingDistance
     }
-
-    let result = EnrichedChargingParkCandidate(
+    return EnrichedChargingParkCandidate(
       park: candidate.park,
       distanceFromRoute: candidate.distanceFromRoute,
-      actualDrivingDistance: drivingRoute.actualDrivingDistance,
-      foodPOIs: foodPOIs
+      actualDrivingDistance: actualDrivingDistance,
+      foodPOIs: criteria.foodChain == nil ? [] : candidate.foodPOIs
     )
-    cache[cacheKey] = CachedEnrichment(
-      actualDrivingDistance: result.actualDrivingDistance,
-      foodPOIs: result.foodPOIs
-    )
-    return result
   }
 
   private struct CacheKey: Hashable {
     let candidateID: UUID
     let origin: Coordinate
     let navigationCoordinate: Coordinate
-    let criteria: RideCriteria
-  }
-
-  private struct CachedEnrichment {
-    let actualDrivingDistance: Meters
-    let foodPOIs: [FoodPOI]
-  }
-}
-
-@MainActor
-final class MapKitFoodPOISearchService: FoodPOISearching {
-  func foodPOIs(chain: FoodChain, near parkCoordinate: Coordinate) async throws -> [FoodPOI] {
-    let request = Self.makeRequest(chain: chain, near: parkCoordinate)
-    let mapItems: [MKMapItem]
-    do {
-      let response = try await MKLocalSearch(request: request).start()
-      mapItems = response.mapItems
-    } catch {
-      if Self.isConfirmedNoMatch(error) {
-        return []
-      }
-      throw error
-    }
-    let parkLocation = CLLocation(
-      latitude: parkCoordinate.latitude,
-      longitude: parkCoordinate.longitude
-    )
-    return try mapItems.compactMap { mapItem in
-      guard let name = mapItem.name,
-        matches(name: name, chain: chain),
-        let itemCoordinate = coordinate(for: mapItem)
-      else {
-        return nil
-      }
-      let itemLocation = CLLocation(
-        latitude: itemCoordinate.latitude,
-        longitude: itemCoordinate.longitude
-      )
-      let distance = Int(parkLocation.distance(from: itemLocation).rounded())
-      guard distance <= SearchConfiguration.maximumFoodDistance.value else {
-        return nil
-      }
-      return try FoodPOI(
-        id: stablePOIID(name: name, coordinate: itemCoordinate),
-        applePlaceIdentifier: mapItem.identifier?.rawValue,
-        chain: chain,
-        name: name,
-        coordinate: itemCoordinate,
-        distanceFromPark: Meters(distance),
-        openingStatus: .unknown
-      )
-    }
-    .sorted { first, second in
-      if first.distanceFromPark == second.distanceFromPark {
-        return first.id < second.id
-      }
-      return first.distanceFromPark < second.distanceFromPark
-    }
-  }
-
-  static func makeRequest(
-    chain: FoodChain,
-    near parkCoordinate: Coordinate
-  ) -> MKLocalSearch.Request {
-    let request = MKLocalSearch.Request()
-    request.naturalLanguageQuery = query(for: chain)
-    request.resultTypes = .pointOfInterest
-    request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
-    request.region = MKCoordinateRegion(
-      center: CLLocationCoordinate2D(
-        latitude: parkCoordinate.latitude,
-        longitude: parkCoordinate.longitude
-      ),
-      latitudinalMeters: 1_200,
-      longitudinalMeters: 1_200
-    )
-    request.regionPriority = .required
-    return request
-  }
-
-  static func isConfirmedNoMatch(_ error: any Error) -> Bool {
-    let error = error as NSError
-    return error.domain == MKError.errorDomain
-      && error.code == Int(MKError.Code.placemarkNotFound.rawValue)
-  }
-
-  private static func query(for chain: FoodChain) -> String {
-    switch chain {
-    case .mcdonalds:
-      "McDonald's"
-    case .burgerKing:
-      "Burger King"
-    case .kfc:
-      "KFC"
-    case .subway:
-      "Subway Restaurant"
-    }
-  }
-
-  private func matches(name: String, chain: FoodChain) -> Bool {
-    let normalized = name.folding(
-      options: [.caseInsensitive, .diacriticInsensitive],
-      locale: Locale(identifier: "de_DE")
-    )
-    .lowercased()
-    .filter(\.isLetter)
-    switch chain {
-    case .mcdonalds:
-      return normalized.contains("mcdonald")
-    case .burgerKing:
-      return normalized.contains("burgerking")
-    case .kfc:
-      return normalized == "kfc" || normalized.contains("kentuckyfriedchicken")
-    case .subway:
-      return normalized.contains("subway")
-    }
-  }
-
-  private func coordinate(for mapItem: MKMapItem) -> Coordinate? {
-    let location: CLLocation
-    if #available(iOS 26.0, *) {
-      location = mapItem.location
-    } else {
-      return legacyCoordinate(for: mapItem)
-    }
-    return try? Coordinate(
-      latitude: location.coordinate.latitude,
-      longitude: location.coordinate.longitude
-    )
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private func legacyCoordinate(for mapItem: MKMapItem) -> Coordinate? {
-    try? Coordinate(
-      latitude: mapItem.placemark.coordinate.latitude,
-      longitude: mapItem.placemark.coordinate.longitude
-    )
-  }
-
-  private func stablePOIID(name: String, coordinate: Coordinate) -> String {
-    "mapkit:\(name.lowercased()):\(coordinate.latitude):\(coordinate.longitude)"
   }
 }

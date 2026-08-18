@@ -4,11 +4,14 @@ import {
   refreshStaticProviders,
   refreshSwissLiveAvailability,
 } from "./refresh-providers.js";
+import { refreshFoodPOIs } from "./refresh-food-pois.js";
 
 const staticSuccessIntervalMilliseconds = 24 * 60 * 60 * 1_000;
 const staticRetryIntervalMilliseconds = 15 * 60 * 1_000;
 const liveSuccessIntervalMilliseconds = 60 * 1_000;
 const liveRetryIntervalMilliseconds = 30 * 1_000;
+const foodSuccessIntervalMilliseconds = 24 * 60 * 60 * 1_000;
+const foodRetryIntervalMilliseconds = 30 * 60 * 1_000;
 
 export interface IngestionLogger {
   info(details: Readonly<Record<string, unknown>>, message: string): void;
@@ -19,10 +22,12 @@ export class ProviderIngestionCoordinator {
   private stopped = true;
   private staticTimer: NodeJS.Timeout | undefined;
   private liveTimer: NodeJS.Timeout | undefined;
+  private foodTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly pool: Pool,
     private readonly logger: IngestionLogger,
+    private readonly foodPOIIngestionEnabled = true,
   ) {}
 
   start(): void {
@@ -32,6 +37,9 @@ export class ProviderIngestionCoordinator {
     this.stopped = false;
     this.staticTimer = setTimeout(() => void this.refreshStatic(), 0);
     this.liveTimer = setTimeout(() => void this.refreshLive(), 0);
+    if (this.foodPOIIngestionEnabled) {
+      this.foodTimer = setTimeout(() => void this.refreshFood(), 0);
+    }
   }
 
   stop(): void {
@@ -41,6 +49,9 @@ export class ProviderIngestionCoordinator {
     }
     if (this.liveTimer !== undefined) {
       clearTimeout(this.liveTimer);
+    }
+    if (this.foodTimer !== undefined) {
+      clearTimeout(this.foodTimer);
     }
   }
 
@@ -81,6 +92,26 @@ export class ProviderIngestionCoordinator {
     }
     if (!this.stopped) {
       this.liveTimer = setTimeout(() => void this.refreshLive(), nextDelay);
+    }
+  }
+
+  private async refreshFood(): Promise<void> {
+    let nextDelay = foodSuccessIntervalMilliseconds;
+    try {
+      const result = await refreshFoodPOIs(this.pool);
+      this.logger.info(
+        { event: "osm-food-poi-refresh", result: result.kind },
+        "OpenStreetMap food POIs refreshed.",
+      );
+    } catch (error) {
+      nextDelay = foodRetryIntervalMilliseconds;
+      this.logger.warn(
+        { event: "osm-food-poi-refresh-failed", failure: failureCode(error) },
+        "OpenStreetMap food POI refresh failed; the active projection was retained.",
+      );
+    }
+    if (!this.stopped) {
+      this.foodTimer = setTimeout(() => void this.refreshFood(), nextDelay);
     }
   }
 }

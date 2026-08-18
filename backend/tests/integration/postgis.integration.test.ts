@@ -14,6 +14,7 @@ import type {
 } from "../../src/domain/normalized-charging.js";
 import { createDatabasePool } from "../../src/persistence/database.js";
 import { AvailabilitySnapshotWriter } from "../../src/persistence/availability-snapshot-writer.js";
+import { FoodPOIProjectionWriter } from "../../src/persistence/food-poi-projection-writer.js";
 import { applyMigrations } from "../../src/persistence/migrate.js";
 import {
   ProjectionWriter,
@@ -28,6 +29,7 @@ import {
   refreshSwissLiveAvailability,
 } from "../../src/jobs/refresh-providers.js";
 import type { SearchRequest } from "../../src/domain/candidate-search.js";
+import type { OpenStreetMapFoodPOIRecord } from "../../src/providers/openstreetmap/pbf-provider.js";
 
 const connectionString = process.env.TEST_DATABASE_URL;
 const signingKey = "integration-test-signing-key-with-at-least-32-bytes";
@@ -250,6 +252,78 @@ void test(
         false,
       );
     });
+
+    await context.test(
+      "uses cached OSM pairs but enforces the exact 500 m food boundary",
+      async () => {
+        await resetDatabase(pool);
+        const chargingProjectionId = await insertActiveProjection(pool);
+        const parkId = "25000000-0000-4000-8000-000000000001";
+        await insertPointPark(pool, chargingProjectionId, {
+          latitude: 52,
+          longitude: 10.05,
+          parkId,
+        });
+        const coordinates = await pool.query<{
+          readonly insideLatitude: number;
+          readonly insideLongitude: number;
+          readonly outsideLatitude: number;
+          readonly outsideLongitude: number;
+        }>(
+          `SELECT
+             ST_Y(inside_point::geometry) AS "insideLatitude",
+             ST_X(inside_point::geometry) AS "insideLongitude",
+             ST_Y(outside_point::geometry) AS "outsideLatitude",
+             ST_X(outside_point::geometry) AS "outsideLongitude"
+           FROM (
+             SELECT ST_Project(origin, 499, 0) AS inside_point,
+                    ST_Project(origin, 501, 0) AS outside_point
+             FROM (
+               SELECT ST_SetSRID(ST_MakePoint(10.05, 52), 4326)::geography AS origin
+             ) AS value
+           ) AS projected`,
+        );
+        const coordinate = coordinates.rows[0];
+        assert.ok(coordinate);
+        const foodProjectionId = "26000000-0000-4000-8000-000000000001";
+        const foodWriter = new FoodPOIProjectionWriter(pool);
+        await foodWriter.create({
+          id: foodProjectionId,
+          sourceDatasetHash: "8".repeat(64),
+          sourceObservedAt: "2026-08-18T00:00:00.000Z",
+          fetchedAt: "2026-08-18T01:00:00.000Z",
+          builtAt: "2026-08-18T01:01:00.000Z",
+          sourceURLs: ["https://download.geofabrik.de/europe/germany-latest.osm.pbf"],
+        });
+        await foodWriter.writeRecords(foodProjectionId, [
+          foodRecord(1, "mcdonalds", coordinate.insideLatitude, coordinate.insideLongitude),
+          foodRecord(2, "burger_king", coordinate.outsideLatitude, coordinate.outsideLongitude),
+        ]);
+        await foodWriter.publish(
+          foodProjectionId,
+          2,
+          0,
+          "2026-08-18T01:02:00.000Z",
+        );
+
+        const base = searchRequest([[10, 52], [10.2, 52]]);
+        const matching = await candidateSearch(pool).search({
+          ...base,
+          criteria: { ...base.criteria, foodChain: "mcdonalds" },
+        });
+        assert.equal(matching.candidates.length, 1);
+        assert.equal(matching.candidates[0]?.foodPOI?.name, "McDonald's");
+        assert.equal(matching.candidates[0]?.foodPOI?.distanceFromChargingParkMeters, 499);
+        assert.equal(matching.attributions[0]?.notice, "© OpenStreetMap contributors");
+
+        const outside = await candidateSearch(pool).search({
+          ...base,
+          criteria: { ...base.criteria, foodChain: "burger_king" },
+        });
+        assert.equal(outside.candidates.length, 0);
+        assert.equal(outside.attributions.length, 1);
+      },
+    );
 
     await context.test("automatically refreshes static and live authority feeds", async () => {
       await resetDatabase(pool);
@@ -542,9 +616,30 @@ function searchRequest(
 async function resetDatabase(pool: Pool): Promise<void> {
   await pool.query(
     `TRUNCATE nextstop.projection_versions,
+              nextstop.food_poi_projection_versions,
               nextstop.provider_records
      CASCADE`,
   );
+}
+
+function foodRecord(
+  id: number,
+  chain: "mcdonalds" | "burger_king",
+  latitude: number,
+  longitude: number,
+): OpenStreetMapFoodPOIRecord {
+  return {
+    osmType: "node",
+    osmId: id,
+    chain,
+    name: chain === "mcdonalds" ? "McDonald's" : "Burger King",
+    geometry: { type: "Point", coordinates: [longitude, latitude] },
+    address: {},
+    matchMethod: "brand_wikidata",
+    sourceRecordURL: `https://www.openstreetmap.org/node/${id}`,
+    sourceObservedAt: "2026-08-18T00:00:00.000Z",
+    fetchedAt: "2026-08-18T01:00:00.000Z",
+  };
 }
 
 async function insertActiveProjection(pool: Pool): Promise<string> {

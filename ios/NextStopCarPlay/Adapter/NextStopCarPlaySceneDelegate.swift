@@ -294,7 +294,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         let outcome = try await searchService.search(draft: draft)
         try Task.checkCancellation()
         if outcome.results.isEmpty {
-          showNoResults(in: loading, draft: draft)
+          showNoResults(in: loading, draft: draft, outcome: outcome)
         } else {
           showResults(outcome)
         }
@@ -308,14 +308,21 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
   }
 
-  private func showNoResults(in template: CPListTemplate, draft: RideSearchDraft) {
+  private func showNoResults(
+    in template: CPListTemplate,
+    draft: RideSearchDraft,
+    outcome: RideCandidateSearchOutcome
+  ) {
     noResultsTemplate = template
-    template.updateSections(makeNoResultsSections(draft))
+    template.updateSections(makeNoResultsSections(draft, attributions: outcome.attributions))
     template.emptyViewTitleVariants = [localizer.text("ride.search.empty.title")]
     template.emptyViewSubtitleVariants = [localizer.text("ride.search.empty.description")]
   }
 
-  private func makeNoResultsSections(_ draft: RideSearchDraft) -> [CPListSection] {
+  private func makeNoResultsSections(
+    _ draft: RideSearchDraft,
+    attributions: [DataAttribution] = []
+  ) -> [CPListSection] {
     let message = CPListItem(
       text: localizer.text("ride.search.empty.title"),
       detailText: localizer.text("ride.search.empty.description")
@@ -336,11 +343,20 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       self?.startSearch()
       completion()
     }
-    return [
+    var sections = [
       CPListSection(items: [message]),
       CPListSection(items: criteria),
       CPListSection(items: [retry]),
     ]
+    if !attributions.isEmpty {
+      let attribution = CPListItem(
+        text: attributions.map(\.notice).joined(separator: " · "),
+        detailText: localizer.text("carplay.attribution.detail")
+      )
+      attribution.isEnabled = false
+      sections.append(CPListSection(items: [attribution]))
+    }
+    return sections
   }
 
   private func showSearchError(
@@ -372,7 +388,11 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       uniqueKeysWithValues: outcome.results.map { ($0.candidate.park.id, $0) }
     )
     let points = presentation.points.map { point in
-      makePointOfInterest(point, coverageMessage: presentation.coverageMessage)
+      makePointOfInterest(
+        point,
+        coverageMessage: presentation.coverageMessage,
+        attributionMessage: presentation.attributionMessage
+      )
     }
     let template = CPPointOfInterestTemplate(
       title: presentation.title,
@@ -397,13 +417,14 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
 
   private func makePointOfInterest(
     _ presentation: CarPlayResultPresentation,
-    coverageMessage: String?
+    coverageMessage: String?,
+    attributionMessage: String?
   ) -> CPPointOfInterest {
     let mapItem = makeMapItem(
       coordinate: presentation.coordinate,
       name: presentation.title
     )
-    let detailSummary = [presentation.detailSummary, coverageMessage]
+    let detailSummary = [presentation.detailSummary, coverageMessage, attributionMessage]
       .compactMap { $0 }
       .joined(separator: "\n")
     let point = CPPointOfInterest(

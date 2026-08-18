@@ -123,7 +123,10 @@ final class RidePreparationViewModelTests: XCTestCase {
       return XCTFail("Expected the route to be ready")
     }
     XCTAssertEqual(candidateSearcher.preparedRides, [preparedRide])
-    XCTAssertEqual(viewModel.candidateSearchState, .noResults(coverage))
+    XCTAssertEqual(
+      viewModel.candidateSearchState,
+      .noResults(RideCandidateSearchOutcome(results: [], coverage: coverage))
+    )
 
     await viewModel.prepareRouteAndSearch()
 
