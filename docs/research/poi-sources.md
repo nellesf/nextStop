@@ -1,8 +1,8 @@
 # Fast-food POI source evaluation
 
-Research date: 2026-08-13.
+Research date: 2026-08-13. Decision updated 2026-08-18 after field testing.
 
-## MVP recommendation: MapKit on-device
+## Superseded MVP recommendation: MapKit on-device
 
 Use `MKLocalSearch` for the selected chain around candidate parks, then enforce the
 500 m geodesic distance in app code. Search by normalized chain aliases and verify
@@ -37,22 +37,26 @@ request succeeded. Network/service failure is “POI data unavailable,” not an
 result. The search orchestrator may retry or fetch the next batch, but must not
 silently claim that a park fails the food criterion because the provider failed.
 
-## Fallback: OpenStreetMap-derived POIs
+## Adopted source: OpenStreetMap-derived POIs
 
-If field validation shows unacceptable MapKit gaps or latency, ingest regional OSM
-extracts into a separate PostGIS source schema. Match `amenity=fast_food` plus
-normalized `brand`, `brand:wikidata`, and names. Do not use the public Overpass
-service as an unbounded production dependency.
+Field validation showed unacceptable latency and MapKit throttling. The backend
+therefore ingests Germany and Switzerland regional OSM extracts into a separate
+PostGIS projection. It matches restaurant-like amenities using `brand:wikidata`
+first and conservative normalized `brand`/`name` aliases. The public Overpass and
+Nominatim services are not production dependencies.
 
 OSM data is under ODbL 1.0 with attribution and share-alike obligations:
 
 - [OSMF license and legal FAQ](https://osmfoundation.org/wiki/Licence/Licence_and_Legal_FAQ)
 - [OSMF license page](https://osmfoundation.org/wiki/Licence)
 
-Before enabling the fallback, obtain a concrete data-boundary/attribution review,
-publish required attribution in iPhone/CarPlay-appropriate surfaces, and document
-the extract/update process. Do not casually merge OSM-derived records into a
-redistributed charging database without reviewing derivative-database obligations.
+The product keeps OSM-derived POIs in a separately versioned relation and displays
+`© OpenStreetMap contributors` linked to the OSM copyright page beside results and
+in a permanent iPhone licenses screen. CarPlay shows the compact notice in result
+details. Geofabrik is identified as the extract transport, not as the source.
+Release owners must still re-review current ODbL obligations and any public
+database distribution plan; this document is an engineering record, not legal
+advice.
 
 ## Rejected for MVP
 

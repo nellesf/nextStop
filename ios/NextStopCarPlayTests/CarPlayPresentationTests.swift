@@ -75,7 +75,18 @@ final class CarPlayPresentationTests: XCTestCase {
         activeSourceIDs: ["bundesnetzagentur_ladesaeulenregister", "ich_tanke_strom"],
         unavailableSourceIDs: ["ich_tanke_strom:live"],
         projectionUpdatedAt: Date(timeIntervalSince1970: 0)
-      )
+      ),
+      attributions: [
+        DataAttribution(
+          id: "openstreetmap_food_poi",
+          name: "OpenStreetMap",
+          notice: "© OpenStreetMap contributors",
+          licenseName: "Open Database License (ODbL) 1.0",
+          licenseURL: URL(string: "https://www.openstreetmap.org/copyright")!,
+          transportName: "Geofabrik",
+          transportURL: URL(string: "https://download.geofabrik.de/")!
+        )
+      ]
     )
 
     let presentation = CarPlayPresenter(localizer: germanLocalizer()).results(
@@ -99,6 +110,7 @@ final class CarPlayPresentationTests: XCTestCase {
     )
     XCTAssertEqual(presentation.points[1].detailSubtitle, "90 km")
     XCTAssertEqual(presentation.coverageMessage, "Live-Daten teilweise verfügbar")
+    XCTAssertEqual(presentation.attributionMessage, "© OpenStreetMap contributors")
   }
 
   private func makeProfile() throws -> UserProfile {

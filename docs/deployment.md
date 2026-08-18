@@ -11,6 +11,10 @@ separate process roles:
 - `api`: stateless HTTP candidate search;
 - `worker`: scheduled provider ingestion and transactional projection rebuilds.
 
+Run the resource-heavy OSM PBF ingestion in exactly one designated worker with a
+persistent private cache volume. API replicas set `INGESTION_ENABLED=false`; a
+charging-only worker can set `OSM_INGESTION_ENABLED=false`.
+
 They share code and database but can scale/restart independently. Do not introduce
 microservices, Redis, Kafka, Elasticsearch, or a server-side router before measured
 need.
@@ -50,6 +54,8 @@ need.
 - PostgreSQL with the PostGIS extension and automated point-in-time recovery.
 - GiST indexes on park/normalized locations; conventional indexes on provider keys,
   EVSE identity, observation time, and projection version.
+- A separate GiST-indexed OSM food-POI projection and version-pinned derived
+  park/POI cache; do not merge it into redistributed charging source tables.
 - Separate roles for migrations, worker writes, API read/search, and operations.
 - Retain provider raw payloads only as allowed/needed for replay; route requests are
   never stored in domain tables or backups.

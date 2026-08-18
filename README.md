@@ -9,7 +9,7 @@ Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
 Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
-candidate search, exact per-candidate MapKit driving distances, optional MapKit
+candidate search, exact per-candidate MapKit driving distances, versioned OSM
 restaurant checks, distance-only ranking, per-operator EVSE counts, and Apple Maps
 handoff. When a restaurant is selected, the handoff keeps the original ride
 destination and inserts that restaurant as a waypoint. The same
@@ -23,7 +23,9 @@ TypeScript/Fastify backend now discovers and imports the current official
 Bundesnetzagentur register automatically, joins the official Swiss
 `ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic
 charging parks, publishes versioned PostGIS static/live snapshots atomically, and
-serves exact 5 km route-corridor candidates through signed stable snapshots.
+serves exact 5 km route-corridor candidates through signed stable snapshots. A
+separate daily OSM projection imports supported chains from cached Geofabrik PBF
+extracts and enforces the exact 500 m restaurant predicate.
 
 ## Non-negotiable product rules
 
@@ -59,6 +61,7 @@ Modular backend
   provider normalization and provenance
   conservative EVSE deduplication
   deterministic 200 m park clustering
+  versioned OSM restaurant ingestion + attribution
   cached search projection
               |
               v
@@ -67,6 +70,7 @@ PostgreSQL + PostGIS
   normalized charging entities
   field-level provenance and quality
   GiST-indexed charging-park projection
+  separate OSM POI projection and park/POI match cache
 ```
 
 The full rationale and boundaries are in
@@ -124,6 +128,7 @@ requires Apple's managed capability and matching provisioning.
 - [Testing strategy](docs/testing.md)
 - [Deployment architecture](docs/deployment.md)
 - [Known limitations](docs/known-limitations.md)
+- [OpenStreetMap food-POI import runbook](docs/operations/openstreetmap-food-poi-import.md)
 - [Approved decisions and remaining external blockers](docs/open-decisions.md)
 - [Architecture decision records](docs/adr/)
 

@@ -110,7 +110,7 @@ and recent destinations as the iPhone UI. Selecting a profile creates a value-co
 ride draft; selecting a saved destination creates a draft from the central
 defaults. Each criterion opens only its centrally defined fixed options. Search
 delegates to the same location, MapKit route, signed backend candidate, exact
-MapKit distance, food check, filtering, and distance-only ranking components as
+MapKit distance, backend OSM food match, filtering, and distance-only ranking components as
 the iPhone flow.
 
 Results use `CPPointOfInterestTemplate`; its picker and map receive the same stable

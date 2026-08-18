@@ -7,6 +7,29 @@ struct BackendCandidate: Identifiable, Hashable, Sendable {
   let park: ChargingPark
   let distanceFromRoute: Meters
   let straightLineLowerBound: Meters
+  let foodPOIs: [FoodPOI]
+
+  init(
+    park: ChargingPark,
+    distanceFromRoute: Meters,
+    straightLineLowerBound: Meters,
+    foodPOIs: [FoodPOI] = []
+  ) {
+    self.park = park
+    self.distanceFromRoute = distanceFromRoute
+    self.straightLineLowerBound = straightLineLowerBound
+    self.foodPOIs = foodPOIs
+  }
+}
+
+struct DataAttribution: Hashable, Sendable, Identifiable {
+  let id: String
+  let name: String
+  let notice: String
+  let licenseName: String
+  let licenseURL: URL
+  let transportName: String?
+  let transportURL: URL?
 }
 
 struct CandidateSearchPage: Hashable, Sendable {
@@ -14,6 +37,21 @@ struct CandidateSearchPage: Hashable, Sendable {
   let nextCursor: String?
   let candidates: [BackendCandidate]
   let coverage: CandidateSearchCoverage
+  let attributions: [DataAttribution]
+
+  init(
+    snapshotToken: String,
+    nextCursor: String?,
+    candidates: [BackendCandidate],
+    coverage: CandidateSearchCoverage,
+    attributions: [DataAttribution] = []
+  ) {
+    self.snapshotToken = snapshotToken
+    self.nextCursor = nextCursor
+    self.candidates = candidates
+    self.coverage = coverage
+    self.attributions = attributions
+  }
 }
 
 enum CandidateCoverageStatus: String, Decodable, Hashable, Sendable {
@@ -34,6 +72,7 @@ enum CandidateSearchServiceError: Error, Equatable {
   case invalidRequest
   case invalidResponse
   case dataPreparing
+  case foodDataPreparing
   case snapshotExpired
   case unavailable
 }
@@ -132,6 +171,8 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     switch (statusCode, problem.type) {
     case (503, "urn:nextstop:error:projection-unavailable"):
       return .dataPreparing
+    case (503, "urn:nextstop:error:food-poi-unavailable"):
+      return .foodDataPreparing
     case (409, "urn:nextstop:error:invalid-pagination-token"):
       return .snapshotExpired
     default:
@@ -146,6 +187,7 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
   let generatedAt: String
   let candidates: [CandidateDTO]
   let coverage: CoverageDTO
+  let attributions: [AttributionDTO]
 
   func domainPage() throws -> CandidateSearchPage {
     guard !snapshotToken.isEmpty,
@@ -165,7 +207,8 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
       snapshotToken: snapshotToken,
       nextCursor: nextCursor,
       candidates: mappedCandidates,
-      coverage: try coverage.domainCoverage()
+      coverage: try coverage.domainCoverage(),
+      attributions: try attributions.map { try $0.domainAttribution() }
     )
   }
 
@@ -183,6 +226,7 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
     let operatorChargingPoints: [OperatorChargingPointsDTO]
     let sources: [SourceDTO]
     let dataUpdatedAt: String
+    let foodPOI: FoodPOIDTO?
 
     func domainCandidate() throws -> BackendCandidate {
       guard let id = UUID(uuidString: id),
@@ -252,10 +296,74 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
         maximumPower: Kilowatts(maximumPowerKW),
         sourceReferences: sourceReferences
       )
+      let foodPOIs: [FoodPOI]
+      if let foodPOI {
+        guard let chain = FoodChain(rawValue: foodPOI.chain),
+          !foodPOI.id.isEmpty,
+          !foodPOI.sourceRecordURL.isEmpty,
+          (0...SearchConfiguration.maximumFoodDistance.value).contains(
+            foodPOI.distanceFromChargingParkMeters
+          )
+        else {
+          throw CandidateSearchServiceError.invalidResponse
+        }
+        foodPOIs = [
+          try FoodPOI(
+            id: foodPOI.id,
+            chain: chain,
+            name: foodPOI.name,
+            coordinate: try foodPOI.coordinate.domainCoordinate(),
+            distanceFromPark: Meters(foodPOI.distanceFromChargingParkMeters),
+            openingStatus: .unknown
+          )
+        ]
+      } else {
+        foodPOIs = []
+      }
       return BackendCandidate(
         park: park,
         distanceFromRoute: Meters(distanceFromRouteMeters),
-        straightLineLowerBound: Meters(straightLineLowerBoundMeters)
+        straightLineLowerBound: Meters(straightLineLowerBoundMeters),
+        foodPOIs: foodPOIs
+      )
+    }
+  }
+
+  struct FoodPOIDTO: Decodable, Equatable {
+    let id: String
+    let chain: String
+    let name: String
+    let coordinate: CoordinateDTO
+    let distanceFromChargingParkMeters: Int
+    let openingHours: String?
+    let sourceRecordURL: String
+  }
+
+  struct AttributionDTO: Decodable, Equatable {
+    let id: String
+    let name: String
+    let notice: String
+    let licenseName: String
+    let licenseURL: String
+    let transportName: String?
+    let transportURL: String?
+
+    func domainAttribution() throws -> DataAttribution {
+      guard !id.isEmpty, !name.isEmpty, !notice.isEmpty, !licenseName.isEmpty,
+        let licenseURL = URL(string: licenseURL),
+        licenseURL.scheme == "https",
+        transportURL == nil || URL(string: transportURL ?? "")?.scheme == "https"
+      else {
+        throw CandidateSearchServiceError.invalidResponse
+      }
+      return DataAttribution(
+        id: id,
+        name: name,
+        notice: notice,
+        licenseName: licenseName,
+        licenseURL: licenseURL,
+        transportName: transportName,
+        transportURL: transportURL.flatMap(URL.init(string:))
       )
     }
   }

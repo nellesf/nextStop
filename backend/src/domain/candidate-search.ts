@@ -34,6 +34,7 @@ export interface SearchResponse {
   readonly generatedAt: string;
   readonly candidates: readonly ChargingParkCandidate[];
   readonly coverage: Coverage;
+  readonly attributions: readonly DataAttribution[];
 }
 
 export interface ChargingParkCandidate {
@@ -51,6 +52,27 @@ export interface ChargingParkCandidate {
   readonly operatorChargingPoints: readonly OperatorChargingPoints[];
   readonly sources: readonly SourceSummary[];
   readonly dataUpdatedAt: string;
+  readonly foodPOI?: FoodPOISummary | null;
+}
+
+export interface FoodPOISummary {
+  readonly id: string;
+  readonly chain: FoodChain;
+  readonly name: string;
+  readonly coordinate: Coordinate;
+  readonly distanceFromChargingParkMeters: number;
+  readonly openingHours?: string | null;
+  readonly sourceRecordURL: string;
+}
+
+export interface DataAttribution {
+  readonly id: string;
+  readonly name: string;
+  readonly notice: string;
+  readonly licenseName: string;
+  readonly licenseURL: string;
+  readonly transportName?: string | null;
+  readonly transportURL?: string | null;
 }
 
 export interface OperatorChargingPoints {

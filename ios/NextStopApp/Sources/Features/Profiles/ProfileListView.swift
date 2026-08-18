@@ -99,7 +99,12 @@ struct ProfileListView: View {
             Label("destinations.title", systemImage: "star")
           }
         }
-        ToolbarItem(placement: .primaryAction) {
+        ToolbarItemGroup(placement: .primaryAction) {
+          NavigationLink {
+            DataSourcesView()
+          } label: {
+            Label("licenses.title", systemImage: "info.circle")
+          }
           Button {
             editorSelection = ProfileEditorSelection()
           } label: {

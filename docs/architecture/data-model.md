@@ -1,7 +1,7 @@
 # Normalized domain data model
 
 Status: Accepted on 2026-08-13.
-Amended on 2026-08-16 for request-scoped per-EVSE power filtering.
+Amended on 2026-08-18 for request-scoped power filtering and OSM food POIs.
 
 All IDs below are internal opaque UUIDs unless an explicit source/native identifier
 is named. Quantities use integer meters and kilowatts. Instants are UTC.
@@ -26,7 +26,7 @@ An aggregate search/display entity, not an operator.
 - `sourceReferences`
 - `lastStaticObservationAt`
 - `lastLiveObservationAt?`
-- `foodPOIs: [FoodPOI]` (normally added on-device in MVP)
+- `foodPOIs: [FoodPOI]` (selected from the pinned backend POI projection)
 
 The display centroid never replaces member coordinates in deduplication or source
 records. A navigation coordinate should be the best access/member location, not a
@@ -132,6 +132,11 @@ request-scoped count is two.
 Distance is computed independently from the charging source and must be <=500 m.
 Unknown opening status does not affect matching.
 
+OSM POIs live in a separate versioned projection with OSM object type/ID, match
+method, source URL, observation/fetch timestamps, and quarantine records. A
+derived park/POI relation caches pairs up to 700 m only as a prefilter. Exact
+request inclusion always rechecks 500 m after eligible EVSE geometry is derived.
+
 ## Search entities
 
 ### `RouteSearchRequest`
@@ -160,6 +165,8 @@ Unknown opening status does not affect matching.
 - `straightLineLowerBoundMeters`
 - `snapshotToken`, `candidateCursor?`
 - no backend-claimed actual driving distance
+- matching `FoodPOI?` when a chain was requested
+- data attributions used by the client
 
 ### `RouteSearchResult`
 

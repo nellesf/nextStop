@@ -32,7 +32,7 @@ distance range. Selecting one opens Apple Maps navigation.
 | Charging count/power filter | Backend/domain |
 | Actual driving distance to park | MapKit on iPhone |
 | Exact distance-range filter and ranking | iPhone domain use case |
-| Fast-food <=500 m | MapKit POI adapter on iPhone (MVP) |
+| Fast-food <=500 m | Versioned OSM POI projection and exact PostGIS geography |
 | Stable max-five presentation | CarPlay POI/list templates |
 | Navigation | Apple Maps |
 
@@ -77,7 +77,7 @@ The vertical slice is complete only when a real-source route can be run through:
 
 ```text
 location -> destination -> MapKit route -> backend candidates
--> exact corridor -> charging filters -> MapKit distance/food enrichment
+-> exact corridor -> charging + OSM food filters -> MapKit driving-distance enrichment
 -> stable max five -> CarPlay templates -> Apple Maps handoff
 ```
 

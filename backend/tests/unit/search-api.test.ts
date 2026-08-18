@@ -2,7 +2,10 @@ import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
 import test from "node:test";
 
-import type { CandidateSearching } from "../../src/application/candidate-search.js";
+import {
+  FoodPOIDataUnavailableError,
+  type CandidateSearching,
+} from "../../src/application/candidate-search.js";
 import { InvalidPaginationTokenError } from "../../src/application/signed-pagination.js";
 import { createApp } from "../../src/api/app.js";
 import type { SearchRequest, SearchResponse } from "../../src/domain/candidate-search.js";
@@ -29,6 +32,7 @@ const emptyResponse: SearchResponse = {
   nextCursor: null,
   generatedAt: "2026-08-14T08:00:00.000Z",
   candidates: [],
+  attributions: [],
   coverage: {
     status: "complete",
     activeSources: ["bundesnetzagentur"],
@@ -151,6 +155,25 @@ void test("invalid snapshot is reported as a conflict without token details", as
 
   assert.equal(response.statusCode, 409);
   assert.match(response.body, /Invalid candidate snapshot/u);
+});
+
+void test("missing requested OSM projection is a retryable 503, not no matches", async (context) => {
+  const app = createApp({
+    candidateSearch: {
+      search: () => Promise.reject(new FoodPOIDataUnavailableError()),
+    },
+    makeErrorId: () => "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee",
+  });
+  context.after(async () => app.close());
+
+  const response = await app.inject({
+    method: "POST",
+    url: "/v1/charging-parks/search",
+    payload: { ...validRequest, criteria: { ...validRequest.criteria, foodChain: "mcdonalds" } },
+  });
+
+  assert.equal(response.statusCode, 503);
+  assert.match(response.body, /Restaurant data unavailable/u);
 });
 
 class CandidateSearchStub implements CandidateSearching {

@@ -13,11 +13,21 @@ enum RideCandidateSearchError: Error, Equatable {
 struct RideCandidateSearchOutcome: Equatable, Sendable {
   let results: [RouteSearchResult]
   let coverage: CandidateSearchCoverage
+  let attributions: [DataAttribution]
+
+  init(
+    results: [RouteSearchResult],
+    coverage: CandidateSearchCoverage,
+    attributions: [DataAttribution] = []
+  ) {
+    self.results = results
+    self.coverage = coverage
+    self.attributions = attributions
+  }
 }
 
 enum CandidateEnrichmentError: Error, Equatable {
   case drivingRouteUnavailable
-  case foodSearchUnavailable
 }
 
 @MainActor
@@ -72,6 +82,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     var seenPageIdentities = Set<String>()
     var previousPageLastLowerBound: Meters?
     var searchCoverage: CandidateSearchCoverage?
+    var searchAttributions: [DataAttribution]?
 
     while true {
       let page: CandidateSearchPage
@@ -81,6 +92,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         throw CancellationError()
       } catch CandidateSearchServiceError.dataPreparing {
         throw RideCandidateSearchError.candidateDataPreparing
+      } catch CandidateSearchServiceError.foodDataPreparing {
+        throw RideCandidateSearchError.foodSearchUnavailable
       } catch CandidateSearchServiceError.snapshotExpired {
         throw RideCandidateSearchError.candidateSnapshotExpired
       } catch CandidateSearchServiceError.invalidResponse {
@@ -99,6 +112,13 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         }
       } else {
         searchCoverage = page.coverage
+      }
+      if let searchAttributions {
+        guard searchAttributions == page.attributions else {
+          throw RideCandidateSearchError.candidateResponseInvalid
+        }
+      } else {
+        searchAttributions = page.attributions
       }
       if page.candidates.isEmpty, page.nextCursor != nil {
         throw RideCandidateSearchError.candidateResponseInvalid
@@ -139,7 +159,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
           return try self.outcome(
             results: batchResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
-            coverage: searchCoverage
+            coverage: searchCoverage,
+            attributions: searchAttributions
           )
         }
       }
@@ -152,7 +173,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         return try outcome(
           results: selectedResults,
           routingFailureLowerBounds: routingFailureLowerBounds,
-          coverage: searchCoverage
+          coverage: searchCoverage,
+          attributions: searchAttributions
         )
       }
       if let lastLowerBound = page.candidates.last?.straightLineLowerBound {
@@ -160,14 +182,16 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
           return try outcome(
             results: selectedResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
-            coverage: searchCoverage
+            coverage: searchCoverage,
+            attributions: searchAttributions
           )
         }
         if safeToStop(results: selectedResults, nextLowerBound: lastLowerBound) {
           return try outcome(
             results: selectedResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
-            coverage: searchCoverage
+            coverage: searchCoverage,
+            attributions: searchAttributions
           )
         }
       }
@@ -199,9 +223,10 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
   private func outcome(
     results: [RouteSearchResult],
     routingFailureLowerBounds: [Meters],
-    coverage: CandidateSearchCoverage?
+    coverage: CandidateSearchCoverage?,
+    attributions: [DataAttribution]?
   ) throws -> RideCandidateSearchOutcome {
-    guard let coverage else {
+    guard let coverage, let attributions else {
       throw RideCandidateSearchError.candidateResponseInvalid
     }
     return RideCandidateSearchOutcome(
@@ -209,7 +234,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         results,
         routingFailureLowerBounds: routingFailureLowerBounds
       ),
-      coverage: coverage
+      coverage: coverage,
+      attributions: attributions
     )
   }
 
@@ -280,8 +306,6 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
       )
     } catch CandidateEnrichmentError.drivingRouteUnavailable {
       return .routingFailure(candidate.straightLineLowerBound)
-    } catch CandidateEnrichmentError.foodSearchUnavailable {
-      throw RideCandidateSearchError.foodSearchUnavailable
     } catch is CancellationError {
       throw CancellationError()
     } catch {

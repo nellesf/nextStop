@@ -21,6 +21,7 @@
 "carplay.result.operator.format" = "%@ · %lld charging points";
 "carplay.coverage.degraded" = "Live data partially available";
 "carplay.coverage.stale" = "Charging data is not current";
+"carplay.attribution.detail" = "License details in the iPhone app";
 "carplay.alert.ok" = "OK";
 "carplay.navigation.error" = "Apple Maps could not be opened.";
 "carplay.profiles.empty.description" = "First create a profile with a destination in the iPhone app.";
@@ -68,6 +69,15 @@
 "profiles.empty.description" = "Create a profile to prepare a destination and charging criteria for CarPlay.";
 "profiles.empty.title" = "No profiles yet";
 "profiles.title" = "Profiles";
+"licenses.title" = "Data Sources & Licenses";
+"licenses.restaurant.title" = "Restaurants";
+"licenses.restaurant.description" = "Restaurant locations come from OpenStreetMap. The nextStop backend imports the data daily via Geofabrik extracts.";
+"licenses.license" = "License";
+"licenses.geofabrik" = "Geofabrik download page";
+"licenses.charging.title" = "Charging stations";
+"licenses.charging.description" = "German charging data comes from the Bundesnetzagentur charging-station register (CC BY 4.0); Swiss data comes from the Swiss Federal Office of Energy via ich-tanke-strom.ch.";
+"licenses.maps.title" = "Route & Navigation";
+"licenses.maps.description" = "Apple MapKit calculates the route and actual driving distances. Apple Maps provides navigation.";
 "ride.criteria" = "Criteria for this ride";
 "ride.destination" = "Destination";
 "ride.error.location_denied" = "Location access is off. Allow it in Settings so nextStop can calculate the route.";
@@ -82,7 +92,7 @@
 "ride.progress.description" = "The route comes directly from Apple Maps.";
 "ride.progress.location" = "Getting current location…";
 "ride.progress.route" = "Calculating the driving route…";
-"ride.ready.description" = "The route and privacy-preserving search request are ready. Start checking matching charging parks now.";
+"ride.ready.description" = "The route was calculated and the search for matching charging stations started automatically.";
 "ride.ready.title" = "Route ready";
 "ride.result.availability.complete.format" = "%lld charging points available";
 "ride.result.availability.partial.format" = "%lld known available, %lld unknown";
@@ -109,7 +119,7 @@
 "ride.search.refresh" = "Refresh search";
 "ride.route.distance" = "Route to destination";
 "ride.route.duration" = "Estimated travel time";
-"ride.start" = "Prepare ride";
+"ride.start" = "Find charging stations";
 "ride.title" = "Prepare ride";
 "search.distance_range.15_50_km" = "15–50 km";
 "search.distance_range.50_100_km" = "50–100 km";

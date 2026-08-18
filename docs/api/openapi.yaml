@@ -4,9 +4,9 @@ info:
   version: 1.0.0-draft
   description: |
     Draft architecture-gate contract. The backend performs exact route-corridor
-    and charging-data filtering. MapKit on iOS calculates actual driving distance,
-    applies the exact selected distance range, checks the selected food chain, and
-    performs final distance-only ranking.
+    charging-data filtering, and the exact selected-chain proximity predicate from
+    a pinned OSM projection. MapKit on iOS calculates actual driving distance,
+    applies the exact selected distance range, and performs final distance-only ranking.
 servers:
   - url: https://api.example.invalid
 paths:
@@ -47,7 +47,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '503':
-          description: No valid charging-data projection is available.
+          description: No valid charging or requested food-POI projection is available.
           content:
             application/problem+json:
               schema:
@@ -134,7 +134,7 @@ components:
         foodChain:
           type: [string, 'null']
           enum: [null, mcdonalds, burger_king, kfc, subway]
-          description: Echo/context only in MVP; MapKit on iOS applies the POI filter.
+          description: When non-null, the backend requires a matching OSM restaurant within 500 m.
     Range15To50:
       type: object
       additionalProperties: false
@@ -159,7 +159,7 @@ components:
     SearchResponse:
       type: object
       additionalProperties: false
-      required: [snapshotToken, candidates, coverage, generatedAt]
+      required: [snapshotToken, candidates, coverage, generatedAt, attributions]
       properties:
         snapshotToken:
           type: string
@@ -175,6 +175,11 @@ components:
             $ref: '#/components/schemas/ChargingParkCandidate'
         coverage:
           $ref: '#/components/schemas/Coverage'
+        attributions:
+          type: array
+          uniqueItems: true
+          items:
+            $ref: '#/components/schemas/DataAttribution'
     ChargingParkCandidate:
       type: object
       additionalProperties: false
@@ -227,6 +232,36 @@ components:
           minItems: 1
           items: { $ref: '#/components/schemas/SourceSummary' }
         dataUpdatedAt: { type: string, format: date-time }
+        foodPOI:
+          oneOf:
+            - $ref: '#/components/schemas/FoodPOI'
+            - type: 'null'
+    FoodPOI:
+      type: object
+      additionalProperties: false
+      required: [id, chain, name, coordinate, distanceFromChargingParkMeters, sourceRecordURL]
+      properties:
+        id: { type: string, minLength: 1 }
+        chain:
+          type: string
+          enum: [mcdonalds, burger_king, kfc, subway]
+        name: { type: string, minLength: 1, maxLength: 200 }
+        coordinate: { $ref: '#/components/schemas/Coordinate' }
+        distanceFromChargingParkMeters: { type: integer, minimum: 0, maximum: 500 }
+        openingHours: { type: [string, 'null'] }
+        sourceRecordURL: { type: string, format: uri }
+    DataAttribution:
+      type: object
+      additionalProperties: false
+      required: [id, name, notice, licenseName, licenseURL]
+      properties:
+        id: { type: string, minLength: 1 }
+        name: { type: string, minLength: 1 }
+        notice: { type: string, minLength: 1 }
+        licenseName: { type: string, minLength: 1 }
+        licenseURL: { type: string, format: uri }
+        transportName: { type: [string, 'null'] }
+        transportURL: { type: [string, 'null'], format: uri }
     OperatorChargingPoints:
       type: object
       additionalProperties: false

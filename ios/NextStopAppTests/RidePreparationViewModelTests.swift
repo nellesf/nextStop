@@ -88,6 +88,77 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(routePlanner.requestCount, 1)
   }
 
+  func testPreparationAndCandidateSearchRunAsOneFlowExactlyOnce() async throws {
+    let origin = try Coordinate(latitude: 50.1109, longitude: 8.6821)
+    let destination = try SavedDestination(
+      displayName: "Rostock",
+      coordinate: Coordinate(latitude: 54.0924, longitude: 12.0991)
+    )
+    let route = PlannedRoute(
+      polyline: try RoutePolyline(coordinates: [origin, destination.coordinate]),
+      actualDrivingDistance: Meters(666_000),
+      expectedTravelTimeSeconds: 22_000
+    )
+    let coverage = CandidateSearchCoverage(
+      status: .complete,
+      activeSourceIDs: ["bundesnetzagentur_ladesaeulenregister"],
+      unavailableSourceIDs: [],
+      projectionUpdatedAt: Date(timeIntervalSince1970: 0)
+    )
+    let locationProvider = LocationProviderStub(result: .success(origin))
+    let routePlanner = RoutePlannerStub(result: .success(route))
+    let candidateSearcher = CandidateSearcherStub(
+      result: .success(RideCandidateSearchOutcome(results: [], coverage: coverage))
+    )
+    let viewModel = RidePreparationViewModel(
+      draft: RideSearchDraft(destination: destination),
+      locationProvider: locationProvider,
+      routePlanner: routePlanner,
+      candidateSearcher: candidateSearcher
+    )
+
+    await viewModel.prepareRouteAndSearch()
+
+    guard case .ready(let preparedRide) = viewModel.state else {
+      return XCTFail("Expected the route to be ready")
+    }
+    XCTAssertEqual(candidateSearcher.preparedRides, [preparedRide])
+    XCTAssertEqual(
+      viewModel.candidateSearchState,
+      .noResults(RideCandidateSearchOutcome(results: [], coverage: coverage))
+    )
+
+    await viewModel.prepareRouteAndSearch()
+
+    XCTAssertEqual(locationProvider.requestCount, 1)
+    XCTAssertEqual(routePlanner.requestCount, 1)
+    XCTAssertEqual(candidateSearcher.preparedRides.count, 1)
+  }
+
+  func testPreparationFailureDoesNotStartCandidateSearch() async throws {
+    let destination = try SavedDestination(
+      displayName: "Rostock",
+      coordinate: Coordinate(latitude: 54.0924, longitude: 12.0991)
+    )
+    let candidateSearcher = CandidateSearcherStub(
+      result: .failure(RideCandidateSearchError.candidateServiceUnavailable)
+    )
+    let viewModel = RidePreparationViewModel(
+      draft: RideSearchDraft(destination: destination),
+      locationProvider: LocationProviderStub(
+        result: .failure(CurrentLocationError.authorizationDenied)
+      ),
+      routePlanner: RoutePlannerStub(result: .failure(RoutePlanningError.noRoute)),
+      candidateSearcher: candidateSearcher
+    )
+
+    await viewModel.prepareRouteAndSearch()
+
+    XCTAssertEqual(viewModel.state, .failed(.locationPermissionDenied))
+    XCTAssertEqual(viewModel.candidateSearchState, .idle)
+    XCTAssertTrue(candidateSearcher.preparedRides.isEmpty)
+  }
+
   func testDeniedLocationMapsToActionableFailureWithoutCallingRoutePlanner() async throws {
     let destination = try SavedDestination(
       displayName: "Hamburg",
@@ -257,6 +328,21 @@ private final class RoutePlannerStub: RoutePlanning {
     requestCount += 1
     receivedOrigin = origin
     receivedDestination = destination
+    return try result.get()
+  }
+}
+
+@MainActor
+private final class CandidateSearcherStub: RideCandidateSearching {
+  let result: Result<RideCandidateSearchOutcome, any Error>
+  private(set) var preparedRides: [PreparedRideSearch] = []
+
+  init(result: Result<RideCandidateSearchOutcome, any Error>) {
+    self.result = result
+  }
+
+  func search(preparedRide: PreparedRideSearch) async throws -> RideCandidateSearchOutcome {
+    preparedRides.append(preparedRide)
     return try result.get()
   }
 }

@@ -9,6 +9,7 @@ import type {
 } from "../domain/normalized-charging.js";
 import { bundesnetzagenturDescriptor } from "../providers/bundesnetzagentur/descriptor.js";
 import { ichTankeStromDescriptor } from "../providers/ich-tanke-strom/descriptor.js";
+import { rebuildFoodMatchesForChargingProjection } from "./food-poi-projection-writer.js";
 
 export interface ProjectionMetadata {
   readonly id: string;
@@ -266,6 +267,7 @@ export class ProjectionWriter {
       ) {
         throw new Error("Projection row counts do not match the validated import.");
       }
+      await rebuildFoodMatchesForChargingProjection(client, projectionId);
       await client.query(
         `UPDATE nextstop.projection_versions
          SET status = 'retired'

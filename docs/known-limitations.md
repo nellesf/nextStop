@@ -27,9 +27,13 @@
   status is available for Swiss `ich-tanke-strom` EVSEs; German results therefore
   honestly retain unknown availability unless a later validated live source covers
   them.
-- MapKit local search can identify nearby named fast-food POIs, but the public
-  `MKMapItem` API does not expose a stable programmatic opening-status value. The
-  MVP therefore omits opening status unless a later reliable provider supplies it.
+- Restaurant coverage and chain tagging depend on OpenStreetMap community data.
+  Opening status remains unknown unless a later validated parser and freshness
+  policy make `opening_hours` safe to interpret; it is never a filter.
+- The initial Germany plus Switzerland OSM PBF download is several gigabytes and
+  the three-pass streaming import is operationally expensive. Conditional HTTP
+  cache validation makes unchanged daily runs cheap, but production should move
+  import work to a dedicated worker process before horizontal API scaling.
 - Exact driving distance requires MapKit directions per candidate. Candidate
   pagination, bounded concurrency, per-ride caching, batch-level safe lower-bound
   stopping, and a rolling directions budget reduce load, but unusually dense
@@ -38,7 +42,8 @@
 - Cross-source deduplication without a common EVSE identifier is inherently
   probabilistic. The accepted policy favors under-merging over silently reducing
   the reported number of distinct EVSEs.
-- OSM is only a documented fallback for POIs. Production use would require ODbL
-  attribution, data-boundary, and share-alike review.
+- OSM-derived POIs are kept separate from charging records and attribution UI is
+  implemented. ODbL/database-distribution obligations still require a release-time
+  legal review whenever storage or export boundaries change.
 - Provider licenses and terms can change; each provider needs a release-time legal
   and attribution check.

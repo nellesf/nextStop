@@ -26,6 +26,9 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     XCTAssertEqual(candidate.distanceFromRoute, Meters(321))
     XCTAssertEqual(candidate.straightLineLowerBound, Meters(12_000))
     XCTAssertEqual(candidate.park.sourceReferences.first?.sourceID, "bundesnetzagentur")
+    XCTAssertEqual(candidate.foodPOIs.first?.name, "McDonald's")
+    XCTAssertEqual(candidate.foodPOIs.first?.distanceFromPark, Meters(250))
+    XCTAssertEqual(page.attributions.first?.notice, "© OpenStreetMap contributors")
   }
 
   func testRejectsAvailabilityCompletenessContradiction() throws {
@@ -58,6 +61,9 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     let expired = Data(
       #"{"type":"urn:nextstop:error:invalid-pagination-token","status":409}"#.utf8
     )
+    let foodPreparing = Data(
+      #"{"type":"urn:nextstop:error:food-poi-unavailable","status":503}"#.utf8
+    )
 
     XCTAssertEqual(
       HTTPCandidateSearchService.error(for: 503, data: preparing),
@@ -66,6 +72,10 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     XCTAssertEqual(
       HTTPCandidateSearchService.error(for: 409, data: expired),
       .snapshotExpired
+    )
+    XCTAssertEqual(
+      HTTPCandidateSearchService.error(for: 503, data: foodPreparing),
+      .foodDataPreparing
     )
   }
 
@@ -82,7 +92,16 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
           "activeSources": ["bundesnetzagentur_ladesaeulenregister", "ich_tanke_strom"],
           "unavailableSources": ["ich_tanke_strom:live"],
           "projectionUpdatedAt": "2026-08-15T13:33:34.000Z"
-        }
+        },
+        "attributions": [{
+          "id": "openstreetmap_food_poi",
+          "name": "OpenStreetMap",
+          "notice": "© OpenStreetMap contributors",
+          "licenseName": "Open Database License (ODbL) 1.0",
+          "licenseURL": "https://www.openstreetmap.org/copyright",
+          "transportName": "Geofabrik",
+          "transportURL": "https://download.geofabrik.de/"
+        }]
       }
       """.utf8
     )
@@ -117,7 +136,16 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
           "qualityTier": "authority",
           "staticObservedAt": "2026-07-07T00:00:00.000Z"
         }],
-        "dataUpdatedAt": "2026-07-07T00:00:00.000Z"
+        "dataUpdatedAt": "2026-07-07T00:00:00.000Z",
+        "foodPOI": {
+          "id": "osm:node:123",
+          "chain": "mcdonalds",
+          "name": "McDonald's",
+          "coordinate": {"latitude": 53.5502, "longitude": 10.0002},
+          "distanceFromChargingParkMeters": 250,
+          "openingHours": null,
+          "sourceRecordURL": "https://www.openstreetmap.org/node/123"
+        }
       }
       """
   }
