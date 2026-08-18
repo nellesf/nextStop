@@ -121,7 +121,7 @@ async function downloadOne(
       signal: AbortSignal.timeout(requestTimeoutMilliseconds),
     });
   }
-  validateDatasetURL(response.url);
+  validateDatasetResponseURL(response.url, url);
   if (!response.ok) {
     throw new Error(`Geofabrik dataset returned HTTP ${response.status}.`);
   }
@@ -178,6 +178,39 @@ function validateDatasetURL(value: string | URL): URL {
     throw new Error("Unexpected Geofabrik dataset URL.");
   }
   return url;
+}
+
+function validateDatasetResponseURL(value: string, requestedURL: URL): URL {
+  const url = new URL(value);
+  const requestedFile = basename(requestedURL.pathname);
+  const datasetName = requestedFile.replace(/-latest\.osm\.pbf$/u, "");
+  const requestedDirectory = requestedURL.pathname.slice(
+    0,
+    requestedURL.pathname.length - requestedFile.length,
+  );
+  const approvedFile = new RegExp(
+    `^${escapeRegularExpression(datasetName)}-(?:latest|[0-9]{6})\\.osm\\.pbf$`,
+    "u",
+  );
+  if (
+    url.protocol !== "https:" ||
+    url.hostname !== requestedURL.hostname ||
+    url.port.length > 0 ||
+    url.username.length > 0 ||
+    url.password.length > 0 ||
+    url.search.length > 0 ||
+    url.hash.length > 0 ||
+    !url.pathname.startsWith(requestedDirectory) ||
+    url.pathname.slice(requestedDirectory.length).includes("/") ||
+    !approvedFile.test(basename(url.pathname))
+  ) {
+    throw new Error("Unexpected Geofabrik dataset redirect URL.");
+  }
+  return url;
+}
+
+function escapeRegularExpression(value: string): string {
+  return value.replaceAll(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 async function readMetadata(
