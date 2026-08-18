@@ -7,7 +7,19 @@ struct BackendCandidate: Identifiable, Hashable, Sendable {
   let park: ChargingPark
   let distanceFromRoute: Meters
   let straightLineLowerBound: Meters
-  let foodPOIs: [FoodPOI] = []
+  let foodPOIs: [FoodPOI]
+
+  init(
+    park: ChargingPark,
+    distanceFromRoute: Meters,
+    straightLineLowerBound: Meters,
+    foodPOIs: [FoodPOI] = []
+  ) {
+    self.park = park
+    self.distanceFromRoute = distanceFromRoute
+    self.straightLineLowerBound = straightLineLowerBound
+    self.foodPOIs = foodPOIs
+  }
 }
 
 struct DataAttribution: Hashable, Sendable, Identifiable {
@@ -25,7 +37,21 @@ struct CandidateSearchPage: Hashable, Sendable {
   let nextCursor: String?
   let candidates: [BackendCandidate]
   let coverage: CandidateSearchCoverage
-  let attributions: [DataAttribution] = []
+  let attributions: [DataAttribution]
+
+  init(
+    snapshotToken: String,
+    nextCursor: String?,
+    candidates: [BackendCandidate],
+    coverage: CandidateSearchCoverage,
+    attributions: [DataAttribution] = []
+  ) {
+    self.snapshotToken = snapshotToken
+    self.nextCursor = nextCursor
+    self.candidates = candidates
+    self.coverage = coverage
+    self.attributions = attributions
+  }
 }
 
 enum CandidateCoverageStatus: String, Decodable, Hashable, Sendable {
