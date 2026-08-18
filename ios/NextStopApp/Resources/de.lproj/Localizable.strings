@@ -86,14 +86,6 @@
 "ride.error.precise_location" = "Für den exakten 5-km-Routenkorridor wird der genaue Standort benötigt. Aktiviere „Genauer Standort“ für nextStop.";
 "ride.error.route_unavailable" = "Apple Maps konnte keine Fahrroute zu diesem Ziel berechnen. Prüfe die Verbindung oder das Fahrziel.";
 "ride.error.title" = "Fahrt konnte nicht vorbereitet werden";
-"ride.map.accessibility" = "Karte der berechneten Route";
-"ride.map.origin" = "Aktueller Standort";
-"ride.privacy" = "Profilname und Zieltext bleiben auf diesem iPhone.";
-"ride.progress.description" = "Die Route kommt direkt von Apple Maps.";
-"ride.progress.location" = "Aktueller Standort wird bestimmt …";
-"ride.progress.route" = "Fahrroute wird berechnet …";
-"ride.ready.description" = "Die Route wurde berechnet und die Suche nach passenden Ladestationen automatisch gestartet.";
-"ride.ready.title" = "Route bereit";
 "ride.result.availability.complete.format" = "%lld Ladepunkte frei";
 "ride.result.availability.partial.format" = "%lld sicher frei, %lld unbekannt";
 "ride.result.navigate" = "In Apple Maps öffnen";
@@ -114,11 +106,8 @@
 "ride.search.error.service" = "Die Ladeparksuche ist gerade nicht erreichbar. Prüfe den lokalen Server oder die Internetverbindung.";
 "ride.search.error.snapshot" = "Die Datenbasis wurde während der Suche erneuert. Starte die Suche erneut, damit alle Ergebnisse aus demselben Stand stammen.";
 "ride.search.error.title" = "Ladeparks konnten nicht gesucht werden";
-"ride.search.progress.description" = "Kandidaten kommen aus dem 5-km-Routenkorridor. Apple Maps prüft jetzt die echte Fahrstrecke inklusive Abfahrt.";
-"ride.search.progress.title" = "Ladeparks werden geprüft …";
+"ride.search.progress.combined" = "Route und Ladeparks werden gesucht …";
 "ride.search.refresh" = "Suche aktualisieren";
-"ride.route.distance" = "Route zum Fahrziel";
-"ride.route.duration" = "Voraussichtliche Fahrzeit";
 "ride.start" = "Ladestationen finden";
 "ride.title" = "Fahrt vorbereiten";
 "search.distance_range.15_50_km" = "15–50 km";
@@ -132,6 +121,4 @@
 "unit.minimum_kilowatts.format" = "%lld kW oder höher";
 "unit.charging_points.format" = "%lld Ladepunkte";
 "unit.kilometers.format" = "%lld km";
-"unit.duration.hours_minutes.format" = "%lld Std. %lld Min.";
-"unit.duration.minutes.format" = "%lld Min.";
 "unit.minimum_count.format" = "mindestens %lld";

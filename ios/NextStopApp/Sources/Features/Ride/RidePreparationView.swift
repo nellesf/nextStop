@@ -1,4 +1,3 @@
-import MapKit
 import NextStopCore
 import SwiftUI
 import UIKit
@@ -133,86 +132,31 @@ struct RidePreparationView: View {
   @ViewBuilder
   private var preparationContent: some View {
     switch viewModel.state {
-    case .idle, .requestingLocation:
-      progressCard(title: "ride.progress.location")
-    case .calculatingRoute:
-      progressCard(title: "ride.progress.route")
-    case .ready(let preparedSearch):
-      readyContent(preparedSearch)
+    case .idle, .requestingLocation, .calculatingRoute:
+      searchProgress
+    case .ready:
+      candidateSearchContent
     case .failed(let failure):
       failureCard(failure)
     }
   }
 
-  private func progressCard(title: LocalizedStringKey) -> some View {
-    Card {
+  private var searchProgress: some View {
+    HStack(spacing: 12) {
       ProgressView()
-        .controlSize(.large)
-        .frame(maxWidth: .infinity)
-      Text(title)
+      Text("ride.search.progress.combined")
         .font(.headline)
-        .frame(maxWidth: .infinity)
-        .multilineTextAlignment(.center)
-      Text("ride.progress.description")
-        .font(.subheadline)
-        .foregroundStyle(.secondary)
-        .frame(maxWidth: .infinity)
-        .multilineTextAlignment(.center)
+        .frame(maxWidth: .infinity, alignment: .leading)
     }
-  }
-
-  private func readyContent(_ preparedSearch: PreparedRideSearch) -> some View {
-    VStack(spacing: 20) {
-      routeMap(preparedSearch)
-
-      Card {
-        Label("ride.ready.title", systemImage: "checkmark.circle.fill")
-          .font(.headline)
-          .foregroundStyle(.green)
-
-        LabeledContent("ride.route.distance") {
-          Text(LocalizedFormat.kilometers(preparedSearch.route.actualDrivingDistance.value))
-        }
-        LabeledContent("ride.route.duration") {
-          Text(LocalizedFormat.duration(preparedSearch.route.expectedTravelTimeSeconds))
-        }
-
-        Divider()
-
-        Text("ride.ready.description")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-
-        Label("ride.privacy", systemImage: "lock.shield")
-          .font(.footnote)
-          .foregroundStyle(.secondary)
-      }
-
-      candidateSearchContent
-    }
+    .padding(.horizontal, 4)
+    .padding(.vertical, 8)
   }
 
   @ViewBuilder
   private var candidateSearchContent: some View {
     switch viewModel.candidateSearchState {
-    case .idle:
-      searchButton
-    case .searching:
-      Card {
-        ProgressView()
-          .controlSize(.large)
-          .frame(maxWidth: .infinity)
-        Text("ride.search.progress.title")
-          .font(.headline)
-          .frame(maxWidth: .infinity)
-          .multilineTextAlignment(.center)
-        Text("ride.search.progress.description")
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity)
-          .multilineTextAlignment(.center)
-      }
+    case .idle, .searching:
+      searchProgress
     case .results(let outcome):
       resultsContent(outcome)
     case .noResults(let outcome):
@@ -403,35 +347,6 @@ struct RidePreparationView: View {
       Int64(availability.knownAvailableCount),
       Int64(availability.unknownCount)
     )
-  }
-
-  private func routeMap(_ preparedSearch: PreparedRideSearch) -> some View {
-    let routeCoordinates = preparedSearch.route.polyline.coordinates.map {
-      CLLocationCoordinate2D(latitude: $0.latitude, longitude: $0.longitude)
-    }
-    let origin = CLLocationCoordinate2D(
-      latitude: preparedSearch.origin.latitude,
-      longitude: preparedSearch.origin.longitude
-    )
-    let destination = CLLocationCoordinate2D(
-      latitude: viewModel.draft.destination.coordinate.latitude,
-      longitude: viewModel.draft.destination.coordinate.longitude
-    )
-
-    return Map {
-      MapPolyline(coordinates: routeCoordinates)
-        .stroke(.blue, style: StrokeStyle(lineWidth: 5, lineCap: .round, lineJoin: .round))
-      Marker("ride.map.origin", systemImage: "location.fill", coordinate: origin)
-      Marker(
-        viewModel.draft.destination.displayName,
-        systemImage: "flag.checkered",
-        coordinate: destination
-      )
-    }
-    .mapStyle(.standard(elevation: .flat))
-    .frame(height: 260)
-    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
-    .accessibilityLabel("ride.map.accessibility")
   }
 
   private func failureCard(_ failure: RidePreparationFailure) -> some View {
