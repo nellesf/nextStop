@@ -31,11 +31,19 @@ const candidateSearch =
     ? undefined
     : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey));
 const app = createApp(candidateSearch === undefined ? {} : { candidateSearch });
+const operationalIngestionLogger = {
+  info(details: Readonly<Record<string, unknown>>, message: string): void {
+    writeOperationalLog("info", details, message);
+  },
+  warn(details: Readonly<Record<string, unknown>>, message: string): void {
+    writeOperationalLog("warn", details, message);
+  },
+};
 const ingestionCoordinator =
   pool !== undefined && parseBoolean(process.env.INGESTION_ENABLED, true)
     ? new ProviderIngestionCoordinator(
         pool,
-        app.log,
+        operationalIngestionLogger,
         parseBoolean(process.env.OSM_INGESTION_ENABLED, true, "OSM_INGESTION_ENABLED"),
       )
     : undefined;
@@ -52,6 +60,16 @@ await app.listen({
   port: parsePort(process.env.PORT),
 });
 ingestionCoordinator?.start();
+
+function writeOperationalLog(
+  level: "info" | "warn",
+  details: Readonly<Record<string, unknown>>,
+  message: string,
+): void {
+  process.stdout.write(
+    `${JSON.stringify({ level, time: new Date().toISOString(), message, ...details })}\n`,
+  );
+}
 
 function parseBoolean(
   value: string | undefined,

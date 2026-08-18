@@ -8,7 +8,7 @@ info:
     a pinned OSM projection. MapKit on iOS calculates actual driving distance,
     applies the exact selected distance range, and performs final distance-only ranking.
 servers:
-  - url: https://api.example.invalid
+  - url: https://api.nextstop.tech
 paths:
   /v1/charging-parks/search:
     post:

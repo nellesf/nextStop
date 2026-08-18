@@ -136,8 +136,13 @@ Production should run this resource-heavy job in one designated process.
 
 ### Connected Simulator search
 
-The Debug build defaults to `http://127.0.0.1:3000`, so start the populated
-backend on the same Mac that runs the Simulator:
+Debug and Release builds default to the owner-approved Google Cloud staging
+service at `https://api.nextstop.tech`. The Simulator therefore uses the same
+automatic charging and OSM projections as TestFlight without a local server.
+
+For deliberate local backend development, set the Xcode scheme environment
+variable `NEXTSTOP_API_BASE_URL` to `http://127.0.0.1:3000`, then start the
+populated backend on the same Mac that runs the Simulator:
 
 ```bash
 cd backend
@@ -152,12 +157,11 @@ background projection has published. The first real import downloads roughly
 80 MB of charging source data before decompression; the independent first OSM
 import is much larger and can take considerably longer.
 
-If Xcode and the backend run on different Macs, set the scheme environment
-variable `NEXTSTOP_API_BASE_URL` to the backend's reachable base URL and start the
-server with an explicitly appropriate `HOST`. Use this only on a trusted local
-network; production configuration must use TLS. The checked-in Release placeholder
-is `https://api.example.invalid` so an archive cannot accidentally send routes to
-an unapproved host.
+If Xcode and a development backend run on different Macs, set
+`NEXTSTOP_API_BASE_URL` to that backend's reachable base URL and start the server
+with an explicitly appropriate `HOST`. Use this only on a trusted local network;
+the checked-in Debug and Release configurations always use the TLS-protected
+staging service.
 
 Tap “Ladestationen finden” for a profile or saved destination. The app calculates
 the MapKit route and then starts the charging-park search automatically as one

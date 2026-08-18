@@ -78,9 +78,9 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
       configs:
         Debug:
-          NEXTSTOP_API_BASE_URL: http://127.0.0.1:3000
+          NEXTSTOP_API_BASE_URL: https://api.nextstop.tech
         Release:
-          NEXTSTOP_API_BASE_URL: https://api.example.invalid
+          NEXTSTOP_API_BASE_URL: https://api.nextstop.tech
 
   NextStopAppTests:
     type: bundle.unit-test
