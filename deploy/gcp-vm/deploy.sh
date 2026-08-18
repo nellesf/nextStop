@@ -9,7 +9,7 @@ temporary_directory=$(mktemp -d)
 archive=$temporary_directory/nextstop-release.tar.gz
 trap 'rm -rf "$temporary_directory"' EXIT
 
-tar -C "$repository_root" -czf "$archive" \
+COPYFILE_DISABLE=1 tar -C "$repository_root" -czf "$archive" \
   --exclude=.git \
   --exclude='*/node_modules' \
   --exclude='*/dist' \
