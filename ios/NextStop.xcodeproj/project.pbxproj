@@ -53,7 +53,6 @@
 		D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */ = {isa = PBXBuildFile; fileRef = 28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */; };
 		D3DED96EB256A63F17E9BDE8 /* MapKitRoutePlanner.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6425BA6F3E89F572E458EC68 /* MapKitRoutePlanner.swift */; };
 		D4B6B5119E8783ACFC513C9E /* RideIntentRouter.swift in Sources */ = {isa = PBXBuildFile; fileRef = 55B04819F20DF73D6E6CFD8B /* RideIntentRouter.swift */; };
-		D975AA79BC546F6D0790F231 /* ChargingParkMapView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 48A7A328B2DD7F746325FC72 /* ChargingParkMapView.swift */; };
 		DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
 		F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */; };
@@ -93,7 +92,6 @@
 		4272F18BB579FF235A8B9A23 /* StoredProfile.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredProfile.swift; sourceTree = "<group>"; };
 		42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NextStopApp.swift; sourceTree = "<group>"; };
 		47D60CB6E90125091339EDB9 /* DestinationLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationLibraryView.swift; sourceTree = "<group>"; };
-		48A7A328B2DD7F746325FC72 /* ChargingParkMapView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargingParkMapView.swift; sourceTree = "<group>"; };
 		4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationViewModelTests.swift; sourceTree = "<group>"; };
 		50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationView.swift; sourceTree = "<group>"; };
 		51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationRepositoryTests.swift; sourceTree = "<group>"; };
@@ -209,7 +207,6 @@
 		25B91FE874A7CAC34D5DB4D5 /* Ride */ = {
 			isa = PBXGroup;
 			children = (
-				48A7A328B2DD7F746325FC72 /* ChargingParkMapView.swift */,
 				5A825E7AD85738EBD516CC46 /* RideCandidateSearchCoordinator.swift */,
 				55B04819F20DF73D6E6CFD8B /* RideIntentRouter.swift */,
 				50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */,
@@ -554,7 +551,6 @@
 				8B0639F296A99367B2022597 /* CandidateSearchService.swift in Sources */,
 				7389907E5C7023E358518CDE /* CarPlayPresentation.swift in Sources */,
 				4E3D4BFA79D8588942540740 /* CarPlayRideSearchService.swift in Sources */,
-				D975AA79BC546F6D0790F231 /* ChargingParkMapView.swift in Sources */,
 				D3A9BFEF57605D1B0C6F19A1 /* CoreLocationProvider.swift in Sources */,
 				52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */,
 				ADD976102177F5C5ED48BEEF /* DataSourcesView.swift in Sources */,

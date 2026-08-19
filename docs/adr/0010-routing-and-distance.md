@@ -19,19 +19,20 @@ When the result contains the selected restaurant match, use Apple's unified Maps
 URL to keep the original destination and insert the restaurant as an intermediate
 waypoint. Without a food match, hand the chosen park `MKMapItem` to Apple Maps.
 
-Before handoff on iPhone, a selected result opens a non-navigating MapKit route
-preview. Hide unrelated base-map POIs and resolve only the selected result's
-power-filtered charging locations and restaurant against nearby Apple places.
-Require a conservative operator plus coordinate/address match before attaching an
-Apple Place Card. Preserve every unmatched authority/OSM location as a visibly
-different fallback pin. Apple matching is presentation-only and cannot affect the
-search result, EVSE count, route, ranking, or waypoint.
+On iPhone, expose a 48-point Apple Maps button beside each charging operator in a
+result. Resolve that operator's power-filtered charging locations against nearby
+Apple EV-charging places only after the user taps the button. Require a
+conservative operator plus coordinate/address match, cache the ride-local result,
+and open the native Apple place through its stable Place ID. If no unambiguous
+Apple place exists, report that condition instead of opening a coordinate-only or
+guessed place. Apple matching is presentation-only and cannot affect the search
+result, EVSE count, route, ranking, or waypoint.
 
-As a separate non-navigating action, hand every matched Apple charging place and
-the matched restaurant for the selected result to Apple Maps together. Apple Maps
-frames those supplied pins and provides its own place cards. Its unrelated
-base-map POIs cannot be filtered by the calling app. Keep navigation as a distinct
-action so candidate POIs never become unintended route waypoints.
+Keep navigation as a distinct result-card action so inspected charging places do
+not become unintended route waypoints. Do not embed a second route map or hand a
+group of caller-created pins to Apple Maps: those paths do not consistently expose
+the native place details and live charging information available on Apple's own
+place record.
 
 ## Alternatives
 

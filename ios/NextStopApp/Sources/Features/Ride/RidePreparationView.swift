@@ -1,3 +1,4 @@
+import MapKit
 import NextStopCore
 import SwiftUI
 import UIKit
@@ -5,7 +6,9 @@ import UIKit
 struct RidePreparationView: View {
   @Environment(\.openURL) private var openURL
   @StateObject private var viewModel: RidePreparationViewModel
+  @State private var navigationLaunchFailed = false
   private let navigationLauncher: any AppleMapsLaunching
+  private let placeResolver: any AppleChargingPlaceResolving
 
   @MainActor
   init(profile: UserProfile, directionsRequestGate: DirectionsRequestGate) {
@@ -47,20 +50,27 @@ struct RidePreparationView: View {
       )
     )
     navigationLauncher = AppleMapsLauncher()
+    placeResolver = MapKitApplePlaceResolver()
   }
 
   @MainActor
   init(viewModel: RidePreparationViewModel) {
     self.init(
       viewModel: viewModel,
-      navigationLauncher: AppleMapsLauncher()
+      navigationLauncher: AppleMapsLauncher(),
+      placeResolver: MapKitApplePlaceResolver()
     )
   }
 
   @MainActor
-  init(viewModel: RidePreparationViewModel, navigationLauncher: any AppleMapsLaunching) {
+  init(
+    viewModel: RidePreparationViewModel,
+    navigationLauncher: any AppleMapsLaunching,
+    placeResolver: any AppleChargingPlaceResolving = MapKitApplePlaceResolver()
+  ) {
     _viewModel = StateObject(wrappedValue: viewModel)
     self.navigationLauncher = navigationLauncher
+    self.placeResolver = placeResolver
   }
 
   var body: some View {
@@ -77,6 +87,11 @@ struct RidePreparationView: View {
     .navigationBarTitleDisplayMode(.inline)
     .task {
       await viewModel.prepareRouteAndSearch()
+    }
+    .alert("ride.apple_maps.error.title", isPresented: $navigationLaunchFailed) {
+      Button("action.done", role: .cancel) {}
+    } message: {
+      Text("ride.apple_maps.error.description")
     }
   }
 
@@ -283,15 +298,24 @@ struct RidePreparationView: View {
       }
 
       ForEach(park.operatorChargingPoints) { chargingOperator in
-        HStack(alignment: .firstTextBaseline, spacing: 12) {
+        HStack(alignment: .center, spacing: 10) {
           Text(chargingOperator.name)
             .font(.headline)
             .frame(maxWidth: .infinity, alignment: .leading)
+            .layoutPriority(1)
           Label(
             LocalizedFormat.chargingPoints(chargingOperator.chargingPointCount),
             systemImage: "ev.charger"
           )
           .font(.subheadline.monospacedDigit())
+          .fixedSize(horizontal: true, vertical: false)
+
+          AppleChargingPlaceButton(
+            park: park,
+            operatorName: chargingOperator.name,
+            resolver: placeResolver,
+            launcher: navigationLauncher
+          )
         }
       }
 
@@ -312,16 +336,18 @@ struct RidePreparationView: View {
           .font(.subheadline)
       }
 
-      if case .ready(let preparedRide) = viewModel.state {
-        NavigationLink {
-          ChargingParkMapView(
-            result: result,
-            preparedRide: preparedRide,
-            finalDestination: viewModel.draft.destination,
-            navigationLauncher: navigationLauncher
+      if case .ready = viewModel.state {
+        Button {
+          navigationLaunchFailed = !navigationLauncher.startNavigation(
+            to: park,
+            via: result.matchingFoodPOI,
+            finalDestination: viewModel.draft.destination
           )
         } label: {
-          Label("ride.result.show_map", systemImage: "map.fill")
+          Label(
+            "ride.result.start_navigation",
+            systemImage: "arrow.triangle.turn.up.right.diamond.fill"
+          )
             .frame(maxWidth: .infinity)
         }
         .buttonStyle(.borderedProminent)
@@ -379,6 +405,109 @@ struct RidePreparationView: View {
       }
       .buttonStyle(.borderedProminent)
     }
+  }
+}
+
+@MainActor
+private struct AppleChargingPlaceButton: View {
+  private enum Failure: Identifiable {
+    case noMatch
+    case launchFailed
+
+    var id: Int {
+      switch self {
+      case .noMatch: 0
+      case .launchFailed: 1
+      }
+    }
+  }
+
+  let park: ChargingPark
+  let operatorName: String
+  let resolver: any AppleChargingPlaceResolving
+  let launcher: any AppleMapsLaunching
+
+  @State private var cachedMapItem: MKMapItem?
+  @State private var isLoading = false
+  @State private var failure: Failure?
+
+  var body: some View {
+    Button {
+      Task {
+        await openApplePlace()
+      }
+    } label: {
+      Group {
+        if isLoading {
+          ProgressView()
+        } else {
+          Image(systemName: "map.fill")
+            .font(.body.weight(.semibold))
+        }
+      }
+      .frame(width: 48, height: 48)
+      .background(Color.accentColor.opacity(0.12), in: Circle())
+      .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .disabled(isLoading)
+    .accessibilityLabel(
+      Text(
+        String.localizedStringWithFormat(
+          NSLocalizedString(
+            "ride.result.apple_place.accessibility_label.format",
+            comment: "Open one charging operator in Apple Maps"
+          ),
+          operatorName
+        )
+      )
+    )
+    .accessibilityHint("ride.result.apple_place.accessibility_hint")
+    .alert(item: $failure) { failure in
+      switch failure {
+      case .noMatch:
+        Alert(
+          title: Text("ride.result.apple_place.no_match.title"),
+          message: Text(
+            String.localizedStringWithFormat(
+              NSLocalizedString(
+                "ride.result.apple_place.no_match.format",
+                comment: "No unambiguous Apple charging place for an operator"
+              ),
+              operatorName
+            )
+          ),
+          dismissButton: .cancel(Text("action.done"))
+        )
+      case .launchFailed:
+        Alert(
+          title: Text("ride.apple_maps.error.title"),
+          message: Text("ride.apple_maps.error.description"),
+          dismissButton: .cancel(Text("action.done"))
+        )
+      }
+    }
+  }
+
+  private func openApplePlace() async {
+    if let cachedMapItem {
+      failure = launcher.openPlace(cachedMapItem) ? nil : .launchFailed
+      return
+    }
+
+    isLoading = true
+    let mapItem = await resolver.resolveChargingPlace(
+      park: park,
+      operatorName: operatorName
+    )
+    isLoading = false
+
+    guard let mapItem else {
+      failure = .noMatch
+      return
+    }
+    cachedMapItem = mapItem
+    failure = launcher.openPlace(mapItem) ? nil : .launchFailed
   }
 }
 

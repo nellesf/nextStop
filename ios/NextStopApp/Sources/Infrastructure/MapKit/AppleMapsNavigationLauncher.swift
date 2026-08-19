@@ -6,7 +6,7 @@ import UIKit
 @MainActor
 protocol AppleMapsLaunching: AnyObject {
   @discardableResult
-  func showPlaces(_ mapItems: [MKMapItem]) -> Bool
+  func openPlace(_ mapItem: MKMapItem) -> Bool
 
   @discardableResult
   func startNavigation(
@@ -19,11 +19,18 @@ protocol AppleMapsLaunching: AnyObject {
 @MainActor
 final class AppleMapsLauncher: AppleMapsLaunching {
   @discardableResult
-  func showPlaces(_ mapItems: [MKMapItem]) -> Bool {
-    guard !mapItems.isEmpty else {
-      return false
+  func openPlace(_ mapItem: MKMapItem) -> Bool {
+    if #available(iOS 18.4, *),
+      let placeIdentifier = mapItem.identifier?.rawValue,
+      let placeURL = Self.placeURL(placeIdentifier: placeIdentifier)
+    {
+      guard UIApplication.shared.canOpenURL(placeURL) else {
+        return false
+      }
+      UIApplication.shared.open(placeURL)
+      return true
     }
-    return MKMapItem.openMaps(with: mapItems)
+    return mapItem.openInMaps()
   }
 
   @discardableResult
@@ -83,6 +90,17 @@ final class AppleMapsLauncher: AppleMapsLaunching {
       )
     }
     components.queryItems = queryItems
+    return components.url
+  }
+
+  static func placeURL(placeIdentifier: String) -> URL? {
+    var components = URLComponents()
+    components.scheme = "https"
+    components.host = "maps.apple.com"
+    components.path = "/place"
+    components.queryItems = [
+      URLQueryItem(name: "place-id", value: placeIdentifier)
+    ]
     return components.url
   }
 

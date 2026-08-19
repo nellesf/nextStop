@@ -2,84 +2,30 @@ import CoreLocation
 import MapKit
 import NextStopCore
 
-struct MapFallbackPOI: Identifiable, Hashable {
-  enum Kind: Hashable {
-    case charging
-    case restaurant
-  }
-
-  let id: String
-  let name: String
-  let coordinate: Coordinate
-  let kind: Kind
-}
-
-struct ApplePlaceResolution {
-  let chargingItems: [MKMapItem]
-  let restaurantItem: MKMapItem?
-  let fallbackPOIs: [MapFallbackPOI]
-
-  var appleMapsItems: [MKMapItem] {
-    [restaurantItem].compactMap { $0 } + chargingItems
-  }
-
-  var unmatchedChargingNames: [String] {
-    fallbackPOIs
-      .filter { $0.kind == .charging }
-      .map(\.name)
-      .sorted()
-  }
-
-  var restaurantUsesFallback: Bool {
-    fallbackPOIs.contains { $0.kind == .restaurant }
-  }
+@MainActor
+protocol AppleChargingPlaceResolving {
+  func resolveChargingPlace(
+    park: ChargingPark,
+    operatorName: String
+  ) async -> MKMapItem?
 }
 
 @MainActor
-protocol ApplePlaceResolving {
-  func resolve(park: ChargingPark, foodPOI: FoodPOI?) async -> ApplePlaceResolution
-}
-
-@MainActor
-final class MapKitApplePlaceResolver: ApplePlaceResolving {
+final class MapKitApplePlaceResolver: AppleChargingPlaceResolving {
   private let maximumDirectMatchDistance: CLLocationDistance = 60
   private let maximumAddressBackedMatchDistance: CLLocationDistance = 125
-  private let maximumRestaurantMatchDistance: CLLocationDistance = 125
 
-  func resolve(park: ChargingPark, foodPOI: FoodPOI?) async -> ApplePlaceResolution {
-    let lookups = lookupTargets(for: park)
-    let chargingItems = (try? await searchChargingItems(around: park, lookups: lookups)) ?? []
-    let chargingMatches = bestChargingMatches(items: chargingItems, lookups: lookups)
-    let deduplicatedChargingItems = deduplicate(chargingMatches.map(\.item))
-    let matchedOperatorKeys = Set(chargingMatches.map(\.operatorKey))
-    var fallbackPOIs = fallbackChargingPOIs(
-      lookups: lookups,
-      matchedOperatorKeys: matchedOperatorKeys,
-      park: park
-    )
-
-    let restaurantItem: MKMapItem?
-    if let foodPOI {
-      restaurantItem = try? await searchRestaurantItem(for: foodPOI)
-      if restaurantItem == nil {
-        fallbackPOIs.append(
-          MapFallbackPOI(
-            id: "restaurant:\(foodPOI.id)",
-            name: foodPOI.name,
-            coordinate: foodPOI.coordinate,
-            kind: .restaurant
-          )
-        )
-      }
-    } else {
-      restaurantItem = nil
+  func resolveChargingPlace(
+    park: ChargingPark,
+    operatorName: String
+  ) async -> MKMapItem? {
+    let lookups = lookupTargets(for: park, operatorName: operatorName)
+    guard !lookups.isEmpty,
+      let items = try? await searchChargingItems(around: park, lookups: lookups)
+    else {
+      return nil
     }
-
-    return ApplePlaceResolution(
-      chargingItems: deduplicatedChargingItems,
-      restaurantItem: restaurantItem,
-      fallbackPOIs: fallbackPOIs
-    )
+    return bestChargingMatch(items: items, lookups: lookups)?.item
   }
 
   private func searchChargingItems(
@@ -101,42 +47,6 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     let request = MKLocalPointsOfInterestRequest(center: center, radius: radius)
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
     return try await MKLocalSearch(request: request).start().mapItems
-  }
-
-  private func searchRestaurantItem(for foodPOI: FoodPOI) async throws -> MKMapItem? {
-    let center = CLLocationCoordinate2D(
-      latitude: foodPOI.coordinate.latitude,
-      longitude: foodPOI.coordinate.longitude
-    )
-    let request = MKLocalSearch.Request()
-    request.naturalLanguageQuery = foodPOI.name
-    request.region = MKCoordinateRegion(
-      center: center,
-      latitudinalMeters: 400,
-      longitudinalMeters: 400
-    )
-    request.resultTypes = .pointOfInterest
-    request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
-    let expectedName = normalized(foodPOI.name)
-    return try await MKLocalSearch(request: request).start().mapItems
-      .compactMap { item -> (item: MKMapItem, distance: CLLocationDistance)? in
-        guard let itemLocation = mapItemLocation(item) else {
-          return nil
-        }
-        let distance = itemLocation.distance(from: CLLocation(
-          latitude: foodPOI.coordinate.latitude,
-          longitude: foodPOI.coordinate.longitude
-        ))
-        guard distance <= maximumRestaurantMatchDistance,
-          normalized(item.name ?? "").contains(expectedName)
-            || expectedName.contains(normalized(item.name ?? ""))
-        else {
-          return nil
-        }
-        return (item, distance)
-      }
-      .min { $0.distance < $1.distance }?
-      .item
   }
 
   private func secureMatchDistance(
@@ -163,32 +73,24 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     return distance
   }
 
-  private func bestChargingMatches(
+  private func bestChargingMatch(
     items: [MKMapItem],
     lookups: [LookupTarget]
-  ) -> [ChargingItemMatch] {
-    Dictionary(grouping: lookups, by: { operatorKey($0.operatorName) })
-      .compactMap { key, operatorLookups in
-        let candidates = items.compactMap { item -> ChargingItemMatch? in
-          guard let distance = operatorLookups.compactMap({
-            secureMatchDistance(item: item, lookup: $0)
-          }).min() else {
-            return nil
-          }
-          return ChargingItemMatch(
-            operatorKey: key,
-            item: item,
-            distance: distance
-          )
-        }
-        return candidates.min {
-          if $0.distance != $1.distance {
-            return $0.distance < $1.distance
-          }
-          return mapItemStableKey($0.item) < mapItemStableKey($1.item)
-        }
+  ) -> ChargingItemMatch? {
+    items.compactMap { item -> ChargingItemMatch? in
+      guard let distance = lookups.compactMap({
+        secureMatchDistance(item: item, lookup: $0)
+      }).min() else {
+        return nil
       }
-      .sorted { $0.operatorKey < $1.operatorKey }
+      return ChargingItemMatch(item: item, distance: distance)
+    }
+    .min {
+      if $0.distance != $1.distance {
+        return $0.distance < $1.distance
+      }
+      return mapItemStableKey($0.item) < mapItemStableKey($1.item)
+    }
   }
 
   private func addressMatches(item: MKMapItem, lookup: LookupTarget) -> Bool {
@@ -207,60 +109,30 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     return streetMatches && houseNumberMatches && localityMatches
   }
 
-  private func lookupTargets(for park: ChargingPark) -> [LookupTarget] {
-    if !park.locationLookups.isEmpty {
-      return park.locationLookups.map {
+  private func lookupTargets(
+    for park: ChargingPark,
+    operatorName: String
+  ) -> [LookupTarget] {
+    let requestedOperatorKey = operatorKey(operatorName)
+    let matchingLookups = park.locationLookups.filter {
+      operatorKey($0.operatorName) == requestedOperatorKey
+    }
+    if !matchingLookups.isEmpty {
+      return matchingLookups.map {
         LookupTarget(
-          id: $0.id.uuidString.lowercased(),
           operatorName: $0.operatorName,
           coordinate: $0.coordinate,
           address: $0.address
         )
       }
     }
-    return park.operatorChargingPoints.map {
+    return [
       LookupTarget(
-        id: "operator:\($0.name)",
-        operatorName: $0.name,
+        operatorName: operatorName,
         coordinate: park.navigationCoordinate,
         address: ChargingLocationAddress()
       )
-    }
-  }
-
-  private func fallbackChargingPOIs(
-    lookups: [LookupTarget],
-    matchedOperatorKeys: Set<String>,
-    park: ChargingPark
-  ) -> [MapFallbackPOI] {
-    let parkLocation = CLLocation(
-      latitude: park.navigationCoordinate.latitude,
-      longitude: park.navigationCoordinate.longitude
-    )
-    return Dictionary(grouping: lookups, by: { operatorKey($0.operatorName) })
-      .compactMap { key, candidates in
-        guard !matchedOperatorKeys.contains(key),
-          let lookup = candidates.min(by: {
-            distance($0.coordinate, from: parkLocation)
-              < distance($1.coordinate, from: parkLocation)
-          })
-        else {
-          return nil
-        }
-        return MapFallbackPOI(
-          id: "charging:\(lookup.id)",
-          name: lookup.operatorName,
-          coordinate: lookup.coordinate,
-          kind: .charging
-        )
-      }
-  }
-
-  private func deduplicate(_ items: [MKMapItem]) -> [MKMapItem] {
-    var seen = Set<String>()
-    return items.filter { item in
-      seen.insert(mapItemStableKey(item)).inserted
-    }
+    ]
   }
 
   private func mapItemStableKey(_ item: MKMapItem) -> String {
@@ -334,13 +206,6 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       .trimmingCharacters(in: .whitespacesAndNewlines)
   }
 
-  private func distance(_ coordinate: Coordinate, from origin: CLLocation) -> CLLocationDistance {
-    origin.distance(from: CLLocation(
-      latitude: coordinate.latitude,
-      longitude: coordinate.longitude
-    ))
-  }
-
   private func mapItemLocation(_ item: MKMapItem) -> CLLocation? {
     if #available(iOS 26.0, *) {
       return item.location
@@ -367,14 +232,12 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
 }
 
 private struct LookupTarget {
-  let id: String
   let operatorName: String
   let coordinate: Coordinate
   let address: ChargingLocationAddress
 }
 
 private struct ChargingItemMatch {
-  let operatorKey: String
   let item: MKMapItem
   let distance: CLLocationDistance
 }

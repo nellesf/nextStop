@@ -39,10 +39,10 @@
   stopping, and a rolling directions budget reduce load, but unusually dense
   corridors may still take longer without replacing MapKit with a server-side
   router.
-- Embedded MapKit place cards do not consistently expose every detail shown by the
-  Apple Maps app, especially EV charging availability. The iPhone preview can hand
-  all matched places to Apple Maps as pins, but Apple Maps does not expose a launch
-  option that hides its unrelated base-map POIs.
+- Native Apple place details and EV charging availability are available only when
+  the bounded operator/coordinate/address lookup returns an unambiguous Apple Place
+  ID. Apple controls that record and its freshness; nextStop reports a missing
+  match rather than opening a coordinate-only pin with incomplete details.
 - Cross-source deduplication without a common EVSE identifier is inherently
   probabilistic. The accepted policy favors under-merging over silently reducing
   the reported number of distinct EVSEs.
