@@ -52,6 +52,26 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(Set(locations.map(\.id)), Set([primary.id, related.id]))
   }
 
+  func testAppleChargingLookupScopeNormalizesEquivalentAddresses() {
+    let first = ChargingLocationAddress(
+      street: "Am Fuchsenacker",
+      houseNumber: "2",
+      postalCode: "97877",
+      city: "Wertheim"
+    )
+    let second = ChargingLocationAddress(
+      street: "am-fuchsenacker",
+      houseNumber: " 2 ",
+      postalCode: "97877",
+      city: "WERTHEIM"
+    )
+
+    XCTAssertEqual(
+      AppleChargingPlaceLookupScope.addressKey(first),
+      AppleChargingPlaceLookupScope.addressKey(second)
+    )
+  }
+
   func testChargingOperatorFoodDistanceUsesNearestLocationForOperator() throws {
     let restaurant = try Coordinate(latitude: 50, longitude: 8)
     let locations = [

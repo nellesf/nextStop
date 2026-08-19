@@ -29,6 +29,8 @@ protocol ApplePlaceResolving {
 @MainActor
 final class MapKitApplePlaceResolver: ApplePlaceResolving {
   private let maximumRestaurantMatchDistance: CLLocationDistance = 125
+  private let minimumChargingSearchCenterSeparation: CLLocationDistance = 75
+  private var chargingPlaceCache: [String: MKMapItem] = [:]
 
   func resolveChargingPlace(
     park: ChargingPark,
@@ -40,12 +42,29 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       operatorName: operatorName,
       relatedLocations: relatedLocations
     )
-    guard !lookups.isEmpty,
-      let items = try? await searchChargingItems(around: park, lookups: lookups)
-    else {
+    guard !lookups.isEmpty else {
       return nil
     }
-    return bestChargingMatch(items: items, lookups: lookups)?.item
+    let cacheKey = chargingPlaceCacheKey(
+      operatorName: operatorName,
+      lookups: lookups
+    )
+    if let cacheKey, let cachedItem = chargingPlaceCache[cacheKey] {
+      return cachedItem
+    }
+
+    for center in chargingSearchCenters(around: park, lookups: lookups) {
+      guard let items = try? await searchChargingItems(around: center),
+        let match = bestChargingMatch(items: items, lookups: lookups)
+      else {
+        continue
+      }
+      if let cacheKey {
+        chargingPlaceCache[cacheKey] = match.item
+      }
+      return match.item
+    }
+    return nil
   }
 
   func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem? {
@@ -53,30 +72,52 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   }
 
   private func searchChargingItems(
-    around park: ChargingPark,
-    lookups: [LookupTarget]
+    around center: CLLocationCoordinate2D
   ) async throws -> [MKMapItem] {
-    let center = CLLocationCoordinate2D(
-      latitude: park.navigationCoordinate.latitude,
-      longitude: park.navigationCoordinate.longitude
+    let request = MKLocalPointsOfInterestRequest(
+      center: center,
+      radius: AppleChargingPlaceMatchPolicy.maximumExactAddressDistanceMeters
     )
-    let centerLocation = CLLocation(latitude: center.latitude, longitude: center.longitude)
-    let farthestLookup = lookups.map {
-      centerLocation.distance(from: CLLocation(
-        latitude: $0.coordinate.latitude,
-        longitude: $0.coordinate.longitude
-      ))
-    }.max() ?? 0
-    let radius = min(
-      600,
-      max(
-        300,
-        farthestLookup + AppleChargingPlaceMatchPolicy.maximumExactAddressDistanceMeters
-      )
-    )
-    let request = MKLocalPointsOfInterestRequest(center: center, radius: radius)
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
     return try await MKLocalSearch(request: request).start().mapItems
+  }
+
+  private func chargingSearchCenters(
+    around park: ChargingPark,
+    lookups: [LookupTarget]
+  ) -> [CLLocationCoordinate2D] {
+    let candidates = [park.navigationCoordinate] + lookups.map(\.coordinate)
+    var centers: [CLLocationCoordinate2D] = []
+    for candidate in candidates {
+      let coordinate = CLLocationCoordinate2D(
+        latitude: candidate.latitude,
+        longitude: candidate.longitude
+      )
+      let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
+      let alreadyCovered = centers.contains {
+        location.distance(from: CLLocation(
+          latitude: $0.latitude,
+          longitude: $0.longitude
+        )) < minimumChargingSearchCenterSeparation
+      }
+      if !alreadyCovered {
+        centers.append(coordinate)
+      }
+    }
+    return centers
+  }
+
+  private func chargingPlaceCacheKey(
+    operatorName: String,
+    lookups: [LookupTarget]
+  ) -> String? {
+    let addressKeys = Set(lookups.compactMap {
+      AppleChargingPlaceLookupScope.addressKey($0.address)
+    })
+    guard !addressKeys.isEmpty else {
+      return nil
+    }
+    return "\(operatorKey(operatorName))|\(addressKeys.sorted().joined(separator: ";"))"
   }
 
   private func searchRestaurantItem(for foodPOI: FoodPOI) async throws -> MKMapItem? {
@@ -323,7 +364,7 @@ enum AppleChargingPlaceLookupScope {
     }
   }
 
-  private static func addressKey(_ address: ChargingLocationAddress) -> String? {
+  static func addressKey(_ address: ChargingLocationAddress) -> String? {
     guard let street = normalized(address.street),
       let houseNumber = normalized(address.houseNumber),
       let postalCode = normalized(address.postalCode),

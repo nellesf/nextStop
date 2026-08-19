@@ -116,6 +116,9 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Verify visible parks with the same operator and complete address share their
   charging-location lookup scope, while a different address or operator remains
   isolated.
+- Verify equivalent normalized addresses share one ride-local charger cache key
+  and that distinct coordinate groups in the address scope are searched without
+  widening the accepted 300 m match distance.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.

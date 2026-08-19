@@ -30,7 +30,10 @@ postal code or city match. The latter supports large charging campuses with one
 central Apple place. When multiple visible backend parks contain the same operator
 at the same complete address, their lookup coordinates form one ride-local Apple
 lookup scope. This lets independently clustered parts of one campus resolve the
-same native place without merging or altering either backend result. If no
+same native place without merging or altering either backend result. Search each
+distinct coordinate group in that bounded scope because a MapKit POI response is
+not treated as an exhaustive radius result, then cache a successful native place
+by normalized operator and address for the remainder of the ride. If no
 unambiguous Apple place exists, report that condition
 instead of opening a coordinate-only or guessed place. Apple matching is
 presentation-only and cannot affect the search result, EVSE count, route, ranking,
