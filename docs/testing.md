@@ -74,7 +74,10 @@ manual/integration routes validates assumptions against the real SDK.
 Use an isolated real PostGIS instance, not an in-memory substitute:
 
 - `ST_DWithin` exact corridor behavior and geodesic meters.
-- GiST index is present and a representative query plan uses spatial prefiltering.
+- Every supported power threshold is materialized with correctly filtered EVSE,
+  operator, availability, and coordinate derivations.
+- The power-projection GiST index is present and a representative query plan uses
+  spatial prefiltering.
 - Candidate cursor/snapshot is stable across pages.
 - Concurrent projection rebuild is atomic for readers.
 - Europe boundary/antimeridian-invalid inputs are handled (the supported region

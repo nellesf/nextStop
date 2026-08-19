@@ -1,3 +1,5 @@
+import { minimumPowerOptions } from "../domain/candidate-search.js";
+
 const coordinateTupleSchema = {
   type: "array",
   minItems: 2,
@@ -62,7 +64,7 @@ export const searchRequestSchema = {
         minimumChargingPoints: { type: "integer", enum: [2, 4, 6, 8, 10, 12, 16, 20] },
         minimumPowerKW: {
           type: "integer",
-          enum: [11, 22, 50, 100, 150, 200, 250, 300, 350, 400],
+          enum: minimumPowerOptions,
         },
         foodChain: {
           type: ["string", "null"],

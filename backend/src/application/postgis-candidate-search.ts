@@ -264,140 +264,101 @@ const candidateQuery = `
 WITH parameters AS (
   SELECT ST_SetSRID(ST_GeomFromGeoJSON($2), 4326)::geography AS route,
          ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography AS origin
-), base_parks AS (
-  SELECT park.*
-  FROM nextstop.charging_park_projection AS park
+), eligible_base AS MATERIALIZED (
+  SELECT power.projection_id,
+         power.park_id,
+         power.centroid,
+         power.navigation_coordinate,
+         power.charging_point_count,
+         power.known_available_count,
+         power.known_unavailable_count,
+         power.unknown_count,
+         power.last_live_observation_at,
+         power.maximum_power_kw,
+         power.operators,
+         power.operator_charging_point_counts,
+         park.source_summaries,
+         park.data_updated_at,
+         round(ST_Distance(
+           power.navigation_coordinate,
+           parameters.route
+         ))::integer AS distance_from_route_meters,
+         ceil(ST_Distance(
+           power.navigation_coordinate,
+           parameters.origin
+         ))::integer AS straight_line_lower_bound_meters
+  FROM nextstop.charging_park_power_projection AS power
+  JOIN nextstop.charging_park_projection AS park
+    ON park.projection_id = power.projection_id
+   AND park.park_id = power.park_id
   CROSS JOIN parameters
-  WHERE park.projection_id = $1
-    AND ST_DWithin(park.navigation_coordinate, parameters.route, 5200)
-    AND park.maximum_power_kw >= $6
+  WHERE power.projection_id = $1
+    AND power.minimum_power_kw = $6
+    AND power.charging_point_count >= $5
+    AND ST_DWithin(power.navigation_coordinate, parameters.route, 5000)
+    AND ST_DWithin(power.navigation_coordinate, parameters.origin, $7)
+), selected_candidates AS MATERIALIZED (
+  SELECT base.*,
+         food.osm_type AS food_osm_type,
+         food.osm_id AS food_osm_id,
+         food.chain AS food_chain,
+         food.name AS food_name,
+         food.coordinate AS food_coordinate,
+         food.distance_meters AS food_distance_meters,
+         food.opening_hours AS food_opening_hours,
+         food.source_record_url AS food_source_record_url
+  FROM eligible_base AS base
+  LEFT JOIN LATERAL (
+    SELECT poi.osm_type, poi.osm_id, poi.chain, poi.name, poi.coordinate,
+           poi.opening_hours, poi.source_record_url,
+           round(ST_Distance(
+             poi.coordinate,
+             base.navigation_coordinate
+           ))::integer AS distance_meters
+    FROM nextstop.charging_park_food_poi_matches AS match
+    JOIN nextstop.food_poi_projection AS poi
+      ON poi.projection_id = match.food_projection_id
+     AND poi.osm_type = match.osm_type
+     AND poi.osm_id = match.osm_id
+    WHERE match.charging_projection_id = base.projection_id
+      AND match.food_projection_id = $12::uuid
+      AND match.park_id = base.park_id
+      AND poi.chain = $13::text
+      AND ST_DWithin(
+        poi.coordinate,
+        base.navigation_coordinate,
+        500
+      )
+    ORDER BY ST_Distance(poi.coordinate, base.navigation_coordinate),
+             poi.osm_type, poi.osm_id
+    LIMIT 1
+  ) AS food ON $13::text IS NOT NULL
+  WHERE ($13::text IS NULL OR food.osm_id IS NOT NULL)
+    AND (
+      $8::integer IS NULL
+      OR (base.straight_line_lower_bound_meters, base.park_id) > ($8, $9::uuid)
+    )
+  ORDER BY base.straight_line_lower_bound_meters, base.park_id
+  LIMIT $10
 ), eligible_point_memberships AS (
-  SELECT base.park_id,
-         location.location_id,
-         location.operator_name,
-         location.coordinate AS location_coordinate,
+  SELECT candidate.park_id,
          point.charging_point_id,
          point.provider_id,
          point.provider_evse_key,
-         point.maximum_power_kw,
-         point.availability_state,
-         point.availability_is_live,
-         point.availability_observed_at,
          COALESCE(
            point.canonical_evse_identity,
            COALESCE(point.provider_id, 'legacy') || ':' || point.charging_point_id::text
          ) AS evse_key
-  FROM base_parks AS base
-  JOIN nextstop.normalized_charging_locations AS location
-    ON location.projection_id = base.projection_id
-   AND location.location_id = ANY(base.member_location_ids)
+  FROM selected_candidates AS candidate
+  JOIN nextstop.charging_park_location_memberships AS membership
+    ON membership.projection_id = candidate.projection_id
+   AND membership.park_id = candidate.park_id
   JOIN nextstop.normalized_charging_points AS point
-    ON point.projection_id = location.projection_id
-   AND point.location_id = location.location_id
+    ON point.projection_id = membership.projection_id
+   AND point.location_id = membership.location_id
   WHERE point.maximum_power_kw >= $6
-), eligible_evses AS (
-  SELECT park_id,
-         evse_key,
-         (array_agg(operator_name ORDER BY charging_point_id, operator_name))[1]
-           AS operator_name,
-         max(maximum_power_kw)::integer AS maximum_power_kw,
-         CASE
-           WHEN bool_and(availability_is_live)
-             AND count(DISTINCT availability_state) = 1
-             THEN min(availability_state)
-           ELSE 'unknown'
-         END AS static_availability_state,
-         max(availability_observed_at) FILTER (
-           WHERE availability_is_live AND availability_state <> 'unknown'
-         ) AS static_observed_at
-  FROM eligible_point_memberships
-  GROUP BY park_id, evse_key
-), eligible_aggregates AS (
-  SELECT park_id,
-         count(*)::integer AS charging_point_count,
-         max(maximum_power_kw)::integer AS maximum_power_kw,
-         count(*) FILTER (
-           WHERE static_availability_state = 'available'
-         )::integer AS known_available_count,
-         count(*) FILTER (
-           WHERE static_availability_state IN (
-             'occupied', 'out_of_service', 'reserved'
-           )
-         )::integer AS known_unavailable_count,
-         count(*) FILTER (
-           WHERE static_availability_state = 'unknown'
-         )::integer AS unknown_count,
-         max(static_observed_at) AS last_live_observation_at
-  FROM eligible_evses
-  GROUP BY park_id
-), operator_groups AS (
-  SELECT park_id,
-         operator_name,
-         count(*)::integer AS charging_point_count
-  FROM eligible_evses
-  GROUP BY park_id, operator_name
-), operator_aggregates AS (
-  SELECT park_id,
-         array_agg(operator_name ORDER BY operator_name) AS operators,
-         jsonb_agg(
-           jsonb_build_object(
-             'name', operator_name,
-             'chargingPoints', charging_point_count
-           )
-           ORDER BY operator_name
-         ) AS operator_charging_points
-  FROM operator_groups
-  GROUP BY park_id
-), eligible_locations AS (
-  SELECT DISTINCT ON (park_id, location_id)
-         park_id,
-         location_id,
-         location_coordinate
-  FROM eligible_point_memberships
-  ORDER BY park_id, location_id
-), eligible_geometry AS (
-  SELECT locations.park_id,
-         ST_Centroid(ST_Collect(locations.location_coordinate::geometry))::geography
-           AS centroid,
-         (array_agg(
-           locations.location_coordinate
-           ORDER BY ST_Distance(
-             locations.location_coordinate,
-             base.navigation_coordinate
-           ), locations.location_id
-         ))[1] AS navigation_coordinate
-  FROM eligible_locations AS locations
-  JOIN base_parks AS base USING (park_id)
-  GROUP BY locations.park_id
-), eligible_base AS (
-  SELECT base.*,
-         round(ST_Distance(
-           geometry.navigation_coordinate,
-           parameters.route
-         ))::integer AS distance_from_route_meters,
-         ceil(ST_Distance(
-           geometry.navigation_coordinate,
-           parameters.origin
-         ))::integer AS straight_line_lower_bound_meters,
-         eligible.charging_point_count AS eligible_charging_point_count,
-         eligible.maximum_power_kw AS eligible_maximum_power_kw,
-         eligible.known_available_count AS eligible_known_available_count,
-         eligible.known_unavailable_count AS eligible_known_unavailable_count,
-         eligible.unknown_count AS eligible_unknown_count,
-         eligible.last_live_observation_at AS eligible_last_live_observation_at,
-         operator_aggregates.operators AS eligible_operators,
-         operator_aggregates.operator_charging_points,
-         geometry.centroid AS eligible_centroid,
-         geometry.navigation_coordinate AS eligible_navigation_coordinate
-  FROM base_parks AS base
-  JOIN eligible_aggregates AS eligible USING (park_id)
-  JOIN operator_aggregates USING (park_id)
-  JOIN eligible_geometry AS geometry USING (park_id)
-  CROSS JOIN parameters
-  WHERE eligible.charging_point_count >= $5
-    AND ST_DWithin(geometry.navigation_coordinate, parameters.route, 5000)
 ), live_point_states AS (
-  SELECT base.park_id,
+  SELECT candidate.park_id,
          membership.evse_key,
          CASE
            WHEN bool_or(observation.availability_state = 'unknown')
@@ -408,14 +369,14 @@ WITH parameters AS (
          max(observation.observed_at) FILTER (
            WHERE observation.availability_state <> 'unknown'
          ) AS observed_at
-  FROM eligible_base AS base
+  FROM selected_candidates AS candidate
   JOIN eligible_point_memberships AS membership USING (park_id)
   JOIN nextstop.availability_observations AS observation
     ON observation.snapshot_id = ANY($11::uuid[])
    AND observation.provider_id = membership.provider_id
    AND observation.provider_evse_key = membership.provider_evse_key
   WHERE cardinality($11::uuid[]) > 0
-  GROUP BY base.park_id, membership.evse_key
+  GROUP BY candidate.park_id, membership.evse_key
 ), live_aggregates AS (
   SELECT park_id,
          count(*) FILTER (WHERE availability_state = 'available')::integer
@@ -427,92 +388,63 @@ WITH parameters AS (
   FROM live_point_states
   GROUP BY park_id
 ), availability AS (
-  SELECT base.*,
+  SELECT candidate.*,
          CASE WHEN cardinality($11::uuid[]) = 0
-           THEN base.eligible_known_available_count
+           THEN candidate.known_available_count
            ELSE coalesce(live.known_available_count, 0)
          END AS resolved_known_available_count,
          CASE WHEN cardinality($11::uuid[]) = 0
-           THEN base.eligible_known_unavailable_count
+           THEN candidate.known_unavailable_count
            ELSE coalesce(live.known_unavailable_count, 0)
          END AS resolved_known_unavailable_count,
          CASE WHEN cardinality($11::uuid[]) = 0
-           THEN base.eligible_unknown_count
-           ELSE base.eligible_charging_point_count
+           THEN candidate.unknown_count
+           ELSE candidate.charging_point_count
              - coalesce(live.known_available_count, 0)
              - coalesce(live.known_unavailable_count, 0)
          END AS resolved_unknown_count,
          CASE WHEN cardinality($11::uuid[]) = 0
-           THEN base.eligible_last_live_observation_at
+           THEN candidate.last_live_observation_at
            ELSE live.last_live_observation_at
          END AS resolved_last_live_observation_at
-  FROM eligible_base AS base
+  FROM selected_candidates AS candidate
   LEFT JOIN live_aggregates AS live USING (park_id)
 )
 SELECT park_id AS id,
-       CASE cardinality(eligible_operators)
-         WHEN 1 THEN eligible_operators[1]
-         WHEN 2 THEN eligible_operators[1] || ' & ' || eligible_operators[2]
-         ELSE eligible_operators[1] || ' + ' || (cardinality(eligible_operators) - 1)::text
+       CASE cardinality(operators)
+         WHEN 1 THEN operators[1]
+         WHEN 2 THEN operators[1] || ' & ' || operators[2]
+         ELSE operators[1] || ' + ' || (cardinality(operators) - 1)::text
        END AS name,
-       ST_Y(eligible_centroid::geometry) AS "centroidLatitude",
-       ST_X(eligible_centroid::geometry) AS "centroidLongitude",
-       ST_Y(eligible_navigation_coordinate::geometry) AS "navigationLatitude",
-       ST_X(eligible_navigation_coordinate::geometry) AS "navigationLongitude",
+       ST_Y(centroid::geometry) AS "centroidLatitude",
+       ST_X(centroid::geometry) AS "centroidLongitude",
+       ST_Y(navigation_coordinate::geometry) AS "navigationLatitude",
+       ST_X(navigation_coordinate::geometry) AS "navigationLongitude",
        distance_from_route_meters AS "distanceFromRouteMeters",
        straight_line_lower_bound_meters AS "straightLineLowerBoundMeters",
-       eligible_charging_point_count AS "chargingPoints",
+       charging_point_count AS "chargingPoints",
        resolved_known_available_count AS "knownAvailable",
        resolved_known_unavailable_count AS "knownUnavailable",
        resolved_unknown_count AS unknown,
        resolved_unknown_count = 0 AS "availabilityComplete",
        resolved_last_live_observation_at AS "lastLiveObservationAt",
-       eligible_maximum_power_kw AS "maximumPowerKW",
-       eligible_operators AS operators,
-       operator_charging_points AS "operatorChargingPoints",
+       maximum_power_kw AS "maximumPowerKW",
+       operators,
+       operator_charging_point_counts AS "operatorChargingPoints",
        source_summaries AS sources,
        data_updated_at AS "dataUpdatedAt",
-       food.osm_type AS "foodOSMType",
-       food.osm_id::text AS "foodOSMId",
-       food.chain AS "foodChain",
-       food.name AS "foodName",
-       ST_Y(food.coordinate::geometry) AS "foodLatitude",
-       ST_X(food.coordinate::geometry) AS "foodLongitude",
-       food.distance_meters AS "foodDistanceMeters",
-       food.opening_hours AS "foodOpeningHours",
-       food.source_record_url AS "foodSourceRecordURL"
+       food_osm_type AS "foodOSMType",
+       food_osm_id::text AS "foodOSMId",
+       food_chain AS "foodChain",
+       food_name AS "foodName",
+       ST_Y(food_coordinate::geometry) AS "foodLatitude",
+       ST_X(food_coordinate::geometry) AS "foodLongitude",
+       food_distance_meters AS "foodDistanceMeters",
+       food_opening_hours AS "foodOpeningHours",
+       food_source_record_url AS "foodSourceRecordURL"
 FROM availability
-LEFT JOIN LATERAL (
-  SELECT poi.osm_type, poi.osm_id, poi.chain, poi.name, poi.coordinate,
-         poi.opening_hours, poi.source_record_url,
-         round(ST_Distance(poi.coordinate, availability.eligible_navigation_coordinate))::integer
-           AS distance_meters
-  FROM nextstop.charging_park_food_poi_matches AS match
-  JOIN nextstop.food_poi_projection AS poi
-    ON poi.projection_id = match.food_projection_id
-   AND poi.osm_type = match.osm_type
-   AND poi.osm_id = match.osm_id
-  WHERE match.charging_projection_id = $1
-    AND match.food_projection_id = $12::uuid
-    AND match.park_id = availability.park_id
-    AND poi.chain = $13::text
-    AND ST_DWithin(
-      poi.coordinate,
-      availability.eligible_navigation_coordinate,
-      500
-    )
-  ORDER BY ST_Distance(poi.coordinate, availability.eligible_navigation_coordinate),
-           poi.osm_type, poi.osm_id
-  LIMIT 1
-) AS food ON $13::text IS NOT NULL
-WHERE straight_line_lower_bound_meters <= $7
-  AND ($13::text IS NULL OR food.osm_id IS NOT NULL)
-  AND (
-    $8::integer IS NULL
-    OR (straight_line_lower_bound_meters, park_id) > ($8, $9::uuid)
-  )
 ORDER BY straight_line_lower_bound_meters ASC, park_id ASC
-LIMIT $10`;
+`;
 
 function resolvePage(
   request: SearchRequest,

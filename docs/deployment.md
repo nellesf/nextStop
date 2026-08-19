@@ -68,6 +68,9 @@ need.
 - PostgreSQL with the PostGIS extension and automated point-in-time recovery.
 - GiST indexes on park/normalized locations; conventional indexes on provider keys,
   EVSE identity, observation time, and projection version.
+- A GiST-indexed power search projection with one derived row per park and
+  supported minimum-power option it satisfies, plus normalized park/location
+  memberships.
 - A separate GiST-indexed OSM food-POI projection and version-pinned derived
   park/POI cache; do not merge it into redistributed charging source tables.
 - Separate roles for migrations, worker writes, API read/search, and operations.

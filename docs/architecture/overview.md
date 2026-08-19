@@ -104,8 +104,13 @@ services:
 - Current authoritative projection and conflict records.
 - GiST-indexed `geography(Point, 4326)` park locations.
 - Separately versioned OSM restaurant POIs plus cached broad park/POI pairs.
-- Search projection for total EVSEs, known-free state, maximum power, operators,
-  quality, freshness, and live coverage.
+- Search projections for each supported minimum-power option a park satisfies.
+  Each row contains the qualifying deduplicated EVSE count, derived operators,
+  static availability, and power-filtered display/navigation coordinates. A
+  normalized park/location membership table replaces array membership scans on
+  the search path.
+- Live availability remains a separate snapshot and is joined only for the
+  selected result page; it cannot affect candidate inclusion or ordering.
 
 No Redis, message broker, or separate search cluster is required in the MVP.
 Ingestion uses durable database jobs/advisory locks and can be extracted only after
@@ -131,10 +136,12 @@ never import provider DTOs or UI frameworks.
 
 ## Search ownership
 
-The backend returns a paginated, stable candidate snapshot after EVSE count/power,
-restaurant, and exact route-corridor filtering. Live availability remains
-informational. The iOS application performs the operations that only MapKit can
-truthfully provide:
+The backend selects the precomputed row for the request's supported power value,
+then returns a paginated, stable candidate snapshot after EVSE count, restaurant,
+and exact route-corridor filtering. A straight-line origin bound safely removes
+parks that cannot satisfy the requested maximum driving distance. Live
+availability is added only to the selected page and remains informational. The
+iOS application performs the operations that only MapKit can truthfully provide:
 
 1. exact automobile distance from the current location to each candidate;
 2. final distance-range filter;
