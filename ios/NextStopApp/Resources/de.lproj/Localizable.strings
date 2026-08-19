@@ -127,4 +127,5 @@
 "unit.minimum_kilowatts.format" = "%lld kW oder höher";
 "unit.charging_points.format" = "%lld Ladepunkte";
 "unit.kilometers.format" = "%lld km";
+"unit.meters_to_place.format" = "%lld m bis %@";
 "unit.minimum_count.format" = "mindestens %lld";

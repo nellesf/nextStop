@@ -127,4 +127,5 @@
 "unit.minimum_kilowatts.format" = "%lld kW or higher";
 "unit.charging_points.format" = "%lld charging points";
 "unit.kilometers.format" = "%lld km";
+"unit.meters_to_place.format" = "%lld m to %@";
 "unit.minimum_count.format" = "at least %lld";

@@ -38,4 +38,15 @@ enum LocalizedFormat {
       Int64((meters + 500) / 1_000)
     )
   }
+
+  static func metersToPlace(_ meters: Int, placeName: String) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "unit.meters_to_place.format",
+        comment: "Straight-line distance from a charging location to a nearby place"
+      ),
+      Int64(meters),
+      placeName
+    )
+  }
 }

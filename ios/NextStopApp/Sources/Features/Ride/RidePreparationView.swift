@@ -280,6 +280,7 @@ struct RidePreparationView: View {
   private func resultCard(_ result: RouteSearchResult) -> some View {
     let candidate = result.candidate
     let park = candidate.park
+    let foodPOI = result.matchingFoodPOI
     return Card {
       HStack(alignment: .firstTextBaseline) {
         Text("ride.result.operators")
@@ -293,10 +294,27 @@ struct RidePreparationView: View {
 
       ForEach(park.operatorChargingPoints) { chargingOperator in
         HStack(alignment: .center, spacing: 10) {
-          Text(chargingOperator.name)
-            .font(.headline)
-            .frame(maxWidth: .infinity, alignment: .leading)
-            .layoutPriority(1)
+          VStack(alignment: .leading, spacing: 3) {
+            Text(chargingOperator.name)
+              .font(.headline)
+
+            if let foodPOI,
+              let distance = ChargingOperatorFoodDistance.nearestMeters(
+                operatorName: chargingOperator.name,
+                locations: park.locationLookups,
+                foodCoordinate: foodPOI.coordinate
+              )
+            {
+              Text(verbatim: LocalizedFormat.metersToPlace(
+                distance,
+                placeName: foodPOI.name
+              ))
+              .font(.caption)
+              .foregroundStyle(.secondary)
+            }
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+          .layoutPriority(1)
           Label {
             Text(verbatim: "\(chargingOperator.chargingPointCount)")
           } icon: {
@@ -328,10 +346,10 @@ struct RidePreparationView: View {
           .foregroundStyle(.secondary)
       }
 
-      if let foodPOI = result.matchingFoodPOI {
+      if let foodPOI {
         HStack(alignment: .center, spacing: 10) {
           Label(foodPOI.name, systemImage: "fork.knife")
-            .font(.subheadline)
+            .font(.headline)
             .frame(maxWidth: .infinity, alignment: .leading)
 
           ApplePlaceButton(
@@ -394,6 +412,30 @@ struct RidePreparationView: View {
       }
       .buttonStyle(.borderedProminent)
     }
+  }
+}
+
+enum ChargingOperatorFoodDistance {
+  static func nearestMeters(
+    operatorName: String,
+    locations: [ChargingLocationLookup],
+    foodCoordinate: Coordinate
+  ) -> Int? {
+    let foodLocation = CLLocation(
+      latitude: foodCoordinate.latitude,
+      longitude: foodCoordinate.longitude
+    )
+    return locations
+      .lazy
+      .filter { $0.operatorName == operatorName }
+      .map {
+        foodLocation.distance(from: CLLocation(
+          latitude: $0.coordinate.latitude,
+          longitude: $0.coordinate.longitude
+        ))
+      }
+      .min()
+      .map { Int($0.rounded()) }
   }
 }
 

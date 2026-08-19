@@ -6,6 +6,47 @@ import XCTest
 
 @MainActor
 final class RidePreparationViewModelTests: XCTestCase {
+  func testChargingOperatorFoodDistanceUsesNearestLocationForOperator() throws {
+    let restaurant = try Coordinate(latitude: 50, longitude: 8)
+    let locations = [
+      try ChargingLocationLookup(
+        id: UUID(),
+        operatorName: "Near operator",
+        coordinate: Coordinate(latitude: 50.001, longitude: 8),
+        address: ChargingLocationAddress()
+      ),
+      try ChargingLocationLookup(
+        id: UUID(),
+        operatorName: "Near operator",
+        coordinate: Coordinate(latitude: 50.002, longitude: 8),
+        address: ChargingLocationAddress()
+      ),
+      try ChargingLocationLookup(
+        id: UUID(),
+        operatorName: "Other operator",
+        coordinate: Coordinate(latitude: 50.0001, longitude: 8),
+        address: ChargingLocationAddress()
+      )
+    ]
+
+    let distance = try XCTUnwrap(
+      ChargingOperatorFoodDistance.nearestMeters(
+        operatorName: "Near operator",
+        locations: locations,
+        foodCoordinate: restaurant
+      )
+    )
+
+    XCTAssertTrue((110...112).contains(distance))
+    XCTAssertNil(
+      ChargingOperatorFoodDistance.nearestMeters(
+        operatorName: "Missing operator",
+        locations: locations,
+        foodCoordinate: restaurant
+      )
+    )
+  }
+
   func testAppleChargingPlaceMatchAllowsLargeCampusOnlyWithExactAddress() {
     XCTAssertTrue(
       AppleChargingPlaceMatchPolicy.accepts(
