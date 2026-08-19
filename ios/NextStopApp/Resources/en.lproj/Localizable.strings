@@ -89,9 +89,8 @@
 "ride.result.availability.complete.format" = "%lld charging points available";
 "ride.result.availability.partial.format" = "%lld known available, %lld unknown";
 "ride.result.navigate" = "Open in Apple Maps";
-"ride.result.start_navigation" = "Start navigation";
 "ride.result.apple_place.accessibility_label.format" = "Open %@ in Apple Maps";
-"ride.result.apple_place.accessibility_hint" = "Shows the native place with details and current availability when Apple provides them.";
+"ride.result.apple_place.accessibility_hint" = "Shows the native place with the details provided by Apple.";
 "ride.result.apple_place.no_match.title" = "No Apple details found";
 "ride.result.apple_place.no_match.format" = "No unambiguous Apple Maps place was found for %@.";
 "ride.result.operators" = "Charging providers";

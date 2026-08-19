@@ -6,9 +6,8 @@ import UIKit
 struct RidePreparationView: View {
   @Environment(\.openURL) private var openURL
   @StateObject private var viewModel: RidePreparationViewModel
-  @State private var navigationLaunchFailed = false
   private let navigationLauncher: any AppleMapsLaunching
-  private let placeResolver: any AppleChargingPlaceResolving
+  private let placeResolver: any ApplePlaceResolving
 
   @MainActor
   init(profile: UserProfile, directionsRequestGate: DirectionsRequestGate) {
@@ -66,7 +65,7 @@ struct RidePreparationView: View {
   init(
     viewModel: RidePreparationViewModel,
     navigationLauncher: any AppleMapsLaunching,
-    placeResolver: any AppleChargingPlaceResolving = MapKitApplePlaceResolver()
+    placeResolver: any ApplePlaceResolving = MapKitApplePlaceResolver()
   ) {
     _viewModel = StateObject(wrappedValue: viewModel)
     self.navigationLauncher = navigationLauncher
@@ -87,11 +86,6 @@ struct RidePreparationView: View {
     .navigationBarTitleDisplayMode(.inline)
     .task {
       await viewModel.prepareRouteAndSearch()
-    }
-    .alert("ride.apple_maps.error.title", isPresented: $navigationLaunchFailed) {
-      Button("action.done", role: .cancel) {}
-    } message: {
-      Text("ride.apple_maps.error.description")
     }
   }
 
@@ -303,27 +297,30 @@ struct RidePreparationView: View {
             .font(.headline)
             .frame(maxWidth: .infinity, alignment: .leading)
             .layoutPriority(1)
-          Label(
-            LocalizedFormat.chargingPoints(chargingOperator.chargingPointCount),
-            systemImage: "ev.charger"
-          )
+          Label {
+            Text(verbatim: "\(chargingOperator.chargingPointCount)")
+          } icon: {
+            Image(systemName: "ev.charger")
+          }
           .font(.subheadline.monospacedDigit())
           .fixedSize(horizontal: true, vertical: false)
+          .accessibilityElement(children: .ignore)
+          .accessibilityLabel(
+            Text(verbatim: LocalizedFormat.chargingPoints(
+              chargingOperator.chargingPointCount
+            ))
+          )
 
-          AppleChargingPlaceButton(
-            park: park,
-            operatorName: chargingOperator.name,
+          ApplePlaceButton(
+            target: .charging(
+              park: park,
+              operatorName: chargingOperator.name
+            ),
             resolver: placeResolver,
             launcher: navigationLauncher
           )
         }
       }
-
-      Label(
-        LocalizedFormat.minimumKilowatts(viewModel.draft.criteria.minimumPower.rawValue),
-        systemImage: "bolt.fill"
-      )
-      .font(.subheadline)
 
       if let availability = availabilityText(park.availability) {
         Text(verbatim: availability)
@@ -332,25 +329,17 @@ struct RidePreparationView: View {
       }
 
       if let foodPOI = result.matchingFoodPOI {
-        Label(foodPOI.name, systemImage: "fork.knife")
-          .font(.subheadline)
-      }
+        HStack(alignment: .center, spacing: 10) {
+          Label(foodPOI.name, systemImage: "fork.knife")
+            .font(.subheadline)
+            .frame(maxWidth: .infinity, alignment: .leading)
 
-      if case .ready = viewModel.state {
-        Button {
-          navigationLaunchFailed = !navigationLauncher.startNavigation(
-            to: park,
-            via: result.matchingFoodPOI,
-            finalDestination: viewModel.draft.destination
+          ApplePlaceButton(
+            target: .restaurant(foodPOI),
+            resolver: placeResolver,
+            launcher: navigationLauncher
           )
-        } label: {
-          Label(
-            "ride.result.start_navigation",
-            systemImage: "arrow.triangle.turn.up.right.diamond.fill"
-          )
-            .frame(maxWidth: .infinity)
         }
-        .buttonStyle(.borderedProminent)
       }
     }
   }
@@ -409,7 +398,7 @@ struct RidePreparationView: View {
 }
 
 @MainActor
-private struct AppleChargingPlaceButton: View {
+private struct ApplePlaceButton: View {
   private enum Failure: Identifiable {
     case noMatch
     case launchFailed
@@ -422,9 +411,8 @@ private struct AppleChargingPlaceButton: View {
     }
   }
 
-  let park: ChargingPark
-  let operatorName: String
-  let resolver: any AppleChargingPlaceResolving
+  let target: ApplePlaceTarget
+  let resolver: any ApplePlaceResolving
   let launcher: any AppleMapsLaunching
 
   @State private var cachedMapItem: MKMapItem?
@@ -456,9 +444,9 @@ private struct AppleChargingPlaceButton: View {
         String.localizedStringWithFormat(
           NSLocalizedString(
             "ride.result.apple_place.accessibility_label.format",
-            comment: "Open one charging operator in Apple Maps"
+            comment: "Open one result place in Apple Maps"
           ),
-          operatorName
+          target.displayName
         )
       )
     )
@@ -472,9 +460,9 @@ private struct AppleChargingPlaceButton: View {
             String.localizedStringWithFormat(
               NSLocalizedString(
                 "ride.result.apple_place.no_match.format",
-                comment: "No unambiguous Apple charging place for an operator"
+                comment: "No unambiguous Apple place for a result"
               ),
-              operatorName
+              target.displayName
             )
           ),
           dismissButton: .cancel(Text("action.done"))
@@ -496,10 +484,7 @@ private struct AppleChargingPlaceButton: View {
     }
 
     isLoading = true
-    let mapItem = await resolver.resolveChargingPlace(
-      park: park,
-      operatorName: operatorName
-    )
+    let mapItem = await target.resolve(using: resolver)
     isLoading = false
 
     guard let mapItem else {
@@ -508,6 +493,33 @@ private struct AppleChargingPlaceButton: View {
     }
     cachedMapItem = mapItem
     failure = launcher.openPlace(mapItem) ? nil : .launchFailed
+  }
+}
+
+private enum ApplePlaceTarget {
+  case charging(park: ChargingPark, operatorName: String)
+  case restaurant(FoodPOI)
+
+  var displayName: String {
+    switch self {
+    case .charging(_, let operatorName):
+      return operatorName
+    case .restaurant(let foodPOI):
+      return foodPOI.name
+    }
+  }
+
+  @MainActor
+  func resolve(using resolver: any ApplePlaceResolving) async -> MKMapItem? {
+    switch self {
+    case .charging(let park, let operatorName):
+      return await resolver.resolveChargingPlace(
+        park: park,
+        operatorName: operatorName
+      )
+    case .restaurant(let foodPOI):
+      return await resolver.resolveRestaurantPlace(foodPOI)
+    }
   }
 }
 

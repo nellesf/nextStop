@@ -40,9 +40,9 @@
   corridors may still take longer without replacing MapKit with a server-side
   router.
 - Native Apple place details and EV charging availability are available only when
-  the bounded operator/coordinate/address lookup returns an unambiguous Apple Place
-  ID. Apple controls that record and its freshness; nextStop reports a missing
-  match rather than opening a coordinate-only pin with incomplete details.
+  the bounded charger/restaurant lookup returns an unambiguous Apple Place ID.
+  Apple controls that record and its freshness; nextStop reports a missing match
+  rather than opening a coordinate-only pin with incomplete details.
 - Cross-source deduplication without a common EVSE identifier is inherently
   probabilistic. The accepted policy favors under-merging over silently reducing
   the reported number of distinct EVSEs.

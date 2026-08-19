@@ -23,13 +23,14 @@ analytics SDKs are permitted in MVP.
 ### iPhone to Apple services
 
 - MapKit destination search and directions.
-- A bounded MapKit EV-charger lookup around one result only after the user taps a
-  charging operator's Maps button. It matches against already-known authority
-  coordinates and does not run during backend filtering or for untouched operators.
+- A bounded MapKit charger or restaurant lookup around one result only after the
+  user taps that item's Maps button. It matches against already-known authority/OSM
+  coordinates and does not run during backend filtering or for untouched items.
 - Siri/App Intents system processing when invoked.
-- Apple Maps handoff either to one matched native charging place by stable Place ID,
-  or for navigation to the selected park. When food is selected, the navigation
-  route contains the matched restaurant waypoint and the original ride destination.
+- Apple Maps handoff either to one matched native charger/restaurant by stable
+  Place ID on iPhone, or to navigation from CarPlay. When food is selected in
+  CarPlay, the navigation route contains the matched restaurant waypoint and the
+  original ride destination.
 
 Apple's current privacy disclosures and SDK behavior must be reflected accurately
 in App Store privacy answers at release.

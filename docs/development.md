@@ -169,10 +169,11 @@ flow. It fetches a stable PostGIS candidate snapshot, asks MapKit for actual
 automobile distance to candidates in bounded groups of four, applies the exact
 configured range after the backend's exact optional 500 m OSM food rule, sorts only by actual driving
 distance, and displays at most five. Each result shows the deduplicated EVSE count
-for every operator. The 48-point Maps button beside an operator lazily performs a
-bounded Apple EV-charger lookup and opens the native place by stable Place ID. A
-separate navigation action keeps the restaurant as a waypoint before the original
-destination, or navigates to the selected park when no restaurant exists.
+for every operator. Its compact row shows the charger icon and count without
+repeating the already-visible power criterion. The 48-point Maps button beside an
+operator or restaurant lazily performs a bounded Apple lookup and opens the native
+place by stable Place ID. Navigation may be started from that native place card;
+the iPhone result card has no duplicate navigation button.
 
 ### CarPlay acceptance gate
 

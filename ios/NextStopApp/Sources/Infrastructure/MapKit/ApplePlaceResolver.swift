@@ -3,17 +3,20 @@ import MapKit
 import NextStopCore
 
 @MainActor
-protocol AppleChargingPlaceResolving {
+protocol ApplePlaceResolving {
   func resolveChargingPlace(
     park: ChargingPark,
     operatorName: String
   ) async -> MKMapItem?
+
+  func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem?
 }
 
 @MainActor
-final class MapKitApplePlaceResolver: AppleChargingPlaceResolving {
+final class MapKitApplePlaceResolver: ApplePlaceResolving {
   private let maximumDirectMatchDistance: CLLocationDistance = 60
   private let maximumAddressBackedMatchDistance: CLLocationDistance = 125
+  private let maximumRestaurantMatchDistance: CLLocationDistance = 125
 
   func resolveChargingPlace(
     park: ChargingPark,
@@ -26,6 +29,10 @@ final class MapKitApplePlaceResolver: AppleChargingPlaceResolving {
       return nil
     }
     return bestChargingMatch(items: items, lookups: lookups)?.item
+  }
+
+  func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem? {
+    try? await searchRestaurantItem(for: foodPOI)
   }
 
   private func searchChargingItems(
@@ -47,6 +54,43 @@ final class MapKitApplePlaceResolver: AppleChargingPlaceResolving {
     let request = MKLocalPointsOfInterestRequest(center: center, radius: radius)
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
     return try await MKLocalSearch(request: request).start().mapItems
+  }
+
+  private func searchRestaurantItem(for foodPOI: FoodPOI) async throws -> MKMapItem? {
+    let center = CLLocationCoordinate2D(
+      latitude: foodPOI.coordinate.latitude,
+      longitude: foodPOI.coordinate.longitude
+    )
+    let request = MKLocalSearch.Request()
+    request.naturalLanguageQuery = foodPOI.name
+    request.region = MKCoordinateRegion(
+      center: center,
+      latitudinalMeters: 400,
+      longitudinalMeters: 400
+    )
+    request.resultTypes = .pointOfInterest
+    request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
+    let expectedName = normalized(foodPOI.name)
+    return try await MKLocalSearch(request: request).start().mapItems
+      .compactMap { item -> (item: MKMapItem, distance: CLLocationDistance)? in
+        guard let itemLocation = mapItemLocation(item) else {
+          return nil
+        }
+        let distance = itemLocation.distance(from: CLLocation(
+          latitude: foodPOI.coordinate.latitude,
+          longitude: foodPOI.coordinate.longitude
+        ))
+        let itemName = normalized(item.name ?? "")
+        guard !itemName.isEmpty,
+          distance <= maximumRestaurantMatchDistance,
+          itemName.contains(expectedName) || expectedName.contains(itemName)
+        else {
+          return nil
+        }
+        return (item, distance)
+      }
+      .min { $0.distance < $1.distance }?
+      .item
   }
 
   private func secureMatchDistance(

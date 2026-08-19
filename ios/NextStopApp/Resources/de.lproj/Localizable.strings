@@ -89,9 +89,8 @@
 "ride.result.availability.complete.format" = "%lld Ladepunkte frei";
 "ride.result.availability.partial.format" = "%lld sicher frei, %lld unbekannt";
 "ride.result.navigate" = "In Apple Maps öffnen";
-"ride.result.start_navigation" = "Navigation starten";
 "ride.result.apple_place.accessibility_label.format" = "%@ in Apple Karten öffnen";
-"ride.result.apple_place.accessibility_hint" = "Zeigt den nativen Ort mit Details und aktueller Verfügbarkeit, sofern Apple diese bereitstellt.";
+"ride.result.apple_place.accessibility_hint" = "Zeigt den nativen Ort mit den von Apple bereitgestellten Details.";
 "ride.result.apple_place.no_match.title" = "Keine Apple-Details gefunden";
 "ride.result.apple_place.no_match.format" = "Für %@ wurde kein eindeutiger Apple-Karten-Eintrag gefunden.";
 "ride.result.operators" = "Ladeanbieter";

@@ -105,10 +105,11 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Runtime `CPListTemplate` limits and exactly zero-to-five POIs.
 - Locked phone, touch and knob input, light/dark, common aspect ratios, reconnect,
   Apple Maps unavailable/handoff failure.
-- On iPhone, verify that every operator Maps button has at least a 44-point touch
-  target, resolves only after it is tapped, opens the native Apple place by Place
-  ID, caches the result for a second tap, and reports an unmatched operator without
-  changing the backend result. Verify that navigation remains a separate action.
+- On iPhone, verify that every operator and restaurant Maps button has at least a
+  44-point touch target, resolves only after it is tapped, opens the native Apple
+  place by Place ID, caches the result for a second tap, and reports an unmatched
+  item without changing the backend result. Verify that the result card does not
+  duplicate the native place card's navigation action.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.

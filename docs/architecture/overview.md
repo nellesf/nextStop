@@ -59,15 +59,15 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Exports the detailed route polyline as a validated GeoJSON LineString.
 - Resolves actual automobile routes from current location to candidate parks.
 - Consumes the backend's validated restaurant match; it does not perform local POI
-  discovery for filtering. On iPhone, tapping one operator's Maps button performs
-  a bounded Apple EV-charger lookup for only that already-selected operator; this
-  lookup never changes inclusion, counts, ranking, or the navigation waypoint.
-- Opens a conservatively matched native Apple charging place by stable Place ID.
-  If no unambiguous match exists, it leaves the backend result unchanged and
+  discovery for filtering. On iPhone, tapping an operator or restaurant Maps button
+  performs a bounded Apple lookup for only that already-selected item; this lookup
+  never changes inclusion, counts, ranking, or the CarPlay navigation waypoint.
+- Opens a conservatively matched native Apple charger or restaurant by stable Place
+  ID. If no unambiguous match exists, it leaves the backend result unchanged and
   reports that Apple details are unavailable.
-- Opens Apple Maps with driving directions. A matched restaurant is inserted as a
-  waypoint before the original ride destination; without a food match, the park
-  remains the navigation destination.
+- For CarPlay, opens Apple Maps with driving directions. A matched restaurant is
+  inserted as a waypoint before the original ride destination; without a food
+  match, the park remains the navigation destination.
 
 ### CarPlay adapter
 
@@ -152,12 +152,12 @@ iOS application performs the operations that only MapKit can truthfully provide:
 2. final distance-range filter;
 3. final distance-only sort and five-result cap.
 
-After the user taps an operator's Maps button, Apple-place matching is presentation
-enrichment only. It combines that operator's power-filtered authority location
-coordinates, normalized addresses, and name with a bounded
-`MKLocalPointsOfInterestRequest`. The ride-local match is cached and the native
-place is opened through its Apple Place ID. Apple Place IDs identify only Apple
-records and are never treated as cross-source identities.
+After the user taps an operator or restaurant Maps button, Apple-place matching is
+presentation enrichment only. It combines the selected item's authority/OSM
+coordinate, normalized address when available, and name with a bounded MapKit
+search. The ride-local match is cached and the native place is opened through its
+Apple Place ID. Apple Place IDs identify only Apple records and are never treated
+as cross-source identities.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work, but the
@@ -184,8 +184,8 @@ a new snapshot after explicit confirmation.
 - MapKit route failure: no search; offer retry/destination change.
 - Backend failure: no stale local European corpus is assumed. Show a clear retry
   path and preserve the ride draft.
-- Apple-place match failure: keep the authority-backed result visible and explain
-  that no unambiguous native Apple place was found for that operator.
+- Apple-place match failure: keep the authority/OSM-backed result visible and
+  explain that no unambiguous native Apple place was found for that item.
 - Apple Maps launch failure: keep details visible and report that navigation could
   not be opened.
 
