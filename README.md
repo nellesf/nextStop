@@ -11,8 +11,11 @@ localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, versioned OSM
 restaurant checks, distance-only ranking, per-operator EVSE counts, and Apple Maps
-handoff. When a restaurant is selected, the handoff keeps the original ride
-destination and inserts that restaurant as a waypoint. The same
+handoff. An iPhone result can first open a selective in-app MapKit preview that
+hides unrelated POIs, resolves conservative Apple charger/restaurant matches,
+and exposes Apple's Place Cards; unmatched authority/OSM records remain visible
+as explicit fallback pins. When a restaurant is selected, the handoff keeps the
+original ride destination and inserts that restaurant as a waypoint. The same
 application flow is connected to a template-native CarPlay scene with profile
 and saved-destination selection, ride-scoped fixed filter choices, stable
 maximum-five POI results, explicit refresh, no-result relaxation, and Apple Maps

@@ -53,9 +53,22 @@ export interface ChargingParkCandidate {
   readonly maximumPowerKW: number;
   readonly operators: readonly string[];
   readonly operatorChargingPoints: readonly OperatorChargingPoints[];
+  readonly locationLookups: readonly ChargingLocationLookup[];
   readonly sources: readonly SourceSummary[];
   readonly dataUpdatedAt: string;
   readonly foodPOI?: FoodPOISummary | null;
+}
+
+export interface ChargingLocationLookup {
+  readonly id: string;
+  readonly operatorName: string;
+  readonly coordinate: Coordinate;
+  readonly address: Readonly<{
+    readonly street?: string;
+    readonly houseNumber?: string;
+    readonly postalCode?: string;
+    readonly city?: string;
+  }>;
 }
 
 export interface FoodPOISummary {

@@ -9,6 +9,7 @@ public enum DomainValidationError: Error, Equatable, Sendable {
   case availabilityTotalMismatch(expected: Int, actual: Int)
   case nonPositiveChargingPointCount(Int)
   case operatorChargingPointTotalMismatch(expected: Int, actual: Int)
+  case locationLookupOperatorNotInPark(String)
   case emptyName
   case emptySourceIdentifier
   case routeRequiresAtLeastTwoCoordinates

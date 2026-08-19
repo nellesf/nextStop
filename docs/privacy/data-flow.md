@@ -23,6 +23,9 @@ analytics SDKs are permitted in MVP.
 ### iPhone to Apple services
 
 - MapKit destination search and directions.
+- A bounded MapKit POI lookup around a user-selected result to attach Apple Place
+  Cards to its already-known charger and restaurant coordinates. This does not run
+  during backend filtering or for results the user does not open.
 - Siri/App Intents system processing when invoked.
 - Apple Maps handoff for the selected park or, when food is selected, for a route
   containing the matched restaurant waypoint and the original ride destination.

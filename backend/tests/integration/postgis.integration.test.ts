@@ -221,6 +221,10 @@ void test(
         assert.equal(matching.candidates.length, 1);
         assert.equal(matching.candidates[0]?.chargingPoints, 2);
         assert.equal(matching.candidates[0]?.maximumPowerKW, 300);
+        assert.deepEqual(
+          matching.candidates[0]?.locationLookups.map(({ operatorName }) => operatorName),
+          ["Fast Charge GmbH"],
+        );
         assert.deepEqual(matching.candidates[0]?.availability, {
           knownAvailable: 0,
           knownUnavailable: 0,

@@ -312,17 +312,20 @@ struct RidePreparationView: View {
           .font(.subheadline)
       }
 
-      Button {
-        navigationLauncher.startNavigation(
-          to: park,
-          via: result.matchingFoodPOI,
-          finalDestination: viewModel.draft.destination
-        )
-      } label: {
-        Label("ride.result.navigate", systemImage: "arrow.triangle.turn.up.right.diamond.fill")
-          .frame(maxWidth: .infinity)
+      if case .ready(let preparedRide) = viewModel.state {
+        NavigationLink {
+          ChargingParkMapView(
+            result: result,
+            preparedRide: preparedRide,
+            finalDestination: viewModel.draft.destination,
+            navigationLauncher: navigationLauncher
+          )
+        } label: {
+          Label("ride.result.show_map", systemImage: "map.fill")
+            .frame(maxWidth: .infinity)
+        }
+        .buttonStyle(.borderedProminent)
       }
-      .buttonStyle(.borderedProminent)
     }
   }
 

@@ -223,6 +223,47 @@ public struct OperatorChargingPointSummary: Identifiable, Hashable, Codable, Sen
   }
 }
 
+public struct ChargingLocationAddress: Hashable, Codable, Sendable {
+  public let street: String?
+  public let houseNumber: String?
+  public let postalCode: String?
+  public let city: String?
+
+  public init(
+    street: String? = nil,
+    houseNumber: String? = nil,
+    postalCode: String? = nil,
+    city: String? = nil
+  ) {
+    self.street = street
+    self.houseNumber = houseNumber
+    self.postalCode = postalCode
+    self.city = city
+  }
+}
+
+public struct ChargingLocationLookup: Identifiable, Hashable, Codable, Sendable {
+  public let id: UUID
+  public let operatorName: String
+  public let coordinate: Coordinate
+  public let address: ChargingLocationAddress
+
+  public init(
+    id: UUID,
+    operatorName: String,
+    coordinate: Coordinate,
+    address: ChargingLocationAddress
+  ) throws {
+    guard !operatorName.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
+      throw DomainValidationError.emptyName
+    }
+    self.id = id
+    self.operatorName = operatorName
+    self.coordinate = coordinate
+    self.address = address
+  }
+}
+
 public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
   public let id: UUID
   public let name: String
@@ -233,6 +274,7 @@ public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
   public let availability: ParkAvailability
   public let maximumPower: Kilowatts
   public let sourceReferences: [DataSourceReference]
+  public let locationLookups: [ChargingLocationLookup]
 
   public init(
     id: UUID,
@@ -243,7 +285,8 @@ public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
     chargingPointCount: Int,
     availability: ParkAvailability,
     maximumPower: Kilowatts,
-    sourceReferences: [DataSourceReference]
+    sourceReferences: [DataSourceReference],
+    locationLookups: [ChargingLocationLookup] = []
   ) throws {
     guard !name.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty else {
       throw DomainValidationError.emptyName
@@ -269,6 +312,12 @@ public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
         actual: attributedChargingPointCount
       )
     }
+    let operatorNames = Set(operatorChargingPoints.map(\.name))
+    if let invalidLookup = locationLookups.first(where: {
+      !operatorNames.contains($0.operatorName)
+    }) {
+      throw DomainValidationError.locationLookupOperatorNotInPark(invalidLookup.operatorName)
+    }
     self.id = id
     self.name = name
     self.coordinate = coordinate
@@ -278,6 +327,7 @@ public struct ChargingPark: Identifiable, Hashable, Codable, Sendable {
     self.availability = availability
     self.maximumPower = maximumPower
     self.sourceReferences = sourceReferences
+    self.locationLookups = locationLookups
   }
 }
 

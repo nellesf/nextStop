@@ -120,6 +120,27 @@ const sourceSummarySchema = {
   },
 } as const;
 
+const chargingLocationLookupSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["id", "operatorName", "coordinate", "address"],
+  properties: {
+    id: { type: "string", format: "uuid" },
+    operatorName: { type: "string", minLength: 1, maxLength: 200 },
+    coordinate: coordinateSchema,
+    address: {
+      type: "object",
+      additionalProperties: false,
+      properties: {
+        street: { type: "string", minLength: 1, maxLength: 200 },
+        houseNumber: { type: "string", minLength: 1, maxLength: 50 },
+        postalCode: { type: "string", minLength: 1, maxLength: 20 },
+        city: { type: "string", minLength: 1, maxLength: 200 },
+      },
+    },
+  },
+} as const;
+
 const candidateSchema = {
   type: "object",
   additionalProperties: false,
@@ -135,6 +156,7 @@ const candidateSchema = {
     "maximumPowerKW",
     "operators",
     "operatorChargingPoints",
+    "locationLookups",
     "sources",
     "dataUpdatedAt",
   ],
@@ -162,6 +184,11 @@ const candidateSchema = {
           chargingPoints: { type: "integer", minimum: 1 },
         },
       },
+    },
+    locationLookups: {
+      type: "array",
+      minItems: 1,
+      items: chargingLocationLookupSchema,
     },
     sources: { type: "array", minItems: 1, items: sourceSummarySchema },
     dataUpdatedAt: { type: "string", format: "date-time" },

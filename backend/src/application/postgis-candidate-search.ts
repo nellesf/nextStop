@@ -14,6 +14,7 @@ import {
   type SnapshotPayload,
 } from "./signed-pagination.js";
 import type {
+  ChargingLocationLookup,
   ChargingParkCandidate,
   Coverage,
   SearchRequest,
@@ -58,6 +59,7 @@ interface CandidateRow {
     readonly name: string;
     readonly chargingPoints: number;
   }[];
+  readonly locationLookups: ChargingLocationLookup[];
   readonly sources: SourceSummary[];
   readonly dataUpdatedAt: Date;
   readonly foodOSMType: "node" | "way" | "relation" | null;
@@ -341,7 +343,9 @@ WITH parameters AS (
   ORDER BY base.straight_line_lower_bound_meters, base.park_id
   LIMIT $10
 ), eligible_point_memberships AS (
-  SELECT candidate.park_id,
+  SELECT candidate.projection_id,
+         candidate.park_id,
+         point.location_id,
          point.charging_point_id,
          point.provider_id,
          point.provider_evse_key,
@@ -357,6 +361,37 @@ WITH parameters AS (
     ON point.projection_id = membership.projection_id
    AND point.location_id = membership.location_id
   WHERE point.maximum_power_kw >= $6
+), location_lookup_aggregates AS (
+  SELECT eligible.park_id,
+         jsonb_agg(
+           jsonb_build_object(
+             'id', location.location_id,
+             'operatorName', location.operator_name,
+             'coordinate', jsonb_build_object(
+               'latitude', ST_Y(location.coordinate::geometry),
+               'longitude', ST_X(location.coordinate::geometry)
+             ),
+             'address', jsonb_strip_nulls(jsonb_build_object(
+               'street', location.address->>'street',
+               'houseNumber', location.address->>'houseNumber',
+               'postalCode', location.address->>'postalCode',
+               'city', location.address->>'city'
+             ))
+           )
+           ORDER BY location.operator_name, location.location_id
+         ) AS location_lookups
+  FROM (
+    SELECT DISTINCT projection_id, park_id, location_id
+    FROM eligible_point_memberships
+  ) AS eligible
+  JOIN selected_candidates AS candidate
+    ON candidate.projection_id = eligible.projection_id
+   AND candidate.park_id = eligible.park_id
+  JOIN nextstop.normalized_charging_locations AS location
+    ON location.projection_id = eligible.projection_id
+   AND location.location_id = eligible.location_id
+   AND location.operator_name = ANY(candidate.operators)
+  GROUP BY eligible.park_id
 ), live_point_states AS (
   SELECT candidate.park_id,
          membership.evse_key,
@@ -431,6 +466,7 @@ SELECT park_id AS id,
        maximum_power_kw AS "maximumPowerKW",
        operators,
        operator_charging_point_counts AS "operatorChargingPoints",
+       lookup.location_lookups AS "locationLookups",
        source_summaries AS sources,
        data_updated_at AS "dataUpdatedAt",
        food_osm_type AS "foodOSMType",
@@ -443,6 +479,7 @@ SELECT park_id AS id,
        food_opening_hours AS "foodOpeningHours",
        food_source_record_url AS "foodSourceRecordURL"
 FROM availability
+JOIN location_lookup_aggregates AS lookup USING (park_id)
 ORDER BY straight_line_lower_bound_meters ASC, park_id ASC
 `;
 
@@ -533,6 +570,7 @@ function mapCandidate(
     maximumPowerKW: row.maximumPowerKW,
     operators: row.operators,
     operatorChargingPoints: row.operatorChargingPoints,
+    locationLookups: row.locationLookups,
     sources: row.sources.map((source) => {
       const liveObservedAt = liveObservedByProvider.get(source.id);
       return liveObservedAt === undefined ? source : { ...source, liveObservedAt };

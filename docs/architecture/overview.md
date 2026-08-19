@@ -59,7 +59,13 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Exports the detailed route polyline as a validated GeoJSON LineString.
 - Resolves actual automobile routes from current location to candidate parks.
 - Consumes the backend's validated restaurant match; it does not perform local POI
-  discovery.
+  discovery for filtering. On the iPhone only, a selected result may perform a
+  bounded Apple POI lookup to attach Place Cards to the already-selected charging
+  locations and restaurant; this lookup never changes inclusion, counts, ranking,
+  or the navigation waypoint.
+- Renders a selective iPhone route preview with unrelated base-map POIs hidden.
+  Unmatched backend/OSM locations remain explicit fallback pins rather than being
+  silently omitted.
 - Opens Apple Maps with driving directions. A matched restaurant is inserted as a
   waypoint before the original ride destination; without a food match, the park
   remains the navigation destination.
@@ -146,6 +152,11 @@ iOS application performs the operations that only MapKit can truthfully provide:
 1. exact automobile distance from the current location to each candidate;
 2. final distance-range filter;
 3. final distance-only sort and five-result cap.
+
+After selection, Apple-place matching is presentation enrichment only. It combines
+the power-filtered authority location coordinate, normalized address, and operator
+name with a bounded `MKLocalPointsOfInterestRequest`. Apple Place IDs identify only
+Apple records and are never treated as cross-source identities.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work, but the

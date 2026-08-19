@@ -23,6 +23,8 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     )
     XCTAssertEqual(candidate.park.availability.unknownCount, 4)
     XCTAssertEqual(candidate.park.maximumPower, Kilowatts(150))
+    XCTAssertEqual(candidate.park.locationLookups.first?.operatorName, "Operator")
+    XCTAssertEqual(candidate.park.locationLookups.first?.address.postalCode, "60389")
     XCTAssertEqual(candidate.distanceFromRoute, Meters(321))
     XCTAssertEqual(candidate.straightLineLowerBound, Meters(12_000))
     XCTAssertEqual(candidate.park.sourceReferences.first?.sourceID, "bundesnetzagentur")
@@ -41,6 +43,16 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
   func testRejectsOperatorCountsThatDoNotMatchParkTotal() throws {
     let invalid = candidateJSON(lowerBound: 12_000)
       .replacingOccurrences(of: #""chargingPoints": 4}]"#, with: #""chargingPoints": 3}]"#)
+
+    XCTAssertThrowsError(try decodePage(candidates: [invalid]))
+  }
+
+  func testRejectsLocationLookupForOperatorOutsidePowerFilteredPark() throws {
+    let invalid = candidateJSON(lowerBound: 12_000)
+      .replacingOccurrences(
+        of: #""operatorName": "Operator""#,
+        with: #""operatorName": "Filtered Out Operator""#
+      )
 
     XCTAssertThrowsError(try decodePage(candidates: [invalid]))
   }
@@ -130,6 +142,17 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
         "maximumPowerKW": 150,
         "operators": ["Operator"],
         "operatorChargingPoints": [{"name": "Operator", "chargingPoints": 4}],
+        "locationLookups": [{
+          "id": "20000000-0000-4000-8000-000000000001",
+          "operatorName": "Operator",
+          "coordinate": {"latitude": 53.5501, "longitude": 10.0001},
+          "address": {
+            "street": "Friedberger Landstraße",
+            "houseNumber": "291",
+            "postalCode": "60389",
+            "city": "Frankfurt am Main"
+          }
+        }],
         "sources": [{
           "id": "bundesnetzagentur",
           "name": "Bundesnetzagentur Ladesäulenregister",

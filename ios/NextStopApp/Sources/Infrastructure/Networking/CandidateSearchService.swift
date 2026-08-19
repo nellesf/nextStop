@@ -224,6 +224,7 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
     let maximumPowerKW: Int
     let operators: [String]
     let operatorChargingPoints: [OperatorChargingPointsDTO]
+    let locationLookups: [ChargingLocationLookupDTO]?
     let sources: [SourceDTO]
     let dataUpdatedAt: String
     let foodPOI: FoodPOIDTO?
@@ -294,7 +295,8 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
         chargingPointCount: chargingPoints,
         availability: parkAvailability,
         maximumPower: Kilowatts(maximumPowerKW),
-        sourceReferences: sourceReferences
+        sourceReferences: sourceReferences,
+        locationLookups: try (locationLookups ?? []).map { try $0.domainLookup() }
       )
       let foodPOIs: [FoodPOI]
       if let foodPOI {
@@ -327,6 +329,37 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
         foodPOIs: foodPOIs
       )
     }
+  }
+
+  struct ChargingLocationLookupDTO: Decodable, Equatable {
+    let id: String
+    let operatorName: String
+    let coordinate: CoordinateDTO
+    let address: ChargingLocationAddressDTO
+
+    func domainLookup() throws -> ChargingLocationLookup {
+      guard let id = UUID(uuidString: id) else {
+        throw CandidateSearchServiceError.invalidResponse
+      }
+      return try ChargingLocationLookup(
+        id: id,
+        operatorName: operatorName,
+        coordinate: try coordinate.domainCoordinate(),
+        address: ChargingLocationAddress(
+          street: address.street,
+          houseNumber: address.houseNumber,
+          postalCode: address.postalCode,
+          city: address.city
+        )
+      )
+    }
+  }
+
+  struct ChargingLocationAddressDTO: Decodable, Equatable {
+    let street: String?
+    let houseNumber: String?
+    let postalCode: String?
+    let city: String?
   }
 
   struct FoodPOIDTO: Decodable, Equatable {

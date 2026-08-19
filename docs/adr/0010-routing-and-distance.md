@@ -3,6 +3,7 @@
 - Status: Accepted
 - Date: 2026-08-13
 - Amended: 2026-08-16
+- Amended: 2026-08-19
 
 ## Context
 
@@ -17,6 +18,14 @@ each paginated candidate. Filter/rank/cap on-device using those exact distances.
 When the result contains the selected restaurant match, use Apple's unified Maps
 URL to keep the original destination and insert the restaurant as an intermediate
 waypoint. Without a food match, hand the chosen park `MKMapItem` to Apple Maps.
+
+Before handoff on iPhone, a selected result opens a non-navigating MapKit route
+preview. Hide unrelated base-map POIs and resolve only the selected result's
+power-filtered charging locations and restaurant against nearby Apple places.
+Require a conservative operator plus coordinate/address match before attaching an
+Apple Place Card. Preserve every unmatched authority/OSM location as a visibly
+different fallback pin. Apple matching is presentation-only and cannot affect the
+search result, EVSE count, route, ranking, or waypoint.
 
 ## Alternatives
 
