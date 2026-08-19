@@ -18,8 +18,12 @@ candidate API.
   Swiss `ich-tanke-strom` feeds without manual seed data.
 - Static data is published as an atomic combined PostGIS projection. Swiss live
   status is published independently as an atomic, freshness-limited snapshot.
-- Search joins live state by provider EVSE identity for informational presentation
-  and uses exact geography `ST_DWithin` for the inclusive 5 km route corridor.
+- Publication also builds power-filtered park summaries for every supported filter
+  value and normalized park/location memberships. Search uses those summaries,
+  exact geography `ST_DWithin` for the inclusive 5 km route corridor, and a safe
+  straight-line upper-bound rejection before selecting a page.
+- Search joins live state by provider EVSE identity only after page selection and
+  only for informational presentation.
 
 ## Commands
 

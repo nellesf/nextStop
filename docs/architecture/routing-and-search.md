@@ -65,8 +65,14 @@ retries consume the same shared request budget.
 ## PostGIS strategy
 
 - Store park search coordinates as `geography(Point, 4326)` with a GiST index.
+- Materialize a power-filtered park row for every supported minimum power option
+  during atomic projection publication. A multicolumn GiST index starts with the
+  projection ID and power threshold before applying the spatial predicate, so
+  retained snapshot versions do not expand the current search.
 - Parse request route as valid `geography(LineString, 4326)`.
 - Use `ST_DWithin(park.geog, route.geog, 5000)` for the final corridor predicate.
+- Use `ST_DWithin(park.geog, origin.geog, maximumDistance)` as a safe early lower-
+  bound rejection; final actual driving-distance filtering remains on-device.
 - Use `ST_Distance` only after `ST_DWithin` narrows the indexed candidate set.
 - Use geography `ST_LineLocatePoint`/`ST_LineSubstring` and length only for
   preliminary progress. Never expose it as driving distance.
@@ -77,15 +83,17 @@ whereas distance/buffer-only patterns are less suitable:
 
 ## Search filter order
 
-An initial SQL plan should reduce work in this order, subject to query planning:
+The static projection build first discards EVSEs below each supported minimum
+power, deduplicates the remainder, and derives its count, operators, static
+availability, and coordinates. A request then reduces work in this order, subject
+to query planning:
 
-1. supported/active park projection and data-expiry policy;
-2. exact 5 km spatial predicate via GiST;
-3. discard individual EVSEs below the requested minimum power;
-4. deduplicate the remaining EVSEs and apply the minimum EVSE count;
-5. aggregate availability for informational presentation only;
-6. broad cached park/POI pair and exact 500 m OSM restaurant predicate;
-7. broad progress/lower-bound window for batching.
+1. supported/active projection and exact precomputed power threshold;
+2. minimum qualifying EVSE count;
+3. exact 5 km spatial predicate via GiST and safe origin/maximum-distance bound;
+4. broad cached park/POI pair and exact 500 m OSM restaurant predicate;
+5. stable cursor ordering and result-page selection;
+6. informational live-availability enrichment for only that selected page.
 
 Actual driving-distance predicates remain on-device. Food proximity is exact
 PostGIS geography and remains pinned across pagination with the POI projection ID.

@@ -267,6 +267,10 @@ export class ProjectionWriter {
       ) {
         throw new Error("Projection row counts do not match the validated import.");
       }
+      await client.query(
+        "SELECT nextstop.rebuild_charging_park_power_projection($1)",
+        [projectionId],
+      );
       await rebuildFoodMatchesForChargingProjection(client, projectionId);
       await client.query(
         `UPDATE nextstop.projection_versions

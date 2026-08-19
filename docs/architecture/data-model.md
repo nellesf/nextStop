@@ -108,6 +108,13 @@ from the remaining deduplicated EVSEs. An operator with no qualifying EVSE is no
 part of that candidate. If only two of an operator's four EVSEs qualify, its
 request-scoped count is two.
 
+The static projection build materializes this exact summary once per centrally
+supported `minimumPowerKW` option. The search selects one row instead of joining,
+deduplicating, and aggregating every EVSE for every request. Park-to-location
+membership is stored as normalized relational rows for efficient joins. Fresh
+live observations remain separate and are merged only for the selected result
+page, preserving the rule that availability is informational.
+
 ### `DataSource` / `SourceReference`
 
 - source ID/name/type (`authority`, `operator`, `openData`, `community`)

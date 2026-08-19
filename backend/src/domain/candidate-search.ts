@@ -4,7 +4,10 @@ export type DistanceRangeMeters =
   | Readonly<{ minimum: 100_000; maximum: 150_000 }>;
 
 export type MinimumChargingPoints = 2 | 4 | 6 | 8 | 10 | 12 | 16 | 20;
-export type MinimumPowerKW = 11 | 22 | 50 | 100 | 150 | 200 | 250 | 300 | 350 | 400;
+export const minimumPowerOptions = [
+  11, 22, 50, 100, 150, 200, 250, 300, 350, 400,
+] as const;
+export type MinimumPowerKW = (typeof minimumPowerOptions)[number];
 export type FoodChain = "mcdonalds" | "burger_king" | "kfc" | "subway";
 export type QualityTier = "operator" | "authority" | "open_data" | "community";
 export type CoverageStatus = "complete" | "degraded" | "stale";

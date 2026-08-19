@@ -28,7 +28,10 @@ import {
   refreshStaticProviders,
   refreshSwissLiveAvailability,
 } from "../../src/jobs/refresh-providers.js";
-import type { SearchRequest } from "../../src/domain/candidate-search.js";
+import {
+  minimumPowerOptions,
+  type SearchRequest,
+} from "../../src/domain/candidate-search.js";
 import type { OpenStreetMapFoodPOIRecord } from "../../src/providers/openstreetmap/pbf-provider.js";
 
 const connectionString = process.env.TEST_DATABASE_URL;
@@ -163,6 +166,45 @@ void test(
           },
           "2026-08-14T08:00:00.000Z",
         );
+
+        const projectedThresholds = await pool.query<{
+          readonly minimumPowerKW: number;
+          readonly chargingPoints: number;
+          readonly operators: string[];
+          readonly operatorChargingPoints: {
+            readonly name: string;
+            readonly chargingPoints: number;
+          }[];
+        }>(
+          `SELECT minimum_power_kw AS "minimumPowerKW",
+                  charging_point_count AS "chargingPoints",
+                  operators,
+                  operator_charging_point_counts AS "operatorChargingPoints"
+           FROM nextstop.charging_park_power_projection
+           WHERE projection_id = $1
+             AND minimum_power_kw IN (50, 300)
+           ORDER BY minimum_power_kw`,
+          [projectionId],
+        );
+        assert.deepEqual(projectedThresholds.rows, [
+          {
+            minimumPowerKW: 50,
+            chargingPoints: 5,
+            operators: ["Fast Charge GmbH", "Slow Charge GmbH"],
+            operatorChargingPoints: [
+              { name: "Fast Charge GmbH", chargingPoints: 4 },
+              { name: "Slow Charge GmbH", chargingPoints: 1 },
+            ],
+          },
+          {
+            minimumPowerKW: 300,
+            chargingPoints: 2,
+            operators: ["Fast Charge GmbH"],
+            operatorChargingPoints: [
+              { name: "Fast Charge GmbH", chargingPoints: 2 },
+            ],
+          },
+        ]);
 
         const baseRequest = searchRequest([
           [10, 52],
@@ -564,27 +606,57 @@ void test(
       },
     );
 
-    await context.test("creates and uses the GiST spatial index", async () => {
+    await context.test("creates every power threshold and uses its GiST index", async () => {
+      await resetDatabase(pool);
+      const projectionId = await insertActiveProjection(pool);
+      await insertPointPark(pool, projectionId, {
+        latitude: 52,
+        longitude: 10.01,
+        parkId: "32000000-0000-4000-8000-000000000001",
+      });
+      const thresholds = await pool.query<{ readonly minimumPowerKW: number }>(
+        `SELECT minimum_power_kw AS "minimumPowerKW"
+         FROM nextstop.charging_park_power_projection
+         WHERE projection_id = $1
+         ORDER BY minimum_power_kw`,
+        [projectionId],
+      );
+      assert.deepEqual(
+        thresholds.rows.map(({ minimumPowerKW }) => minimumPowerKW),
+        minimumPowerOptions.filter((minimumPowerKW) => minimumPowerKW <= 150),
+      );
       const indexes = await pool.query<{ readonly indexname: string }>(
         `SELECT indexname
          FROM pg_indexes
-         WHERE schemaname = 'nextstop' AND indexname = 'charging_park_projection_coordinate_gist'`,
+         WHERE schemaname = 'nextstop'
+           AND indexname = 'charging_park_power_projection_lookup_gist'`,
       );
       assert.equal(indexes.rows.length, 1);
+      const functionSettings = await pool.query<{
+        readonly settings: string[] | null;
+      }>(
+        `SELECT procedure.proconfig AS settings
+         FROM pg_proc AS procedure
+         JOIN pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+         WHERE namespace.nspname = 'nextstop'
+           AND procedure.proname = 'rebuild_charging_park_power_projection'`,
+      );
+      assert.ok(functionSettings.rows[0]?.settings?.includes("work_mem=128MB"));
       await pool.query("SET enable_seqscan = off");
       const plan = await pool.query<{ readonly "QUERY PLAN": unknown }>(
-        `EXPLAIN (FORMAT JSON)
+         `EXPLAIN (FORMAT JSON)
          SELECT park_id
-         FROM nextstop.charging_park_projection
-         WHERE ST_DWithin(
-           navigation_coordinate,
-           ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography,
-           5000
-         )`,
+         FROM nextstop.charging_park_power_projection
+         WHERE projection_id = $1
+           AND minimum_power_kw = 100
+         ORDER BY navigation_coordinate <->
+           ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography
+         LIMIT 1`,
+        [projectionId],
       );
       assert.match(
         JSON.stringify(plan.rows),
-        /charging_park_projection_coordinate_gist/u,
+        /charging_park_power_projection_lookup_gist/u,
       );
       await pool.query("RESET enable_seqscan");
     });
@@ -809,6 +881,36 @@ async function insertPointPark(
           staticObservedAt: "2026-07-07T00:00:00.000Z",
         },
       ]),
+    ],
+  );
+  await pool.query(
+    `INSERT INTO nextstop.charging_park_location_memberships (
+       projection_id, park_id, location_id
+     ) VALUES ($1, $2, $2)`,
+    [projectionId, input.parkId],
+  );
+  await pool.query(
+    `INSERT INTO nextstop.charging_park_power_projection (
+       projection_id, park_id, minimum_power_kw, centroid,
+       navigation_coordinate, charging_point_count, known_available_count,
+       known_unavailable_count, unknown_count, maximum_power_kw, operators,
+       operator_charging_point_counts
+     )
+     SELECT $1, $2, threshold.minimum_power_kw,
+            ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+            ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography,
+            4, $5, $6, $7, 150, ARRAY['Fixture Operator'],
+            '[{"name":"Fixture Operator","chargingPoints":4}]'::jsonb
+     FROM (VALUES (11), (22), (50), (100), (150))
+       AS threshold(minimum_power_kw)`,
+    [
+      projectionId,
+      input.parkId,
+      input.longitude,
+      input.latitude,
+      knownAvailable,
+      knownUnavailable,
+      unknown,
     ],
   );
 }
