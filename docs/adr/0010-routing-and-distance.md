@@ -27,7 +27,11 @@ coordinate/address match, cache the ride-local result, and open the native Apple
 place through its stable Place ID. A matching operator is accepted within 60 m
 without address evidence, or within 300 m only when street, house number, and
 postal code or city match. The latter supports large charging campuses with one
-central Apple place. If no unambiguous Apple place exists, report that condition
+central Apple place. When multiple visible backend parks contain the same operator
+at the same complete address, their lookup coordinates form one ride-local Apple
+lookup scope. This lets independently clustered parts of one campus resolve the
+same native place without merging or altering either backend result. If no
+unambiguous Apple place exists, report that condition
 instead of opening a coordinate-only or guessed place. Apple matching is
 presentation-only and cannot affect the search result, EVSE count, route, ranking,
 restaurant predicate, or CarPlay waypoint.

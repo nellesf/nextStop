@@ -113,6 +113,9 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Verify charger matching accepts an operator within 60 m without address evidence,
   permits up to 300 m only with matching street, house number, and postal code or
   city, and rejects 301 m even when the address matches.
+- Verify visible parks with the same operator and complete address share their
+  charging-location lookup scope, while a different address or operator remains
+  isolated.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.

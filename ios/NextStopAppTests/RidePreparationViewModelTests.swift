@@ -6,6 +6,52 @@ import XCTest
 
 @MainActor
 final class RidePreparationViewModelTests: XCTestCase {
+  func testAppleChargingLookupScopeIncludesSameOperatorAtExactSameAddress() throws {
+    let sharedAddress = ChargingLocationAddress(
+      street: "Am Fuchsenacker",
+      houseNumber: "2",
+      postalCode: "97877",
+      city: "Wertheim"
+    )
+    let primary = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "HomE of Mobility GmbH",
+      coordinate: Coordinate(latitude: 49.772275, longitude: 9.587747),
+      address: sharedAddress
+    )
+    let related = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "HomE of Mobility GmbH",
+      coordinate: Coordinate(latitude: 49.772468, longitude: 9.585005),
+      address: sharedAddress
+    )
+    let differentAddress = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "HomE of Mobility GmbH",
+      coordinate: Coordinate(latitude: 49.8, longitude: 9.6),
+      address: ChargingLocationAddress(
+        street: "Other Street",
+        houseNumber: "1",
+        postalCode: "97877",
+        city: "Wertheim"
+      )
+    )
+    let otherOperator = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "Other operator",
+      coordinate: Coordinate(latitude: 49.772468, longitude: 9.585005),
+      address: sharedAddress
+    )
+
+    let locations = AppleChargingPlaceLookupScope.relatedLocations(
+      primaryLocations: [primary],
+      candidateLocations: [primary, related, differentAddress, otherOperator],
+      operatorName: "HomE of Mobility GmbH"
+    )
+
+    XCTAssertEqual(Set(locations.map(\.id)), Set([primary.id, related.id]))
+  }
+
   func testChargingOperatorFoodDistanceUsesNearestLocationForOperator() throws {
     let restaurant = try Coordinate(latitude: 50, longitude: 8)
     let locations = [

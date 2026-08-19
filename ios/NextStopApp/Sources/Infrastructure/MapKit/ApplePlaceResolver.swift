@@ -19,7 +19,8 @@ enum AppleChargingPlaceMatchPolicy {
 protocol ApplePlaceResolving {
   func resolveChargingPlace(
     park: ChargingPark,
-    operatorName: String
+    operatorName: String,
+    relatedLocations: [ChargingLocationLookup]
   ) async -> MKMapItem?
 
   func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem?
@@ -31,9 +32,14 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
 
   func resolveChargingPlace(
     park: ChargingPark,
-    operatorName: String
+    operatorName: String,
+    relatedLocations: [ChargingLocationLookup]
   ) async -> MKMapItem? {
-    let lookups = lookupTargets(for: park, operatorName: operatorName)
+    let lookups = lookupTargets(
+      for: park,
+      operatorName: operatorName,
+      relatedLocations: relatedLocations
+    )
     guard !lookups.isEmpty,
       let items = try? await searchChargingItems(around: park, lookups: lookups)
     else {
@@ -171,10 +177,11 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
 
   private func lookupTargets(
     for park: ChargingPark,
-    operatorName: String
+    operatorName: String,
+    relatedLocations: [ChargingLocationLookup]
   ) -> [LookupTarget] {
     let requestedOperatorKey = operatorKey(operatorName)
-    let matchingLookups = park.locationLookups.filter {
+    let matchingLookups = relatedLocations.filter {
       operatorKey($0.operatorName) == requestedOperatorKey
     }
     if !matchingLookups.isEmpty {
@@ -288,6 +295,62 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   @available(iOS, introduced: 18.0, obsoleted: 26.0)
   private func legacyAddress(_ item: MKMapItem) -> String? {
     item.placemark.title
+  }
+}
+
+enum AppleChargingPlaceLookupScope {
+  static func relatedLocations(
+    primaryLocations: [ChargingLocationLookup],
+    candidateLocations: [ChargingLocationLookup],
+    operatorName: String
+  ) -> [ChargingLocationLookup] {
+    let primaryOperatorLocations = primaryLocations.filter {
+      $0.operatorName == operatorName
+    }
+    let primaryAddressKeys = Set(primaryOperatorLocations.compactMap {
+      addressKey($0.address)
+    })
+    guard !primaryAddressKeys.isEmpty else {
+      return primaryOperatorLocations
+    }
+
+    var seenLocationIDs = Set<UUID>()
+    return (primaryOperatorLocations + candidateLocations.filter {
+      $0.operatorName == operatorName
+        && addressKey($0.address).map(primaryAddressKeys.contains) == true
+    }).filter {
+      seenLocationIDs.insert($0.id).inserted
+    }
+  }
+
+  private static func addressKey(_ address: ChargingLocationAddress) -> String? {
+    guard let street = normalized(address.street),
+      let houseNumber = normalized(address.houseNumber),
+      let postalCode = normalized(address.postalCode),
+      let city = normalized(address.city)
+    else {
+      return nil
+    }
+    return "\(street)|\(houseNumber)|\(postalCode)|\(city)"
+  }
+
+  private static func normalized(_ value: String?) -> String? {
+    guard let value else {
+      return nil
+    }
+    let result = value
+      .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+      .lowercased()
+      .unicodeScalars
+      .map { CharacterSet.alphanumerics.contains($0) ? Character(String($0)) : " " }
+      .reduce(into: "") { result, character in
+        if character == " ", result.last == " " {
+          return
+        }
+        result.append(character)
+      }
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+    return result.isEmpty ? nil : result
   }
 }
 

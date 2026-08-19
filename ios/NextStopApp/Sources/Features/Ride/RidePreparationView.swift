@@ -208,6 +208,7 @@ struct RidePreparationView: View {
 
   private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
     let results = outcome.results
+    let candidateLocations = results.flatMap(\.candidate.park.locationLookups)
     return VStack(spacing: 12) {
       coverageNotice(outcome.coverage)
 
@@ -221,7 +222,7 @@ struct RidePreparationView: View {
       }
 
       ForEach(results) { result in
-        resultCard(result)
+        resultCard(result, candidateLocations: candidateLocations)
       }
 
       attributionContent(outcome.attributions)
@@ -277,7 +278,10 @@ struct RidePreparationView: View {
     }
   }
 
-  private func resultCard(_ result: RouteSearchResult) -> some View {
+  private func resultCard(
+    _ result: RouteSearchResult,
+    candidateLocations: [ChargingLocationLookup]
+  ) -> some View {
     let candidate = result.candidate
     let park = candidate.park
     let foodPOI = result.matchingFoodPOI
@@ -332,7 +336,12 @@ struct RidePreparationView: View {
           ApplePlaceButton(
             target: .charging(
               park: park,
-              operatorName: chargingOperator.name
+              operatorName: chargingOperator.name,
+              relatedLocations: AppleChargingPlaceLookupScope.relatedLocations(
+                primaryLocations: park.locationLookups,
+                candidateLocations: candidateLocations,
+                operatorName: chargingOperator.name
+              )
             ),
             resolver: placeResolver,
             launcher: navigationLauncher
@@ -539,12 +548,16 @@ private struct ApplePlaceButton: View {
 }
 
 private enum ApplePlaceTarget {
-  case charging(park: ChargingPark, operatorName: String)
+  case charging(
+    park: ChargingPark,
+    operatorName: String,
+    relatedLocations: [ChargingLocationLookup]
+  )
   case restaurant(FoodPOI)
 
   var displayName: String {
     switch self {
-    case .charging(_, let operatorName):
+    case .charging(_, let operatorName, _):
       return operatorName
     case .restaurant(let foodPOI):
       return foodPOI.name
@@ -554,10 +567,11 @@ private enum ApplePlaceTarget {
   @MainActor
   func resolve(using resolver: any ApplePlaceResolving) async -> MKMapItem? {
     switch self {
-    case .charging(let park, let operatorName):
+    case .charging(let park, let operatorName, let relatedLocations):
       return await resolver.resolveChargingPlace(
         park: park,
-        operatorName: operatorName
+        operatorName: operatorName,
+        relatedLocations: relatedLocations
       )
     case .restaurant(let foodPOI):
       return await resolver.resolveRestaurantPlace(foodPOI)
