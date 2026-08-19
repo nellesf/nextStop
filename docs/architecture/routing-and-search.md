@@ -65,8 +65,10 @@ retries consume the same shared request budget.
 ## PostGIS strategy
 
 - Store park search coordinates as `geography(Point, 4326)` with a GiST index.
-- Materialize a GiST-indexed, power-filtered park row for every supported minimum
-  power option during atomic projection publication.
+- Materialize a power-filtered park row for every supported minimum power option
+  during atomic projection publication. A multicolumn GiST index starts with the
+  projection ID and power threshold before applying the spatial predicate, so
+  retained snapshot versions do not expand the current search.
 - Parse request route as valid `geography(LineString, 4326)`.
 - Use `ST_DWithin(park.geog, route.geog, 5000)` for the final corridor predicate.
 - Use `ST_DWithin(park.geog, origin.geog, maximumDistance)` as a safe early lower-

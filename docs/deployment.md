@@ -68,9 +68,10 @@ need.
 - PostgreSQL with the PostGIS extension and automated point-in-time recovery.
 - GiST indexes on park/normalized locations; conventional indexes on provider keys,
   EVSE identity, observation time, and projection version.
-- A GiST-indexed power search projection with one derived row per park and
-  supported minimum-power option it satisfies, plus normalized park/location
-  memberships.
+- A multicolumn GiST-indexed power search projection keyed by projection version,
+  supported minimum-power option, and coordinate, plus normalized park/location
+  memberships. Retained snapshot versions therefore do not enlarge current
+  spatial index scans.
 - The serial power-projection rebuild has a function-local `work_mem` override;
   API sessions retain PostgreSQL defaults and cannot multiply that memory budget.
 - A separate GiST-indexed OSM food-POI projection and version-pinned derived

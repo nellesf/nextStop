@@ -629,7 +629,7 @@ void test(
         `SELECT indexname
          FROM pg_indexes
          WHERE schemaname = 'nextstop'
-           AND indexname = 'charging_park_power_projection_coordinate_gist'`,
+           AND indexname = 'charging_park_power_projection_lookup_gist'`,
       );
       assert.equal(indexes.rows.length, 1);
       const functionSettings = await pool.query<{
@@ -647,15 +647,16 @@ void test(
          `EXPLAIN (FORMAT JSON)
          SELECT park_id
          FROM nextstop.charging_park_power_projection
-         WHERE ST_DWithin(
-           navigation_coordinate,
-           ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography,
-           5000
-         )`,
+         WHERE projection_id = $1
+           AND minimum_power_kw = 100
+         ORDER BY navigation_coordinate <->
+           ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography
+         LIMIT 1`,
+        [projectionId],
       );
       assert.match(
         JSON.stringify(plan.rows),
-        /charging_park_power_projection_coordinate_gist/u,
+        /charging_park_power_projection_lookup_gist/u,
       );
       await pool.query("RESET enable_seqscan");
     });
