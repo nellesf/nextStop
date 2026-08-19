@@ -2,6 +2,19 @@ import CoreLocation
 import MapKit
 import NextStopCore
 
+enum AppleChargingPlaceMatchPolicy {
+  static let maximumDirectDistanceMeters: Double = 60
+  static let maximumExactAddressDistanceMeters: Double = 300
+
+  static func accepts(
+    distanceMeters: Double,
+    hasExactAddressMatch: Bool
+  ) -> Bool {
+    distanceMeters <= maximumDirectDistanceMeters
+      || (hasExactAddressMatch && distanceMeters <= maximumExactAddressDistanceMeters)
+  }
+}
+
 @MainActor
 protocol ApplePlaceResolving {
   func resolveChargingPlace(
@@ -14,8 +27,6 @@ protocol ApplePlaceResolving {
 
 @MainActor
 final class MapKitApplePlaceResolver: ApplePlaceResolving {
-  private let maximumDirectMatchDistance: CLLocationDistance = 60
-  private let maximumAddressBackedMatchDistance: CLLocationDistance = 125
   private let maximumRestaurantMatchDistance: CLLocationDistance = 125
 
   func resolveChargingPlace(
@@ -50,7 +61,13 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
         longitude: $0.coordinate.longitude
       ))
     }.max() ?? 0
-    let radius = min(600, max(300, farthestLookup + maximumAddressBackedMatchDistance))
+    let radius = min(
+      600,
+      max(
+        300,
+        farthestLookup + AppleChargingPlaceMatchPolicy.maximumExactAddressDistanceMeters
+      )
+    )
     let request = MKLocalPointsOfInterestRequest(center: center, radius: radius)
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
     return try await MKLocalSearch(request: request).start().mapItems
@@ -106,12 +123,10 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       latitude: lookup.coordinate.latitude,
       longitude: lookup.coordinate.longitude
     ))
-    if distance <= maximumDirectMatchDistance {
-      return distance
-    }
-    guard distance <= maximumAddressBackedMatchDistance,
-      addressMatches(item: item, lookup: lookup)
-    else {
+    guard AppleChargingPlaceMatchPolicy.accepts(
+      distanceMeters: distance,
+      hasExactAddressMatch: addressMatches(item: item, lookup: lookup)
+    ) else {
       return nil
     }
     return distance
@@ -146,9 +161,10 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     let houseNumber = lookup.address.houseNumber.map(normalized)
     let postalCode = lookup.address.postalCode.map(normalized)
     let city = lookup.address.city.map(normalized)
+    let addressTokens = Set(appleAddress.split(separator: " ").map(String.init))
     let streetMatches = street.map(appleAddress.contains) ?? false
-    let houseNumberMatches = houseNumber.map(appleAddress.contains) ?? false
-    let localityMatches = (postalCode.map(appleAddress.contains) ?? false)
+    let houseNumberMatches = houseNumber.map(addressTokens.contains) ?? false
+    let localityMatches = (postalCode.map(addressTokens.contains) ?? false)
       || (city.map(appleAddress.contains) ?? false)
     return streetMatches && houseNumberMatches && localityMatches
   }

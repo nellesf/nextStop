@@ -24,10 +24,13 @@ On iPhone, expose a 48-point Apple Maps button beside each charging operator and
 the matched restaurant. Resolve the selected authority/OSM location against nearby
 Apple places only after the user taps its button. Require a conservative name plus
 coordinate/address match, cache the ride-local result, and open the native Apple
-place through its stable Place ID. If no unambiguous Apple place exists, report
-that condition instead of opening a coordinate-only or guessed place. Apple
-matching is presentation-only and cannot affect the search result, EVSE count,
-route, ranking, restaurant predicate, or CarPlay waypoint.
+place through its stable Place ID. A matching operator is accepted within 60 m
+without address evidence, or within 300 m only when street, house number, and
+postal code or city match. The latter supports large charging campuses with one
+central Apple place. If no unambiguous Apple place exists, report that condition
+instead of opening a coordinate-only or guessed place. Apple matching is
+presentation-only and cannot affect the search result, EVSE count, route, ranking,
+restaurant predicate, or CarPlay waypoint.
 
 The iPhone result card does not duplicate navigation; the user may start it from
 the native Apple place card. CarPlay retains its template navigation action and

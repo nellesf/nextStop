@@ -6,6 +6,33 @@ import XCTest
 
 @MainActor
 final class RidePreparationViewModelTests: XCTestCase {
+  func testAppleChargingPlaceMatchAllowsLargeCampusOnlyWithExactAddress() {
+    XCTAssertTrue(
+      AppleChargingPlaceMatchPolicy.accepts(
+        distanceMeters: 60,
+        hasExactAddressMatch: false
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceMatchPolicy.accepts(
+        distanceMeters: 61,
+        hasExactAddressMatch: false
+      )
+    )
+    XCTAssertTrue(
+      AppleChargingPlaceMatchPolicy.accepts(
+        distanceMeters: 300,
+        hasExactAddressMatch: true
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceMatchPolicy.accepts(
+        distanceMeters: 301,
+        hasExactAddressMatch: true
+      )
+    )
+  }
+
   func testNativeApplePlaceURLUsesOnlyTheStablePlaceIdentifier() throws {
     let url = try XCTUnwrap(
       AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")

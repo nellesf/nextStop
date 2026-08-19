@@ -110,6 +110,9 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
   place by Place ID, caches the result for a second tap, and reports an unmatched
   item without changing the backend result. Verify that the result card does not
   duplicate the native place card's navigation action.
+- Verify charger matching accepts an operator within 60 m without address evidence,
+  permits up to 300 m only with matching street, house number, and postal code or
+  city, and rejects 301 m even when the address matches.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.
