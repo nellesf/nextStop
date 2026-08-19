@@ -632,6 +632,16 @@ void test(
            AND indexname = 'charging_park_power_projection_coordinate_gist'`,
       );
       assert.equal(indexes.rows.length, 1);
+      const functionSettings = await pool.query<{
+        readonly settings: string[] | null;
+      }>(
+        `SELECT procedure.proconfig AS settings
+         FROM pg_proc AS procedure
+         JOIN pg_namespace AS namespace ON namespace.oid = procedure.pronamespace
+         WHERE namespace.nspname = 'nextstop'
+           AND procedure.proname = 'rebuild_charging_park_power_projection'`,
+      );
+      assert.ok(functionSettings.rows[0]?.settings?.includes("work_mem=128MB"));
       await pool.query("SET enable_seqscan = off");
       const plan = await pool.query<{ readonly "QUERY PLAN": unknown }>(
          `EXPLAIN (FORMAT JSON)

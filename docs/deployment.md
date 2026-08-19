@@ -71,6 +71,8 @@ need.
 - A GiST-indexed power search projection with one derived row per park and
   supported minimum-power option it satisfies, plus normalized park/location
   memberships.
+- The serial power-projection rebuild has a function-local `work_mem` override;
+  API sessions retain PostgreSQL defaults and cannot multiply that memory budget.
 - A separate GiST-indexed OSM food-POI projection and version-pinned derived
   park/POI cache; do not merge it into redistributed charging source tables.
 - Separate roles for migrations, worker writes, API read/search, and operations.
