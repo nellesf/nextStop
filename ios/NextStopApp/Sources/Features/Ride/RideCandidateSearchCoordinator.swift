@@ -83,6 +83,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     var previousPageLastLowerBound: Meters?
     var searchCoverage: CandidateSearchCoverage?
     var searchAttributions: [DataAttribution]?
+    var restaurantIDsToComplete: Set<String>?
 
     while true {
       let page: CandidateSearchPage
@@ -137,8 +138,16 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
       }
       for offset in stride(from: 0, to: candidatesToEnrich.count, by: enrichmentBatchSize) {
         let end = min(offset + enrichmentBatchSize, candidatesToEnrich.count)
+        let batch = Array(candidatesToEnrich[offset..<end]).filter { candidate in
+          guard let restaurantIDsToComplete else {
+            return true
+          }
+          return candidate.foodPOIs.contains {
+            restaurantIDsToComplete.contains($0.id)
+          }
+        }
         let outcome = try await enrichBatch(
-          Array(candidatesToEnrich[offset..<end]),
+          batch,
           origin: preparedRide.origin,
           criteria: request.criteria
         )
@@ -153,14 +162,26 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
           from: enrichedCandidates,
           criteria: request.criteria
         )
+        if restaurantIDsToComplete == nil {
+          restaurantIDsToComplete = restaurantCompletionIDs(
+            results: batchResults,
+            nextLowerBound: nextLowerBound,
+            criteria: request.criteria
+          )
+        }
         if nextLowerBound > upperDistance
-          || safeToStop(results: batchResults, nextLowerBound: nextLowerBound)
+          || safeToStop(
+            results: batchResults,
+            nextLowerBound: nextLowerBound,
+            criteria: request.criteria
+          )
         {
           return try self.outcome(
             results: batchResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
-            attributions: searchAttributions
+            attributions: searchAttributions,
+            criteria: request.criteria
           )
         }
       }
@@ -174,7 +195,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
           results: selectedResults,
           routingFailureLowerBounds: routingFailureLowerBounds,
           coverage: searchCoverage,
-          attributions: searchAttributions
+          attributions: searchAttributions,
+          criteria: request.criteria
         )
       }
       if let lastLowerBound = page.candidates.last?.straightLineLowerBound {
@@ -183,15 +205,28 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
             results: selectedResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
-            attributions: searchAttributions
+            attributions: searchAttributions,
+            criteria: request.criteria
           )
         }
-        if safeToStop(results: selectedResults, nextLowerBound: lastLowerBound) {
+        if restaurantIDsToComplete == nil {
+          restaurantIDsToComplete = restaurantCompletionIDs(
+            results: selectedResults,
+            nextLowerBound: lastLowerBound,
+            criteria: request.criteria
+          )
+        }
+        if safeToStop(
+          results: selectedResults,
+          nextLowerBound: lastLowerBound,
+          criteria: request.criteria
+        ) {
           return try outcome(
             results: selectedResults,
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
-            attributions: searchAttributions
+            attributions: searchAttributions,
+            criteria: request.criteria
           )
         }
       }
@@ -212,19 +247,43 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
 
   private func safeToStop(
     results: [RouteSearchResult],
-    nextLowerBound: Meters
+    nextLowerBound: Meters,
+    criteria: RideCriteria
   ) -> Bool {
-    results.count == SearchConfiguration.maximumResultCount
+    guard criteria.foodChain == nil else {
+      return false
+    }
+    return results.count == SearchConfiguration.maximumResultCount
       && results.last.map {
         nextLowerBound > $0.candidate.actualDrivingDistance
       } == true
+  }
+
+  private func restaurantCompletionIDs(
+    results: [RouteSearchResult],
+    nextLowerBound: Meters,
+    criteria: RideCriteria
+  ) -> Set<String>? {
+    guard criteria.foodChain != nil,
+      results.count == SearchConfiguration.maximumResultCount,
+      let fifthDistance = results.last?.candidate.actualDrivingDistance,
+      nextLowerBound > fifthDistance
+    else {
+      return nil
+    }
+    let restaurantIDs = Set(results.compactMap { $0.matchingFoodPOI?.id })
+    guard restaurantIDs.count == SearchConfiguration.maximumResultCount else {
+      return nil
+    }
+    return restaurantIDs
   }
 
   private func outcome(
     results: [RouteSearchResult],
     routingFailureLowerBounds: [Meters],
     coverage: CandidateSearchCoverage?,
-    attributions: [DataAttribution]?
+    attributions: [DataAttribution]?,
+    criteria: RideCriteria
   ) throws -> RideCandidateSearchOutcome {
     guard let coverage, let attributions else {
       throw RideCandidateSearchError.candidateResponseInvalid
@@ -232,7 +291,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     return RideCandidateSearchOutcome(
       results: try validatedResults(
         results,
-        routingFailureLowerBounds: routingFailureLowerBounds
+        routingFailureLowerBounds: routingFailureLowerBounds,
+        criteria: criteria
       ),
       coverage: coverage,
       attributions: attributions
@@ -241,10 +301,14 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
 
   private func validatedResults(
     _ results: [RouteSearchResult],
-    routingFailureLowerBounds: [Meters]
+    routingFailureLowerBounds: [Meters],
+    criteria: RideCriteria
   ) throws -> [RouteSearchResult] {
     guard !routingFailureLowerBounds.isEmpty else {
       return results
+    }
+    guard criteria.foodChain == nil else {
+      throw RideCandidateSearchError.drivingDistancesUnavailable
     }
     if results.count == SearchConfiguration.maximumResultCount,
       let fifthDistance = results.last?.candidate.actualDrivingDistance,

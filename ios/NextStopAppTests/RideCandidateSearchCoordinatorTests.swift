@@ -80,6 +80,53 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
     )
   }
 
+  func testFoodSearchScansRemainingCandidatesAndCompletesTopRestaurantGroups() async throws {
+    let restaurantIDs = [
+      "restaurant-a", "restaurant-b", "restaurant-c", "restaurant-d", "restaurant-e",
+      "restaurant-f", "restaurant-g", "restaurant-h", "restaurant-a", "restaurant-i",
+    ]
+    let candidates = try restaurantIDs.enumerated().map { offset, restaurantID in
+      try makeBackendCandidate(
+        index: offset + 1,
+        lowerBoundKilometers: (offset + 1) * 10,
+        foodPOIID: restaurantID
+      )
+    }
+    let enricher = CandidateEnricherStub(
+      distances: Dictionary(
+        uniqueKeysWithValues: candidates.enumerated().map { offset, candidate in
+          (candidate.id, Meters((offset + 51) * 1_000))
+        }
+      )
+    )
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot",
+          nextCursor: nil,
+          candidates: candidates,
+          coverage: coverage
+        )
+      ]),
+      enricher: enricher,
+      enrichmentBatchSize: 4
+    )
+
+    let outcome = try await coordinator.search(
+      preparedRide: try preparedRide(
+        distanceRange: .kilometers50To100,
+        foodChain: .mcdonalds
+      )
+    )
+
+    XCTAssertEqual(enricher.requestedIDs.count, 9)
+    XCTAssertFalse(enricher.requestedIDs.contains(candidates[9].id))
+    XCTAssertEqual(outcome.results.count, 5)
+    XCTAssertEqual(outcome.results.first?.matchingFoodPOI?.id, "restaurant-a")
+    XCTAssertEqual(outcome.results.first?.candidates.count, 2)
+    XCTAssertEqual(outcome.results.first?.chargingPointCount, 8)
+  }
+
   func testContinuesWithTheSignedSnapshotUntilExhausted() async throws {
     let first = try makeBackendCandidate(index: 1, lowerBoundKilometers: 40)
     let second = try makeBackendCandidate(index: 2, lowerBoundKilometers: 50)
@@ -311,14 +358,17 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
     )
   }
 
-  private func preparedRide(distanceRange: DistanceRangeOption) throws -> PreparedRideSearch {
+  private func preparedRide(
+    distanceRange: DistanceRangeOption,
+    foodChain: FoodChain? = nil
+  ) throws -> PreparedRideSearch {
     let origin = try Coordinate(latitude: 52, longitude: 10)
     let destination = try Coordinate(latitude: 53, longitude: 11)
     let criteria = RideCriteria(
       distanceRange: distanceRange,
       minimumChargingPoints: .four,
       minimumPower: .oneHundred,
-      foodChain: nil
+      foodChain: foodChain
     )
     let polyline = try RoutePolyline(coordinates: [origin, destination])
     return PreparedRideSearch(
@@ -338,7 +388,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
 
   private func makeBackendCandidate(
     index: Int,
-    lowerBoundKilometers: Int
+    lowerBoundKilometers: Int,
+    foodPOIID: String? = nil
   ) throws -> BackendCandidate {
     let id = UUID(uuidString: String(format: "10000000-0000-4000-8000-%012d", index))!
     let coordinate = try Coordinate(latitude: 52, longitude: 10 + Double(index) / 100)
@@ -367,10 +418,26 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       maximumPower: Kilowatts(150),
       sourceReferences: [source]
     )
+    let foodPOIs: [FoodPOI]
+    if let foodPOIID {
+      foodPOIs = [
+        try FoodPOI(
+          id: foodPOIID,
+          chain: .mcdonalds,
+          name: "McDonald's",
+          coordinate: coordinate,
+          distanceFromPark: Meters(100),
+          openingStatus: .unknown
+        )
+      ]
+    } else {
+      foodPOIs = []
+    }
     return BackendCandidate(
       park: park,
       distanceFromRoute: Meters(1_000),
-      straightLineLowerBound: Meters(lowerBoundKilometers * 1_000)
+      straightLineLowerBound: Meters(lowerBoundKilometers * 1_000),
+      foodPOIs: foodPOIs
     )
   }
 }
@@ -414,7 +481,6 @@ private final class CandidateEnricherStub: CandidateEnriching {
     criteria: RideCriteria
   ) async throws -> EnrichedChargingParkCandidate {
     _ = origin
-    _ = criteria
     requestedIDs.append(candidate.id)
     if failedIDs.contains(candidate.id) {
       throw CandidateEnrichmentError.drivingRouteUnavailable
@@ -426,7 +492,7 @@ private final class CandidateEnricherStub: CandidateEnriching {
       park: candidate.park,
       distanceFromRoute: candidate.distanceFromRoute,
       actualDrivingDistance: distance,
-      foodPOIs: []
+      foodPOIs: criteria.foodChain == nil ? [] : candidate.foodPOIs
     )
   }
 }

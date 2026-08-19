@@ -212,28 +212,29 @@ struct CarPlayPresenter {
   ) -> CarPlayResultPresentation {
     let candidate = routeResult.candidate
     let park = candidate.park
+    let foodPOI = routeResult.matchingFoodPOI
     let drivingDistance = kilometers(candidate.actualDrivingDistance.value)
     let routeDistance = localizer.format(
       "carplay.result.route_distance.format",
       Int64(roundedKilometers(candidate.distanceFromRoute.value))
     )
-    let availability = availabilityText(park.availability)
+    let availability = availabilityText(routeResult.availability)
     let chargingSummary = localizer.format(
       "carplay.result.charging_summary.format",
-      Int64(park.chargingPointCount),
+      Int64(routeResult.chargingPointCount),
       minimumKilowatts(criteria.minimumPower.rawValue)
     )
     let summary = [chargingSummary, availability]
       .compactMap { $0 }
       .joined(separator: " · ")
-    let foodSummary = routeResult.matchingFoodPOI.map { food in
+    let foodSummary = foodPOI.map { food in
       localizer.format(
         "carplay.result.food.format",
         food.name,
         Int64(food.distanceFromPark.value)
       )
     }
-    let operatorSummary = park.operatorChargingPoints.map { chargingOperator in
+    let operatorSummary = routeResult.operatorChargingPoints.map { chargingOperator in
       localizer.format(
         "carplay.result.operator.format",
         chargingOperator.name,
@@ -244,13 +245,15 @@ struct CarPlayPresenter {
     let detailSummary = [operatorSummary, summary, foodSummary]
       .compactMap { $0 }
       .joined(separator: "\n")
+    let title = foodPOI?.name ?? park.name
+    let coordinate = foodPOI?.coordinate ?? park.navigationCoordinate
     return CarPlayResultPresentation(
-      id: park.id,
-      coordinate: park.navigationCoordinate,
-      title: park.name,
+      id: routeResult.id,
+      coordinate: coordinate,
+      title: title,
       subtitle: "\(drivingDistance) · \(routeDistance)",
       summary: summary,
-      detailTitle: park.name,
+      detailTitle: title,
       detailSubtitle: availability.map { "\(drivingDistance) · \($0)" }
         ?? drivingDistance,
       detailSummary: detailSummary,

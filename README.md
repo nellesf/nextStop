@@ -2,8 +2,10 @@
 
 nextStop is an Apple CarPlay-focused iOS app for EV drivers. Given a
 destination and a small set of explicit criteria, it finds at most the next five
-matching charging parks along the current MapKit route and hands the selected
-park to Apple Maps. It does not provide turn-by-turn navigation.
+matching charging stops along the current MapKit route and hands the selected
+restaurant or park to Apple Maps. With a food filter, one stop represents one
+restaurant and combines all qualifying nearby parks by charging operator. It does
+not provide turn-by-turn navigation.
 
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
 Implementation includes the portable, entitlement-independent Swift core, a
@@ -11,8 +13,9 @@ localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, versioned OSM
 restaurant checks, distance-only ranking, per-operator EVSE counts, and Apple Maps
-handoff. Each charging operator and the matched restaurant in an iPhone result has
-a 48-point Apple Maps button. A tap performs a bounded, conservative place match
+handoff. Each charging operator appears once per restaurant result with its
+combined EVSE count and one 48-point Apple Maps button; the restaurant has one too.
+A tap performs a bounded, conservative place match
 and opens the native Apple place by stable Place ID so Apple Maps can show its own
 current details and navigation action. A missing unambiguous match is reported
 instead of opening a guessed place. CarPlay keeps its direct navigation handoff;
@@ -44,9 +47,14 @@ extracts and enforces the exact 500 m restaurant predicate.
   counts, minimum park size, and informational availability are aggregated.
 - Availability remains informational and never filters a park.
 - A selected food chain must be within 500 m geodesic distance of the park.
+- With a selected food chain, parks that match the same stable restaurant POI are
+  presented as one result. Exact operator names are combined and their qualifying
+  EVSE counts are summed; the nearest member park by actual driving distance
+  determines result order and displayed driving distance.
 - Opening hours are informational only.
 - Results are sorted only by actual MapKit driving distance from the current
-  location and capped at five. Filters are never relaxed automatically.
+  location and capped at five parks without a food filter or five restaurants
+  with one. Filters are never relaxed automatically.
 - Profiles, favorites, and recent destinations remain local. CarPlay edits are
   ride-scoped and never mutate a saved profile.
 

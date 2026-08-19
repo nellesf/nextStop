@@ -7,17 +7,48 @@ public struct ChargingParkSearchPolicy: Sendable {
     from candidates: [EnrichedChargingParkCandidate],
     criteria: RideCriteria
   ) -> [RouteSearchResult] {
-    candidates.compactMap { candidate in
+    let matchingResults = candidates.compactMap { candidate in
       evaluate(candidate, criteria: criteria)
     }
-    .sorted { lhs, rhs in
-      if lhs.candidate.actualDrivingDistance == rhs.candidate.actualDrivingDistance {
-        return lhs.id.uuidString < rhs.id.uuidString
+
+    return groupByRestaurant(matchingResults, criteria: criteria)
+      .sorted { lhs, rhs in
+        if lhs.candidate.actualDrivingDistance == rhs.candidate.actualDrivingDistance {
+          return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return lhs.candidate.actualDrivingDistance < rhs.candidate.actualDrivingDistance
       }
-      return lhs.candidate.actualDrivingDistance < rhs.candidate.actualDrivingDistance
+      .prefix(SearchConfiguration.maximumResultCount)
+      .map { $0 }
+  }
+
+  private func groupByRestaurant(
+    _ results: [RouteSearchResult],
+    criteria: RideCriteria
+  ) -> [RouteSearchResult] {
+    guard criteria.foodChain != nil else {
+      return results
     }
-    .prefix(SearchConfiguration.maximumResultCount)
-    .map { $0 }
+
+    let groupedResults = Dictionary(grouping: results) { result in
+      result.matchingFoodPOI?.id ?? "park:\(result.id.uuidString)"
+    }
+    return groupedResults.values.compactMap { group in
+      let sortedGroup = group.sorted { lhs, rhs in
+        if lhs.candidate.actualDrivingDistance == rhs.candidate.actualDrivingDistance {
+          return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return lhs.candidate.actualDrivingDistance < rhs.candidate.actualDrivingDistance
+      }
+      guard let primary = sortedGroup.first else {
+        return nil
+      }
+      return RouteSearchResult(
+        candidate: primary.candidate,
+        relatedCandidates: sortedGroup.dropFirst().map(\.candidate),
+        matchingFoodPOI: primary.matchingFoodPOI
+      )
+    }
   }
 
   private func evaluate(

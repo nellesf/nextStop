@@ -5,9 +5,11 @@ Status: Phase 1 complete; architecture decisions accepted on 2026-08-13.
 ## Primary use case
 
 From a current location and chosen destination, create a MapKit route and return no
-more than five charging parks that satisfy every explicit charging/food criterion,
-lie no farther than 5 km from the route, and fall in the chosen actual driving
-distance range. Selecting one opens Apple Maps navigation.
+more than five results that satisfy every explicit charging/food criterion, lie no
+farther than 5 km from the route, and fall in the chosen actual driving distance
+range. Without food a result is a charging park. With food it is one restaurant
+that combines all qualifying nearby parks by operator. Selecting one opens Apple
+Maps navigation.
 
 ## Actors and surfaces
 
@@ -33,7 +35,7 @@ distance range. Selecting one opens Apple Maps navigation.
 | Actual driving distance to park | MapKit on iPhone |
 | Exact distance-range filter and ranking | iPhone domain use case |
 | Fast-food <=500 m | Versioned OSM POI projection and exact PostGIS geography |
-| Stable max-five presentation | CarPlay POI/list templates |
+| Stable max-five park/restaurant presentation | CarPlay POI/list templates |
 | Navigation | Apple Maps |
 
 ## Explicit non-goals
@@ -47,6 +49,8 @@ filter, ratings, reservations, live re-ranking, or paid data source.
 - Thresholds/options are centrally modeled and versioned.
 - `ChargingPoint` means EVSE; connectors do not inflate counts.
 - A park may contain several operators.
+- A food-filtered result contains exactly one restaurant; all qualifying parks
+  matched to its stable POI ID are combined by exact operator name.
 - Availability is informational and never affects inclusion.
 - POI opening status cannot affect inclusion.
 - No score exists after filtering; actual distance is the only visible order.

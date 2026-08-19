@@ -208,7 +208,7 @@ struct RidePreparationView: View {
 
   private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
     let results = outcome.results
-    let candidateLocations = results.flatMap(\.candidate.park.locationLookups)
+    let allCandidateLocations = results.flatMap(\.locationLookups)
     return VStack(spacing: 12) {
       coverageNotice(outcome.coverage)
 
@@ -222,7 +222,11 @@ struct RidePreparationView: View {
       }
 
       ForEach(results) { result in
-        resultCard(result, candidateLocations: candidateLocations)
+        resultCard(
+          result,
+          lookupLocations: result.matchingFoodPOI == nil
+            ? allCandidateLocations : result.locationLookups
+        )
       }
 
       attributionContent(outcome.attributions)
@@ -280,10 +284,9 @@ struct RidePreparationView: View {
 
   private func resultCard(
     _ result: RouteSearchResult,
-    candidateLocations: [ChargingLocationLookup]
+    lookupLocations: [ChargingLocationLookup]
   ) -> some View {
     let candidate = result.candidate
-    let park = candidate.park
     let foodPOI = result.matchingFoodPOI
     return Card {
       HStack(alignment: .firstTextBaseline) {
@@ -296,7 +299,7 @@ struct RidePreparationView: View {
           .foregroundStyle(.tint)
       }
 
-      ForEach(park.operatorChargingPoints) { chargingOperator in
+      ForEach(result.operatorChargingPoints) { chargingOperator in
         HStack(alignment: .center, spacing: 10) {
           VStack(alignment: .leading, spacing: 3) {
             Text(chargingOperator.name)
@@ -305,14 +308,16 @@ struct RidePreparationView: View {
             if let foodPOI,
               let distance = ChargingOperatorFoodDistance.nearestMeters(
                 operatorName: chargingOperator.name,
-                locations: park.locationLookups,
+                locations: result.locationLookups,
                 foodCoordinate: foodPOI.coordinate
               )
             {
-              Text(verbatim: LocalizedFormat.metersToPlace(
-                distance,
-                placeName: foodPOI.name
-              ))
+              Text(
+                verbatim: LocalizedFormat.metersToPlace(
+                  distance,
+                  placeName: foodPOI.name
+                )
+              )
               .font(.caption)
               .foregroundStyle(.secondary)
             }
@@ -328,28 +333,33 @@ struct RidePreparationView: View {
           .fixedSize(horizontal: true, vertical: false)
           .accessibilityElement(children: .ignore)
           .accessibilityLabel(
-            Text(verbatim: LocalizedFormat.chargingPoints(
-              chargingOperator.chargingPointCount
-            ))
+            Text(
+              verbatim: LocalizedFormat.chargingPoints(
+                chargingOperator.chargingPointCount
+              ))
           )
 
-          ApplePlaceButton(
-            target: .charging(
-              park: park,
-              operatorName: chargingOperator.name,
-              relatedLocations: AppleChargingPlaceLookupScope.relatedLocations(
-                primaryLocations: park.locationLookups,
-                candidateLocations: candidateLocations,
-                operatorName: chargingOperator.name
-              )
-            ),
-            resolver: placeResolver,
-            launcher: navigationLauncher
-          )
+          if let representativePark = result.representativePark(
+            for: chargingOperator.name
+          ) {
+            ApplePlaceButton(
+              target: .charging(
+                park: representativePark,
+                operatorName: chargingOperator.name,
+                relatedLocations: AppleChargingPlaceLookupScope.relatedLocations(
+                  primaryLocations: representativePark.locationLookups,
+                  candidateLocations: lookupLocations,
+                  operatorName: chargingOperator.name
+                )
+              ),
+              resolver: placeResolver,
+              launcher: navigationLauncher
+            )
+          }
         }
       }
 
-      if let availability = availabilityText(park.availability) {
+      if let availability = availabilityText(result.availability) {
         Text(verbatim: availability)
           .font(.subheadline)
           .foregroundStyle(.secondary)
@@ -438,10 +448,11 @@ enum ChargingOperatorFoodDistance {
       .lazy
       .filter { $0.operatorName == operatorName }
       .map {
-        foodLocation.distance(from: CLLocation(
-          latitude: $0.coordinate.latitude,
-          longitude: $0.coordinate.longitude
-        ))
+        foodLocation.distance(
+          from: CLLocation(
+            latitude: $0.coordinate.latitude,
+            longitude: $0.coordinate.longitude
+          ))
       }
       .min()
       .map { Int($0.rounded()) }

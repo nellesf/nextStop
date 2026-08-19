@@ -385,7 +385,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     let presentation = presenter.results(outcome, criteria: criteria)
     resultsByID = Dictionary(
-      uniqueKeysWithValues: outcome.results.map { ($0.candidate.park.id, $0) }
+      uniqueKeysWithValues: outcome.results.map { ($0.id, $0) }
     )
     let points = presentation.points.map { point in
       makePointOfInterest(

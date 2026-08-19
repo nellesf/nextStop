@@ -21,19 +21,30 @@ as an intermediate waypoint. Without a food match, hand the chosen park
 `MKMapItem` to Apple Maps.
 
 On iPhone, expose a 48-point Apple Maps button beside each charging operator and
-the matched restaurant. Resolve the selected authority/OSM location against nearby
+the matched restaurant. When food is selected, use the stable backend restaurant
+POI ID as the result identity: all qualifying parks for that restaurant form one
+result, exact operator names are combined, and qualifying EVSE counts are summed.
+The closest member park by actual MapKit driving distance represents the group for
+ranking and displayed distance. Candidate pagination within the selected maximum
+distance is scanned instead of using the five-result shortcut, because a later
+park can still contribute to an already selected restaurant. Once the lower bound
+proves the top five restaurant IDs, MapKit enrichment is skipped for later parks
+belonging only to other restaurants. Without food, the park remains the result
+identity.
+
+Resolve the selected authority/OSM location against nearby
 Apple places only after the user taps its button. Require a conservative name plus
 coordinate/address match, cache the ride-local result, and open the native Apple
 place through its stable Place ID. A matching operator is accepted within 60 m
 without address evidence, or within 300 m only when street, house number, and
 postal code or city match. The latter supports large charging campuses with one
-central Apple place. When multiple visible backend parks contain the same operator
-at the same complete address, their lookup coordinates form one ride-local Apple
-lookup scope. This lets independently clustered parts of one campus resolve the
-same native place without merging or altering either backend result. Search each
-distinct coordinate group in that bounded scope because a MapKit POI response is
-not treated as an exhaustive radius result, then cache a successful native place
-by normalized operator and address for the remainder of the ride. If no
+central Apple place. One restaurant result exposes one button per exact operator
+name. Its lookup scope contains all authority locations for that operator across
+the group's member parks, while the resolver opens only the best unambiguous native
+Apple POI. Search each distinct coordinate group in that bounded scope because a
+MapKit POI response is not treated as an exhaustive radius result, then cache a
+successful native place by normalized operator and address for the remainder of
+the ride. If no
 unambiguous Apple place exists, report that condition
 instead of opening a coordinate-only or guessed place. Apple matching is
 presentation-only and cannot affect the search result, EVSE count, route, ranking,

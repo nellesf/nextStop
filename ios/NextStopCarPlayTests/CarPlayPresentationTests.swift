@@ -113,6 +113,58 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(presentation.attributionMessage, "© OpenStreetMap contributors")
   }
 
+  func testRestaurantResultCombinesMemberParksAndOperatorsOnce() throws {
+    let first = try makeResult(
+      id: "10000000-0000-4000-8000-000000000001",
+      name: "Ladepark Eins",
+      drivingMeters: 80_000,
+      knownAvailable: 0,
+      unknown: 4
+    )
+    let second = try makeResult(
+      id: "10000000-0000-4000-8000-000000000002",
+      name: "Ladepark Zwei",
+      drivingMeters: 81_000,
+      knownAvailable: 0,
+      unknown: 4
+    )
+    let foodPOI = try FoodPOI(
+      id: "osm:node:1",
+      chain: .mcdonalds,
+      name: "McDonald's",
+      coordinate: Coordinate(latitude: 52, longitude: 10),
+      distanceFromPark: Meters(100),
+      openingStatus: .unknown
+    )
+    let groupedResult = RouteSearchResult(
+      candidate: first.candidate,
+      relatedCandidates: [second.candidate],
+      matchingFoodPOI: foodPOI
+    )
+    let outcome = RideCandidateSearchOutcome(
+      results: [groupedResult],
+      coverage: CandidateSearchCoverage(
+        status: .complete,
+        activeSourceIDs: ["bundesnetzagentur_ladesaeulenregister"],
+        unavailableSourceIDs: [],
+        projectionUpdatedAt: Date(timeIntervalSince1970: 0)
+      )
+    )
+
+    let presentation = CarPlayPresenter(localizer: germanLocalizer()).results(
+      outcome,
+      criteria: try makeProfile().criteria
+    )
+
+    XCTAssertEqual(presentation.points.count, 1)
+    XCTAssertEqual(presentation.points[0].title, "McDonald's")
+    XCTAssertEqual(presentation.points[0].summary, "8 Ladepunkte · 150 kW oder höher")
+    XCTAssertEqual(
+      presentation.points[0].detailSummary,
+      "Operator · 8 Ladepunkte\n8 Ladepunkte · 150 kW oder höher\nMcDonald's · 100 m"
+    )
+  }
+
   private func makeProfile() throws -> UserProfile {
     try UserProfile(
       id: UUID(uuidString: "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE")!,

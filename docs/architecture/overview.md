@@ -40,8 +40,8 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Domain value types and central option catalog.
 - Ride-scoped search draft copied from an optional profile.
 - Availability validation and informational presentation without filtering.
-- Candidate enrichment orchestration, exact-distance filtering, sorting, and
-  five-result cap.
+- Candidate enrichment orchestration, exact-distance filtering, restaurant
+  grouping, operator aggregation, sorting, and five-result cap.
 - Error taxonomy independent of UIKit, SwiftUI, CarPlay, MapKit, and URLSession.
 
 ### iPhone application
@@ -62,6 +62,10 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
   discovery for filtering. On iPhone, tapping an operator or restaurant Maps button
   performs a bounded Apple lookup for only that already-selected item; this lookup
   never changes inclusion, counts, ranking, or the CarPlay navigation waypoint.
+- When a food chain is selected, groups qualifying park candidates by the stable
+  backend restaurant POI ID. One restaurant becomes one result, operator EVSE
+  counts are summed across its member parks, and each exact operator name receives
+  one Apple Maps button.
 - Opens a conservatively matched native Apple charger or restaurant by stable Place
   ID. If no unambiguous match exists, it leaves the backend result unchanged and
   reports that Apple details are unavailable.
@@ -150,14 +154,19 @@ iOS application performs the operations that only MapKit can truthfully provide:
 
 1. exact automobile distance from the current location to each candidate;
 2. final distance-range filter;
-3. final distance-only sort and five-result cap.
+3. when food is selected, grouping by stable restaurant POI ID and aggregation of
+   qualifying EVSE counts by exact operator name;
+4. final distance-only sort and five-result cap, using the nearest member park's
+   actual driving distance for a restaurant group.
 
 After the user taps an operator or restaurant Maps button, Apple-place matching is
 presentation enrichment only. It combines the selected item's authority/OSM
 coordinate, normalized address when available, and name with a bounded MapKit
 search. The ride-local match is cached and the native place is opened through its
 Apple Place ID. Apple Place IDs identify only Apple records and are never treated
-as cross-source identities.
+as cross-source identities. For a restaurant result, one operator lookup considers
+all of that operator's authority locations in the group but opens only one
+conservatively matched native Apple POI.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work, but the

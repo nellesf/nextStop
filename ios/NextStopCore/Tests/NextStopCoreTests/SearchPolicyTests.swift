@@ -126,6 +126,59 @@ final class SearchPolicyTests: XCTestCase {
     XCTAssertEqual(results.first?.matchingFoodPOI?.openingStatus, .closed)
   }
 
+  func testFoodSearchReturnsOneAggregatedResultPerRestaurant() throws {
+    let firstRestaurant = try makeFoodPOI(
+      id: "restaurant-a",
+      chain: .mcdonalds,
+      meters: 100,
+      openingStatus: .unknown
+    )
+    let sameRestaurantFromAnotherPark = try makeFoodPOI(
+      id: "restaurant-a",
+      chain: .mcdonalds,
+      meters: 200,
+      openingStatus: .unknown
+    )
+    let secondRestaurant = try makeFoodPOI(
+      id: "restaurant-b",
+      chain: .mcdonalds,
+      meters: 150,
+      openingStatus: .unknown
+    )
+    let firstPark = try makeCandidate(
+      name: "first-park",
+      drivingKilometers: 60,
+      operatorName: "HomE of Mobility GmbH",
+      foodPOIs: [firstRestaurant]
+    )
+    let secondPark = try makeCandidate(
+      name: "second-park",
+      drivingKilometers: 61,
+      operatorName: "HomE of Mobility GmbH",
+      foodPOIs: [sameRestaurantFromAnotherPark]
+    )
+    let thirdPark = try makeCandidate(
+      name: "third-park",
+      drivingKilometers: 70,
+      foodPOIs: [secondRestaurant]
+    )
+    var criteria = SearchConfiguration.defaultCriteria
+    criteria.foodChain = .mcdonalds
+
+    let results = policy.selectResults(
+      from: [thirdPark, secondPark, firstPark],
+      criteria: criteria
+    )
+
+    XCTAssertEqual(results.count, 2)
+    XCTAssertEqual(results.map(\.matchingFoodPOI?.id), ["restaurant-a", "restaurant-b"])
+    XCTAssertEqual(results[0].candidates.map(\.park.name), ["first-park", "second-park"])
+    XCTAssertEqual(results[0].chargingPointCount, 8)
+    XCTAssertEqual(results[0].operatorChargingPoints.count, 1)
+    XCTAssertEqual(results[0].operatorChargingPoints.first?.name, "HomE of Mobility GmbH")
+    XCTAssertEqual(results[0].operatorChargingPoints.first?.chargingPointCount, 8)
+  }
+
   func testRankingUsesOnlyActualDrivingDistance() throws {
     let closer = try makeCandidate(
       name: "closer",
@@ -155,6 +208,7 @@ final class SearchPolicyTests: XCTestCase {
     chargingPoints: Int = 4,
     availability: ParkAvailability? = nil,
     maximumPower: Int = 100,
+    operatorName: String = "Operator",
     foodPOIs: [FoodPOI] = []
   ) throws -> EnrichedChargingParkCandidate {
     let coordinate = try Coordinate(latitude: 52.0, longitude: 10.0)
@@ -183,7 +237,10 @@ final class SearchPolicyTests: XCTestCase {
       coordinate: coordinate,
       navigationCoordinate: coordinate,
       operatorChargingPoints: [
-        try OperatorChargingPointSummary(name: "Operator", chargingPointCount: chargingPoints)
+        try OperatorChargingPointSummary(
+          name: operatorName,
+          chargingPointCount: chargingPoints
+        )
       ],
       chargingPointCount: chargingPoints,
       availability: resolvedAvailability,

@@ -398,13 +398,81 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
   public var id: UUID { candidate.id }
 
   public let candidate: EnrichedChargingParkCandidate
+  public let relatedCandidates: [EnrichedChargingParkCandidate]
   public let matchingFoodPOI: FoodPOI?
+
+  public var candidates: [EnrichedChargingParkCandidate] {
+    [candidate] + relatedCandidates
+  }
+
+  public var chargingPointCount: Int {
+    candidates.reduce(0) { $0 + $1.park.chargingPointCount }
+  }
+
+  public var operatorChargingPoints: [RouteSearchOperatorSummary] {
+    var counts: [String: Int] = [:]
+    for summary in candidates.flatMap(\.park.operatorChargingPoints) {
+      counts[summary.name, default: 0] += summary.chargingPointCount
+    }
+    return counts.map {
+      RouteSearchOperatorSummary(name: $0.key, chargingPointCount: $0.value)
+    }
+    .sorted { $0.name < $1.name }
+  }
+
+  public var locationLookups: [ChargingLocationLookup] {
+    var seenIDs = Set<UUID>()
+    return candidates.flatMap(\.park.locationLookups).filter {
+      seenIDs.insert($0.id).inserted
+    }
+  }
+
+  public var availability: ParkAvailability {
+    let parkAvailability = candidates.map(\.park.availability)
+    return
+      (try? ParkAvailability(
+        knownAvailableCount: parkAvailability.reduce(0) { $0 + $1.knownAvailableCount },
+        knownUnavailableCount: parkAvailability.reduce(0) { $0 + $1.knownUnavailableCount },
+        unknownCount: parkAvailability.reduce(0) { $0 + $1.unknownCount },
+        totalCount: parkAvailability.reduce(0) { $0 + $1.totalCount },
+        lastLiveObservationAt: parkAvailability.compactMap(\.lastLiveObservationAt).max()
+      )) ?? candidate.park.availability
+  }
+
+  public func representativePark(for operatorName: String) -> ChargingPark? {
+    candidates.first {
+      $0.park.operatorChargingPoints.contains { $0.name == operatorName }
+    }?.park
+  }
 
   public init(
     candidate: EnrichedChargingParkCandidate,
+    relatedCandidates: [EnrichedChargingParkCandidate] = [],
     matchingFoodPOI: FoodPOI?
   ) {
     self.candidate = candidate
+    var seenIDs = Set([candidate.id])
+    self.relatedCandidates =
+      relatedCandidates
+      .filter { seenIDs.insert($0.id).inserted }
+      .sorted { lhs, rhs in
+        if lhs.actualDrivingDistance == rhs.actualDrivingDistance {
+          return lhs.id.uuidString < rhs.id.uuidString
+        }
+        return lhs.actualDrivingDistance < rhs.actualDrivingDistance
+      }
     self.matchingFoodPOI = matchingFoodPOI
+  }
+}
+
+public struct RouteSearchOperatorSummary: Identifiable, Hashable, Codable, Sendable {
+  public var id: String { name }
+
+  public let name: String
+  public let chargingPointCount: Int
+
+  fileprivate init(name: String, chargingPointCount: Int) {
+    self.name = name
+    self.chargingPointCount = chargingPointCount
   }
 }

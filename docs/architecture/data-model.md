@@ -177,12 +177,23 @@ request inclusion always rechecks 500 m after eligible EVSE geometry is derived.
 
 ### `RouteSearchResult`
 
-- candidate/park
+- primary candidate/park (shortest actual driving distance in the result)
+- related candidates/parks sharing the same stable restaurant POI ID when food is
+  selected; empty for an ungrouped park result
 - `actualDrivingDistanceMeters` from MapKit
 - `distanceFromRouteMeters`
 - matching `FoodPOI?`
+- summed qualifying EVSE count and exact-name operator counts across all member
+  candidates
+- deduplicated charging-location lookup evidence across all member candidates
 - `availabilityEvidence`
 - snapshot metadata
+
+With a food criterion, `RouteSearchResult` is restaurant-centric: one stable
+restaurant POI produces at most one result and one Apple POI action per exact
+charging operator name. Its rank and displayed driving distance remain the actual
+MapKit distance to the closest qualifying member park, not a straight-line or
+restaurant distance. Without a food criterion, the result remains park-centric.
 
 ## User-local entities
 

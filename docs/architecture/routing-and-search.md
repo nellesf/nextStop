@@ -33,17 +33,27 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    coordinate. It returns the selected restaurant and attribution in the stable
    paginated snapshot.
 8. iOS requests MapKit automobile directions from the current location to each
-   candidate in bounded batches behind a shared rolling request gate. After every
-   batch it applies safe lower-bound stopping before requesting more routes.
+   candidate in bounded batches behind a shared rolling request gate. Without a
+   food filter it applies safe lower-bound stopping after every batch. With a food
+   filter it scans candidates within the selected maximum distance so every park
+   belonging to a selected restaurant can contribute to its operator counts. Once
+   the top five restaurant IDs are proven by the lower bound, later parks for
+   other restaurants need no MapKit request.
    `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
    departure from the main route.
 9. Discard exact distances outside the selected range.
 10. If a food chain is selected, require the backend-provided OSM match. Opening
     information is optional and not a predicate.
-11. Sort matches only by actual driving distance ascending, with stable park ID as
+11. With a food filter, group matches by stable restaurant POI ID. Sum qualifying
+    EVSE counts by exact operator name across all member parks and expose one Apple
+    place action per operator. The member park with the shortest actual driving
+    distance represents the group for distance and ordering. Without food, every
+    matching park remains its own result.
+12. Sort matches only by actual driving distance ascending, with stable park ID as
     a non-user-visible deterministic tie-breaker.
-12. Return the first five. If fewer exist, return fewer. If pagination is not
-    exhausted and correctness cannot yet be proven, request the next batch.
+13. Return the first five parks or restaurant groups. If fewer exist, return
+    fewer. If pagination is not exhausted and correctness cannot yet be proven,
+    request the next batch.
 
 ## Correct pagination and stopping
 
@@ -55,6 +65,11 @@ rank. The client may stop only when:
   bound is greater than the fifth match's actual driving distance; or
 - the lower bound exceeds the selected range maximum and ordering guarantees all
   later lower bounds are no smaller.
+
+The five-result lower-bound shortcut is not used for a food-filtered search:
+later candidates can share a restaurant already in the first five and must be
+included in its displayed operator totals. The maximum-distance lower bound still
+terminates that search safely.
 
 Straight-line origin-to-park distance is a safe lower bound for road distance.
 Preliminary route progress is useful for batching but is not, by itself, a proof
