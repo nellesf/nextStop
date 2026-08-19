@@ -1,4 +1,6 @@
+import CoreLocation
 import Foundation
+import MapKit
 import NextStopCore
 import XCTest
 
@@ -6,6 +8,22 @@ import XCTest
 
 @MainActor
 final class RidePreparationViewModelTests: XCTestCase {
+  func testAppleMapsPlaceListStartsWithRestaurantAndIncludesAllChargingPlaces() {
+    let restaurant = makeMapItem(name: "McDonald's", latitude: 49.75, longitude: 9.51)
+    let firstCharger = makeMapItem(name: "HomE", latitude: 49.751, longitude: 9.511)
+    let secondCharger = makeMapItem(name: "Electra", latitude: 49.752, longitude: 9.512)
+    let resolution = ApplePlaceResolution(
+      chargingItems: [firstCharger, secondCharger],
+      restaurantItem: restaurant,
+      fallbackPOIs: []
+    )
+
+    XCTAssertEqual(
+      resolution.appleMapsItems.compactMap(\.name),
+      ["McDonald's", "HomE", "Electra"]
+    )
+  }
+
   func testAppleMapsURLKeepsDestinationAndAddsRestaurantWaypoint() throws {
     let destination = try SavedDestination(
       displayName: "Berlin Hauptbahnhof",
@@ -23,7 +41,7 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
 
     let url = try XCTUnwrap(
-      AppleMapsNavigationLauncher.multistopDirectionsURL(
+      AppleMapsLauncher.multistopDirectionsURL(
         waypoint: restaurant,
         finalDestination: destination
       )
@@ -278,6 +296,27 @@ final class RidePreparationViewModelTests: XCTestCase {
 
     XCTAssertEqual(base.requestCount, 3)
     XCTAssertEqual(clock.sleepDurations, [60])
+  }
+
+  private func makeMapItem(
+    name: String,
+    latitude: CLLocationDegrees,
+    longitude: CLLocationDegrees
+  ) -> MKMapItem {
+    let location = CLLocation(latitude: latitude, longitude: longitude)
+    let mapItem: MKMapItem
+    if #available(iOS 26.0, *) {
+      mapItem = MKMapItem(location: location, address: nil)
+    } else {
+      mapItem = makeLegacyMapItem(for: location)
+    }
+    mapItem.name = name
+    return mapItem
+  }
+
+  @available(iOS, introduced: 18.0, obsoleted: 26.0)
+  private func makeLegacyMapItem(for location: CLLocation) -> MKMapItem {
+    MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
   }
 
   private func makeProfile(name: String, destination: SavedDestination) throws -> UserProfile {

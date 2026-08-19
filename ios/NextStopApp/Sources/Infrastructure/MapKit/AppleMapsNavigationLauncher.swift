@@ -4,7 +4,10 @@ import NextStopCore
 import UIKit
 
 @MainActor
-protocol NavigationLaunching: AnyObject {
+protocol AppleMapsLaunching: AnyObject {
+  @discardableResult
+  func showPlaces(_ mapItems: [MKMapItem]) -> Bool
+
   @discardableResult
   func startNavigation(
     to park: ChargingPark,
@@ -14,7 +17,15 @@ protocol NavigationLaunching: AnyObject {
 }
 
 @MainActor
-final class AppleMapsNavigationLauncher: NavigationLaunching {
+final class AppleMapsLauncher: AppleMapsLaunching {
+  @discardableResult
+  func showPlaces(_ mapItems: [MKMapItem]) -> Bool {
+    guard !mapItems.isEmpty else {
+      return false
+    }
+    return MKMapItem.openMaps(with: mapItems)
+  }
+
   @discardableResult
   func startNavigation(
     to park: ChargingPark,

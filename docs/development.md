@@ -169,9 +169,10 @@ flow. It fetches a stable PostGIS candidate snapshot, asks MapKit for actual
 automobile distance to candidates in bounded groups of four, applies the exact
 configured range after the backend's exact optional 500 m OSM food rule, sorts only by actual driving
 distance, and displays at most five. Each result shows the deduplicated EVSE count
-for every operator. With a selected restaurant, the result button opens Apple Maps
-with the restaurant as a waypoint before the original ride destination; otherwise
-it opens the selected park.
+for every operator. A result first opens the selective in-app map. From there, one
+action opens every matched restaurant and charging place together as pins in Apple
+Maps; a separate navigation action keeps the restaurant as a waypoint before the
+original destination, or navigates to the selected park when no restaurant exists.
 
 ### CarPlay acceptance gate
 

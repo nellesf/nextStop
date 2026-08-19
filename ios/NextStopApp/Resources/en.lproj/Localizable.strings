@@ -99,9 +99,10 @@
 "ride.map.apple_places.partial.format" = "No unambiguous Apple place was found for %@. The gray pin comes from the official charging data.";
 "ride.map.apple_places.restaurant_fallback" = "No unambiguous Apple place was found for the restaurant. The orange pin comes from OpenStreetMap.";
 "ride.map.apple_places.fallback_hint" = "Apple place details are not available for this pin.";
+"ride.map.open_apple_places" = "Show places in Apple Maps";
 "ride.map.start_navigation" = "Start navigation in Apple Maps";
-"ride.map.navigation.error.title" = "Navigation could not be opened";
-"ride.map.navigation.error.description" = "Apple Maps is currently unavailable. Try again.";
+"ride.map.apple_maps.error.title" = "Apple Maps could not be opened";
+"ride.map.apple_maps.error.description" = "Apple Maps is currently unavailable. Try again.";
 "ride.coverage.degraded.title" = "Live data partially available";
 "ride.coverage.degraded.description" = "Missing or stale status remains unknown and never falsely excludes a charging park.";
 "ride.coverage.stale.title" = "Charging data is not current";

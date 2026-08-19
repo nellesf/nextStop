@@ -5,7 +5,7 @@ import UIKit
 struct RidePreparationView: View {
   @Environment(\.openURL) private var openURL
   @StateObject private var viewModel: RidePreparationViewModel
-  private let navigationLauncher: any NavigationLaunching
+  private let navigationLauncher: any AppleMapsLaunching
 
   @MainActor
   init(profile: UserProfile, directionsRequestGate: DirectionsRequestGate) {
@@ -46,19 +46,19 @@ struct RidePreparationView: View {
         candidateSearcher: candidateSearcher
       )
     )
-    navigationLauncher = AppleMapsNavigationLauncher()
+    navigationLauncher = AppleMapsLauncher()
   }
 
   @MainActor
   init(viewModel: RidePreparationViewModel) {
     self.init(
       viewModel: viewModel,
-      navigationLauncher: AppleMapsNavigationLauncher()
+      navigationLauncher: AppleMapsLauncher()
     )
   }
 
   @MainActor
-  init(viewModel: RidePreparationViewModel, navigationLauncher: any NavigationLaunching) {
+  init(viewModel: RidePreparationViewModel, navigationLauncher: any AppleMapsLaunching) {
     _viewModel = StateObject(wrappedValue: viewModel)
     self.navigationLauncher = navigationLauncher
   }

@@ -27,8 +27,10 @@ analytics SDKs are permitted in MVP.
   Cards to its already-known charger and restaurant coordinates. This does not run
   during backend filtering or for results the user does not open.
 - Siri/App Intents system processing when invoked.
-- Apple Maps handoff for the selected park or, when food is selected, for a route
-  containing the matched restaurant waypoint and the original ride destination.
+- Apple Maps handoff either for the selected result's matched Apple POIs as a
+  non-navigating pin group, or for navigation to the selected park. When food is
+  selected, the navigation route contains the matched restaurant waypoint and the
+  original ride destination.
 
 Apple's current privacy disclosures and SDK behavior must be reflected accurately
 in App Store privacy answers at release.

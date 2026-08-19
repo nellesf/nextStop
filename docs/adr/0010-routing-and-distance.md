@@ -27,6 +27,12 @@ Apple Place Card. Preserve every unmatched authority/OSM location as a visibly
 different fallback pin. Apple matching is presentation-only and cannot affect the
 search result, EVSE count, route, ranking, or waypoint.
 
+As a separate non-navigating action, hand every matched Apple charging place and
+the matched restaurant for the selected result to Apple Maps together. Apple Maps
+frames those supplied pins and provides its own place cards. Its unrelated
+base-map POIs cannot be filtered by the calling app. Keep navigation as a distinct
+action so candidate POIs never become unintended route waypoints.
+
 ## Alternatives
 
 - Server-side OSM router: scalable matrices but can disagree with MapKit/Apple Maps

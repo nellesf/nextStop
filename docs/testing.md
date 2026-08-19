@@ -105,6 +105,9 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Runtime `CPListTemplate` limits and exactly zero-to-five POIs.
 - Locked phone, touch and knob input, light/dark, common aspect ratios, reconnect,
   Apple Maps unavailable/handoff failure.
+- On iPhone, verify that the non-navigating Apple Maps handoff includes the matched
+  restaurant first and every matched charging place, while navigation remains a
+  separate action.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.

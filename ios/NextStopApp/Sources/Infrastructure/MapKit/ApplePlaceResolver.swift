@@ -19,6 +19,10 @@ struct ApplePlaceResolution {
   let restaurantItem: MKMapItem?
   let fallbackPOIs: [MapFallbackPOI]
 
+  var appleMapsItems: [MKMapItem] {
+    [restaurantItem].compactMap { $0 } + chargingItems
+  }
+
   var unmatchedChargingNames: [String] {
     fallbackPOIs
       .filter { $0.kind == .charging }

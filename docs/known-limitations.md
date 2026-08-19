@@ -39,6 +39,10 @@
   stopping, and a rolling directions budget reduce load, but unusually dense
   corridors may still take longer without replacing MapKit with a server-side
   router.
+- Embedded MapKit place cards do not consistently expose every detail shown by the
+  Apple Maps app, especially EV charging availability. The iPhone preview can hand
+  all matched places to Apple Maps as pins, but Apple Maps does not expose a launch
+  option that hides its unrelated base-map POIs.
 - Cross-source deduplication without a common EVSE identifier is inherently
   probabilistic. The accepted policy favors under-merging over silently reducing
   the reported number of distinct EVSEs.

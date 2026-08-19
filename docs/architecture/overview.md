@@ -66,6 +66,9 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Renders a selective iPhone route preview with unrelated base-map POIs hidden.
   Unmatched backend/OSM locations remain explicit fallback pins rather than being
   silently omitted.
+- Can hand the selected result's matched charging and restaurant `MKMapItem`s to
+  Apple Maps together as non-navigating pins. Apple Maps controls its own base-map
+  POIs and place-card content; the app cannot hide or customize them there.
 - Opens Apple Maps with driving directions. A matched restaurant is inserted as a
   waypoint before the original ride destination; without a food match, the park
   remains the navigation destination.

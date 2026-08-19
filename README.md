@@ -14,10 +14,12 @@ restaurant checks, distance-only ranking, per-operator EVSE counts, and Apple Ma
 handoff. An iPhone result can first open a selective in-app MapKit preview that
 hides unrelated POIs, resolves conservative Apple charger/restaurant matches,
 and exposes Apple's Place Cards; unmatched authority/OSM records remain visible
-as explicit fallback pins. When a restaurant is selected, the handoff keeps the
-original ride destination and inserts that restaurant as a waypoint. The same
-application flow is connected to a template-native CarPlay scene with profile
-and saved-destination selection, ride-scoped fixed filter choices, stable
+as explicit fallback pins. The preview can hand all matched charger and restaurant
+places to Apple Maps together as pins so its richer place details remain available.
+Navigation stays a separate action; when a restaurant is selected, that handoff
+keeps the original ride destination and inserts the restaurant as a waypoint.
+The same application flow is connected to a template-native CarPlay scene with
+profile and saved-destination selection, ride-scoped fixed filter choices, stable
 maximum-five POI results, explicit refresh, no-result relaxation, and Apple Maps
 handoff. Local favorites and the capped recent-destination list are shared by the
 iPhone and CarPlay surfaces. A localized App Intent lets Siri resolve a spoken

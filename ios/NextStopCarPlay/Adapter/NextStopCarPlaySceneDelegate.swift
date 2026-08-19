@@ -19,7 +19,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private let presenter = CarPlayPresenter()
   private let draftController = CarPlayRideDraftController()
   private let searchService: any CarPlayRideSearchExecuting = CarPlayRideSearchService()
-  private let navigationLauncher: any NavigationLaunching = AppleMapsNavigationLauncher()
+  private let navigationLauncher: any AppleMapsLaunching = AppleMapsLauncher()
 
   func templateApplicationScene(
     _ templateApplicationScene: CPTemplateApplicationScene,

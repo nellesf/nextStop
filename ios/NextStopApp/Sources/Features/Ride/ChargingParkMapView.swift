@@ -39,17 +39,17 @@ final class ChargingParkMapViewModel: ObservableObject {
 struct ChargingParkMapView: View {
   @StateObject private var viewModel: ChargingParkMapViewModel
   @State private var selectedMapItem: MKMapItem?
-  @State private var navigationFailed = false
+  @State private var appleMapsLaunchFailed = false
 
   private let finalDestination: SavedDestination
-  private let navigationLauncher: any NavigationLaunching
+  private let navigationLauncher: any AppleMapsLaunching
 
   @MainActor
   init(
     result: RouteSearchResult,
     preparedRide: PreparedRideSearch,
     finalDestination: SavedDestination,
-    navigationLauncher: any NavigationLaunching
+    navigationLauncher: any AppleMapsLaunching
   ) {
     _viewModel = StateObject(
       wrappedValue: ChargingParkMapViewModel(
@@ -65,7 +65,7 @@ struct ChargingParkMapView: View {
   init(
     viewModel: ChargingParkMapViewModel,
     finalDestination: SavedDestination,
-    navigationLauncher: any NavigationLaunching
+    navigationLauncher: any AppleMapsLaunching
   ) {
     _viewModel = StateObject(wrappedValue: viewModel)
     self.finalDestination = finalDestination
@@ -82,10 +82,10 @@ struct ChargingParkMapView: View {
       .task {
         await viewModel.load()
       }
-      .alert("ride.map.navigation.error.title", isPresented: $navigationFailed) {
+      .alert("ride.map.apple_maps.error.title", isPresented: $appleMapsLaunchFailed) {
         Button("action.done", role: .cancel) {}
       } message: {
-        Text("ride.map.navigation.error.description")
+        Text("ride.map.apple_maps.error.description")
       }
   }
 
@@ -157,10 +157,22 @@ struct ChargingParkMapView: View {
             .font(.caption)
             .foregroundStyle(.secondary)
         }
+
+        if !resolution.appleMapsItems.isEmpty {
+          Button {
+            appleMapsLaunchFailed = !navigationLauncher.showPlaces(
+              resolution.appleMapsItems
+            )
+          } label: {
+            Label("ride.map.open_apple_places", systemImage: "map.fill")
+              .frame(maxWidth: .infinity)
+          }
+          .buttonStyle(.borderedProminent)
+        }
       }
 
       Button {
-        navigationFailed = !navigationLauncher.startNavigation(
+        appleMapsLaunchFailed = !navigationLauncher.startNavigation(
           to: viewModel.result.candidate.park,
           via: viewModel.result.matchingFoodPOI,
           finalDestination: finalDestination
@@ -172,7 +184,7 @@ struct ChargingParkMapView: View {
         )
         .frame(maxWidth: .infinity)
       }
-      .buttonStyle(.borderedProminent)
+      .buttonStyle(.bordered)
     }
     .padding()
     .background(.regularMaterial)
