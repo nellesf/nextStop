@@ -101,13 +101,13 @@ struct ChargingParkMapView: View {
         ForEach(resolution.chargingItems, id: \.self) { item in
           Marker(item: item)
             .tint(.blue)
+            .tag(item)
         }
-        .mapItemDetailSelectionAccessory(.callout)
 
         if let restaurantItem = resolution.restaurantItem {
           Marker(item: restaurantItem)
             .tint(.orange)
-            .mapItemDetailSelectionAccessory(.callout)
+            .tag(restaurantItem)
         }
 
         ForEach(resolution.fallbackPOIs) { poi in
@@ -118,6 +118,7 @@ struct ChargingParkMapView: View {
       }
     }
     .mapStyle(.standard(pointsOfInterest: .excludingAll))
+    .mapItemDetailSheet(item: $selectedMapItem)
     .mapControls {
       MapCompass()
       MapScaleView()

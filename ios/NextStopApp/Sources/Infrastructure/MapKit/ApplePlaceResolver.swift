@@ -45,19 +45,9 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   func resolve(park: ChargingPark, foodPOI: FoodPOI?) async -> ApplePlaceResolution {
     let lookups = lookupTargets(for: park)
     let chargingItems = (try? await searchChargingItems(around: park, lookups: lookups)) ?? []
-    let matchedChargingItems = chargingItems.filter { item in
-      lookups.contains { lookup in
-        isSecureChargingMatch(item: item, lookup: lookup)
-      }
-    }
-    let deduplicatedChargingItems = deduplicate(matchedChargingItems)
-    let matchedOperatorKeys = Set(
-      lookups.compactMap { lookup in
-        deduplicatedChargingItems.contains {
-          isSecureChargingMatch(item: $0, lookup: lookup)
-        } ? operatorKey(lookup.operatorName) : nil
-      }
-    )
+    let chargingMatches = bestChargingMatches(items: chargingItems, lookups: lookups)
+    let deduplicatedChargingItems = deduplicate(chargingMatches.map(\.item))
+    let matchedOperatorKeys = Set(chargingMatches.map(\.operatorKey))
     var fallbackPOIs = fallbackChargingPOIs(
       lookups: lookups,
       matchedOperatorKeys: matchedOperatorKeys,
@@ -145,21 +135,56 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       .item
   }
 
-  private func isSecureChargingMatch(item: MKMapItem, lookup: LookupTarget) -> Bool {
+  private func secureMatchDistance(
+    item: MKMapItem,
+    lookup: LookupTarget
+  ) -> CLLocationDistance? {
     guard let itemLocation = mapItemLocation(item),
       operatorMatches(item.name ?? "", lookup.operatorName)
     else {
-      return false
+      return nil
     }
     let distance = itemLocation.distance(from: CLLocation(
       latitude: lookup.coordinate.latitude,
       longitude: lookup.coordinate.longitude
     ))
     if distance <= maximumDirectMatchDistance {
-      return true
+      return distance
     }
-    return distance <= maximumAddressBackedMatchDistance
-      && addressMatches(item: item, lookup: lookup)
+    guard distance <= maximumAddressBackedMatchDistance,
+      addressMatches(item: item, lookup: lookup)
+    else {
+      return nil
+    }
+    return distance
+  }
+
+  private func bestChargingMatches(
+    items: [MKMapItem],
+    lookups: [LookupTarget]
+  ) -> [ChargingItemMatch] {
+    Dictionary(grouping: lookups, by: { operatorKey($0.operatorName) })
+      .compactMap { key, operatorLookups in
+        let candidates = items.compactMap { item -> ChargingItemMatch? in
+          guard let distance = operatorLookups.compactMap({
+            secureMatchDistance(item: item, lookup: $0)
+          }).min() else {
+            return nil
+          }
+          return ChargingItemMatch(
+            operatorKey: key,
+            item: item,
+            distance: distance
+          )
+        }
+        return candidates.min {
+          if $0.distance != $1.distance {
+            return $0.distance < $1.distance
+          }
+          return mapItemStableKey($0.item) < mapItemStableKey($1.item)
+        }
+      }
+      .sorted { $0.operatorKey < $1.operatorKey }
   }
 
   private func addressMatches(item: MKMapItem, lookup: LookupTarget) -> Bool {
@@ -230,11 +255,14 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   private func deduplicate(_ items: [MKMapItem]) -> [MKMapItem] {
     var seen = Set<String>()
     return items.filter { item in
-      let location = mapItemLocation(item)
-      let key = item.identifier?.rawValue
-        ?? "\(normalized(item.name ?? "")):\(location?.coordinate.latitude ?? 0):\(location?.coordinate.longitude ?? 0)"
-      return seen.insert(key).inserted
+      seen.insert(mapItemStableKey(item)).inserted
     }
+  }
+
+  private func mapItemStableKey(_ item: MKMapItem) -> String {
+    let location = mapItemLocation(item)
+    return item.identifier?.rawValue
+      ?? "\(normalized(item.name ?? "")):\(location?.coordinate.latitude ?? 0):\(location?.coordinate.longitude ?? 0)"
   }
 
   private func operatorKey(_ value: String) -> String {
@@ -339,4 +367,10 @@ private struct LookupTarget {
   let operatorName: String
   let coordinate: Coordinate
   let address: ChargingLocationAddress
+}
+
+private struct ChargingItemMatch {
+  let operatorKey: String
+  let item: MKMapItem
+  let distance: CLLocationDistance
 }
