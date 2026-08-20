@@ -72,6 +72,62 @@ final class ProfileFormStateTests: XCTestCase {
     XCTAssertEqual(profile.updatedAt, now)
   }
 
+  func testExistingProfileLoadsAndPersistsDestinationAndEveryCriterion() throws {
+    let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+    let destination = try SavedDestination(
+      displayName: "Berlin",
+      coordinate: Coordinate(latitude: 52.5200, longitude: 13.4050),
+      applePlaceIdentifier: "berlin-place",
+      displayAddress: "Berlin, Deutschland"
+    )
+    let criteria = RideCriteria(
+      distanceRange: .kilometers100To150,
+      minimumChargingPoints: .sixteen,
+      minimumPower: .threeHundred,
+      foodChain: .burgerKing
+    )
+    let profile = try UserProfile(
+      name: "Langstrecke",
+      destination: destination,
+      criteria: criteria,
+      createdAt: timestamp,
+      updatedAt: timestamp
+    )
+
+    let state = ProfileFormState(profile: profile)
+    let savedProfile = try state.makeProfile(now: timestamp.addingTimeInterval(60))
+
+    XCTAssertEqual(state.destination, destination)
+    XCTAssertEqual(state.distanceRange, criteria.distanceRange)
+    XCTAssertEqual(state.minimumChargingPoints, criteria.minimumChargingPoints)
+    XCTAssertEqual(state.minimumPower, criteria.minimumPower)
+    XCTAssertEqual(state.foodChain, criteria.foodChain)
+    XCTAssertEqual(savedProfile.destination, destination)
+    XCTAssertEqual(savedProfile.criteria, criteria)
+  }
+
+  func testChargingPointNavigationUsesOnlyConfiguredOptionsAndStopsAtBounds() {
+    var state = ProfileFormState()
+
+    state.minimumChargingPoints = .two
+    state.selectPreviousMinimumChargingPoints()
+    XCTAssertEqual(state.minimumChargingPoints, .two)
+
+    state.selectNextMinimumChargingPoints()
+    XCTAssertEqual(state.minimumChargingPoints, .four)
+
+    state.minimumChargingPoints = .twelve
+    state.selectNextMinimumChargingPoints()
+    XCTAssertEqual(state.minimumChargingPoints, .sixteen)
+
+    state.selectPreviousMinimumChargingPoints()
+    XCTAssertEqual(state.minimumChargingPoints, .twelve)
+
+    state.minimumChargingPoints = .twenty
+    state.selectNextMinimumChargingPoints()
+    XCTAssertEqual(state.minimumChargingPoints, .twenty)
+  }
+
   private func makeDestination(name: String) throws -> SavedDestination {
     try SavedDestination(
       displayName: name,

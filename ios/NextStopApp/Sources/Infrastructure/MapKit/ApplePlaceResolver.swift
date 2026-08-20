@@ -340,6 +340,16 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
 }
 
 enum AppleChargingPlaceLookupScope {
+  static func restaurantGroupLocations(
+    candidateLocations: [ChargingLocationLookup],
+    operatorName: String
+  ) -> [ChargingLocationLookup] {
+    var seenLocationIDs = Set<UUID>()
+    return candidateLocations.filter {
+      $0.operatorName == operatorName && seenLocationIDs.insert($0.id).inserted
+    }
+  }
+
   static func relatedLocations(
     primaryLocations: [ChargingLocationLookup],
     candidateLocations: [ChargingLocationLookup],

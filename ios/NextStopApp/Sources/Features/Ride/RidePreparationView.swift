@@ -75,8 +75,10 @@ struct RidePreparationView: View {
   var body: some View {
     ScrollView {
       VStack(spacing: 20) {
-        destinationCard
-        criteriaCard
+        if viewModel.draft.sourceProfileID == nil {
+          destinationCard
+          criteriaCard
+        }
         preparationContent
       }
       .padding()
@@ -204,26 +206,38 @@ struct RidePreparationView: View {
         .frame(maxWidth: .infinity)
     }
     .buttonStyle(.borderedProminent)
+    .foregroundStyle(.black)
   }
 
   private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
     let results = outcome.results
     let allCandidateLocations = results.flatMap(\.locationLookups)
-    return VStack(spacing: 12) {
+    return VStack(alignment: .leading, spacing: 16) {
       coverageNotice(outcome.coverage)
 
-      HStack {
-        Label("ride.results.title", systemImage: "bolt.car.fill")
-          .font(.title3.weight(.semibold))
-        Spacer()
-        Text("\(results.count)")
-          .font(.headline.monospacedDigit())
-          .foregroundStyle(.secondary)
-      }
+      ViewThatFits(in: .horizontal) {
+        HStack(alignment: .center, spacing: 12) {
+          resultsHeading
+          Spacer()
+          resultCountBadge(results.count)
+        }
 
-      ForEach(results) { result in
+        VStack(alignment: .leading, spacing: 10) {
+          resultsHeading
+          resultCountBadge(results.count)
+        }
+      }
+      .padding(.horizontal, 4)
+
+      Label("ride.results.sorted_by_driving_distance", systemImage: "arrow.up.arrow.down")
+        .font(.caption)
+        .foregroundStyle(.secondary)
+        .padding(.horizontal, 4)
+
+      ForEach(Array(results.enumerated()), id: \.element.resultCardID) { index, result in
         resultCard(
           result,
+          position: index + 1,
           lookupLocations: result.matchingFoodPOI == nil
             ? allCandidateLocations : result.locationLookups
         )
@@ -241,6 +255,35 @@ struct RidePreparationView: View {
       }
       .buttonStyle(.bordered)
     }
+  }
+
+  private var resultsHeading: some View {
+    VStack(alignment: .leading, spacing: 4) {
+      Text("ride.results.screen.title")
+        .font(.title2.weight(.bold))
+
+      Label {
+        Text(
+          verbatim: LocalizedFormat.direction(
+            to: viewModel.draft.destination.displayName
+          )
+        )
+      } icon: {
+        Image(systemName: "arrow.up.right")
+      }
+      .font(.subheadline)
+      .foregroundStyle(.secondary)
+    }
+  }
+
+  private func resultCountBadge(_ count: Int) -> some View {
+    Text(verbatim: LocalizedFormat.resultCount(count))
+      .font(.headline.weight(.bold).monospacedDigit())
+      .foregroundStyle(.primary)
+      .frame(minHeight: 36)
+      .padding(.horizontal, 12)
+      .background(Color.accentColor.opacity(0.12), in: Capsule())
+      .fixedSize(horizontal: true, vertical: false)
   }
 
   @ViewBuilder
@@ -282,108 +325,237 @@ struct RidePreparationView: View {
     }
   }
 
+  @ViewBuilder
   private func resultCard(
     _ result: RouteSearchResult,
+    position: Int,
     lookupLocations: [ChargingLocationLookup]
   ) -> some View {
-    let candidate = result.candidate
-    let foodPOI = result.matchingFoodPOI
-    let chargingOperators = ChargingOperatorFoodDistance.sorted(
-      result.operatorChargingPoints,
-      operatorName: { $0.name },
-      locations: result.locationLookups,
-      foodCoordinate: foodPOI?.coordinate
-    )
+    if let foodPOI = result.matchingFoodPOI {
+      restaurantResultCard(
+        result,
+        foodPOI: foodPOI,
+        position: position,
+        lookupLocations: lookupLocations
+      )
+    } else {
+      parkResultCard(
+        result,
+        position: position,
+        lookupLocations: lookupLocations
+      )
+    }
+  }
+
+  private func restaurantResultCard(
+    _ result: RouteSearchResult,
+    foodPOI: FoodPOI,
+    position: Int,
+    lookupLocations: [ChargingLocationLookup]
+  ) -> some View {
     return Card {
-      HStack(alignment: .firstTextBaseline) {
-        Text("ride.result.operators")
-          .font(.caption.weight(.semibold))
+      HStack(alignment: .top, spacing: 12) {
+        resultPositionBadge(position)
+
+        VStack(alignment: .leading, spacing: 8) {
+          Label(foodPOI.name, systemImage: "fork.knife")
+            .font(.title3.weight(.bold))
+            .foregroundStyle(.primary)
+
+          resultMetrics(result)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+
+        ApplePlaceButton(
+          target: .restaurant(foodPOI),
+          resolver: placeResolver,
+          launcher: navigationLauncher
+        )
+      }
+
+      Divider()
+
+      operatorSection(
+        result.operatorChargingPoints,
+        result: result,
+        lookupLocations: lookupLocations,
+        usesRestaurantGroupLookupScope: true
+      )
+
+      availabilityContent(result.availability)
+    }
+  }
+
+  private func parkResultCard(
+    _ result: RouteSearchResult,
+    position: Int,
+    lookupLocations: [ChargingLocationLookup]
+  ) -> some View {
+    let chargingOperators = result.operatorChargingPoints
+
+    return Card {
+      HStack(alignment: .top, spacing: 12) {
+        resultPositionBadge(position)
+
+        VStack(alignment: .leading, spacing: 8) {
+          Label(result.candidate.park.name, systemImage: "bolt.car.fill")
+            .font(.title3.weight(.bold))
+            .foregroundStyle(.primary)
+
+          resultMetrics(result)
+        }
+        .frame(maxWidth: .infinity, alignment: .leading)
+      }
+
+      Divider()
+
+      operatorSection(
+        chargingOperators,
+        result: result,
+        lookupLocations: lookupLocations,
+        usesRestaurantGroupLookupScope: false
+      )
+
+      availabilityContent(result.availability)
+    }
+  }
+
+  private func resultPositionBadge(_ position: Int) -> some View {
+    Text(verbatim: "\(position)")
+      .font(.subheadline.weight(.bold).monospacedDigit())
+      .foregroundStyle(.black.opacity(0.82))
+      .frame(width: 32, height: 32)
+      .background(Color.accentColor, in: Circle())
+      .accessibilityLabel(Text(verbatim: LocalizedFormat.resultRank(position)))
+  }
+
+  private func resultMetrics(_ result: RouteSearchResult) -> some View {
+    VStack(alignment: .leading, spacing: 6) {
+      drivingDistanceLabel(result.candidate.actualDrivingDistance.value)
+      chargingPointLabel(result.chargingPointCount)
+    }
+  }
+
+  private func drivingDistanceLabel(_ meters: Int) -> some View {
+    Label {
+      Text(verbatim: LocalizedFormat.drivingDistanceToStop(meters))
+        .font(.title3.weight(.bold).monospacedDigit())
+    } icon: {
+      Image(systemName: "car.side.fill")
+    }
+    .foregroundStyle(.primary)
+  }
+
+  private func chargingPointLabel(_ count: Int) -> some View {
+    Label {
+      Text(verbatim: LocalizedFormat.matchingChargingPoints(count))
+        .monospacedDigit()
+    } icon: {
+      Image(systemName: "ev.charger.fill")
+    }
+    .font(.subheadline.weight(.medium))
+    .foregroundStyle(.secondary)
+  }
+
+  private func operatorSection(
+    _ chargingOperators: [RouteSearchOperatorSummary],
+    result: RouteSearchResult,
+    lookupLocations: [ChargingLocationLookup],
+    usesRestaurantGroupLookupScope: Bool
+  ) -> some View {
+    VStack(alignment: .leading, spacing: 0) {
+      Text("ride.result.operators")
+        .font(.caption.weight(.semibold))
+        .foregroundStyle(.secondary)
+        .textCase(.uppercase)
+        .padding(.bottom, 4)
+
+      ForEach(Array(chargingOperators.enumerated()), id: \.element.id) {
+        index, chargingOperator in
+        chargingOperatorRow(
+          chargingOperator,
+          result: result,
+          lookupLocations: lookupLocations,
+          usesRestaurantGroupLookupScope: usesRestaurantGroupLookupScope
+        )
+
+        if index < chargingOperators.count - 1 {
+          Divider()
+            .padding(.leading, 42)
+        }
+      }
+    }
+  }
+
+  private func chargingOperatorRow(
+    _ chargingOperator: RouteSearchOperatorSummary,
+    result: RouteSearchResult,
+    lookupLocations: [ChargingLocationLookup],
+    usesRestaurantGroupLookupScope: Bool
+  ) -> some View {
+    let relatedLocations =
+      usesRestaurantGroupLookupScope
+      ? AppleChargingPlaceLookupScope.restaurantGroupLocations(
+        candidateLocations: lookupLocations,
+        operatorName: chargingOperator.name
+      )
+      : AppleChargingPlaceLookupScope.relatedLocations(
+        primaryLocations: result.representativePark(
+          for: chargingOperator.name
+        )?.locationLookups ?? [],
+        candidateLocations: lookupLocations,
+        operatorName: chargingOperator.name
+      )
+
+    return HStack(alignment: .center, spacing: 10) {
+      Image(systemName: "bolt.fill")
+        .font(.caption.weight(.bold))
+        .foregroundStyle(.tint)
+        .frame(width: 32, height: 32)
+        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .accessibilityHidden(true)
+
+      VStack(alignment: .leading, spacing: 3) {
+        Text(chargingOperator.name)
+          .font(.headline)
+
+        Text(verbatim: LocalizedFormat.chargingPoints(chargingOperator.chargingPointCount))
+          .font(.subheadline.monospacedDigit())
           .foregroundStyle(.secondary)
-          .frame(maxWidth: .infinity, alignment: .leading)
-        Text(LocalizedFormat.kilometers(candidate.actualDrivingDistance.value))
-          .font(.title3.weight(.bold).monospacedDigit())
+      }
+      .frame(maxWidth: .infinity, alignment: .leading)
+      .layoutPriority(1)
+
+      if let representativePark = result.representativePark(
+        for: chargingOperator.name
+      ) {
+        ApplePlaceButton(
+          target: .charging(
+            park: representativePark,
+            operatorName: chargingOperator.name,
+            relatedLocations: relatedLocations
+          ),
+          resolver: placeResolver,
+          launcher: navigationLauncher
+        )
+      }
+    }
+    .padding(.vertical, 6)
+  }
+
+  @ViewBuilder
+  private func availabilityContent(_ availability: ParkAvailability) -> some View {
+    if let availability = availabilityText(availability) {
+      Divider()
+
+      Label {
+        Text(verbatim: availability)
+      } icon: {
+        Image(systemName: "wave.3.right.circle.fill")
           .foregroundStyle(.tint)
       }
-
-      ForEach(chargingOperators) { chargingOperator in
-        HStack(alignment: .center, spacing: 10) {
-          VStack(alignment: .leading, spacing: 3) {
-            Text(chargingOperator.name)
-              .font(.headline)
-
-            if let foodPOI,
-              let distance = ChargingOperatorFoodDistance.nearestMeters(
-                operatorName: chargingOperator.name,
-                locations: result.locationLookups,
-                foodCoordinate: foodPOI.coordinate
-              )
-            {
-              Text(
-                verbatim: LocalizedFormat.metersToPlace(
-                  distance,
-                  placeName: foodPOI.name
-                )
-              )
-              .font(.caption)
-              .foregroundStyle(.secondary)
-            }
-          }
-          .frame(maxWidth: .infinity, alignment: .leading)
-          .layoutPriority(1)
-          Label {
-            Text(verbatim: "\(chargingOperator.chargingPointCount)")
-          } icon: {
-            Image(systemName: "ev.charger")
-          }
-          .font(.subheadline.monospacedDigit())
-          .fixedSize(horizontal: true, vertical: false)
-          .accessibilityElement(children: .ignore)
-          .accessibilityLabel(
-            Text(
-              verbatim: LocalizedFormat.chargingPoints(
-                chargingOperator.chargingPointCount
-              ))
-          )
-
-          if let representativePark = result.representativePark(
-            for: chargingOperator.name
-          ) {
-            ApplePlaceButton(
-              target: .charging(
-                park: representativePark,
-                operatorName: chargingOperator.name,
-                relatedLocations: AppleChargingPlaceLookupScope.relatedLocations(
-                  primaryLocations: representativePark.locationLookups,
-                  candidateLocations: lookupLocations,
-                  operatorName: chargingOperator.name
-                )
-              ),
-              resolver: placeResolver,
-              launcher: navigationLauncher
-            )
-          }
-        }
-      }
-
-      if let availability = availabilityText(result.availability) {
-        Text(verbatim: availability)
-          .font(.subheadline)
-          .foregroundStyle(.secondary)
-      }
-
-      if let foodPOI {
-        HStack(alignment: .center, spacing: 10) {
-          Label(foodPOI.name, systemImage: "fork.knife")
-            .font(.headline)
-            .frame(maxWidth: .infinity, alignment: .leading)
-
-          ApplePlaceButton(
-            target: .restaurant(foodPOI),
-            resolver: placeResolver,
-            launcher: navigationLauncher
-          )
-        }
-      }
+      .font(.subheadline)
+      .foregroundStyle(.secondary)
     }
   }
 
@@ -436,69 +608,17 @@ struct RidePreparationView: View {
         }
       }
       .buttonStyle(.borderedProminent)
+      .foregroundStyle(.black)
     }
   }
 }
 
-enum ChargingOperatorFoodDistance {
-  static func sorted<Operator>(
-    _ operators: [Operator],
-    operatorName: (Operator) -> String,
-    locations: [ChargingLocationLookup],
-    foodCoordinate: Coordinate?
-  ) -> [Operator] {
-    guard let foodCoordinate else {
-      return operators
+extension RouteSearchResult {
+  fileprivate var resultCardID: String {
+    if let matchingFoodPOI {
+      return "restaurant:\(matchingFoodPOI.id)"
     }
-    var distances: [String: Int] = [:]
-    for chargingOperator in operators {
-      let name = operatorName(chargingOperator)
-      distances[name] = nearestMeters(
-        operatorName: name,
-        locations: locations,
-        foodCoordinate: foodCoordinate
-      )
-    }
-    return operators.sorted { lhs, rhs in
-      let lhsName = operatorName(lhs)
-      let rhsName = operatorName(rhs)
-      switch (distances[lhsName], distances[rhsName]) {
-      case (let lhsDistance?, let rhsDistance?):
-        if lhsDistance == rhsDistance {
-          return lhsName < rhsName
-        }
-        return lhsDistance < rhsDistance
-      case (_?, nil):
-        return true
-      case (nil, _?):
-        return false
-      case (nil, nil):
-        return lhsName < rhsName
-      }
-    }
-  }
-
-  static func nearestMeters(
-    operatorName: String,
-    locations: [ChargingLocationLookup],
-    foodCoordinate: Coordinate
-  ) -> Int? {
-    let foodLocation = CLLocation(
-      latitude: foodCoordinate.latitude,
-      longitude: foodCoordinate.longitude
-    )
-    return locations
-      .lazy
-      .filter { $0.operatorName == operatorName }
-      .map {
-        foodLocation.distance(
-          from: CLLocation(
-            latitude: $0.coordinate.latitude,
-            longitude: $0.coordinate.longitude
-          ))
-      }
-      .min()
-      .map { Int($0.rounded()) }
+    return "park:\(id.uuidString)"
   }
 }
 
@@ -536,14 +656,27 @@ private struct ApplePlaceButton: View {
         } else {
           Image(systemName: "map.fill")
             .font(.body.weight(.semibold))
+            .foregroundStyle(.primary)
         }
       }
       .frame(width: 48, height: 48)
-      .background(Color.accentColor.opacity(0.12), in: Circle())
-      .contentShape(Circle())
+      .background(
+        Color.accentColor.opacity(0.12),
+        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: 14, style: .continuous)
+          .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+      }
+      .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
     }
     .buttonStyle(.plain)
     .disabled(isLoading)
+    .onChange(of: target) {
+      cachedMapItem = nil
+      isLoading = false
+      failure = nil
+    }
     .accessibilityLabel(
       Text(
         String.localizedStringWithFormat(
@@ -583,13 +716,15 @@ private struct ApplePlaceButton: View {
   }
 
   private func openApplePlace() async {
+    let requestedTarget = target
     if let cachedMapItem {
       failure = launcher.openPlace(cachedMapItem) ? nil : .launchFailed
       return
     }
 
     isLoading = true
-    let mapItem = await target.resolve(using: resolver)
+    let mapItem = await requestedTarget.resolve(using: resolver)
+    guard requestedTarget == target else { return }
     isLoading = false
 
     guard let mapItem else {
@@ -601,7 +736,7 @@ private struct ApplePlaceButton: View {
   }
 }
 
-private enum ApplePlaceTarget {
+private enum ApplePlaceTarget: Hashable {
   case charging(
     park: ChargingPark,
     operatorName: String,
@@ -637,12 +772,17 @@ private struct Card<Content: View>: View {
   @ViewBuilder let content: Content
 
   var body: some View {
+    let shape = RoundedRectangle(cornerRadius: 20, style: .continuous)
+
     VStack(alignment: .leading, spacing: 12) {
       content
     }
     .padding()
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
+    .background(Color(.secondarySystemGroupedBackground), in: shape)
+    .overlay {
+      shape.stroke(Color.primary.opacity(0.06), lineWidth: 1)
+    }
+    .shadow(color: Color.black.opacity(0.04), radius: 12, y: 4)
   }
 }

@@ -42,6 +42,14 @@ struct ProfileFormState: Equatable {
     foodChain = profile?.criteria.foodChain ?? SearchConfiguration.defaultCriteria.foodChain
   }
 
+  mutating func selectPreviousMinimumChargingPoints() {
+    moveMinimumChargingPoints(by: -1)
+  }
+
+  mutating func selectNextMinimumChargingPoints() {
+    moveMinimumChargingPoints(by: 1)
+  }
+
   func makeProfile(now: Date, newID: UUID = UUID()) throws -> UserProfile {
     let trimmedName = name.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedName.isEmpty else {
@@ -64,5 +72,15 @@ struct ProfileFormState: Equatable {
       createdAt: createdAt ?? now,
       updatedAt: now
     )
+  }
+
+  private mutating func moveMinimumChargingPoints(by offset: Int) {
+    let options = MinimumChargingPointsOption.allCases
+    guard let currentIndex = options.firstIndex(of: minimumChargingPoints) else {
+      return
+    }
+    let nextIndex = currentIndex + offset
+    guard options.indices.contains(nextIndex) else { return }
+    minimumChargingPoints = options[nextIndex]
   }
 }

@@ -72,75 +72,42 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
-  func testChargingOperatorFoodDistanceUsesNearestLocationForOperator() throws {
-    let restaurant = try Coordinate(latitude: 50, longitude: 8)
-    let locations = [
-      try ChargingLocationLookup(
-        id: UUID(),
-        operatorName: "Near operator",
-        coordinate: Coordinate(latitude: 50.001, longitude: 8),
-        address: ChargingLocationAddress()
-      ),
-      try ChargingLocationLookup(
-        id: UUID(),
-        operatorName: "Near operator",
-        coordinate: Coordinate(latitude: 50.002, longitude: 8),
-        address: ChargingLocationAddress()
-      ),
-      try ChargingLocationLookup(
-        id: UUID(),
-        operatorName: "Other operator",
-        coordinate: Coordinate(latitude: 50.0001, longitude: 8),
-        address: ChargingLocationAddress()
-      ),
-    ]
-
-    let distance = try XCTUnwrap(
-      ChargingOperatorFoodDistance.nearestMeters(
-        operatorName: "Near operator",
-        locations: locations,
-        foodCoordinate: restaurant
+  func testRestaurantGroupLookupScopeIncludesEveryExactOperatorLocation() throws {
+    let first = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "IONITY",
+      coordinate: Coordinate(latitude: 50.001, longitude: 8),
+      address: ChargingLocationAddress(
+        street: "First Street",
+        houseNumber: "1",
+        postalCode: "10000",
+        city: "First City"
       )
     )
-
-    XCTAssertTrue((110...112).contains(distance))
-    XCTAssertNil(
-      ChargingOperatorFoodDistance.nearestMeters(
-        operatorName: "Missing operator",
-        locations: locations,
-        foodCoordinate: restaurant
+    let second = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "IONITY",
+      coordinate: Coordinate(latitude: 50.01, longitude: 8.01),
+      address: ChargingLocationAddress(
+        street: "Second Street",
+        houseNumber: "2",
+        postalCode: "20000",
+        city: "Second City"
       )
     )
-  }
-
-  func testChargingOperatorsSortByRestaurantDistanceWithUnknownLocationsLast() throws {
-    let restaurant = try Coordinate(latitude: 50, longitude: 8)
-    let locations = [
-      try ChargingLocationLookup(
-        id: UUID(),
-        operatorName: "Far operator",
-        coordinate: Coordinate(latitude: 50.002, longitude: 8),
-        address: ChargingLocationAddress()
-      ),
-      try ChargingLocationLookup(
-        id: UUID(),
-        operatorName: "Near operator",
-        coordinate: Coordinate(latitude: 50.001, longitude: 8),
-        address: ChargingLocationAddress()
-      ),
-    ]
-
-    let sortedOperators = ChargingOperatorFoodDistance.sorted(
-      ["Missing B", "Far operator", "Near operator", "Missing A"],
-      operatorName: { $0 },
-      locations: locations,
-      foodCoordinate: restaurant
+    let differentlyNamedOperator = try ChargingLocationLookup(
+      id: UUID(),
+      operatorName: "Ionity GmbH",
+      coordinate: Coordinate(latitude: 50.02, longitude: 8.02),
+      address: ChargingLocationAddress()
     )
 
-    XCTAssertEqual(
-      sortedOperators,
-      ["Near operator", "Far operator", "Missing A", "Missing B"]
+    let locations = AppleChargingPlaceLookupScope.restaurantGroupLocations(
+      candidateLocations: [first, second, first, differentlyNamedOperator],
+      operatorName: "IONITY"
     )
+
+    XCTAssertEqual(locations.map(\.id), [first.id, second.id])
   }
 
   func testAppleChargingPlaceMatchAllowsLargeCampusOnlyWithExactAddress() {

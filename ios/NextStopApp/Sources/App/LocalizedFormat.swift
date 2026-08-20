@@ -26,8 +26,9 @@ enum LocalizedFormat {
   }
 
   static func chargingPoints(_ value: Int) -> String {
-    String.localizedStringWithFormat(
-      NSLocalizedString("unit.charging_points.format", comment: "Number of charging points"),
+    let key = value == 1 ? "unit.charging_points.one" : "unit.charging_points.other"
+    return String.localizedStringWithFormat(
+      NSLocalizedString(key, comment: "Number of charging points"),
       Int64(value)
     )
   }
@@ -36,6 +37,84 @@ enum LocalizedFormat {
     String.localizedStringWithFormat(
       NSLocalizedString("unit.kilometers.format", comment: "Distance in rounded kilometers"),
       Int64((meters + 500) / 1_000)
+    )
+  }
+
+  static func powerOptionCount(_ value: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "profile.minimum_power.option_count.format",
+        comment: "Number of selectable charging power levels"
+      ),
+      Int64(value)
+    )
+  }
+
+  static func maximumRouteCorridor(_ meters: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "profile.route_corridor.info.format",
+        comment: "Fixed maximum route corridor in rounded kilometers"
+      ),
+      Int64((meters + 500) / 1_000)
+    )
+  }
+
+  static func maximumFoodDistance(_ meters: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "profile.food_distance.info.format",
+        comment: "Fixed maximum distance from a restaurant to a charging park"
+      ),
+      Int64(meters)
+    )
+  }
+
+  static func direction(to destination: String) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "ride.results.direction.format",
+        comment: "Destination direction shown above iPhone search results"
+      ),
+      destination
+    )
+  }
+
+  static func resultCount(_ value: Int) -> String {
+    let key = value == 1 ? "ride.results.count.one" : "ride.results.count.other"
+    return String.localizedStringWithFormat(
+      NSLocalizedString(key, comment: "Number of iPhone search results"),
+      Int64(value)
+    )
+  }
+
+  static func drivingDistanceToStop(_ meters: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "ride.result.driving_distance_to_stop.format",
+        comment: "Actual driving distance to a charging stop"
+      ),
+      Int64((meters + 500) / 1_000)
+    )
+  }
+
+  static func matchingChargingPoints(_ value: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "ride.result.matching_charging_points.format",
+        comment: "Number of charging points matching the selected minimum power"
+      ),
+      Int64(value)
+    )
+  }
+
+  static func resultRank(_ value: Int) -> String {
+    String.localizedStringWithFormat(
+      NSLocalizedString(
+        "ride.result.rank.accessibility.format",
+        comment: "Accessible ordinal label for one search result"
+      ),
+      Int64(value)
     )
   }
 
