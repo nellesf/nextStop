@@ -51,36 +51,54 @@ struct ProfileListView: View {
         } else {
           List {
             ForEach(profiles) { profile in
-              VStack(alignment: .leading, spacing: 12) {
+              VStack(alignment: .leading, spacing: 16) {
                 Button {
                   editorSelection = ProfileEditorSelection(profile: profile)
                 } label: {
-                  HStack {
+                  HStack(alignment: .center, spacing: 16) {
                     VStack(alignment: .leading, spacing: 4) {
                       Text(profile.name)
-                        .font(.headline)
+                        .font(.title3.weight(.semibold))
                         .foregroundStyle(.primary)
                       Text(profile.destination.displayName)
                         .font(.subheadline)
                         .foregroundStyle(.secondary)
                     }
-                    Spacer()
-                    Image(systemName: "pencil")
-                      .foregroundStyle(.secondary)
-                      .accessibilityHidden(true)
+                    .frame(maxWidth: .infinity, alignment: .leading)
+
+                    Text("action.edit")
+                      .font(.callout.weight(.semibold))
+                      .foregroundStyle(.primary)
+                      .padding(.horizontal, 16)
+                      .frame(minHeight: 44)
+                      .background(Color(.tertiarySystemFill), in: Capsule())
                   }
+                  .frame(minHeight: 64)
                   .contentShape(Rectangle())
                 }
+                .buttonStyle(.plain)
 
                 Button {
                   startRide(profile)
                 } label: {
-                  Label("ride.start", systemImage: "arrow.trianglehead.turn.up.right.circle.fill")
+                  Label("ride.start", systemImage: "bolt.car.fill")
+                    .symbolRenderingMode(.monochrome)
                     .frame(maxWidth: .infinity)
                 }
                 .buttonStyle(.borderedProminent)
+                .controlSize(.large)
                 .tint(.green)
               }
+              .padding(16)
+              .background(
+                Color(.secondarySystemGroupedBackground),
+                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+              )
+              .listRowInsets(
+                EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)
+              )
+              .listRowSeparator(.hidden)
+              .listRowBackground(Color.clear)
               .swipeActions {
                 Button("action.delete", role: .destructive) {
                   delete(profile)
@@ -88,23 +106,21 @@ struct ProfileListView: View {
               }
             }
           }
+          .listStyle(.plain)
+          .scrollContentBackground(.hidden)
+          .background(Color(.systemGroupedBackground))
         }
       }
       .navigationTitle("profiles.title")
       .toolbar {
         ToolbarItem(placement: .topBarLeading) {
           NavigationLink {
-            DestinationLibraryView(directionsRequestGate: directionsRequestGate)
-          } label: {
-            Label("destinations.title", systemImage: "star")
-          }
-        }
-        ToolbarItemGroup(placement: .primaryAction) {
-          NavigationLink {
             DataSourcesView()
           } label: {
             Label("licenses.title", systemImage: "info.circle")
           }
+        }
+        ToolbarItem(placement: .primaryAction) {
           Button {
             editorSelection = ProfileEditorSelection()
           } label: {
