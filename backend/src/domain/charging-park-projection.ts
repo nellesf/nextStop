@@ -4,6 +4,7 @@ import {
 } from "./geodesy.js";
 import type {
   AvailabilityState,
+  ChargingCampusProjection,
   ChargingParkProjection,
   EVSEIdentityConflict,
   NormalizedChargingLocation,
@@ -14,19 +15,138 @@ import type {
 import { stableId } from "./stable-id.js";
 
 export const chargingParkMaximumDiameterMeters = 200;
+export const chargingCampusMaximumNeighborDistanceMeters = 200;
+export const chargingCampusMaximumDiameterMeters = 500;
 
 export function buildChargingParkProjection(
   locations: readonly NormalizedChargingLocation[],
 ): readonly ChargingParkProjection[] {
+  const conflictingCanonicalEVSEIdentities = new Set(
+    findEVSEIdentityConflicts(locations).map(({ canonicalEVSEIdentity }) =>
+      canonicalEVSEIdentity,
+    ),
+  );
   const activeLocations = locations
     .filter((location) => location.active)
     .toSorted((first, second) => first.id.localeCompare(second.id));
   assertUniqueLocationIds(activeLocations);
 
-  const components = connectedComponents(activeLocations);
-  const clusters = components.flatMap(clusterComponent);
-  return clusters
-    .map(aggregatePark)
+  return connectedComponents(
+    activeLocations,
+    chargingParkMaximumDiameterMeters,
+  )
+    .flatMap(clusterComponent)
+    .map((members) => aggregatePark(members, conflictingCanonicalEVSEIdentities))
+    .toSorted((first, second) => first.id.localeCompare(second.id));
+}
+
+export function buildChargingCampusProjection(
+  locations: readonly NormalizedChargingLocation[],
+  fineParks: readonly ChargingParkProjection[],
+): readonly ChargingCampusProjection[] {
+  const activeLocations = locations
+    .filter((location) => location.active)
+    .toSorted((first, second) => first.id.localeCompare(second.id));
+  assertUniqueLocationIds(activeLocations);
+
+  const sortedFineParks = fineParks.toSorted((first, second) =>
+    first.id.localeCompare(second.id),
+  );
+  assertUniqueParkIds(sortedFineParks);
+  const activeLocationById = new Map(
+    activeLocations.map((location) => [location.id, location]),
+  );
+  const fineParkIndexByLocationId = validateFineParkSeeds(
+    activeLocations,
+    sortedFineParks,
+    activeLocationById,
+  );
+  const parents = sortedFineParks.map((_, index) => index);
+  const memberLocationsByRoot = sortedFineParks.map((park) =>
+    park.memberLocationIds
+      .map((locationId) => requiredLocation(activeLocationById, locationId))
+      .toSorted((first, second) => first.id.localeCompare(second.id)),
+  );
+  const rejectedRootPairs = new Set<string>();
+
+  for (const edge of locationNeighborEdges(
+    activeLocations,
+    chargingCampusMaximumNeighborDistanceMeters,
+  )) {
+    const firstLocation = activeLocations[edge.firstIndex];
+    const secondLocation = activeLocations[edge.secondIndex];
+    if (firstLocation === undefined || secondLocation === undefined) {
+      throw new Error("Campus neighbor edge references an unknown location.");
+    }
+    const firstParkIndex = fineParkIndexByLocationId.get(firstLocation.id);
+    const secondParkIndex = fineParkIndexByLocationId.get(secondLocation.id);
+    if (firstParkIndex === undefined || secondParkIndex === undefined) {
+      throw new Error("Campus neighbor edge references a location without a fine park.");
+    }
+    const firstRoot = find(parents, firstParkIndex);
+    const secondRoot = find(parents, secondParkIndex);
+    if (firstRoot === secondRoot) {
+      continue;
+    }
+
+    const lowerRoot = Math.min(firstRoot, secondRoot);
+    const higherRoot = Math.max(firstRoot, secondRoot);
+    const pairKey = `${lowerRoot}:${higherRoot}`;
+    if (rejectedRootPairs.has(pairKey)) {
+      continue;
+    }
+    const lowerMembers = memberLocationsByRoot[lowerRoot];
+    const higherMembers = memberLocationsByRoot[higherRoot];
+    if (lowerMembers === undefined || higherMembers === undefined) {
+      throw new Error("Campus cluster members disappeared during aggregation.");
+    }
+    if (!canMergeCampusClusters(lowerMembers, higherMembers)) {
+      rejectedRootPairs.add(pairKey);
+      continue;
+    }
+
+    parents[higherRoot] = lowerRoot;
+    memberLocationsByRoot[lowerRoot] = [...lowerMembers, ...higherMembers].toSorted(
+      (first, second) => first.id.localeCompare(second.id),
+    );
+    memberLocationsByRoot[higherRoot] = [];
+  }
+
+  const fineParksByRoot = new Map<number, ChargingParkProjection[]>();
+  sortedFineParks.forEach((park, index) => {
+    const root = find(parents, index);
+    const group = fineParksByRoot.get(root) ?? [];
+    group.push(park);
+    fineParksByRoot.set(root, group);
+  });
+  const conflictingCanonicalEVSEIdentities = new Set(
+    findEVSEIdentityConflicts(locations).map(({ canonicalEVSEIdentity }) =>
+      canonicalEVSEIdentity,
+    ),
+  );
+
+  return [...fineParksByRoot.values()]
+    .map((parks) => {
+      const memberParkIds = parks
+        .map((park) => park.id)
+        .toSorted((first, second) => first.localeCompare(second));
+      const memberLocations = parks
+        .flatMap((park) =>
+          park.memberLocationIds.map((locationId) =>
+            requiredLocation(activeLocationById, locationId),
+          ),
+        )
+        .toSorted((first, second) => first.id.localeCompare(second.id));
+      const aggregate = aggregatePark(
+        memberLocations,
+        conflictingCanonicalEVSEIdentities,
+      );
+      return {
+        ...aggregate,
+        id: stableId("charging-campus-v1", memberParkIds),
+        memberParkIds,
+      };
+    })
     .toSorted((first, second) => first.id.localeCompare(second.id));
 }
 
@@ -77,41 +197,15 @@ export function findEVSEIdentityConflicts(
 
 function connectedComponents(
   locations: readonly NormalizedChargingLocation[],
+  maximumNeighborDistanceMeters: number,
 ): readonly (readonly NormalizedChargingLocation[])[] {
   const parents = locations.map((_, index) => index);
-  const buckets = new Map<string, number[]>();
-
-  locations.forEach((location, index) => {
-    const earthCentered = earthCenteredCoordinate(location.coordinate);
-    const bucket = [earthCentered.x, earthCentered.y, earthCentered.z].map((value) =>
-      Math.floor(value / chargingParkMaximumDiameterMeters),
-    );
-    for (let xOffset = -1; xOffset <= 1; xOffset += 1) {
-      for (let yOffset = -1; yOffset <= 1; yOffset += 1) {
-        for (let zOffset = -1; zOffset <= 1; zOffset += 1) {
-          const neighborKey = bucketKey(
-            (bucket[0] ?? 0) + xOffset,
-            (bucket[1] ?? 0) + yOffset,
-            (bucket[2] ?? 0) + zOffset,
-          );
-          for (const neighborIndex of buckets.get(neighborKey) ?? []) {
-            const neighbor = locations[neighborIndex];
-            if (
-              neighbor !== undefined &&
-              geodesicDistanceMeters(location.coordinate, neighbor.coordinate) <=
-                chargingParkMaximumDiameterMeters
-            ) {
-              union(parents, index, neighborIndex);
-            }
-          }
-        }
-      }
-    }
-    const ownKey = bucketKey(bucket[0] ?? 0, bucket[1] ?? 0, bucket[2] ?? 0);
-    const ownBucket = buckets.get(ownKey) ?? [];
-    ownBucket.push(index);
-    buckets.set(ownKey, ownBucket);
-  });
+  for (const edge of locationNeighborEdges(
+    locations,
+    maximumNeighborDistanceMeters,
+  )) {
+    union(parents, edge.firstIndex, edge.secondIndex);
+  }
 
   const grouped = new Map<number, NormalizedChargingLocation[]>();
   locations.forEach((location, index) => {
@@ -203,8 +297,101 @@ function completeLinkDistance(
   return maximumDistance;
 }
 
+interface LocationNeighborEdge {
+  readonly firstIndex: number;
+  readonly secondIndex: number;
+  readonly distanceMeters: number;
+}
+
+function locationNeighborEdges(
+  locations: readonly NormalizedChargingLocation[],
+  maximumNeighborDistanceMeters: number,
+): readonly LocationNeighborEdge[] {
+  const buckets = new Map<string, number[]>();
+  const edges: LocationNeighborEdge[] = [];
+
+  locations.forEach((location, index) => {
+    const earthCentered = earthCenteredCoordinate(location.coordinate);
+    const bucket = [earthCentered.x, earthCentered.y, earthCentered.z].map((value) =>
+      Math.floor(value / maximumNeighborDistanceMeters),
+    );
+    for (let xOffset = -1; xOffset <= 1; xOffset += 1) {
+      for (let yOffset = -1; yOffset <= 1; yOffset += 1) {
+        for (let zOffset = -1; zOffset <= 1; zOffset += 1) {
+          const neighborKey = bucketKey(
+            (bucket[0] ?? 0) + xOffset,
+            (bucket[1] ?? 0) + yOffset,
+            (bucket[2] ?? 0) + zOffset,
+          );
+          for (const neighborIndex of buckets.get(neighborKey) ?? []) {
+            const neighbor = locations[neighborIndex];
+            if (neighbor === undefined) {
+              continue;
+            }
+            const distanceMeters = geodesicDistanceMeters(
+              neighbor.coordinate,
+              location.coordinate,
+            );
+            if (distanceMeters <= maximumNeighborDistanceMeters) {
+              edges.push({
+                firstIndex: neighborIndex,
+                secondIndex: index,
+                distanceMeters,
+              });
+            }
+          }
+        }
+      }
+    }
+    const ownKey = bucketKey(bucket[0] ?? 0, bucket[1] ?? 0, bucket[2] ?? 0);
+    const ownBucket = buckets.get(ownKey) ?? [];
+    ownBucket.push(index);
+    buckets.set(ownKey, ownBucket);
+  });
+
+  return edges.toSorted((first, second) => {
+    const firstStartId = locations[first.firstIndex]?.id;
+    const secondStartId = locations[second.firstIndex]?.id;
+    const firstEndId = locations[first.secondIndex]?.id;
+    const secondEndId = locations[second.secondIndex]?.id;
+    if (
+      firstStartId === undefined ||
+      secondStartId === undefined ||
+      firstEndId === undefined ||
+      secondEndId === undefined
+    ) {
+      throw new Error("Neighbor edge references an unknown location.");
+    }
+    return (
+      first.distanceMeters - second.distanceMeters ||
+      firstStartId.localeCompare(secondStartId) ||
+      firstEndId.localeCompare(secondEndId)
+    );
+  });
+}
+
+function canMergeCampusClusters(
+  first: readonly NormalizedChargingLocation[],
+  second: readonly NormalizedChargingLocation[],
+): boolean {
+  for (const firstLocation of first) {
+    for (const secondLocation of second) {
+      if (
+        geodesicDistanceMeters(
+          firstLocation.coordinate,
+          secondLocation.coordinate,
+        ) > chargingCampusMaximumDiameterMeters
+      ) {
+        return false;
+      }
+    }
+  }
+  return true;
+}
+
 function aggregatePark(
   members: readonly NormalizedChargingLocation[],
+  conflictingCanonicalEVSEIdentities: ReadonlySet<string>,
 ): ChargingParkProjection {
   const sortedMembers = members.toSorted((first, second) => first.id.localeCompare(second.id));
   const pointMemberships = deduplicatePointMemberships(
@@ -214,6 +401,7 @@ function aggregatePark(
         point,
       })),
     ),
+    conflictingCanonicalEVSEIdentities,
   );
   const points = pointMemberships.map(({ point }) => point);
   if (points.length === 0) {
@@ -256,17 +444,20 @@ interface PointMembership {
 
 function deduplicatePointMemberships(
   memberships: readonly PointMembership[],
+  conflictingCanonicalEVSEIdentities: ReadonlySet<string>,
 ): readonly PointMembership[] {
   const groups = new Map<string, PointMembership[]>();
   for (const membership of memberships) {
-    const key = membership.point.canonicalEVSEIdentity ?? membership.point.id;
+    const key = membership.point.canonicalEVSEIdentity === undefined
+      ? `point:${membership.point.id}`
+      : `canonical:${membership.point.canonicalEVSEIdentity}`;
     const group = groups.get(key) ?? [];
     group.push(membership);
     groups.set(key, group);
   }
   return [...groups.entries()]
     .toSorted(([first], [second]) => first.localeCompare(second))
-    .map(([, group]) => {
+    .flatMap(([, group]) => {
       const sorted = group.toSorted(
         (first, second) =>
           first.point.id.localeCompare(second.point.id) ||
@@ -276,10 +467,14 @@ function deduplicatePointMemberships(
       if (selected === undefined) {
         throw new Error("Cannot merge an empty EVSE membership group.");
       }
-      return {
-        operatorName: selected.operatorName,
-        point: mergeExactPointGroup(sorted.map(({ point }) => point)),
-      };
+      const canonicalEVSEIdentity = selected.point.canonicalEVSEIdentity;
+      return canonicalEVSEIdentity !== undefined &&
+        conflictingCanonicalEVSEIdentities.has(canonicalEVSEIdentity)
+        ? sorted
+        : [{
+            ...selected,
+            point: mergeExactPointGroup(sorted.map(({ point }) => point)),
+          }];
     });
 }
 
@@ -460,6 +655,57 @@ function assertUniqueLocationIds(locations: readonly NormalizedChargingLocation[
       throw new Error(`Duplicate charging location ID: ${locations[index]?.id ?? "unknown"}`);
     }
   }
+}
+
+function assertUniqueParkIds(parks: readonly ChargingParkProjection[]): void {
+  for (let index = 1; index < parks.length; index += 1) {
+    if (parks[index - 1]?.id === parks[index]?.id) {
+      throw new Error(`Duplicate charging park ID: ${parks[index]?.id ?? "unknown"}`);
+    }
+  }
+}
+
+function validateFineParkSeeds(
+  activeLocations: readonly NormalizedChargingLocation[],
+  fineParks: readonly ChargingParkProjection[],
+  activeLocationById: ReadonlyMap<string, NormalizedChargingLocation>,
+): ReadonlyMap<string, number> {
+  const fineParkIndexByLocationId = new Map<string, number>();
+
+  fineParks.forEach((park, parkIndex) => {
+    if (park.memberLocationIds.length === 0) {
+      throw new Error(`Charging park ${park.id} has no member locations.`);
+    }
+    const members = park.memberLocationIds.map((locationId) => {
+      if (fineParkIndexByLocationId.has(locationId)) {
+        throw new Error(`Charging location ${locationId} belongs to multiple fine parks.`);
+      }
+      const location = requiredLocation(activeLocationById, locationId);
+      fineParkIndexByLocationId.set(locationId, parkIndex);
+      return location;
+    });
+    if (maximumLocationDistance(members) > chargingParkMaximumDiameterMeters) {
+      throw new Error(`Charging park ${park.id} exceeds the 200 m fine-park diameter.`);
+    }
+  });
+
+  for (const location of activeLocations) {
+    if (!fineParkIndexByLocationId.has(location.id)) {
+      throw new Error(`Active charging location ${location.id} has no fine park.`);
+    }
+  }
+  return fineParkIndexByLocationId;
+}
+
+function requiredLocation(
+  activeLocationById: ReadonlyMap<string, NormalizedChargingLocation>,
+  locationId: string,
+): NormalizedChargingLocation {
+  const location = activeLocationById.get(locationId);
+  if (location === undefined) {
+    throw new Error(`Fine park references unknown or inactive location ${locationId}.`);
+  }
+  return location;
 }
 
 function bucketKey(x: number, y: number, z: number): string {

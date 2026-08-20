@@ -1,6 +1,7 @@
 import type { Pool, PoolClient } from "pg";
 
 import type {
+  ChargingCampusProjection,
   ChargingParkProjection,
   EVSEIdentityConflict,
   NormalizedLocationObservation,
@@ -31,6 +32,7 @@ export interface ProjectionCounts {
   readonly locationCount: number;
   readonly chargingPointCount: number;
   readonly parkCount: number;
+  readonly campusCount: number;
   readonly quarantineCount: number;
   readonly conflictCount: number;
 }
@@ -49,7 +51,9 @@ export class ProjectionWriter {
     const result = await this.pool.query<{ readonly id: string }>(
       `SELECT id
        FROM nextstop.projection_versions
-       WHERE status = 'active' AND source_dataset_hash = $1`,
+       WHERE status = 'active'
+         AND source_dataset_hash = $1
+         AND campus_count > 0`,
       [sourceDatasetHash],
     );
     return result.rows[0]?.id;
@@ -185,6 +189,65 @@ export class ProjectionWriter {
     );
   }
 
+  async writeCampuses(
+    projectionId: string,
+    campuses: readonly ChargingCampusProjection[],
+  ): Promise<void> {
+    if (campuses.length === 0) {
+      return;
+    }
+    await this.pool.query(
+      `INSERT INTO nextstop.charging_campus_projection (
+         projection_id, campus_id, name, centroid, navigation_coordinate,
+         member_park_ids, member_location_ids, operators,
+         operator_charging_point_counts, charging_point_count,
+         known_available_count, known_unavailable_count, unknown_count,
+         availability_complete, last_live_observation_at, maximum_power_kw,
+         source_summaries, data_updated_at
+       )
+       SELECT $1,
+              campus_id,
+              name,
+              ST_SetSRID(ST_MakePoint(centroid_longitude, centroid_latitude), 4326)::geography,
+              ST_SetSRID(ST_MakePoint(navigation_longitude, navigation_latitude), 4326)::geography,
+              member_park_ids,
+              member_location_ids,
+              operators,
+              operator_charging_point_counts,
+              charging_point_count,
+              known_available_count,
+              known_unavailable_count,
+              unknown_count,
+              availability_complete,
+              last_live_observation_at,
+              maximum_power_kw,
+              source_summaries,
+              data_updated_at
+       FROM jsonb_to_recordset($2::jsonb) AS item(
+         campus_id uuid,
+         name text,
+         centroid_latitude double precision,
+         centroid_longitude double precision,
+         navigation_latitude double precision,
+         navigation_longitude double precision,
+         member_park_ids uuid[],
+         member_location_ids uuid[],
+         operators text[],
+         operator_charging_point_counts jsonb,
+         charging_point_count integer,
+         known_available_count integer,
+         known_unavailable_count integer,
+         unknown_count integer,
+         availability_complete boolean,
+         last_live_observation_at timestamptz,
+         maximum_power_kw integer,
+         source_summaries jsonb,
+         data_updated_at timestamptz
+       )`,
+      [projectionId, JSON.stringify(campuses.map(storedCampus))],
+    );
+  }
+
   async writeConflicts(
     projectionId: string,
     conflicts: readonly EVSEIdentityConflict[],
@@ -244,6 +307,7 @@ export class ProjectionWriter {
         readonly locations: number;
         readonly chargingPoints: number;
         readonly parks: number;
+        readonly campuses: number;
         readonly quarantines: number;
         readonly conflicts: number;
       }>(
@@ -251,6 +315,7 @@ export class ProjectionWriter {
            (SELECT count(*)::integer FROM nextstop.normalized_charging_locations WHERE projection_id = $1) AS locations,
            (SELECT count(*)::integer FROM nextstop.normalized_charging_points WHERE projection_id = $1) AS "chargingPoints",
            (SELECT count(*)::integer FROM nextstop.charging_park_projection WHERE projection_id = $1) AS parks,
+           (SELECT count(*)::integer FROM nextstop.charging_campus_projection WHERE projection_id = $1) AS campuses,
            (SELECT count(*)::integer FROM nextstop.provider_quarantine WHERE projection_id = $1) AS quarantines,
            (SELECT count(*)::integer FROM nextstop.projection_conflicts WHERE projection_id = $1) AS conflicts`,
         [projectionId],
@@ -261,14 +326,20 @@ export class ProjectionWriter {
         row.locations !== counts.locationCount ||
         row.chargingPoints !== counts.chargingPointCount ||
         row.parks !== counts.parkCount ||
+        row.campuses !== counts.campusCount ||
         row.quarantines !== counts.quarantineCount ||
         row.conflicts !== counts.conflictCount ||
-        counts.parkCount === 0
+        counts.parkCount === 0 ||
+        counts.campusCount === 0
       ) {
         throw new Error("Projection row counts do not match the validated import.");
       }
       await client.query(
         "SELECT nextstop.rebuild_charging_park_power_projection($1)",
+        [projectionId],
+      );
+      await client.query(
+        "SELECT nextstop.rebuild_charging_campus_power_projection($1)",
         [projectionId],
       );
       await rebuildFoodMatchesForChargingProjection(client, projectionId);
@@ -284,8 +355,9 @@ export class ProjectionWriter {
              location_count = $3,
              charging_point_count = $4,
              park_count = $5,
-             quarantine_count = $6,
-             conflict_count = $7
+             campus_count = $6,
+             quarantine_count = $7,
+             conflict_count = $8
          WHERE id = $1 AND status = 'building'`,
         [
           projectionId,
@@ -293,6 +365,7 @@ export class ProjectionWriter {
           counts.locationCount,
           counts.chargingPointCount,
           counts.parkCount,
+          counts.campusCount,
           counts.quarantineCount,
           counts.conflictCount,
         ],
@@ -480,6 +553,30 @@ function storedPark(park: ChargingParkProjection): Readonly<Record<string, unkno
     maximum_power_kw: park.maximumPowerKW,
     source_summaries: sourceSummaries(park.sourceReferences),
     data_updated_at: park.lastStaticObservationAt,
+  };
+}
+
+function storedCampus(campus: ChargingCampusProjection): Readonly<Record<string, unknown>> {
+  return {
+    campus_id: campus.id,
+    name: campus.name,
+    centroid_latitude: campus.centroid.latitude,
+    centroid_longitude: campus.centroid.longitude,
+    navigation_latitude: campus.navigationCoordinate.latitude,
+    navigation_longitude: campus.navigationCoordinate.longitude,
+    member_park_ids: campus.memberParkIds,
+    member_location_ids: campus.memberLocationIds,
+    operators: campus.operators,
+    operator_charging_point_counts: campus.operatorChargingPointCounts,
+    charging_point_count: campus.chargingPointCount,
+    known_available_count: campus.availability.knownAvailableCount,
+    known_unavailable_count: campus.availability.knownUnavailableCount,
+    unknown_count: campus.availability.unknownCount,
+    availability_complete: campus.availability.complete,
+    last_live_observation_at: campus.availability.lastLiveObservationAt ?? null,
+    maximum_power_kw: campus.maximumPowerKW,
+    source_summaries: sourceSummaries(campus.sourceReferences),
+    data_updated_at: campus.lastStaticObservationAt,
   };
 }
 

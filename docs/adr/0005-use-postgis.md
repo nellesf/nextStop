@@ -5,8 +5,9 @@
 
 ## Context
 
-The 5 km route rule and 200/500 m distance rules require correct point/line
-geodesic predicates at European scale. Bounding-box-only filtering is forbidden.
+The 5 km route rule, 200 m fine-park/campus-edge rules, 500 m campus-diameter rule,
+and separate 500 m food-distance rule require correct point/line geodesic
+predicates at European scale. Bounding-box-only filtering is forbidden.
 
 ## Decision
 

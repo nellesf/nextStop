@@ -1,6 +1,6 @@
 # Test strategy
 
-Status: Accepted on 2026-08-13.
+Status: Accepted on 2026-08-13; clustering cases amended on 2026-08-20.
 
 ## Pure Swift domain tests
 
@@ -18,6 +18,12 @@ Run without Xcode entitlements through `ios/NextStopCore`.
 - No selected chain does not require a POI.
 - A selected chain uses the pinned OSM POI projection; exact 500 m is included and
   501 m is excluded even when both are present in the 700 m broad match cache.
+- The broad cache compares a POI with the complete-link fine park's base navigation
+  coordinate. A POI exactly 700 m away remains discoverable, and an exact <=500 m
+  match against a power-filtered member navigation coordinate remains discoverable
+  when the two park coordinates are 200 m apart. Duplicate projection work still
+  produces one fine-park/POI pair.
+- A food-filtered search uses fine parks and ignores no-food campus membership.
 - Missing active OSM data is a retryable provider error, not an empty result.
 - OSM attribution is present for both non-empty and empty food-filtered responses.
 
@@ -44,6 +50,9 @@ surplus power, availability count, and restaurant distance do not change order.
   excessive geometries.
 - Candidate displayed distance uses the candidate `MKRoute.distance` adapter result,
   not route progress or geodesic distance.
+- For no-food mode, exact corridor, straight-line lower bound, MapKit distance, and
+  handoff all use the same power-filtered campus navigation coordinate. Food mode
+  applies the equivalent rule to each power-filtered fine park.
 - Candidate pagination continues until safe lower-bound stopping is proven.
 - Candidate enrichment re-evaluates safe stopping after every bounded batch and
   shares a rolling MapKit directions budget across retries and subsequent rides.
@@ -61,13 +70,30 @@ manual/integration routes validates assumptions against the real SDK.
 - Malformed/out-of-range provider data is quarantined.
 - Timeouts, rate limits, partial provider failure, stale cache, and atomic publish.
 
-## Clustering tests
+## Clustering and projection tests
 
-- Different operators at 100 m and 199 m form one park.
-- Locations over 200 m remain separate.
-- A–B 150, B–C 150, A–C 300 exercises the approved chaining semantics.
-- All input permutations yield the same clusters and stable IDs.
-- Aggregate operators, EVSE count, free coverage, and maximum power are correct.
+- Different operators at 100 m and 199 m can form one fine park.
+- Fine-park complete link: A–B 150 m, B–C 150 m, A–C 300 m cannot form one park;
+  the deterministic split and park IDs are invariant under input permutations.
+- Campus construction starts from indivisible fine-park seeds, considers only
+  exact cross-park member edges <=200 m, accepts a union diameter of exactly 500 m,
+  and rejects 501 m.
+- Campus edge sorting by distance and canonical endpoint IDs produces identical
+  memberships and `charging-campus-v1` IDs under all input permutations and
+  equal-distance ties.
+- Campus power projection filters individual EVSEs first, deduplicates across all
+  constituent fine parks, then derives minimum-count inclusion, exact-name operator
+  partitions, availability, maximum power, lookup evidence, name, and navigation.
+  It never sums already aggregated child counts.
+- The backend selects one campus candidate per campus before count/corridor/origin
+  filtering and pagination when food is null; non-null food selects fine parks and
+  exact POI matching instead.
+- A production-shaped Wertheim regression keeps three fine parks but produces one
+  no-food campus. At >=150 kW the 38, 28, and 0 seed counts deduplicate to 66:
+  Electra 20, HomE 22, Tesla 20, EnBW 2, and EWE Go 2.
+- The full 2026-07-28 Bundesnetzagentur snapshot remains 48,664 fine parks ->
+  45,869 no-food campuses; the Stuttgart 12-fine-park area remains six campuses,
+  and zero campuses exceed 500 m diameter.
 
 ## PostGIS integration tests
 
@@ -75,7 +101,11 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 
 - `ST_DWithin` exact corridor behavior and geodesic meters.
 - Every supported power threshold is materialized with correctly filtered EVSE,
-  operator, availability, and coordinate derivations.
+  operator, availability, and coordinate derivations for both fine parks and
+  campuses.
+- Food-cache publication uses only the fine-park base navigation coordinate at
+  700 m; exact food inclusion rechecks the power-filtered fine-park coordinate at
+  500 m, and no campus row enters the food join.
 - The version/power/coordinate GiST index is present and a representative query
   plan uses it for spatial prefiltering without scanning retained versions.
 - Candidate cursor/snapshot is stable across pages.
@@ -86,6 +116,9 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 ## API contract/security tests
 
 - OpenAPI request/response validation and unknown-field policy.
+- `foodChain: null` returns at most one stable-ID candidate per bounded campus with
+  campus-wide qualifying EVSE/operator counts; non-null food returns fine-park
+  candidates with an exact restaurant match, without changing the v1 wire shape.
 - Oversized route, too many coordinates, NaN/invalid ranges, unsupported region,
   unrecognized enum, cursor mismatch, and injection payloads.
 - 429 retry metadata, provider-degraded response, error IDs, and no sensitive body
@@ -106,7 +139,7 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Locked phone, touch and knob input, light/dark, common aspect ratios, reconnect,
   Apple Maps unavailable/handoff failure.
 - On iPhone, verify that every operator and restaurant Maps button has at least a
-  44-point touch target, resolves only after it is tapped, opens the native Apple
+  48-point touch target, resolves only after it is tapped, opens the native Apple
   place by Place ID, caches the result for a second tap, and reports an unmatched
   item without changing the backend result. Verify that the result card does not
   duplicate the native place card's navigation action.

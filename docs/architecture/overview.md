@@ -1,6 +1,6 @@
 # System architecture
 
-Status: Accepted on 2026-08-13.
+Status: Accepted on 2026-08-13; clustering/search identity amended on 2026-08-20.
 
 ## Goals
 
@@ -57,21 +57,23 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Resolves destination text/completions to `MKMapItem`.
 - Calculates the canonical route from current location to destination.
 - Exports the detailed route polyline as a validated GeoJSON LineString.
-- Resolves actual automobile routes from current location to candidate parks.
+- Resolves actual automobile routes from current location to each candidate's
+  power-filtered navigation coordinate.
 - Consumes the backend's validated restaurant match; it does not perform local POI
   discovery for filtering. On iPhone, tapping an operator or restaurant Maps button
   performs a bounded Apple lookup for only that already-selected item; this lookup
   never changes inclusion, counts, ranking, or the CarPlay navigation waypoint.
-- When a food chain is selected, groups qualifying park candidates by the stable
-  backend restaurant POI ID. One restaurant becomes one result, operator EVSE
-  counts are summed across its member parks, and each exact operator name receives
-  one Apple Maps button.
+- When a food chain is selected, groups qualifying fine-park candidates by the
+  stable backend restaurant POI ID. One restaurant becomes one result, operator
+  EVSE counts are summed across its member fine parks, and each exact operator name
+  receives one Apple Maps button. Without food, the backend has already emitted
+  one campus-wide candidate per stable `ChargingCampusID`.
 - Opens a conservatively matched native Apple charger or restaurant by stable Place
   ID. If no unambiguous match exists, it leaves the backend result unchanged and
   reports that Apple details are unavailable.
 - For CarPlay, opens Apple Maps with driving directions. A matched restaurant is
   inserted as a waypoint before the original ride destination; without a food
-  match, the park remains the navigation destination.
+  match, the campus navigation coordinate remains the navigation destination.
 
 ### CarPlay adapter
 
@@ -101,7 +103,11 @@ services:
 - `normalization`: provider-independent operators, locations, EVSEs, connectors,
   availability, and provenance.
 - `identity`: exact identifiers and conservative cross-source deduplication.
-- `parks`: deterministic 200 m clustering and aggregated search projection.
+- `parks`: deterministic complete-link fine parks with <=200 m diameter.
+- `campuses`: deterministic no-food aggregates over indivisible fine parks using
+  <=200 m cross-edges and an inclusive <=500 m union diameter.
+- `projections`: power-specific fine-park and campus search summaries with
+  candidate-wide EVSE deduplication and aggregation.
 - `search`: PostGIS corridor and preliminary-filter query.
 - `api`: authentication/rate limiting, OpenAPI DTO validation, and redaction.
 - `operations`: provider health, freshness, quarantine, and metrics.
@@ -111,13 +117,14 @@ services:
 - Raw source payload metadata and content hash for replay/audit.
 - Normalized relational charging model with field-level observations.
 - Current authoritative projection and conflict records.
-- GiST-indexed `geography(Point, 4326)` park locations.
-- Separately versioned OSM restaurant POIs plus cached broad park/POI pairs.
-- Search projections for each supported minimum-power option a park satisfies.
-  Each row contains the qualifying deduplicated EVSE count, derived operators,
-  static availability, and power-filtered display/navigation coordinates. A
-  normalized park/location membership table replaces array membership scans on
-  the search path.
+- GiST-indexed `geography(Point, 4326)` fine-park and campus navigation locations.
+- Separately versioned OSM restaurant POIs plus cached broad fine-park/POI pairs
+  built from each fine park's base navigation coordinate.
+- Fine-park and campus search projections for each supported minimum-power option
+  the entity satisfies. Each row contains the entity-wide qualifying deduplicated
+  EVSE count, exact-name operators, static availability, lookup evidence, and
+  power-filtered display/navigation coordinates. Normalized fine-park/location and
+  campus/fine-park memberships replace array scans on the search path.
 - Live availability remains a separate snapshot and is joined only for the
   selected result page; it cannot affect candidate inclusion or ordering.
 
@@ -145,19 +152,23 @@ never import provider DTOs or UI frameworks.
 
 ## Search ownership
 
-The backend selects the precomputed row for the request's supported power value,
-then returns a paginated, stable candidate snapshot after EVSE count, restaurant,
-and exact route-corridor filtering. A straight-line origin bound safely removes
-parks that cannot satisfy the requested maximum driving distance. Live
-availability is added only to the selected page and remains informational. The
-iOS application performs the operations that only MapKit can truthfully provide:
+The backend first selects the candidate entity from `foodChain`: one
+`ChargingCampus` row per stable campus ID when it is null, or one complete-link
+`ChargingPark` row when it is non-null. It then selects the request's power
+projection and applies entity-wide minimum EVSE count, exact route corridor,
+origin lower bound, and, for fine parks, the exact restaurant predicate before
+stable pagination. Live availability is added only to the selected page and
+remains informational. The iOS application performs the operations that only
+MapKit can truthfully provide:
 
-1. exact automobile distance from the current location to each candidate;
+1. exact automobile distance from the current location to each candidate's same
+   power-filtered navigation coordinate;
 2. final distance-range filter;
 3. when food is selected, grouping by stable restaurant POI ID and aggregation of
    qualifying EVSE counts by exact operator name;
-4. final distance-only sort and five-result cap, using the nearest member park's
-   actual driving distance for a restaurant group.
+4. final distance-only sort and five-result cap, using the nearest member fine
+   park's actual driving distance for a restaurant group and the single campus
+   candidate distance without food.
 
 After the user taps an operator or restaurant Maps button, Apple-place matching is
 presentation enrichment only. It combines the selected item's authority/OSM
@@ -169,9 +180,13 @@ all of that operator's authority locations in the group but opens only one
 conservatively matched native Apple POI.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
-signed pagination token. A 700 m materialized pair cache reduces work, but the
-candidate query still applies exact geography `ST_DWithin(..., 500)` against the
-navigation coordinate derived after the request's power filter.
+signed pagination token. A 700 m materialized pair cache reduces work and retains
+a fine-park/POI pair when the POI is within that radius of the fine park's base
+navigation coordinate. The candidate query still applies exact geography
+`ST_DWithin(..., 500)` against the fine-park navigation coordinate derived after
+the request's power filter; the cached distance is never a matching decision. The
+complete-link 200 m park diameter guarantees prefilter completeness by the
+triangle inequality. No-food campuses do not participate in this cache.
 
 This split avoids a second router that could disagree with Apple Maps. It also
 means an API field named `actualDrivingDistance` must never be populated by route
@@ -187,7 +202,7 @@ a new snapshot after explicit confirmation.
 ## Failure boundaries
 
 - Provider failure: use non-expired cached data and report degraded source health.
-- Partial live data: retain the park with explicit coverage/unknown state.
+- Partial live data: retain the candidate with explicit coverage/unknown state.
 - POI projection failure: retain the previous active projection. If none exists,
   return a retryable error instead of misrepresenting it as a confirmed no-match.
 - MapKit route failure: no search; offer retry/destination change.

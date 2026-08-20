@@ -218,7 +218,7 @@ struct ProfileListView: View {
             }
             criterionDivider
 
-            profileCriterion("profile.preferred_food_chain", systemImage: "fork.knife") {
+            profileCriterion("profile.restaurant.title", systemImage: "fork.knife") {
               if let foodChain = profile.criteria.foodChain {
                 VStack(alignment: .trailing, spacing: 1) {
                   Text(LocalizedStringKey(foodChain.localizationKey))
@@ -231,7 +231,7 @@ struct ProfileListView: View {
                   .foregroundStyle(.secondary)
                 }
               } else {
-                Text("food.any")
+                Text("profile.restaurant.not_required")
               }
             }
           }

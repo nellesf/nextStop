@@ -3,17 +3,20 @@ info:
   title: nextStop Candidate Search API
   version: 1.0.0-draft
   description: |
-    Draft architecture-gate contract. The backend performs exact route-corridor
-    charging-data filtering, and the exact selected-chain proximity predicate from
-    a pinned OSM projection. MapKit on iOS calculates actual driving distance,
-    applies the exact selected distance range, and performs final distance-only ranking.
+    Draft architecture-gate contract. The v1 wire shape is unchanged across two
+    candidate modes. With foodChain omitted or null, the backend emits one bounded
+    charging campus candidate per stable campus ID. With foodChain non-null, it emits
+    complete-link fine-park candidates after the exact selected-chain proximity
+    predicate from a pinned OSM projection. The backend performs exact route
+    corridor filtering. MapKit on iOS calculates actual driving distance, applies
+    the exact selected distance range, and performs final distance-only ranking.
 servers:
   - url: https://api.nextstop.tech
 paths:
   /v1/charging-parks/search:
     post:
       operationId: searchChargingParkCandidates
-      summary: Return a stable page of route-corridor charging-park candidates
+      summary: Return a stable page of route-corridor charging candidates
       requestBody:
         required: true
         content:
@@ -126,15 +129,24 @@ components:
         minimumChargingPoints:
           type: integer
           enum: [2, 4, 6, 8, 10, 12, 16, 20]
-          description: Applied after EVSEs below minimumPowerKW are removed and the remainder is deduplicated.
+          description: >
+            Applied after EVSEs below minimumPowerKW are removed and the remainder
+            is deduplicated across the selected candidate unit: the whole campus
+            when foodChain is omitted or null, otherwise one fine park.
         minimumPowerKW:
           type: integer
           enum: [11, 22, 50, 100, 150, 200, 250, 300, 350, 400]
-          description: Applied to each EVSE before operator counts and minimumChargingPoints. Availability remains informational.
+          description: >
+            Applied to each EVSE before candidate-wide deduplication, operator
+            counts, and minimumChargingPoints. Availability remains informational.
         foodChain:
           type: [string, 'null']
           enum: [null, mcdonalds, burger_king, kfc, subway]
-          description: When non-null, the backend requires a matching OSM restaurant within 500 m.
+          description: >
+            Omitted or null selects bounded no-food campus candidates. A non-null
+            value selects complete-link fine-park candidates and requires a matching
+            OSM restaurant within 500 m of the power-filtered fine-park navigation
+            coordinate.
     Range15To50:
       type: object
       additionalProperties: false
@@ -183,6 +195,18 @@ components:
     ChargingParkCandidate:
       type: object
       additionalProperties: false
+      description: |
+        Compatibility name for the v1 candidate shape. With foodChain omitted or
+        null this is one ChargingCampus (fine-park seeds joined by <=200 m
+        cross-edges while the union diameter remains <=500 m). With foodChain
+        non-null this is one
+        complete-link ChargingPark with maximum diameter <=200 m and an exact food
+        match. The backend chooses this identity before charging filters and paging.
+        coordinate is the power-filtered display coordinate; navigationCoordinate
+        is the qualifying member/access point used consistently for corridor,
+        origin lower bound, MapKit distance, and handoff. chargingPoints, operator
+        counts, availability, maximumPowerKW, and locationLookups all cover that
+        selected candidate unit after power filtering and EVSE deduplication.
       required:
         - id
         - name
@@ -199,25 +223,50 @@ components:
         - sources
         - dataUpdatedAt
       properties:
-        id: { type: string, format: uuid }
-        name: { type: string, minLength: 1, maxLength: 200 }
+        id:
+          type: string
+          format: uuid
+          description: >
+            Stable charging-campus-v1 ID when foodChain is omitted or null;
+            otherwise the stable fine-park ID.
+        name:
+          type: string
+          minLength: 1
+          maxLength: 200
+          description: >
+            Power-filtered candidate name; campus-wide when foodChain is omitted or
+            null.
         coordinate: { $ref: '#/components/schemas/Coordinate' }
         navigationCoordinate: { $ref: '#/components/schemas/Coordinate' }
-        distanceFromRouteMeters: { type: integer, minimum: 0, maximum: 5000 }
+        distanceFromRouteMeters:
+          type: integer
+          minimum: 0
+          maximum: 5000
+          description: >
+            Exact geodesic distance from navigationCoordinate to the supplied route
+            line.
         preliminaryRouteProgressMeters:
           type: integer
           minimum: 0
           description: Never display or treat as actual driving distance.
-        straightLineLowerBoundMeters: { type: integer, minimum: 0 }
+        straightLineLowerBoundMeters:
+          type: integer
+          minimum: 0
+          description: >
+            Geodesic origin-to-navigationCoordinate lower bound; never display as
+            driving distance.
         chargingPoints:
           type: integer
           minimum: 1
-          description: Deduplicated EVSEs meeting the request's minimumPowerKW.
+          description: >
+            Deduplicated EVSEs meeting minimumPowerKW across the whole campus when
+            foodChain is omitted or null, otherwise across this fine park.
         availability: { $ref: '#/components/schemas/ParkAvailability' }
         maximumPowerKW:
           type: integer
           minimum: 1
-          description: Maximum power among the EVSEs included in this request-scoped candidate.
+          description: >
+            Maximum power among qualifying EVSEs across the selected candidate unit.
         operators:
           type: array
           uniqueItems: true
@@ -225,13 +274,18 @@ components:
         operatorChargingPoints:
           type: array
           minItems: 1
-          description: Deduplicated EVSEs meeting minimumPowerKW per included operator; the sum equals chargingPoints.
+          description: >
+            Exact-name operator partitions of candidate-wide deduplicated EVSEs
+            meeting minimumPowerKW; the sum equals chargingPoints. Campus mode must
+            not sum pre-aggregated fine-park counts.
           items:
             $ref: '#/components/schemas/OperatorChargingPoints'
         locationLookups:
           type: array
           minItems: 1
-          description: Power-filtered authority locations used only for on-device Apple POI matching.
+          description: >
+            Power-filtered authority locations across the whole selected candidate
+            unit, used only for on-device Apple POI matching.
           items:
             $ref: '#/components/schemas/ChargingLocationLookup'
         sources:
@@ -240,6 +294,9 @@ components:
           items: { $ref: '#/components/schemas/SourceSummary' }
         dataUpdatedAt: { type: string, format: date-time }
         foodPOI:
+          description: >
+            Absent or null in campus mode; the exact <=500 m OSM match for this
+            fine park in food mode.
           oneOf:
             - $ref: '#/components/schemas/FoodPOI'
             - type: 'null'
@@ -270,7 +327,13 @@ components:
           enum: [mcdonalds, burger_king, kfc, subway]
         name: { type: string, minLength: 1, maxLength: 200 }
         coordinate: { $ref: '#/components/schemas/Coordinate' }
-        distanceFromChargingParkMeters: { type: integer, minimum: 0, maximum: 500 }
+        distanceFromChargingParkMeters:
+          type: integer
+          minimum: 0
+          maximum: 500
+          description: >
+            Exact geodesic distance to the power-filtered fine-park navigation
+            coordinate.
         openingHours: { type: [string, 'null'] }
         sourceRecordURL: { type: string, format: uri }
     DataAttribution:

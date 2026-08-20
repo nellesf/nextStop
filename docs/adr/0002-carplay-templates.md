@@ -6,7 +6,8 @@
 ## Context
 
 The product is an EV-charging CarPlay app, not a navigation app. It needs fixed
-choices, a map/list of no more than five parks, details, and Apple Maps handoff.
+choices, a map/list of no more than five charging results, details, and Apple Maps
+handoff.
 
 ## Decision
 

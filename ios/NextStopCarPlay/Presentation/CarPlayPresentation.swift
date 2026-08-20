@@ -143,7 +143,7 @@ struct CarPlayPresenter {
       [
         CarPlayCriteriaOptionPresentation(
           selection: .foodChain(nil),
-          title: localizer.text("food.any"),
+          title: localizer.text("profile.restaurant.not_required"),
           selected: draft.criteria.foodChain == nil
         )
       ]
@@ -199,9 +199,9 @@ struct CarPlayPresenter {
     case .foodChain:
       return CarPlayCriterionPresentation(
         field: field,
-        title: localizer.text("profile.fast_food"),
+        title: localizer.text("profile.restaurant.title"),
         value: criteria.foodChain.map { localizer.text($0.localizationKey) }
-          ?? localizer.text("food.any")
+          ?? localizer.text("profile.restaurant.not_required")
       )
     }
   }

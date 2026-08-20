@@ -14,6 +14,7 @@ final class ProfileFormStateTests: XCTestCase {
       SearchConfiguration.defaultCriteria.minimumChargingPoints
     )
     XCTAssertEqual(state.minimumPower, SearchConfiguration.defaultCriteria.minimumPower)
+    XCTAssertFalse(state.requiresNearbyRestaurant)
     XCTAssertEqual(state.foodChain, SearchConfiguration.defaultCriteria.foodChain)
   }
 
@@ -101,9 +102,49 @@ final class ProfileFormStateTests: XCTestCase {
     XCTAssertEqual(state.distanceRange, criteria.distanceRange)
     XCTAssertEqual(state.minimumChargingPoints, criteria.minimumChargingPoints)
     XCTAssertEqual(state.minimumPower, criteria.minimumPower)
+    XCTAssertTrue(state.requiresNearbyRestaurant)
     XCTAssertEqual(state.foodChain, criteria.foodChain)
     XCTAssertEqual(savedProfile.destination, destination)
     XCTAssertEqual(savedProfile.criteria, criteria)
+  }
+
+  func testRestaurantModeRequiresAChainBeforeSaving() throws {
+    var state = ProfileFormState()
+    state.name = "Pause"
+    state.destination = try makeDestination(name: "München")
+    state.requiresNearbyRestaurant = true
+
+    XCTAssertThrowsError(try state.makeProfile(now: Date())) { error in
+      XCTAssertEqual(error as? ProfileFormValidationError, .restaurantChainRequired)
+    }
+  }
+
+  func testDisabledRestaurantModePersistsNoChain() throws {
+    var state = ProfileFormState()
+    state.name = "Ohne Pause"
+    state.destination = try makeDestination(name: "Köln")
+    state.foodChain = .subway
+    state.requiresNearbyRestaurant = false
+
+    let profile = try state.makeProfile(now: Date())
+
+    XCTAssertNil(profile.criteria.foodChain)
+  }
+
+  func testRestaurantModeRestoresSelectionWithinTheSameEditSession() throws {
+    var state = ProfileFormState()
+    state.name = "Kaffeepause"
+    state.destination = try makeDestination(name: "Berlin")
+    state.requiresNearbyRestaurant = true
+    state.foodChain = .burgerKing
+
+    state.requiresNearbyRestaurant = false
+    XCTAssertEqual(state.foodChain, .burgerKing)
+
+    state.requiresNearbyRestaurant = true
+    let profile = try state.makeProfile(now: Date())
+
+    XCTAssertEqual(profile.criteria.foodChain, .burgerKing)
   }
 
   func testChargingPointNavigationUsesOnlyConfiguredOptionsAndStopsAtBounds() {

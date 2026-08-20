@@ -53,6 +53,20 @@ final class CarPlayPresentationTests: XCTestCase {
     )
   }
 
+  func testNoRestaurantModeUsesExplicitCopyInsteadOfAny() throws {
+    let profile = try makeProfile(foodChain: nil)
+    let draft = RideSearchDraft(profile: profile)
+    let presenter = CarPlayPresenter(localizer: germanLocalizer())
+
+    let restaurantCriterion = presenter.rideSummary(draft).criteria[3]
+    let restaurantOptions = presenter.options(for: .foodChain, draft: draft)
+
+    XCTAssertEqual(restaurantCriterion.title, "Restaurant")
+    XCTAssertEqual(restaurantCriterion.value, "Kein Restaurant erforderlich")
+    XCTAssertEqual(restaurantOptions.first?.title, "Kein Restaurant erforderlich")
+    XCTAssertEqual(restaurantOptions.filter(\.selected).count, 1)
+  }
+
   func testResultsKeepDistanceOrderAndDescribePartialAvailabilityHonestly() throws {
     let first = try makeResult(
       id: "10000000-0000-4000-8000-000000000001",
@@ -165,7 +179,7 @@ final class CarPlayPresentationTests: XCTestCase {
     )
   }
 
-  private func makeProfile() throws -> UserProfile {
+  private func makeProfile(foodChain: FoodChain? = .mcdonalds) throws -> UserProfile {
     try UserProfile(
       id: UUID(uuidString: "AAAAAAAA-BBBB-4CCC-8DDD-EEEEEEEEEEEE")!,
       name: "Langstrecke",
@@ -177,7 +191,7 @@ final class CarPlayPresentationTests: XCTestCase {
         distanceRange: .kilometers100To150,
         minimumChargingPoints: .eight,
         minimumPower: .oneHundredFifty,
-        foodChain: .mcdonalds
+        foodChain: foodChain
       ),
       createdAt: Date(timeIntervalSince1970: 0),
       updatedAt: Date(timeIntervalSince1970: 0)
@@ -236,7 +250,8 @@ final class CarPlayPresentationTests: XCTestCase {
       "profile.distance_range": "Ladestopp",
       "profile.minimum_charging_points": "Mindestens Ladepunkte",
       "profile.minimum_power": "Mindestleistung",
-      "profile.fast_food": "Fast Food",
+      "profile.restaurant.title": "Restaurant",
+      "profile.restaurant.not_required": "Kein Restaurant erforderlich",
       "search.distance_range.100_150_km": "100–150 km",
       "unit.minimum_count.format": "mindestens %lld",
       "unit.kilowatts.format": "%lld kW",
@@ -253,7 +268,6 @@ final class CarPlayPresentationTests: XCTestCase {
       "ride.results.title": "Passende Ladeparks",
       "carplay.coverage.degraded": "Live-Daten teilweise verfügbar",
       "carplay.coverage.stale": "Ladedaten nicht aktuell",
-      "food.any": "egal",
     ]
     return CarPlayLocalizer(locale: Locale(identifier: "de_DE")) { key in
       values[key] ?? key

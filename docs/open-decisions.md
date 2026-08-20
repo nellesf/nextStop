@@ -1,7 +1,8 @@
 # Approved decisions and external blockers
 
 The owner approved all recommendations on 2026-08-13 and selected centrally
-configured defaults for non-profile rides. Implementation is authorized within the
+configured defaults for non-profile rides. The owner amended the charging-park
+clustering decision on 2026-08-20. Implementation is authorized within the
 accepted ADR boundaries.
 
 ## 1. Minimum iOS version
@@ -27,13 +28,28 @@ good ingestion ergonomics, and a small operational footprint. Alternatives:
 The database recommendation is PostgreSQL + PostGIS under every option. See ADRs
 0003 and 0004.
 
-## 3. Exact 200 m clustering semantics
+## 3. Fine-park and no-food-campus semantics
 
-**Decision: deterministic diameter-bounded agglomeration (complete-linkage),
-so no two member locations in a park are more than 200 m apart.** A transitive
-DBSCAN/connected-component rule can chain locations A–B–C into one park even when
-A and C are more than 200 m apart. That conflicts with the phrase “maximum cluster
-distance,” but DBSCAN may better represent long physical service areas.
+**Decision amended 2026-08-20: retain deterministic complete-link parks with a
+maximum 200 m diameter, and derive a separate bounded campus identity only for
+searches without a food chain.** Fine parks are indivisible campus seeds.
+Deterministically ordered member-location cross-edges of at most 200 m may merge
+seed groups only while every underlying member pair in the union remains within
+500 m. A `charging-campus-v1` ID is derived from sorted constituent fine-park IDs.
+
+The backend selects the result unit before filters and pagination. Without food,
+power filtering, campus-wide EVSE deduplication, minimum count, operators,
+availability, navigation coordinate, corridor, and origin bound all apply to the
+campus. With food, the complete-link fine park remains the candidate unit and the
+existing exact restaurant predicate and restaurant-centric client grouping remain
+unchanged.
+
+The full 2026-07-28 Bundesnetzagentur snapshot produces 48,664 fine parks and
+45,869 no-food campuses, with no campus over 500 m. Wertheim changes from three
+fine parks to one campus with 66 qualifying EVSEs at >=150 kW. The problematic
+Stuttgart 200 m-edge area is boundedly split from 12 fine parks into six campuses.
+Universal complete-link would keep Wertheim duplicated; universal unbounded
+connected components would merge urban chains over much larger distances.
 
 See ADR 0006.
 
@@ -56,7 +72,7 @@ editable before search:
 - charging stop: 50–100 km;
 - minimum charging points: 4 EVSEs;
 - minimum power: 100 kW;
-- fast food: any.
+- nearby restaurant required: no (`foodChain = nil`).
 
 See accepted ADR 0012. These defaults are not persisted back into a profile and
 are never automatically relaxed.

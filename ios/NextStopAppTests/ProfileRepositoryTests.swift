@@ -38,6 +38,23 @@ final class ProfileRepositoryTests: XCTestCase {
 
     XCTAssertEqual(try repository.fetchProfiles(), [updated])
 
+    let withoutRestaurant = try UserProfile(
+      id: profileID,
+      name: "Updated",
+      destination: original.destination,
+      criteria: RideCriteria(
+        distanceRange: updated.criteria.distanceRange,
+        minimumChargingPoints: updated.criteria.minimumChargingPoints,
+        minimumPower: updated.criteria.minimumPower,
+        foodChain: nil
+      ),
+      createdAt: firstTimestamp,
+      updatedAt: firstTimestamp.addingTimeInterval(120)
+    )
+    try repository.save(withoutRestaurant)
+
+    XCTAssertEqual(try repository.fetchProfiles(), [withoutRestaurant])
+
     try repository.delete(id: profileID)
     XCTAssertTrue(try repository.fetchProfiles().isEmpty)
   }

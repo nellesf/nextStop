@@ -3,11 +3,13 @@
 nextStop is an Apple CarPlay-focused iOS app for EV drivers. Given a
 destination and a small set of explicit criteria, it finds at most the next five
 matching charging stops along the current MapKit route and hands the selected
-restaurant or park to Apple Maps. With a food filter, one stop represents one
-restaurant and combines all qualifying nearby parks by charging operator. It does
-not provide turn-by-turn navigation.
+restaurant or charging campus to Apple Maps. Without a food filter, one stop is a
+bounded charging campus. With a food filter, one stop represents one restaurant
+and combines all qualifying nearby fine parks by charging operator. It does not
+provide turn-by-turn navigation.
 
-Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
+Phase 1 research and the Phase 2 architecture were approved on 2026-08-13; the
+charging-park clustering decision was amended on 2026-08-20.
 Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
@@ -30,30 +32,38 @@ destination through MapKit and open the same ride preparation. The strict
 TypeScript/Fastify backend now discovers and imports the current official
 Bundesnetzagentur register automatically, joins the official Swiss
 `ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic
-charging parks, publishes versioned PostGIS static/live snapshots atomically, and
-serves exact 5 km route-corridor candidates through signed stable snapshots. A
+complete-link charging parks plus bounded no-food campuses, publishes versioned
+PostGIS static/live snapshots atomically, and serves exact 5 km route-corridor
+candidates through signed stable snapshots. A
 separate daily OSM projection imports supported chains from cached Geofabrik PBF
 extracts and enforces the exact 500 m restaurant predicate.
 
 ## Non-negotiable product rules
 
-- A charging park must be at most 5 km geodesic distance from the actual route
-  polyline.
-- Charging locations from different operators may form one park when the chosen
-  clustering rule permits it within 200 m.
+- The selected power-specific candidate navigation coordinate must be at most 5 km
+  geodesic distance from the actual route polyline.
+- A fine charging park uses deterministic complete-link clustering: every pair of
+  member locations is at most 200 m apart.
+- Without a food filter, fine parks are indivisible seeds of a
+  `charging-campus-v1` result. Deterministically ordered cross-park edges of at
+  most 200 m may merge seeds only while the union diameter remains at most 500 m.
+  The backend chooses and aggregates this campus before filtering and pagination.
 - EVSEs (simultaneously usable charging positions), not cabinets or connectors,
   are counted.
-- The minimum-power filter is applied to individual EVSEs before per-operator
-  counts, minimum park size, and informational availability are aggregated.
-- Availability remains informational and never filters a park.
-- A selected food chain must be within 500 m geodesic distance of the park.
-- With a selected food chain, parks that match the same stable restaurant POI are
-  presented as one result. Exact operator names are combined and their qualifying
-  EVSE counts are summed; the nearest member park by actual driving distance
-  determines result order and displayed driving distance.
+- The minimum-power filter is applied to individual EVSEs before candidate-wide
+  deduplication, per-operator counts, minimum size, and informational availability
+  are derived. Counts cover the whole campus without food and one fine park before
+  restaurant grouping with food.
+- Availability remains informational and never filters a candidate.
+- A selected food chain must be within 500 m geodesic distance of the
+  power-filtered fine-park navigation coordinate.
+- With a selected food chain, fine parks that match the same stable restaurant POI
+  are presented as one result. Exact operator names are combined and their
+  qualifying EVSE counts are summed; the nearest member fine park by actual driving
+  distance determines result order and displayed driving distance.
 - Opening hours are informational only.
 - Results are sorted only by actual MapKit driving distance from the current
-  location and capped at five parks without a food filter or five restaurants
+  location and capped at five campuses without a food filter or five restaurants
   with one. Filters are never relaxed automatically.
 - Profiles, favorites, and recent destinations remain local. CarPlay edits are
   ride-scoped and never mutate a saved profile.
@@ -73,7 +83,8 @@ Modular backend
   versioned HTTP API
   provider normalization and provenance
   conservative EVSE deduplication
-  deterministic 200 m park clustering
+  deterministic complete-link 200 m fine-park clustering
+  deterministic 200 m-edge / 500 m-diameter no-food campus projection
   versioned OSM restaurant ingestion + attribution
   cached search projection
               |
@@ -82,8 +93,8 @@ PostgreSQL + PostGIS
   raw provider records
   normalized charging entities
   field-level provenance and quality
-  GiST-indexed charging-park projection
-  separate OSM POI projection and park/POI match cache
+  GiST-indexed fine-park and campus search projections
+  separate OSM POI projection and fine-park/POI match cache
 ```
 
 The full rationale and boundaries are in

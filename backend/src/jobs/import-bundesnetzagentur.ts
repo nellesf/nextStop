@@ -3,6 +3,7 @@ import { createReadStream } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
+  buildChargingCampusProjection,
   buildChargingParkProjection,
   findEVSEIdentityConflicts,
 } from "../domain/charging-park-projection.js";
@@ -82,9 +83,16 @@ async function main(): Promise<void> {
     await writer.writeQuarantines(projectionId, quarantines);
 
     const parks = buildChargingParkProjection(locations);
+    const campuses = buildChargingCampusProjection(locations, parks);
     const conflicts = findEVSEIdentityConflicts(locations);
     for (let offset = 0; offset < parks.length; offset += writeBatchSize) {
       await writer.writeParks(projectionId, parks.slice(offset, offset + writeBatchSize));
+    }
+    for (let offset = 0; offset < campuses.length; offset += writeBatchSize) {
+      await writer.writeCampuses(
+        projectionId,
+        campuses.slice(offset, offset + writeBatchSize),
+      );
     }
     for (let offset = 0; offset < conflicts.length; offset += writeBatchSize) {
       await writer.writeConflicts(
@@ -96,6 +104,7 @@ async function main(): Promise<void> {
       locationCount: locations.length,
       chargingPointCount,
       parkCount: parks.length,
+      campusCount: campuses.length,
       quarantineCount,
       conflictCount: conflicts.length,
     };

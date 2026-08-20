@@ -128,18 +128,18 @@ struct RidePreparationView: View {
       LabeledContent("profile.minimum_power") {
         Text(LocalizedFormat.kilowatts(viewModel.draft.criteria.minimumPower.rawValue))
       }
-      LabeledContent("profile.fast_food") {
-        foodChainText
+      LabeledContent("profile.restaurant.title") {
+        restaurantRequirementText
       }
     }
   }
 
   @ViewBuilder
-  private var foodChainText: some View {
+  private var restaurantRequirementText: some View {
     if let foodChain = viewModel.draft.criteria.foodChain {
       Text(LocalizedStringKey(foodChain.localizationKey))
     } else {
-      Text("food.any")
+      Text("profile.restaurant.not_required")
     }
   }
 

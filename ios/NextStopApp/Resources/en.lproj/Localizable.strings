@@ -53,12 +53,10 @@
 "destinations.manage" = "Manage destinations";
 "destinations.title" = "Destinations";
 "error.generic" = "Something went wrong.";
-"food.any" = "any";
 "profile.charging_points" = "Charging points";
 "profile.destination" = "Destination";
 "profile.distance_range" = "Charging stop";
 "profile.distance_to_stop" = "Distance to charging stop";
-"profile.fast_food" = "Fast food";
 "profile.food_distance.info.format" = "At most %lld m from the charging park";
 "profile.minimum_charging_points" = "Minimum charging points";
 "profile.minimum_power" = "Minimum power";
@@ -66,7 +64,13 @@
 "profile.name" = "Profile name";
 "profile.new.title" = "New profile";
 "profile.edit.title" = "Edit profile";
-"profile.preferred_food_chain" = "Preferred chain";
+"profile.restaurant.chain" = "Restaurant chain";
+"profile.restaurant.chain.placeholder" = "Choose a chain";
+"profile.restaurant.not_required" = "No restaurant required";
+"profile.restaurant.not_required.explanation" = "Even without a restaurant filter, nextStop combines nearby charging locations from different operators into one charging park. All matching charging points in that park count toward the minimum, across operators.";
+"profile.restaurant.required" = "Nearby restaurant required";
+"profile.restaurant.required.description" = "Only show charging parks with a supported restaurant chain within 500 m.";
+"profile.restaurant.title" = "Restaurant";
 "profile.route_corridor.info.format" = "Along the route · max. %lld km";
 "profile.save.action" = "Save profile";
 "profile.search.start" = "Start search";
@@ -75,6 +79,7 @@
 "profile.section.general" = "Profile";
 "profile.validation.destination" = "Select a destination from the search results.";
 "profile.validation.name" = "Enter a profile name.";
+"profile.validation.restaurant_chain" = "Please choose a restaurant chain.";
 "profiles.empty.description" = "Create a profile to prepare a destination and charging criteria for CarPlay.";
 "profiles.empty.title" = "No profiles yet";
 "profiles.edit.accessibility_hint" = "Opens the profile for editing.";

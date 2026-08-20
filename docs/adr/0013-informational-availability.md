@@ -16,7 +16,7 @@ differently by region.
 Remove minimum available EVSEs from saved profiles, ride drafts, iPhone and CarPlay
 editors, and the candidate-search API. Availability remains normalized and visible
 as informational data when a provider supplies it, but it never includes or
-excludes a charging park.
+excludes a charging candidate.
 
 The minimum charging-point criterion remains and counts only deduplicated EVSEs
 that satisfy the selected minimum power. The legacy SwiftData availability field

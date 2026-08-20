@@ -1,6 +1,6 @@
 # Charging data provider concept
 
-Status: Accepted on 2026-08-13.
+Status: Accepted on 2026-08-13; projection pipeline amended on 2026-08-20.
 
 ## Port
 
@@ -16,7 +16,8 @@ interface ChargingDataProvider {
 
 `ProviderBatch` contains source-private records plus cursor/watermark metadata. A
 separate mapper validates and emits normalized observations. The provider never
-returns `ChargingPark`; parks exist only after cross-source identity and clustering.
+returns `ChargingPark` or `ChargingCampus`; both exist only after cross-source
+identity and backend projection construction.
 
 Provider families:
 
@@ -35,7 +36,9 @@ ChargingDataProvider
 fetch -> byte/content limits -> schema validation -> raw record + hash
       -> source mapping -> normalized observations -> exact identity
       -> conservative cross-source dedup -> conflict resolution
-      -> 200 m clustering -> transactional search projection publish
+      -> complete-link <=200 m fine parks
+      -> deterministic <=200 m-edge / <=500 m-diameter no-food campuses
+      -> power-specific fine-park + campus projections -> transactional publish
 ```
 
 Publishing is atomic: a failed refresh cannot replace the last valid projection

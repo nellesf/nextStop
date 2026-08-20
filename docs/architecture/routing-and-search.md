@@ -1,12 +1,13 @@
 # Routing and candidate search
 
-Status: Accepted on 2026-08-13.
+Status: Accepted on 2026-08-13; candidate identity amended on 2026-08-20.
 
 ## Canonical routing rule
 
 MapKit is the sole source for the user-selected route and actual automobile
-distance to a park. The backend does not run a second router in the MVP because
-different road graphs/options could rank a different “next five” than Apple Maps.
+distance to a candidate navigation coordinate. The backend does not run a second
+router in the MVP because different road graphs/options could rank a different
+“next five” than Apple Maps.
 
 ## End-to-end algorithm
 
@@ -23,21 +24,25 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    outside the supported region.
 5. Send the route plus ride criteria to the backend. Do not send profile name,
    saved destination text, favorites, account ID, or a persistent device ID.
-6. Backend queries clustered parks whose geography is within 5,000 m of the actual
-   LineString using index-aware `ST_DWithin` on WGS84 geography. A bounding box may
-   prefilter but is never the final corridor predicate.
-7. Backend computes geodesic distance to the line and a preliminary route-progress
-   measure, applies normalized charging filters, and, when selected, joins the
-   pinned OSM restaurant projection. It uses a cached 700 m broad pair followed by
-   an exact inclusive 500 m geography check against the power-filtered park access
-   coordinate. It returns the selected restaurant and attribution in the stable
-   paginated snapshot.
+6. Backend chooses the search entity before any filter or pagination. With
+   `foodChain = null`, it selects one bounded `ChargingCampus` per stable campus ID.
+   With a selected chain, it selects complete-link `ChargingPark` rows and never
+   uses campus membership for restaurant matching.
+7. Backend selects the entity's precomputed power projection, then applies the
+   entity-wide minimum qualifying EVSE count, the exact 5,000 m route-corridor
+   predicate, and the safe origin bound against its power-filtered navigation
+   coordinate. A bounding box may prefilter but is never the final corridor
+   predicate. For food mode, the 700 m broad cache compares the POI with the fine
+   park's base navigation coordinate; the candidate query then applies the exact
+   inclusive 500 m check against the power-filtered fine-park navigation
+   coordinate and returns the selected restaurant plus attribution.
 8. iOS requests MapKit automobile directions from the current location to each
-   candidate in bounded batches behind a shared rolling request gate. Without a
-   food filter it applies safe lower-bound stopping after every batch. With a food
-   filter it scans candidates within the selected maximum distance so every park
-   belonging to a selected restaurant can contribute to its operator counts. Once
-   the top five restaurant IDs are proven by the lower bound, later parks for
+   candidate navigation coordinate in bounded batches behind a shared rolling
+   request gate. Without a food filter it applies safe lower-bound stopping after
+   every batch. With a food filter it scans candidates within the selected maximum
+   distance so every fine park belonging to a selected restaurant can contribute
+   to its operator counts. Once
+   the top five restaurant IDs are proven by the lower bound, later fine parks for
    other restaurants need no MapKit request.
    `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
    departure from the main route.
@@ -45,13 +50,14 @@ stable snapshot; retry and refresh remain explicit after an error or result.
 10. If a food chain is selected, require the backend-provided OSM match. Opening
     information is optional and not a predicate.
 11. With a food filter, group matches by stable restaurant POI ID. Sum qualifying
-    EVSE counts by exact operator name across all member parks and expose one Apple
-    place action per operator. The member park with the shortest actual driving
-    distance represents the group for distance and ordering. Without food, every
-    matching park remains its own result.
-12. Sort matches only by actual driving distance ascending, with stable park ID as
-    a non-user-visible deterministic tie-breaker.
-13. Return the first five parks or restaurant groups. If fewer exist, return
+    EVSE counts by exact operator name across all member fine parks and expose one
+    Apple place action per operator. The member fine park with the shortest actual
+    driving distance represents the group for distance and ordering. Without food,
+    every matching campus is already one result with campus-wide deduplicated EVSE
+    and exact-name operator counts.
+12. Sort matches only by actual driving distance ascending, with the stable campus,
+    fine-park, or restaurant identity as a non-user-visible deterministic tie-breaker.
+13. Return the first five campuses or restaurant groups. If fewer exist, return
     fewer. If pagination is not exhausted and correctness cannot yet be proven,
     request the next batch.
 
@@ -67,27 +73,38 @@ rank. The client may stop only when:
   later lower bounds are no smaller.
 
 The five-result lower-bound shortcut is not used for a food-filtered search:
-later candidates can share a restaurant already in the first five and must be
-included in its displayed operator totals. The maximum-distance lower bound still
-terminates that search safely.
+later fine-park candidates can share a restaurant already in the first five and
+must be included in its displayed operator totals. The maximum-distance lower
+bound still terminates that search safely. Without food, one backend row already
+represents the whole campus, so the ordinary shortcut remains correct.
 
-Straight-line origin-to-park distance is a safe lower bound for road distance.
-Preliminary route progress is useful for batching but is not, by itself, a proof
+Straight-line origin-to-candidate-navigation distance is a safe lower bound for
+road distance. Preliminary route progress is useful for batching but is not, by
+itself, a proof
 of actual driving distance. The iPhone process keeps all ride-preparation and
 candidate `MKDirections` requests below Apple's observed short-window throttle;
 retries consume the same shared request budget.
 
 ## PostGIS strategy
 
-- Store park search coordinates as `geography(Point, 4326)` with a GiST index.
-- Materialize a power-filtered park row for every supported minimum power option
-  during atomic projection publication. A multicolumn GiST index starts with the
-  projection ID and power threshold before applying the spatial predicate, so
-  retained snapshot versions do not expand the current search.
+- Store fine-park and campus search navigation coordinates as
+  `geography(Point, 4326)` with GiST indexes.
+- Materialize power-filtered fine-park and campus rows for every supported minimum
+  power option during atomic projection publication. Campus rows deduplicate EVSEs
+  across all constituent fine parks before deriving total/operator counts and the
+  minimum-count decision. A multicolumn GiST index starts with the projection ID
+  and power threshold before applying the spatial predicate, so retained snapshot
+  versions do not expand the current search.
+- Treat the 700 m base-navigation fine-park/POI relation only as a completeness
+  prefilter. Both base and power-filtered navigation coordinates are member/access
+  locations in a <=200 m-diameter fine park, so every exact <=500 m match is
+  retained. Campus rows never enter the restaurant join.
 - Parse request route as valid `geography(LineString, 4326)`.
-- Use `ST_DWithin(park.geog, route.geog, 5000)` for the final corridor predicate.
-- Use `ST_DWithin(park.geog, origin.geog, maximumDistance)` as a safe early lower-
-  bound rejection; final actual driving-distance filtering remains on-device.
+- Use `ST_DWithin(powerCandidate.navigationGeog, route.geog, 5000)` for the final
+  corridor predicate.
+- Use `ST_DWithin(powerCandidate.navigationGeog, origin.geog, maximumDistance)` as
+  a safe early lower-bound rejection; final actual driving-distance filtering
+  remains on-device.
 - Use `ST_Distance` only after `ST_DWithin` narrows the indexed candidate set.
 - Use geography `ST_LineLocatePoint`/`ST_LineSubstring` and length only for
   preliminary progress. Never expose it as driving distance.
@@ -99,16 +116,21 @@ whereas distance/buffer-only patterns are less suitable:
 ## Search filter order
 
 The static projection build first discards EVSEs below each supported minimum
-power, deduplicates the remainder, and derives its count, operators, static
-availability, and coordinates. A request then reduces work in this order, subject
-to query planning:
+power. It then deduplicates and derives count, operators, static availability,
+lookup evidence, and coordinates across each fine park and, independently, across
+each whole campus. A request reduces work in this order, subject to query planning:
 
-1. supported/active projection and exact precomputed power threshold;
-2. minimum qualifying EVSE count;
-3. exact 5 km spatial predicate via GiST and safe origin/maximum-distance bound;
-4. broad cached park/POI pair and exact 500 m OSM restaurant predicate;
-5. stable cursor ordering and result-page selection;
-6. informational live-availability enrichment for only that selected page.
+1. select campus rows for `foodChain = null`, otherwise fine-park rows plus the
+   pinned OSM projection;
+2. supported/active projection and exact precomputed power threshold;
+3. candidate-wide minimum qualifying EVSE count;
+4. exact 5 km spatial predicate via GiST and safe origin/maximum-distance bound
+   against the same power-filtered candidate coordinate;
+5. only in food mode, broad cached fine-park/POI pair and exact 500 m OSM
+   restaurant predicate against the power-filtered fine-park coordinate;
+6. stable cursor ordering and result-page selection, with one row per campus in
+   no-food mode;
+7. informational live-availability enrichment for only that selected page.
 
 Actual driving-distance predicates remain on-device. Food proximity is exact
 PostGIS geography and remains pinned across pagination with the POI projection ID.
@@ -128,9 +150,9 @@ When a result has a matched restaurant, open Apple's documented unified Maps
 destination as the final destination. This multistop handoff is available on iOS
 18.4 and later. On iOS 18.0–18.3, open automobile directions to the restaurant as
 the safe documented fallback. Without a food match, create an `MKMapItem` from the
-chosen park access coordinate and open automobile directions to the park. Do not
-claim navigation has begun until the handoff succeeds. The app does not render
-maneuvers or request the navigation entitlement.
+chosen campus navigation coordinate and open automobile directions to the campus.
+Do not claim navigation has begun until the handoff succeeds. The app does not
+render maneuvers or request the navigation entitlement.
 
 ## Error mapping
 

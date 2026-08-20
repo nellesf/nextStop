@@ -316,46 +316,52 @@ struct ProfileEditorView: View {
       Text("profile.section.break")
         .font(.title3.weight(.bold))
 
-      Menu {
-        Button {
-          form.foodChain = nil
-        } label: {
-          if form.foodChain == nil {
-            Label("food.any", systemImage: "checkmark")
-          } else {
-            Text("food.any")
-          }
-        }
-
-        ForEach(FoodChain.allCases, id: \.self) { option in
-          Button {
-            form.foodChain = option
-          } label: {
-            if form.foodChain == option {
-              Label {
-                Text(LocalizedStringKey(option.localizationKey))
-              } icon: {
-                Image(systemName: "checkmark")
-              }
-            } else {
-              Text(LocalizedStringKey(option.localizationKey))
-            }
-          }
-        }
-      } label: {
-        EditorSelectionRow {
-          Text("profile.preferred_food_chain")
-            .font(.body)
-        } selection: {
-          selectedFoodChainText
+      Toggle(isOn: $form.requiresNearbyRestaurant) {
+        VStack(alignment: .leading, spacing: 3) {
+          Text("profile.restaurant.required")
             .font(.body.weight(.medium))
+
+          Text("profile.restaurant.required.description")
+            .font(.caption)
+            .foregroundStyle(.secondary)
         }
       }
-      .buttonStyle(.plain)
-      .accessibilityLabel(Text("profile.preferred_food_chain"))
-      .accessibilityValue(selectedFoodChainAccessibilityValue)
+      .tint(Color.nextStopHighlight)
+      .accessibilityLabel(Text("profile.restaurant.required"))
+      .accessibilityHint(Text("profile.restaurant.required.description"))
 
-      if form.foodChain != nil {
+      Divider()
+
+      if form.requiresNearbyRestaurant {
+        Menu {
+          ForEach(FoodChain.allCases, id: \.self) { option in
+            Button {
+              form.foodChain = option
+            } label: {
+              if form.foodChain == option {
+                Label {
+                  Text(LocalizedStringKey(option.localizationKey))
+                } icon: {
+                  Image(systemName: "checkmark")
+                }
+              } else {
+                Text(LocalizedStringKey(option.localizationKey))
+              }
+            }
+          }
+        } label: {
+          EditorSelectionRow {
+            Text("profile.restaurant.chain")
+              .font(.body)
+          } selection: {
+            selectedFoodChainText
+              .font(.body.weight(.medium))
+          }
+        }
+        .buttonStyle(.plain)
+        .accessibilityLabel(Text("profile.restaurant.chain"))
+        .accessibilityValue(selectedFoodChainAccessibilityValue)
+
         Divider()
 
         Label {
@@ -369,6 +375,11 @@ struct ProfileEditorView: View {
         }
         .font(.footnote)
         .foregroundStyle(.secondary)
+      } else {
+        Label("profile.restaurant.not_required.explanation", systemImage: "info.circle")
+          .font(.footnote)
+          .foregroundStyle(.secondary)
+          .fixedSize(horizontal: false, vertical: true)
       }
     }
   }
@@ -378,7 +389,8 @@ struct ProfileEditorView: View {
     if let foodChain = form.foodChain {
       Text(LocalizedStringKey(foodChain.localizationKey))
     } else {
-      Text("food.any")
+      Text("profile.restaurant.chain.placeholder")
+        .foregroundStyle(.secondary)
     }
   }
 
@@ -386,7 +398,7 @@ struct ProfileEditorView: View {
     if let foodChain = form.foodChain {
       Text(LocalizedStringKey(foodChain.localizationKey))
     } else {
-      Text("food.any")
+      Text("profile.restaurant.chain.placeholder")
     }
   }
 

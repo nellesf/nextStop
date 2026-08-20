@@ -4,6 +4,7 @@ import NextStopCore
 enum ProfileFormValidationError: Error, Equatable, Identifiable {
   case nameRequired
   case destinationRequired
+  case restaurantChainRequired
 
   var id: Self { self }
 
@@ -13,6 +14,8 @@ enum ProfileFormValidationError: Error, Equatable, Identifiable {
       "profile.validation.name"
     case .destinationRequired:
       "profile.validation.destination"
+    case .restaurantChainRequired:
+      "profile.validation.restaurant_chain"
     }
   }
 }
@@ -25,6 +28,7 @@ struct ProfileFormState: Equatable {
   var distanceRange: DistanceRangeOption
   var minimumChargingPoints: MinimumChargingPointsOption
   var minimumPower: MinimumPowerOption
+  var requiresNearbyRestaurant: Bool
   var foodChain: FoodChain?
 
   init(profile: UserProfile? = nil) {
@@ -39,7 +43,10 @@ struct ProfileFormState: Equatable {
       ?? SearchConfiguration.defaultCriteria.minimumChargingPoints
     minimumPower =
       profile?.criteria.minimumPower ?? SearchConfiguration.defaultCriteria.minimumPower
-    foodChain = profile?.criteria.foodChain ?? SearchConfiguration.defaultCriteria.foodChain
+    let initialFoodChain =
+      profile?.criteria.foodChain ?? SearchConfiguration.defaultCriteria.foodChain
+    requiresNearbyRestaurant = initialFoodChain != nil
+    foodChain = initialFoodChain
   }
 
   mutating func selectPreviousMinimumChargingPoints() {
@@ -58,6 +65,9 @@ struct ProfileFormState: Equatable {
     guard let destination else {
       throw ProfileFormValidationError.destinationRequired
     }
+    guard !requiresNearbyRestaurant || foodChain != nil else {
+      throw ProfileFormValidationError.restaurantChainRequired
+    }
 
     return try UserProfile(
       id: profileID ?? newID,
@@ -67,7 +77,7 @@ struct ProfileFormState: Equatable {
         distanceRange: distanceRange,
         minimumChargingPoints: minimumChargingPoints,
         minimumPower: minimumPower,
-        foodChain: foodChain
+        foodChain: requiresNearbyRestaurant ? foodChain : nil
       ),
       createdAt: createdAt ?? now,
       updatedAt: now

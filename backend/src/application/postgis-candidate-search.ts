@@ -32,6 +32,7 @@ const pageSize = 50;
 
 interface ProjectionRow {
   readonly id: string;
+  readonly campusCount: number;
   readonly publishedAt: Date;
   readonly coverageStatus: Coverage["status"];
   readonly activeSources: string[];
@@ -91,7 +92,10 @@ export class PostGISCandidateSearch implements CandidateSearching {
       page.snapshot === undefined
         ? await this.activeProjection()
         : await this.projection(page.snapshot.projectionId);
-    if (projection === undefined) {
+    if (
+      projection === undefined ||
+      (request.criteria.foodChain == null && projection.campusCount === 0)
+    ) {
       throw new NoProjectionAvailableError();
     }
     const foodProjectionId = await this.resolveFoodProjectionId(request, page.snapshot);
@@ -205,6 +209,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
   private async activeProjection(): Promise<ProjectionRow | undefined> {
     const result = await this.pool.query<ProjectionRow>(
       `SELECT id,
+              campus_count AS "campusCount",
               published_at AS "publishedAt",
               coverage_status AS "coverageStatus",
               active_sources AS "activeSources",
@@ -218,6 +223,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
   private async projection(id: string): Promise<ProjectionRow | undefined> {
     const result = await this.pool.query<ProjectionRow>(
       `SELECT id,
+              campus_count AS "campusCount",
               published_at AS "publishedAt",
               coverage_status AS "coverageStatus",
               active_sources AS "activeSources",
@@ -267,8 +273,9 @@ WITH parameters AS (
   SELECT ST_SetSRID(ST_GeomFromGeoJSON($2), 4326)::geography AS route,
          ST_SetSRID(ST_MakePoint($3, $4), 4326)::geography AS origin
 ), eligible_base AS MATERIALIZED (
-  SELECT power.projection_id,
-         power.park_id,
+  SELECT 'park'::text AS candidate_kind,
+         power.projection_id,
+         power.park_id AS candidate_id,
          power.centroid,
          power.navigation_coordinate,
          power.charging_point_count,
@@ -294,7 +301,43 @@ WITH parameters AS (
     ON park.projection_id = power.projection_id
    AND park.park_id = power.park_id
   CROSS JOIN parameters
-  WHERE power.projection_id = $1
+  WHERE $13::text IS NOT NULL
+    AND power.projection_id = $1
+    AND power.minimum_power_kw = $6
+    AND power.charging_point_count >= $5
+    AND ST_DWithin(power.navigation_coordinate, parameters.route, 5000)
+    AND ST_DWithin(power.navigation_coordinate, parameters.origin, $7)
+  UNION ALL
+  SELECT 'campus'::text AS candidate_kind,
+         power.projection_id,
+         power.campus_id AS candidate_id,
+         power.centroid,
+         power.navigation_coordinate,
+         power.charging_point_count,
+         power.known_available_count,
+         power.known_unavailable_count,
+         power.unknown_count,
+         power.last_live_observation_at,
+         power.maximum_power_kw,
+         power.operators,
+         power.operator_charging_point_counts,
+         campus.source_summaries,
+         campus.data_updated_at,
+         round(ST_Distance(
+           power.navigation_coordinate,
+           parameters.route
+         ))::integer AS distance_from_route_meters,
+         ceil(ST_Distance(
+           power.navigation_coordinate,
+           parameters.origin
+         ))::integer AS straight_line_lower_bound_meters
+  FROM nextstop.charging_campus_power_projection AS power
+  JOIN nextstop.charging_campus_projection AS campus
+    ON campus.projection_id = power.projection_id
+   AND campus.campus_id = power.campus_id
+  CROSS JOIN parameters
+  WHERE $13::text IS NULL
+    AND power.projection_id = $1
     AND power.minimum_power_kw = $6
     AND power.charging_point_count >= $5
     AND ST_DWithin(power.navigation_coordinate, parameters.route, 5000)
@@ -324,7 +367,7 @@ WITH parameters AS (
      AND poi.osm_id = match.osm_id
     WHERE match.charging_projection_id = base.projection_id
       AND match.food_projection_id = $12::uuid
-      AND match.park_id = base.park_id
+      AND match.park_id = base.candidate_id
       AND poi.chain = $13::text
       AND ST_DWithin(
         poi.coordinate,
@@ -334,35 +377,63 @@ WITH parameters AS (
     ORDER BY ST_Distance(poi.coordinate, base.navigation_coordinate),
              poi.osm_type, poi.osm_id
     LIMIT 1
-  ) AS food ON $13::text IS NOT NULL
-  WHERE ($13::text IS NULL OR food.osm_id IS NOT NULL)
+  ) AS food ON base.candidate_kind = 'park' AND $13::text IS NOT NULL
+  WHERE (base.candidate_kind = 'campus' OR food.osm_id IS NOT NULL)
     AND (
       $8::integer IS NULL
-      OR (base.straight_line_lower_bound_meters, base.park_id) > ($8, $9::uuid)
+      OR (base.straight_line_lower_bound_meters, base.candidate_id) > ($8, $9::uuid)
     )
-  ORDER BY base.straight_line_lower_bound_meters, base.park_id
+  ORDER BY base.straight_line_lower_bound_meters, base.candidate_id
   LIMIT $10
+), selected_candidate_locations AS (
+  SELECT candidate.projection_id,
+         candidate.candidate_id,
+         membership.location_id
+  FROM selected_candidates AS candidate
+  JOIN nextstop.charging_park_location_memberships AS membership
+    ON candidate.candidate_kind = 'park'
+   AND membership.projection_id = candidate.projection_id
+   AND membership.park_id = candidate.candidate_id
+  UNION ALL
+  SELECT candidate.projection_id,
+         candidate.candidate_id,
+         park_location.location_id
+  FROM selected_candidates AS candidate
+  JOIN nextstop.charging_campus_park_memberships AS campus
+    ON candidate.candidate_kind = 'campus'
+   AND campus.projection_id = candidate.projection_id
+   AND campus.campus_id = candidate.candidate_id
+  JOIN nextstop.charging_park_location_memberships AS park_location
+    ON park_location.projection_id = campus.projection_id
+   AND park_location.park_id = campus.park_id
 ), eligible_point_memberships AS (
   SELECT candidate.projection_id,
-         candidate.park_id,
+         candidate.candidate_id,
          point.location_id,
          point.charging_point_id,
          point.provider_id,
          point.provider_evse_key,
-         COALESCE(
-           point.canonical_evse_identity,
-           COALESCE(point.provider_id, 'legacy') || ':' || point.charging_point_id::text
-         ) AS evse_key
-  FROM selected_candidates AS candidate
-  JOIN nextstop.charging_park_location_memberships AS membership
-    ON membership.projection_id = candidate.projection_id
-   AND membership.park_id = candidate.park_id
+         CASE
+           WHEN point.canonical_evse_identity IS NULL
+             THEN 'source:' || COALESCE(point.provider_id, 'legacy') || ':'
+               || point.charging_point_id::text
+           WHEN EXISTS (
+             SELECT 1
+             FROM nextstop.projection_conflicts AS conflict
+             WHERE conflict.projection_id = point.projection_id
+               AND conflict.canonical_evse_identity = point.canonical_evse_identity
+               AND conflict.resolution = 'kept_distinct'
+           )
+             THEN 'point:' || point.charging_point_id::text
+           ELSE 'canonical:' || point.canonical_evse_identity
+         END AS evse_key
+  FROM selected_candidate_locations AS candidate
   JOIN nextstop.normalized_charging_points AS point
-    ON point.projection_id = membership.projection_id
-   AND point.location_id = membership.location_id
+    ON point.projection_id = candidate.projection_id
+   AND point.location_id = candidate.location_id
   WHERE point.maximum_power_kw >= $6
 ), location_lookup_aggregates AS (
-  SELECT eligible.park_id,
+  SELECT eligible.candidate_id,
          jsonb_agg(
            jsonb_build_object(
              'id', location.location_id,
@@ -381,19 +452,19 @@ WITH parameters AS (
            ORDER BY location.operator_name, location.location_id
          ) AS location_lookups
   FROM (
-    SELECT DISTINCT projection_id, park_id, location_id
+    SELECT DISTINCT projection_id, candidate_id, location_id
     FROM eligible_point_memberships
   ) AS eligible
   JOIN selected_candidates AS candidate
     ON candidate.projection_id = eligible.projection_id
-   AND candidate.park_id = eligible.park_id
+   AND candidate.candidate_id = eligible.candidate_id
   JOIN nextstop.normalized_charging_locations AS location
     ON location.projection_id = eligible.projection_id
    AND location.location_id = eligible.location_id
    AND location.operator_name = ANY(candidate.operators)
-  GROUP BY eligible.park_id
+  GROUP BY eligible.candidate_id
 ), live_point_states AS (
-  SELECT candidate.park_id,
+  SELECT candidate.candidate_id,
          membership.evse_key,
          CASE
            WHEN bool_or(observation.availability_state = 'unknown')
@@ -405,15 +476,15 @@ WITH parameters AS (
            WHERE observation.availability_state <> 'unknown'
          ) AS observed_at
   FROM selected_candidates AS candidate
-  JOIN eligible_point_memberships AS membership USING (park_id)
+  JOIN eligible_point_memberships AS membership USING (candidate_id)
   JOIN nextstop.availability_observations AS observation
     ON observation.snapshot_id = ANY($11::uuid[])
    AND observation.provider_id = membership.provider_id
    AND observation.provider_evse_key = membership.provider_evse_key
   WHERE cardinality($11::uuid[]) > 0
-  GROUP BY candidate.park_id, membership.evse_key
+  GROUP BY candidate.candidate_id, membership.evse_key
 ), live_aggregates AS (
-  SELECT park_id,
+  SELECT candidate_id,
          count(*) FILTER (WHERE availability_state = 'available')::integer
            AS known_available_count,
          count(*) FILTER (
@@ -421,7 +492,7 @@ WITH parameters AS (
          )::integer AS known_unavailable_count,
          max(observed_at) AS last_live_observation_at
   FROM live_point_states
-  GROUP BY park_id
+  GROUP BY candidate_id
 ), availability AS (
   SELECT candidate.*,
          CASE WHEN cardinality($11::uuid[]) = 0
@@ -443,9 +514,9 @@ WITH parameters AS (
            ELSE live.last_live_observation_at
          END AS resolved_last_live_observation_at
   FROM selected_candidates AS candidate
-  LEFT JOIN live_aggregates AS live USING (park_id)
+  LEFT JOIN live_aggregates AS live USING (candidate_id)
 )
-SELECT park_id AS id,
+SELECT candidate_id AS id,
        CASE cardinality(operators)
          WHEN 1 THEN operators[1]
          WHEN 2 THEN operators[1] || ' & ' || operators[2]
@@ -479,8 +550,8 @@ SELECT park_id AS id,
        food_opening_hours AS "foodOpeningHours",
        food_source_record_url AS "foodSourceRecordURL"
 FROM availability
-JOIN location_lookup_aggregates AS lookup USING (park_id)
-ORDER BY straight_line_lower_bound_meters ASC, park_id ASC
+JOIN location_lookup_aggregates AS lookup USING (candidate_id)
+ORDER BY straight_line_lower_bound_meters ASC, candidate_id ASC
 `;
 
 function resolvePage(

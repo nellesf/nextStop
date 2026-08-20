@@ -101,6 +101,10 @@ export interface ChargingParkProjection {
   readonly lastStaticObservationAt: string;
 }
 
+export interface ChargingCampusProjection extends ChargingParkProjection {
+  readonly memberParkIds: readonly string[];
+}
+
 export interface EVSEIdentityConflict {
   readonly id: string;
   readonly type: "evse_coordinate_disagreement";

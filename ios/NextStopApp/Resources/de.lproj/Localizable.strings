@@ -53,12 +53,10 @@
 "destinations.manage" = "Ziele verwalten";
 "destinations.title" = "Ziele";
 "error.generic" = "Etwas ist schiefgelaufen.";
-"food.any" = "egal";
 "profile.charging_points" = "Ladepunkte";
 "profile.destination" = "Fahrziel";
 "profile.distance_range" = "Ladestopp";
 "profile.distance_to_stop" = "Entfernung bis zum Ladestopp";
-"profile.fast_food" = "Fast Food";
 "profile.food_distance.info.format" = "Max. %lld m vom Ladepark entfernt";
 "profile.minimum_charging_points" = "Mindestens Ladepunkte";
 "profile.minimum_power" = "Mindestleistung";
@@ -66,7 +64,13 @@
 "profile.name" = "Profilname";
 "profile.new.title" = "Neues Profil";
 "profile.edit.title" = "Profil bearbeiten";
-"profile.preferred_food_chain" = "Lieblingskette";
+"profile.restaurant.chain" = "Restaurantkette";
+"profile.restaurant.chain.placeholder" = "Kette auswählen";
+"profile.restaurant.not_required" = "Kein Restaurant erforderlich";
+"profile.restaurant.not_required.explanation" = "Auch ohne Restaurantfilter fasst nextStop nahe Ladestandorte verschiedener Betreiber zu einem Ladepark zusammen. Für die Mindestanzahl zählen alle passenden Ladepunkte im Park – betreiberübergreifend.";
+"profile.restaurant.required" = "Restaurant in der Nähe erforderlich";
+"profile.restaurant.required.description" = "Nur Ladeparks mit einer unterstützten Restaurantkette im Umkreis von max. 500 m anzeigen.";
+"profile.restaurant.title" = "Restaurant";
 "profile.route_corridor.info.format" = "Entlang der Route · max. %lld km";
 "profile.save.action" = "Profil sichern";
 "profile.search.start" = "Suche starten";
@@ -75,6 +79,7 @@
 "profile.section.general" = "Profil";
 "profile.validation.destination" = "Bitte wähle ein Fahrziel aus den Suchergebnissen.";
 "profile.validation.name" = "Bitte gib einen Profilnamen ein.";
+"profile.validation.restaurant_chain" = "Bitte wähle eine Restaurantkette aus.";
 "profiles.empty.description" = "Lege ein Profil an, um Fahrziel und Ladekriterien für CarPlay vorzubereiten.";
 "profiles.empty.title" = "Noch keine Profile";
 "profiles.edit.accessibility_hint" = "Öffnet das Profil zum Bearbeiten.";

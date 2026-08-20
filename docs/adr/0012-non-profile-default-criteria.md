@@ -18,7 +18,7 @@ defaults:
 - distance range: 50–100 km;
 - minimum charging points: 4 EVSEs;
 - minimum power: 100 kW;
-- food chain: any (`nil`).
+- nearby restaurant required: no (`foodChain = nil`).
 
 Show every value on the ride summary before search. The driver may change any
 value for the current ride. Defaults and ride edits never mutate saved profiles.
@@ -33,7 +33,8 @@ value for the current ride. Defaults and ride edits never mutate saved profiles.
 ## Consequences
 
 Availability was removed as a filter by owner approval on 2026-08-17 and remains
-informational. The broad defaults avoid excluding parks based on uncertain food
-data while still favoring meaningful park size and fast charging. Product changes
+informational. The broad defaults avoid excluding charging candidates based on
+uncertain food data while still favoring meaningful site size and fast charging.
+Product changes
 to these values require updating this ADR, the central catalog, tests, and German
 summary localization.

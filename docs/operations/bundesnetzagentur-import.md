@@ -66,19 +66,27 @@ The job refuses a hash mismatch, validates the exact 47-column schema, enforces 
 100 MiB input limit and 64 KiB record limit, quarantines invalid records, writes
 raw and normalized observations in bounded batches, and builds the projection
 under a new UUID. It publishes only after stored row counts match validated
-counts and at least one park exists.
+counts and at least one fine park and one no-food campus exist.
 
 Publication takes an advisory transaction lock, retires the prior active version,
 and activates the new one in the same transaction. API readers therefore see
 either the complete prior version or the complete new version. Failed builds are
 marked `failed` and never replace the active projection.
 
+Migration 0008 initially mirrors every retained fine park into a singleton campus
+so no-food searches remain available during rollout. The projection-policy
+fingerprint then forces the next successful static refresh to replace that
+compatibility fallback with the deterministic bounded campus projection. Treat a
+deployment as incomplete until that refresh publishes with a non-zero campus
+count; if provider downloads fail, the previous fine-grained behavior remains
+available but duplicate campus results can persist temporarily.
+
 ## Latest combined shadow counts
 
 ```text
 locations           133206
 EVSE observations   224995
-charging parks       53571
+fine charging parks  53571
 quarantined rows      1068
 identity conflicts     181
 ```

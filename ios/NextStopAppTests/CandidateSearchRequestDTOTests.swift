@@ -55,9 +55,11 @@ final class CandidateSearchRequestDTOTests: XCTestCase {
       JSONSerialization.jsonObject(with: data) as? [String: Any]
     )
     let page = try XCTUnwrap(object["page"] as? [String: Any])
+    let criteria = try XCTUnwrap(object["criteria"] as? [String: Any])
 
     XCTAssertEqual(page["snapshotToken"] as? String, "snapshot-1")
     XCTAssertEqual(page["cursor"] as? String, "cursor-2")
     XCTAssertEqual(Set(page.keys), ["snapshotToken", "cursor"])
+    XCTAssertNil(criteria["foodChain"])
   }
 }

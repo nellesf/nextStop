@@ -147,7 +147,7 @@ normalize to unknown, non-live availability.
 
 The complete combined shadow import on 2026-08-15 used the current 2026-07-28
 German CSV plus the current Swiss static feed. It produced 133,206 valid
-locations, 224,995 normalized EVSE observations, 53,571 active charging parks,
+locations, 224,995 normalized EVSE observations, 53,571 active fine charging parks,
 1,068 quarantined source rows, and 181 explicit coordinate conflicts. Conflicting
 observations remain distinct and are recorded for review rather than silently
 merged.

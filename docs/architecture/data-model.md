@@ -2,6 +2,7 @@
 
 Status: Accepted on 2026-08-13.
 Amended on 2026-08-18 for request-scoped power filtering and OSM food POIs.
+Amended on 2026-08-20 for dual fine-park/no-food-campus identity.
 
 All IDs below are internal opaque UUIDs unless an explicit source/native identifier
 is named. Quantities use integer meters and kilowatts. Instants are UTC.
@@ -10,7 +11,10 @@ is named. Quantities use integer meters and kilowatts. Instants are UTC.
 
 ### `ChargingPark`
 
-An aggregate search/display entity, not an operator.
+A fine-grained, source-independent physical aggregate, not an operator. Its member
+locations are produced by deterministic complete-link clustering and have a
+maximum pairwise geodesic distance of 200 m. It is an indivisible campus seed and
+the backend search candidate only when `foodChain` is non-null.
 
 - `id`
 - `name`
@@ -29,8 +33,25 @@ An aggregate search/display entity, not an operator.
 - `foodPOIs: [FoodPOI]` (selected from the pinned backend POI projection)
 
 The display centroid never replaces member coordinates in deduplication or source
-records. A navigation coordinate should be the best access/member location, not a
-mathematical centroid that could fall across a road barrier.
+records. A navigation coordinate is a qualifying best access/member location, not
+a mathematical centroid that could fall across a road barrier.
+
+### `ChargingCampus`
+
+A derived, no-food search aggregate over one or more complete fine parks.
+
+- `id` (stable `charging-campus-v1` hash of sorted `memberParkIDs`)
+- `memberParkIDs`
+- all underlying `memberLocationIDs`
+- `name`, display coordinate, navigation coordinate
+- campus-wide `operators`, `operatorChargingPointCounts`, `chargingPointCount`
+- `availability`, `maximumPowerKW`, `dataQuality`, source/observation metadata
+
+Fine parks are indivisible seeds. Deterministically ordered <=200 m
+member-location cross-edges may join seed groups only when the union's maximum
+member-to-member diameter remains <=500 m. Campus membership is static for a
+charging projection and independent of route, power, availability, and food.
+Campus IDs and fine-park IDs are distinct identities.
 
 ### `ChargingLocation`
 
@@ -101,17 +122,23 @@ partial/unknown availability.
 - request-scoped `chargingPointCountAtOrAbovePower`
 - provenance and observation time
 
-For each search, discard EVSEs below `minimumPowerKW` before building the candidate
-summary. Per-operator counts, `chargingPointCount`, availability, the minimum-point
-filter, display/navigation coordinates, and the candidate name are all derived
-from the remaining deduplicated EVSEs. An operator with no qualifying EVSE is not
-part of that candidate. If only two of an operator's four EVSEs qualify, its
-request-scoped count is two.
+For each supported projection, discard EVSEs below `minimumPowerKW` before building
+the candidate summary. Per-operator counts, `chargingPointCount`, availability,
+the minimum-point filter, display/navigation coordinates, and the candidate name
+are all derived from the remaining deduplicated EVSEs. An operator with no
+qualifying EVSE is not part of that candidate. If only two of an operator's four
+EVSEs qualify, its request-scoped count is two.
 
-The static projection build materializes this exact summary once per centrally
+For no-food campus rows, deduplication and aggregation run across every underlying
+location in the campus; summing pre-aggregated fine-park totals is invalid. For
+food rows, the same derivation runs within each fine park. The backend selects
+which projection is the candidate unit from `foodChain` before count, corridor,
+lower-bound, and pagination filtering.
+
+The static projection build materializes these summaries once per centrally
 supported `minimumPowerKW` option. The search selects one row instead of joining,
-deduplicating, and aggregating every EVSE for every request. Park-to-location
-membership is stored as normalized relational rows for efficient joins. Fresh
+deduplicating, and aggregating every EVSE for every request. Fine-park and campus
+membership are stored as normalized relational rows for efficient joins. Fresh
 live observations remain separate and are merged only for the selected result
 page, preserving the rule that availability is informational.
 
@@ -141,8 +168,11 @@ Unknown opening status does not affect matching.
 
 OSM POIs live in a separate versioned projection with OSM object type/ID, match
 method, source URL, observation/fetch timestamps, and quarantine records. A
-derived park/POI relation caches pairs up to 700 m only as a prefilter. Exact
-request inclusion always rechecks 500 m after eligible EVSE geometry is derived.
+derived fine-park/POI relation caches one pair when the POI lies within 700 m of
+the fine park's base navigation coordinate. This is only a completeness prefilter.
+Exact request inclusion always rechecks 500 m against the power-filtered fine-park
+navigation coordinate. The fine park's <=200 m diameter makes that broad cache
+complete by the triangle inequality. No-food campuses never enter this relation.
 
 ## Search entities
 
@@ -166,20 +196,22 @@ request inclusion always rechecks 500 m after eligible EVSE geometry is derived.
 
 ### `RouteSearchCandidate`
 
-- park summary
+- candidate summary: one `ChargingCampus` when `foodChain` is null, otherwise one
+  complete-link `ChargingPark`
+- `id`: the selected entity's stable ID (campus v1 ID or fine-park ID)
 - `distanceFromRouteMeters`
 - `routeProgressMeters` explicitly approximate/preliminary
 - `straightLineLowerBoundMeters`
 - `snapshotToken`, `candidateCursor?`
 - no backend-claimed actual driving distance
-- matching `FoodPOI?` when a chain was requested
+- matching `FoodPOI?` only when a chain was requested
 - data attributions used by the client
 
 ### `RouteSearchResult`
 
-- primary candidate/park (shortest actual driving distance in the result)
-- related candidates/parks sharing the same stable restaurant POI ID when food is
-  selected; empty for an ungrouped park result
+- primary candidate (shortest actual driving distance in the result)
+- related fine-park candidates sharing the same stable restaurant POI ID when food
+  is selected; empty for an ungrouped campus result
 - `actualDrivingDistanceMeters` from MapKit
 - `distanceFromRouteMeters`
 - matching `FoodPOI?`
@@ -192,8 +224,10 @@ request inclusion always rechecks 500 m after eligible EVSE geometry is derived.
 With a food criterion, `RouteSearchResult` is restaurant-centric: one stable
 restaurant POI produces at most one result and one Apple POI action per exact
 charging operator name. Its rank and displayed driving distance remain the actual
-MapKit distance to the closest qualifying member park, not a straight-line or
-restaurant distance. Without a food criterion, the result remains park-centric.
+MapKit distance to the closest qualifying member fine park, not a straight-line or
+restaurant distance. Without a food criterion, the result identity is the stable
+`ChargingCampusID`; all counts and operator lookup evidence already cover that
+whole campus.
 
 ## User-local entities
 
@@ -228,15 +262,17 @@ The domain exposes ordered configuration rather than scattering literals:
 
 - distance: 15–50, 50–100, 100–150 km;
 - minimum EVSEs: 2, 4, 6, 8, 10, 12, 16, 20;
-- minimum free: any, 1, 2, 4, 6, 8, 10;
 - power: 11, 22, 50, 100, 150, 200, 250, 300, 350, 400 kW;
-- food: any, McDonald's, Burger King, KFC, Subway;
-- corridor 5,000 m, park grouping 200 m, food 500 m, results 5;
+- restaurant: not required (`foodChain = nil`), or required with McDonald's,
+  Burger King, KFC, or Subway;
+- corridor 5,000 m; fine-park complete-link 200 m; campus cross-edge 200 m and
+  diameter cap 500 m; food distance 500 m; results 5;
 - recent-destination limit: 20.
 
-Approved non-profile defaults are 50–100 km, at least 4 EVSEs, availability “any”,
-at least 100 kW, and food “any”. They are visible on the ride summary and are never
-hidden or automatically adjusted.
+Approved non-profile defaults are 50–100 km, at least 4 EVSEs, at least 100 kW, and
+no required nearby restaurant (`foodChain = nil`). They are visible on the ride
+summary and are never hidden or automatically adjusted. Availability is displayed
+only as information and is not a criterion.
 
 Each option has a stable machine ID and localization key. API DTOs transmit stable
 values, never localized labels.

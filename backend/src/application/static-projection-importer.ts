@@ -3,6 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
 import {
+  buildChargingCampusProjection,
   buildChargingParkProjection,
   findEVSEIdentityConflicts,
 } from "../domain/charging-park-projection.js";
@@ -18,6 +19,7 @@ import {
 } from "../persistence/projection-writer.js";
 
 const writeBatchSize = 250;
+const projectionPolicyVersion = "conditional-charging-campus-v1";
 
 export type StaticProviderRecordResult =
   | Readonly<{ kind: "observation"; observation: NormalizedLocationObservation }>
@@ -100,9 +102,16 @@ export async function importStaticProjection(
     await writer.writeQuarantines(projectionId, quarantines);
 
     const parks = buildChargingParkProjection(locations);
+    const campuses = buildChargingCampusProjection(locations, parks);
     const conflicts = findEVSEIdentityConflicts(locations);
     for (let offset = 0; offset < parks.length; offset += writeBatchSize) {
       await writer.writeParks(projectionId, parks.slice(offset, offset + writeBatchSize));
+    }
+    for (let offset = 0; offset < campuses.length; offset += writeBatchSize) {
+      await writer.writeCampuses(
+        projectionId,
+        campuses.slice(offset, offset + writeBatchSize),
+      );
     }
     for (let offset = 0; offset < conflicts.length; offset += writeBatchSize) {
       await writer.writeConflicts(
@@ -114,6 +123,7 @@ export async function importStaticProjection(
       locationCount: locations.length,
       chargingPointCount,
       parkCount: parks.length,
+      campusCount: campuses.length,
       quarantineCount,
       conflictCount: conflicts.length,
     };
@@ -132,6 +142,7 @@ function combinedDatasetHash(
   return createHash("sha256")
     .update(
       JSON.stringify({
+        projectionPolicyVersion,
         datasets: datasets
           .map(({ providerId, datasetHash }) => ({ providerId, datasetHash }))
           .toSorted((first, second) => first.providerId.localeCompare(second.providerId)),
