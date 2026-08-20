@@ -92,7 +92,7 @@ final class RidePreparationViewModelTests: XCTestCase {
         operatorName: "Other operator",
         coordinate: Coordinate(latitude: 50.0001, longitude: 8),
         address: ChargingLocationAddress()
-      )
+      ),
     ]
 
     let distance = try XCTUnwrap(
@@ -110,6 +110,36 @@ final class RidePreparationViewModelTests: XCTestCase {
         locations: locations,
         foodCoordinate: restaurant
       )
+    )
+  }
+
+  func testChargingOperatorsSortByRestaurantDistanceWithUnknownLocationsLast() throws {
+    let restaurant = try Coordinate(latitude: 50, longitude: 8)
+    let locations = [
+      try ChargingLocationLookup(
+        id: UUID(),
+        operatorName: "Far operator",
+        coordinate: Coordinate(latitude: 50.002, longitude: 8),
+        address: ChargingLocationAddress()
+      ),
+      try ChargingLocationLookup(
+        id: UUID(),
+        operatorName: "Near operator",
+        coordinate: Coordinate(latitude: 50.001, longitude: 8),
+        address: ChargingLocationAddress()
+      ),
+    ]
+
+    let sortedOperators = ChargingOperatorFoodDistance.sorted(
+      ["Missing B", "Far operator", "Near operator", "Missing A"],
+      operatorName: { $0 },
+      locations: locations,
+      foodCoordinate: restaurant
+    )
+
+    XCTAssertEqual(
+      sortedOperators,
+      ["Near operator", "Far operator", "Missing A", "Missing B"]
     )
   }
 
@@ -149,9 +179,11 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(components.scheme, "https")
     XCTAssertEqual(components.host, "maps.apple.com")
     XCTAssertEqual(components.path, "/place")
-    XCTAssertEqual(components.queryItems, [
-      URLQueryItem(name: "place-id", value: "I1234567890ABCDEF")
-    ])
+    XCTAssertEqual(
+      components.queryItems,
+      [
+        URLQueryItem(name: "place-id", value: "I1234567890ABCDEF")
+      ])
   }
 
   func testAppleMapsURLKeepsDestinationAndAddsRestaurantWaypoint() throws {

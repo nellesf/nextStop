@@ -288,6 +288,12 @@ struct RidePreparationView: View {
   ) -> some View {
     let candidate = result.candidate
     let foodPOI = result.matchingFoodPOI
+    let chargingOperators = ChargingOperatorFoodDistance.sorted(
+      result.operatorChargingPoints,
+      operatorName: { $0.name },
+      locations: result.locationLookups,
+      foodCoordinate: foodPOI?.coordinate
+    )
     return Card {
       HStack(alignment: .firstTextBaseline) {
         Text("ride.result.operators")
@@ -299,7 +305,7 @@ struct RidePreparationView: View {
           .foregroundStyle(.tint)
       }
 
-      ForEach(result.operatorChargingPoints) { chargingOperator in
+      ForEach(chargingOperators) { chargingOperator in
         HStack(alignment: .center, spacing: 10) {
           VStack(alignment: .leading, spacing: 3) {
             Text(chargingOperator.name)
@@ -435,6 +441,43 @@ struct RidePreparationView: View {
 }
 
 enum ChargingOperatorFoodDistance {
+  static func sorted<Operator>(
+    _ operators: [Operator],
+    operatorName: (Operator) -> String,
+    locations: [ChargingLocationLookup],
+    foodCoordinate: Coordinate?
+  ) -> [Operator] {
+    guard let foodCoordinate else {
+      return operators
+    }
+    var distances: [String: Int] = [:]
+    for chargingOperator in operators {
+      let name = operatorName(chargingOperator)
+      distances[name] = nearestMeters(
+        operatorName: name,
+        locations: locations,
+        foodCoordinate: foodCoordinate
+      )
+    }
+    return operators.sorted { lhs, rhs in
+      let lhsName = operatorName(lhs)
+      let rhsName = operatorName(rhs)
+      switch (distances[lhsName], distances[rhsName]) {
+      case (let lhsDistance?, let rhsDistance?):
+        if lhsDistance == rhsDistance {
+          return lhsName < rhsName
+        }
+        return lhsDistance < rhsDistance
+      case (_?, nil):
+        return true
+      case (nil, _?):
+        return false
+      case (nil, nil):
+        return lhsName < rhsName
+      }
+    }
+  }
+
   static func nearestMeters(
     operatorName: String,
     locations: [ChargingLocationLookup],
