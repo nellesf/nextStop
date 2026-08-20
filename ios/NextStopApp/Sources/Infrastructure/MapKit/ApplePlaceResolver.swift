@@ -6,12 +6,95 @@ enum AppleChargingPlaceMatchPolicy {
   static let maximumDirectDistanceMeters: Double = 60
   static let maximumExactAddressDistanceMeters: Double = 300
 
+  enum Scope: Hashable {
+    case operatorOnly
+    case noFoodCampus
+  }
+
+  enum Match: Equatable {
+    case operatorScoped(distanceMeters: Double)
+    case campus(distanceMeters: Double, stablePlaceIdentifier: String)
+  }
+
+  struct Evidence: Equatable {
+    let operatorNameMatches: Bool
+    let canonicalOperatorNameMatches: Bool
+    let operatorScopedDistanceMeters: Double?
+    let hasExactOperatorAddressMatch: Bool
+    let isEVCharger: Bool
+    let campusDistanceMeters: Double?
+    let hasCampusLocalityMatch: Bool
+    let stablePlaceIdentifier: String?
+  }
+
   static func accepts(
     distanceMeters: Double,
     hasExactAddressMatch: Bool
   ) -> Bool {
     distanceMeters <= maximumDirectDistanceMeters
       || (hasExactAddressMatch && distanceMeters <= maximumExactAddressDistanceMeters)
+  }
+
+  static func match(
+    evidence: Evidence,
+    scope: Scope
+  ) -> Match? {
+    guard evidence.isEVCharger else {
+      return nil
+    }
+    if evidence.operatorNameMatches,
+      let distance = evidence.operatorScopedDistanceMeters,
+      accepts(
+        distanceMeters: distance,
+        hasExactAddressMatch: evidence.hasExactOperatorAddressMatch
+      )
+    {
+      return .operatorScoped(distanceMeters: distance)
+    }
+    guard scope == .noFoodCampus,
+      evidence.canonicalOperatorNameMatches,
+      let distance = evidence.campusDistanceMeters,
+      distance <= maximumDirectDistanceMeters,
+      evidence.hasCampusLocalityMatch,
+      let identifier = evidence.stablePlaceIdentifier,
+      !identifier.isEmpty
+    else {
+      return nil
+    }
+    return .campus(
+      distanceMeters: distance,
+      stablePlaceIdentifier: identifier
+    )
+  }
+
+  static func unambiguousCampusPlaceIdentifier(
+    in matches: [Match]
+  ) -> String? {
+    let identifiers = Set(
+      matches.compactMap { match -> String? in
+        guard case .campus(_, let identifier) = match else {
+          return nil
+        }
+        return identifier
+      })
+    guard identifiers.count == 1 else {
+      return nil
+    }
+    return identifiers.first
+  }
+}
+
+enum AppleChargingPlaceSearchQuery {
+  static func naturalLanguageQuery(
+    for operatorName: String,
+    scope: AppleChargingPlaceMatchPolicy.Scope,
+    hasSecureCategoryMatch: Bool
+  ) -> String? {
+    guard scope == .noFoodCampus, !hasSecureCategoryMatch else {
+      return nil
+    }
+    let query = operatorName.trimmingCharacters(in: .whitespacesAndNewlines)
+    return query.isEmpty ? nil : query
   }
 }
 
@@ -20,7 +103,9 @@ protocol ApplePlaceResolving {
   func resolveChargingPlace(
     park: ChargingPark,
     operatorName: String,
-    relatedLocations: [ChargingLocationLookup]
+    relatedLocations: [ChargingLocationLookup],
+    campusLocations: [ChargingLocationLookup],
+    matchScope: AppleChargingPlaceMatchPolicy.Scope
   ) async -> MKMapItem?
 
   func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem?
@@ -35,7 +120,9 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   func resolveChargingPlace(
     park: ChargingPark,
     operatorName: String,
-    relatedLocations: [ChargingLocationLookup]
+    relatedLocations: [ChargingLocationLookup],
+    campusLocations: [ChargingLocationLookup],
+    matchScope: AppleChargingPlaceMatchPolicy.Scope
   ) async -> MKMapItem? {
     let lookups = lookupTargets(
       for: park,
@@ -46,25 +133,90 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       return nil
     }
     let cacheKey = chargingPlaceCacheKey(
+      parkID: park.id,
       operatorName: operatorName,
-      lookups: lookups
+      lookups: lookups,
+      matchScope: matchScope
     )
     if let cacheKey, let cachedItem = chargingPlaceCache[cacheKey] {
       return cachedItem
     }
 
-    for center in chargingSearchCenters(around: park, lookups: lookups) {
-      guard let items = try? await searchChargingItems(around: center),
-        let match = bestChargingMatch(items: items, lookups: lookups)
-      else {
+    let campusLookups =
+      matchScope == .noFoodCampus
+      ? campusLocations.map(LookupTarget.init)
+      : []
+    let centers = chargingSearchCenters(
+      around: park,
+      lookups: lookups
+    )
+    var campusMatches: [ChargingItemMatch] = []
+
+    for center in centers {
+      guard let items = try? await searchChargingItems(around: center) else {
         continue
       }
-      if let cacheKey {
-        chargingPlaceCache[cacheKey] = match.item
+      let matches = chargingMatches(
+        items: items,
+        operatorName: operatorName,
+        lookups: lookups,
+        campusLookups: campusLookups,
+        matchScope: matchScope
+      )
+      if let operatorMatch = bestOperatorScopedMatch(in: matches) {
+        if let cacheKey {
+          chargingPlaceCache[cacheKey] = operatorMatch.item
+        }
+        return operatorMatch.item
       }
-      return match.item
+      campusMatches.append(contentsOf: matches.filter(\.isCampusMatch))
     }
-    return nil
+
+    if let campusMatch = unambiguousCampusMatch(in: campusMatches) {
+      if let cacheKey {
+        chargingPlaceCache[cacheKey] = campusMatch.item
+      }
+      return campusMatch.item
+    }
+
+    if let query = AppleChargingPlaceSearchQuery.naturalLanguageQuery(
+      for: operatorName,
+      scope: matchScope,
+      hasSecureCategoryMatch: false
+    ) {
+      for center in centers {
+        guard
+          let items = try? await searchChargingItems(
+            around: center,
+            naturalLanguageQuery: query
+          )
+        else {
+          continue
+        }
+        let matches = chargingMatches(
+          items: items,
+          operatorName: operatorName,
+          lookups: lookups,
+          campusLookups: campusLookups,
+          matchScope: matchScope
+        )
+        if let operatorMatch = bestOperatorScopedMatch(in: matches) {
+          if let cacheKey {
+            chargingPlaceCache[cacheKey] = operatorMatch.item
+          }
+          return operatorMatch.item
+        }
+        campusMatches.append(contentsOf: matches.filter(\.isCampusMatch))
+      }
+    }
+
+    guard let campusMatch = unambiguousCampusMatch(in: campusMatches) else {
+      return nil
+    }
+    if let cacheKey {
+      chargingPlaceCache[cacheKey] = campusMatch.item
+    }
+    return campusMatch.item
   }
 
   func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem? {
@@ -82,11 +234,29 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     return try await MKLocalSearch(request: request).start().mapItems
   }
 
+  private func searchChargingItems(
+    around center: CLLocationCoordinate2D,
+    naturalLanguageQuery: String
+  ) async throws -> [MKMapItem] {
+    let request = MKLocalSearch.Request()
+    request.naturalLanguageQuery = naturalLanguageQuery
+    request.region = MKCoordinateRegion(
+      center: center,
+      latitudinalMeters: AppleChargingPlaceMatchPolicy.maximumExactAddressDistanceMeters * 2,
+      longitudinalMeters: AppleChargingPlaceMatchPolicy.maximumExactAddressDistanceMeters * 2
+    )
+    request.resultTypes = .pointOfInterest
+    request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
+    return try await MKLocalSearch(request: request).start().mapItems
+  }
+
   private func chargingSearchCenters(
     around park: ChargingPark,
     lookups: [LookupTarget]
   ) -> [CLLocationCoordinate2D] {
-    let candidates = [park.navigationCoordinate] + lookups.map(\.coordinate)
+    let candidates =
+      [park.navigationCoordinate]
+      + lookups.map(\.coordinate)
     var centers: [CLLocationCoordinate2D] = []
     for candidate in candidates {
       let coordinate = CLLocationCoordinate2D(
@@ -95,10 +265,11 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       )
       let location = CLLocation(latitude: coordinate.latitude, longitude: coordinate.longitude)
       let alreadyCovered = centers.contains {
-        location.distance(from: CLLocation(
-          latitude: $0.latitude,
-          longitude: $0.longitude
-        )) < minimumChargingSearchCenterSeparation
+        location.distance(
+          from: CLLocation(
+            latitude: $0.latitude,
+            longitude: $0.longitude
+          )) < minimumChargingSearchCenterSeparation
       }
       if !alreadyCovered {
         centers.append(coordinate)
@@ -108,16 +279,23 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   }
 
   private func chargingPlaceCacheKey(
+    parkID: UUID,
     operatorName: String,
-    lookups: [LookupTarget]
+    lookups: [LookupTarget],
+    matchScope: AppleChargingPlaceMatchPolicy.Scope
   ) -> String? {
-    let addressKeys = Set(lookups.compactMap {
-      AppleChargingPlaceLookupScope.addressKey($0.address)
-    })
+    let addressKeys = Set(
+      lookups.compactMap {
+        AppleChargingPlaceLookupScope.addressKey($0.address)
+      })
+    if matchScope == .noFoodCampus {
+      return
+        "campus:\(parkID.uuidString.lowercased())|\(operatorKey(operatorName))|\(addressKeys.sorted().joined(separator: ";"))"
+    }
     guard !addressKeys.isEmpty else {
       return nil
     }
-    return "\(operatorKey(operatorName))|\(addressKeys.sorted().joined(separator: ";"))"
+    return "operator:\(operatorKey(operatorName))|\(addressKeys.sorted().joined(separator: ";"))"
   }
 
   private func searchRestaurantItem(for foodPOI: FoodPOI) async throws -> MKMapItem? {
@@ -140,10 +318,11 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
         guard let itemLocation = mapItemLocation(item) else {
           return nil
         }
-        let distance = itemLocation.distance(from: CLLocation(
-          latitude: foodPOI.coordinate.latitude,
-          longitude: foodPOI.coordinate.longitude
-        ))
+        let distance = itemLocation.distance(
+          from: CLLocation(
+            latitude: foodPOI.coordinate.latitude,
+            longitude: foodPOI.coordinate.longitude
+          ))
         let itemName = normalized(item.name ?? "")
         guard !itemName.isEmpty,
           distance <= maximumRestaurantMatchDistance,
@@ -157,46 +336,110 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       .item
   }
 
-  private func secureMatchDistance(
+  private func operatorScopedEvidence(
     item: MKMapItem,
     lookup: LookupTarget
-  ) -> CLLocationDistance? {
-    guard let itemLocation = mapItemLocation(item),
-      operatorMatches(item.name ?? "", lookup.operatorName)
-    else {
+  ) -> (distance: CLLocationDistance, hasExactAddressMatch: Bool)? {
+    guard let itemLocation = mapItemLocation(item) else {
       return nil
     }
-    let distance = itemLocation.distance(from: CLLocation(
-      latitude: lookup.coordinate.latitude,
-      longitude: lookup.coordinate.longitude
-    ))
-    guard AppleChargingPlaceMatchPolicy.accepts(
-      distanceMeters: distance,
+    let distance = itemLocation.distance(
+      from: CLLocation(
+        latitude: lookup.coordinate.latitude,
+        longitude: lookup.coordinate.longitude
+      ))
+    return (
+      distance: distance,
       hasExactAddressMatch: addressMatches(item: item, lookup: lookup)
-    ) else {
-      return nil
-    }
-    return distance
+    )
   }
 
-  private func bestChargingMatch(
+  private func chargingMatches(
     items: [MKMapItem],
-    lookups: [LookupTarget]
-  ) -> ChargingItemMatch? {
+    operatorName: String,
+    lookups: [LookupTarget],
+    campusLookups: [LookupTarget],
+    matchScope: AppleChargingPlaceMatchPolicy.Scope
+  ) -> [ChargingItemMatch] {
     items.compactMap { item -> ChargingItemMatch? in
-      guard let distance = lookups.compactMap({
-        secureMatchDistance(item: item, lookup: $0)
-      }).min() else {
+      let operatorEvidence = lookups.compactMap {
+        operatorScopedEvidence(item: item, lookup: $0)
+      }
+      .filter {
+        AppleChargingPlaceMatchPolicy.accepts(
+          distanceMeters: $0.distance,
+          hasExactAddressMatch: $0.hasExactAddressMatch
+        )
+      }
+      .min { $0.distance < $1.distance }
+      let campusDistance = campusLookups.compactMap {
+        distance(from: item, to: $0)
+      }.min()
+      let match = AppleChargingPlaceMatchPolicy.match(
+        evidence: AppleChargingPlaceMatchPolicy.Evidence(
+          operatorNameMatches: operatorMatches(item.name ?? "", operatorName),
+          canonicalOperatorNameMatches: operatorKey(item.name ?? "")
+            == operatorKey(operatorName),
+          operatorScopedDistanceMeters: operatorEvidence?.distance,
+          hasExactOperatorAddressMatch: operatorEvidence?.hasExactAddressMatch ?? false,
+          isEVCharger: item.pointOfInterestCategory == .evCharger,
+          campusDistanceMeters: campusDistance,
+          hasCampusLocalityMatch: AppleChargingPlaceLookupScope.localityMatches(
+            mapItemAddress(item),
+            referenceAddresses: lookups.map(\.address)
+          ),
+          stablePlaceIdentifier: item.identifier?.rawValue
+        ),
+        scope: matchScope
+      )
+      guard let match else {
         return nil
       }
-      return ChargingItemMatch(item: item, distance: distance)
+      return ChargingItemMatch(item: item, match: match)
     }
-    .min {
+  }
+
+  private func bestOperatorScopedMatch(
+    in matches: [ChargingItemMatch]
+  ) -> ChargingItemMatch? {
+    matches.filter(\.isOperatorScopedMatch).min {
       if $0.distance != $1.distance {
         return $0.distance < $1.distance
       }
       return mapItemStableKey($0.item) < mapItemStableKey($1.item)
     }
+  }
+
+  private func unambiguousCampusMatch(
+    in matches: [ChargingItemMatch]
+  ) -> ChargingItemMatch? {
+    guard
+      let identifier = AppleChargingPlaceMatchPolicy.unambiguousCampusPlaceIdentifier(
+        in: matches.map(\.match)
+      )
+    else {
+      return nil
+    }
+    return matches.filter { $0.stablePlaceIdentifier == identifier }.min {
+      if $0.distance != $1.distance {
+        return $0.distance < $1.distance
+      }
+      return mapItemStableKey($0.item) < mapItemStableKey($1.item)
+    }
+  }
+
+  private func distance(
+    from item: MKMapItem,
+    to lookup: LookupTarget
+  ) -> CLLocationDistance? {
+    guard let itemLocation = mapItemLocation(item) else {
+      return nil
+    }
+    return itemLocation.distance(
+      from: CLLocation(
+        latitude: lookup.coordinate.latitude,
+        longitude: lookup.coordinate.longitude
+      ))
   }
 
   private func addressMatches(item: MKMapItem, lookup: LookupTarget) -> Bool {
@@ -211,7 +454,8 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     let addressTokens = Set(appleAddress.split(separator: " ").map(String.init))
     let streetMatches = street.map(appleAddress.contains) ?? false
     let houseNumberMatches = houseNumber.map(addressTokens.contains) ?? false
-    let localityMatches = (postalCode.map(addressTokens.contains) ?? false)
+    let localityMatches =
+      (postalCode.map(addressTokens.contains) ?? false)
       || (city.map(appleAddress.contains) ?? false)
     return streetMatches && houseNumberMatches && localityMatches
   }
@@ -358,20 +602,23 @@ enum AppleChargingPlaceLookupScope {
     let primaryOperatorLocations = primaryLocations.filter {
       $0.operatorName == operatorName
     }
-    let primaryAddressKeys = Set(primaryOperatorLocations.compactMap {
-      addressKey($0.address)
-    })
+    let primaryAddressKeys = Set(
+      primaryOperatorLocations.compactMap {
+        addressKey($0.address)
+      })
     guard !primaryAddressKeys.isEmpty else {
       return primaryOperatorLocations
     }
 
     var seenLocationIDs = Set<UUID>()
-    return (primaryOperatorLocations + candidateLocations.filter {
-      $0.operatorName == operatorName
-        && addressKey($0.address).map(primaryAddressKeys.contains) == true
-    }).filter {
-      seenLocationIDs.insert($0.id).inserted
-    }
+    return
+      (primaryOperatorLocations
+      + candidateLocations.filter {
+        $0.operatorName == operatorName
+          && addressKey($0.address).map(primaryAddressKeys.contains) == true
+      }).filter {
+        seenLocationIDs.insert($0.id).inserted
+      }
   }
 
   static func addressKey(_ address: ChargingLocationAddress) -> String? {
@@ -385,11 +632,32 @@ enum AppleChargingPlaceLookupScope {
     return "\(street)|\(houseNumber)|\(postalCode)|\(city)"
   }
 
+  static func localityMatches(
+    _ candidateAddress: String?,
+    referenceAddresses: [ChargingLocationAddress]
+  ) -> Bool {
+    guard let candidateAddress = normalized(candidateAddress) else {
+      return false
+    }
+    let candidateTokens = Set(candidateAddress.split(separator: " ").map(String.init))
+    let paddedCandidateAddress = " \(candidateAddress) "
+    return referenceAddresses.contains { address in
+      let postalCodeMatches =
+        normalized(address.postalCode)
+        .map(candidateTokens.contains) ?? false
+      let cityMatches =
+        normalized(address.city)
+        .map { paddedCandidateAddress.contains(" \($0) ") } ?? false
+      return postalCodeMatches || cityMatches
+    }
+  }
+
   private static func normalized(_ value: String?) -> String? {
     guard let value else {
       return nil
     }
-    let result = value
+    let result =
+      value
       .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
       .lowercased()
       .unicodeScalars
@@ -409,9 +677,55 @@ private struct LookupTarget {
   let operatorName: String
   let coordinate: Coordinate
   let address: ChargingLocationAddress
+
+  init(
+    operatorName: String,
+    coordinate: Coordinate,
+    address: ChargingLocationAddress
+  ) {
+    self.operatorName = operatorName
+    self.coordinate = coordinate
+    self.address = address
+  }
+
+  init(_ lookup: ChargingLocationLookup) {
+    self.init(
+      operatorName: lookup.operatorName,
+      coordinate: lookup.coordinate,
+      address: lookup.address
+    )
+  }
 }
 
 private struct ChargingItemMatch {
   let item: MKMapItem
-  let distance: CLLocationDistance
+  let match: AppleChargingPlaceMatchPolicy.Match
+
+  var distance: CLLocationDistance {
+    switch match {
+    case .operatorScoped(let distance), .campus(let distance, _):
+      return distance
+    }
+  }
+
+  var isOperatorScopedMatch: Bool {
+    if case .operatorScoped = match {
+      return true
+    }
+    return false
+  }
+
+  var isCampusMatch: Bool {
+    if case .campus = match {
+      return true
+    }
+    return false
+  }
+
+  var stablePlaceIdentifier: String? {
+    guard case .campus(_, let identifier) = match else {
+      return nil
+    }
+    return identifier
+  }
 }

@@ -137,6 +137,257 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
+  func testNoFoodCampusMatchAcceptsWertheimShapedGeometryEvidence() {
+    let match = AppleChargingPlaceMatchPolicy.match(
+      evidence: campusEvidence(),
+      scope: .noFoodCampus
+    )
+
+    XCTAssertEqual(
+      match,
+      .campus(distanceMeters: 44, stablePlaceIdentifier: "I19TESLA")
+    )
+  }
+
+  func testFoodModeKeepsAppleChargingMatchOperatorScoped() {
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(),
+        scope: .operatorOnly
+      )
+    )
+  }
+
+  func testNoFoodCampusPrefersOperatorScopedEvidence() {
+    let evidence = AppleChargingPlaceMatchPolicy.Evidence(
+      operatorNameMatches: true,
+      canonicalOperatorNameMatches: true,
+      operatorScopedDistanceMeters: 60,
+      hasExactOperatorAddressMatch: false,
+      isEVCharger: true,
+      campusDistanceMeters: 20,
+      hasCampusLocalityMatch: true,
+      stablePlaceIdentifier: "I19TESLA"
+    )
+
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: evidence,
+        scope: .noFoodCampus
+      ),
+      .operatorScoped(distanceMeters: 60)
+    )
+  }
+
+  func testCampusMatchRejectsWrongCategoryLocalityAndCanonicalOperator() {
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(isEVCharger: false),
+        scope: .noFoodCampus
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(hasCampusLocalityMatch: false),
+        scope: .noFoodCampus
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(canonicalOperatorNameMatches: false),
+        scope: .noFoodCampus
+      )
+    )
+  }
+
+  func testCampusMatchKeepsSixtyMeterBoundaryAndRequiresStableIdentity() {
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(campusDistanceMeters: 60),
+        scope: .noFoodCampus
+      ),
+      .campus(distanceMeters: 60, stablePlaceIdentifier: "I19TESLA")
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(campusDistanceMeters: 61),
+        scope: .noFoodCampus
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(stablePlaceIdentifier: nil),
+        scope: .noFoodCampus
+      )
+    )
+  }
+
+  func testCampusMatchRequiresOneStableApplePlaceIdentity() throws {
+    let first = try XCTUnwrap(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(stablePlaceIdentifier: "FIRST"),
+        scope: .noFoodCampus
+      )
+    )
+    let duplicate = try XCTUnwrap(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(stablePlaceIdentifier: "FIRST"),
+        scope: .noFoodCampus
+      )
+    )
+    let second = try XCTUnwrap(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: campusEvidence(stablePlaceIdentifier: "SECOND"),
+        scope: .noFoodCampus
+      )
+    )
+
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.unambiguousCampusPlaceIdentifier(
+        in: [first, duplicate]
+      ),
+      "FIRST"
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.unambiguousCampusPlaceIdentifier(
+        in: [first, second]
+      )
+    )
+  }
+
+  func testOperatorScopedMatchPreservesExistingBroaderNameRule() {
+    let evidence = AppleChargingPlaceMatchPolicy.Evidence(
+      operatorNameMatches: true,
+      canonicalOperatorNameMatches: false,
+      operatorScopedDistanceMeters: 60,
+      hasExactOperatorAddressMatch: false,
+      isEVCharger: true,
+      campusDistanceMeters: nil,
+      hasCampusLocalityMatch: false,
+      stablePlaceIdentifier: nil
+    )
+    let wrongCategoryEvidence = AppleChargingPlaceMatchPolicy.Evidence(
+      operatorNameMatches: true,
+      canonicalOperatorNameMatches: false,
+      operatorScopedDistanceMeters: 60,
+      hasExactOperatorAddressMatch: false,
+      isEVCharger: false,
+      campusDistanceMeters: nil,
+      hasCampusLocalityMatch: false,
+      stablePlaceIdentifier: nil
+    )
+
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: evidence,
+        scope: .operatorOnly
+      ),
+      .operatorScoped(distanceMeters: 60)
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: wrongCategoryEvidence,
+        scope: .operatorOnly
+      )
+    )
+  }
+
+  func testCampusLocalityAcceptsCityOrPostalCode() {
+    let campusAddress = ChargingLocationAddress(
+      street: "Am Fuchsenacker",
+      houseNumber: "2",
+      postalCode: "97877",
+      city: "Wertheim"
+    )
+
+    XCTAssertTrue(
+      AppleChargingPlaceLookupScope.localityMatches(
+        "Almosenberg 12, Bettingen, 97877 Wertheim, Deutschland",
+        referenceAddresses: [campusAddress]
+      )
+    )
+    XCTAssertTrue(
+      AppleChargingPlaceLookupScope.localityMatches(
+        "Andere Straße 1, Wertheim, Deutschland",
+        referenceAddresses: [campusAddress]
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceLookupScope.localityMatches(
+        "Andere Straße 1, 97070 Würzburg, Deutschland",
+        referenceAddresses: [campusAddress]
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceLookupScope.localityMatches(
+        "Andere Straße 1, Hessen, Deutschland",
+        referenceAddresses: [
+          ChargingLocationAddress(
+            street: nil,
+            houseNumber: nil,
+            postalCode: nil,
+            city: "Essen"
+          )
+        ]
+      )
+    )
+  }
+
+  func testChargingPlaceFallbackQueryKeepsExactSelectedOperatorName() {
+    XCTAssertEqual(
+      AppleChargingPlaceSearchQuery.naturalLanguageQuery(
+        for: "  Tesla Germany GmbH  ",
+        scope: .noFoodCampus,
+        hasSecureCategoryMatch: false
+      ),
+      "Tesla Germany GmbH"
+    )
+    XCTAssertEqual(
+      AppleChargingPlaceSearchQuery.naturalLanguageQuery(
+        for: "IONITY",
+        scope: .noFoodCampus,
+        hasSecureCategoryMatch: false
+      ),
+      "IONITY"
+    )
+  }
+
+  func testChargingPlaceFallbackQueryRequiresNoFoodScopeAndCategoryMiss() {
+    XCTAssertNil(
+      AppleChargingPlaceSearchQuery.naturalLanguageQuery(
+        for: "Tesla Germany GmbH",
+        scope: .operatorOnly,
+        hasSecureCategoryMatch: false
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceSearchQuery.naturalLanguageQuery(
+        for: "Tesla Germany GmbH",
+        scope: .noFoodCampus,
+        hasSecureCategoryMatch: true
+      )
+    )
+  }
+
+  private func campusEvidence(
+    canonicalOperatorNameMatches: Bool = true,
+    isEVCharger: Bool = true,
+    campusDistanceMeters: Double = 44,
+    hasCampusLocalityMatch: Bool = true,
+    stablePlaceIdentifier: String? = "I19TESLA"
+  ) -> AppleChargingPlaceMatchPolicy.Evidence {
+    AppleChargingPlaceMatchPolicy.Evidence(
+      operatorNameMatches: true,
+      canonicalOperatorNameMatches: canonicalOperatorNameMatches,
+      operatorScopedDistanceMeters: nil,
+      hasExactOperatorAddressMatch: false,
+      isEVCharger: isEVCharger,
+      campusDistanceMeters: campusDistanceMeters,
+      hasCampusLocalityMatch: hasCampusLocalityMatch,
+      stablePlaceIdentifier: stablePlaceIdentifier
+    )
+  }
+
   func testNativeApplePlaceURLUsesOnlyTheStablePlaceIdentifier() throws {
     let url = try XCTUnwrap(
       AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")

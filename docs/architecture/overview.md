@@ -1,6 +1,7 @@
 # System architecture
 
-Status: Accepted on 2026-08-13; clustering/search identity amended on 2026-08-20.
+Status: Accepted on 2026-08-13; clustering/search identity and no-food
+Apple-place matching amended on 2026-08-20.
 
 ## Goals
 
@@ -71,6 +72,12 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Opens a conservatively matched native Apple charger or restaurant by stable Place
   ID. If no unambiguous match exists, it leaves the backend result unchanged and
   reports that Apple details are unavailable.
+- Requires a matching operator name and Apple's `.evCharger` category for every
+  native charger match. The operator-specific 60 m direct rule and 300 m
+  exact-address rule remain primary. Only without food, one unique stable Apple
+  place may additionally use the selected bounded campus as spatial evidence when
+  it has the same postal code or normalized city and lies within 60 m of any
+  qualifying campus location. Food-mode operator scopes remain unchanged.
 - For CarPlay, opens Apple Maps with driving directions. A matched restaurant is
   inserted as a waypoint before the original ride destination; without a food
   match, the campus navigation coordinate remains the navigation destination.
@@ -177,7 +184,22 @@ search. The ride-local match is cached and the native place is opened through it
 Apple Place ID. Apple Place IDs identify only Apple records and are never treated
 as cross-source identities. For a restaurant result, one operator lookup considers
 all of that operator's authority locations in the group but opens only one
-conservatively matched native Apple POI.
+conservatively matched native Apple POI. For a no-food campus, an operator-matched
+Apple `.evCharger` that fails the primary operator-coordinate/address rules may use
+another qualifying location in that same campus only as <=60 m spatial evidence.
+The Apple place must share the requested operator's postal code or normalized city
+and be the single qualifying stable Place ID across the bounded lookup. This does
+not alter operator identity, campus membership, search results, or food behavior.
+
+Charging-place lookup first performs the bounded category-only `.evCharger`
+search. Food mode has no second charging search pass. Only for a no-food campus,
+collect campus-fallback evidence across the category-only pass. A primary
+operator-specific match may return immediately; one unambiguous campus match is
+accepted after that pass. Otherwise a second bounded natural-language search for
+the requested operator uses the same `.evCharger` filter and campus scope.
+Ambiguous category campus candidates remain evidence in that second-pass
+decision. Both passes use the same identity, locality, distance, and ambiguity
+rules; no broad or unfiltered search is allowed.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work and retains

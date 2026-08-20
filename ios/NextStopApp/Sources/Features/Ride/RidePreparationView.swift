@@ -567,11 +567,15 @@ struct RidePreparationView: View {
       if let representativePark = result.representativePark(
         for: chargingOperator.name
       ) {
+        let matchScope: AppleChargingPlaceMatchPolicy.Scope =
+          usesRestaurantGroupLookupScope ? .operatorOnly : .noFoodCampus
         ApplePlaceButton(
           target: .charging(
             park: representativePark,
             operatorName: chargingOperator.name,
-            relatedLocations: relatedLocations
+            relatedLocations: relatedLocations,
+            campusLocations: matchScope == .noFoodCampus ? result.locationLookups : [],
+            matchScope: matchScope
           ),
           resolver: placeResolver,
           launcher: navigationLauncher
@@ -781,13 +785,15 @@ private enum ApplePlaceTarget: Hashable {
   case charging(
     park: ChargingPark,
     operatorName: String,
-    relatedLocations: [ChargingLocationLookup]
+    relatedLocations: [ChargingLocationLookup],
+    campusLocations: [ChargingLocationLookup],
+    matchScope: AppleChargingPlaceMatchPolicy.Scope
   )
   case restaurant(FoodPOI)
 
   var displayName: String {
     switch self {
-    case .charging(_, let operatorName, _):
+    case .charging(_, let operatorName, _, _, _):
       return operatorName
     case .restaurant(let foodPOI):
       return foodPOI.name
@@ -797,11 +803,19 @@ private enum ApplePlaceTarget: Hashable {
   @MainActor
   func resolve(using resolver: any ApplePlaceResolving) async -> MKMapItem? {
     switch self {
-    case .charging(let park, let operatorName, let relatedLocations):
+    case .charging(
+      let park,
+      let operatorName,
+      let relatedLocations,
+      let campusLocations,
+      let matchScope
+    ):
       return await resolver.resolveChargingPlace(
         park: park,
         operatorName: operatorName,
-        relatedLocations: relatedLocations
+        relatedLocations: relatedLocations,
+        campusLocations: campusLocations,
+        matchScope: matchScope
       )
     case .restaurant(let foodPOI):
       return await resolver.resolveRestaurantPlace(foodPOI)

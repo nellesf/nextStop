@@ -1,6 +1,7 @@
 # Routing and candidate search
 
-Status: Accepted on 2026-08-13; candidate identity amended on 2026-08-20.
+Status: Accepted on 2026-08-13; candidate identity and no-food Apple-place
+matching amended on 2026-08-20.
 
 ## Canonical routing rule
 
@@ -142,6 +143,46 @@ continuously track/re-route or change result order. A user-initiated refresh or 
 new destination creates a new route, new candidate snapshot, and new results. The
 fingerprint is built from a canonical field order so semantically identical JSON
 requests remain compatible across pages regardless of serializer key order.
+
+## Native Apple-place enrichment
+
+Native Apple-place resolution starts only after the user taps an operator or
+restaurant Maps button and never participates in candidate inclusion or ranking.
+Every charging-place candidate must match the requested operator name and have
+Apple's `.evCharger` category. Accept it within 60 m of that operator's qualifying
+authority location without address evidence, or within 300 m when street, house
+number, and postal code or city match. These primary rules apply in both search
+modes.
+
+Only for an already selected no-food `ChargingCampus`, a campus-local fallback may
+accept a charger that fails both primary rules. Its address must share the postal
+code or normalized city of the requested operator's qualifying authority evidence,
+and its coordinate must be within 60 m of any qualifying location in that bounded
+campus. A different operator's campus location is only spatial evidence; the Apple
+place itself must still match the requested operator.
+
+For each applicable lookup scope, first perform the bounded category-only
+`.evCharger` search. Food mode ends after that category pass and retains its
+existing operator-specific behavior. Only for a no-food campus, complete the
+category-only searches across every bounded center when evaluating campus
+evidence. A primary operator-specific match retains its existing best-match
+behavior and may return immediately. Otherwise accept one unambiguous campus
+match after the category pass. If that pass has no secure match, including an
+ambiguous set of qualifying campus candidates, perform a second bounded
+natural-language search for the requested operator with the same `.evCharger`
+filter and campus scope. Retain the ambiguous category campus candidates as
+evidence alongside the second-pass results. Never issue a broad or unfiltered
+fallback search. Apply the same identity, locality, and distance rules,
+deduplicate the combined campus evidence by stable Apple Place ID, and require
+exactly one campus-fallback place.
+
+Food-mode lookup remains operator-specific across the restaurant group's member
+fine parks and never uses another operator's coordinate as fallback evidence. If
+the applicable rules do not yield one unambiguous stable Apple place, keep the
+authority/OSM-backed result visible and report that Apple details are unavailable.
+The 2026-08-20 Wertheim regression fixes the intended boundary: Apple's Tesla
+place was 211.5 m from the Tesla authority point but 43.3 m from another qualifying
+location in the same no-food campus.
 
 ## Apple Maps handoff
 
