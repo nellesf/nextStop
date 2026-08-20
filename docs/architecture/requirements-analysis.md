@@ -67,7 +67,7 @@ filter, ratings, reservations, live re-ranking, or paid data source.
 
 ## Owner-approved resolutions
 
-- Minimum deployment target: iOS 18.
+- Minimum deployment target: iOS 26.
 - Backend: strict TypeScript/Fastify on Node.js active LTS.
 - Database: PostgreSQL + PostGIS.
 - Clustering: deterministic complete-link with maximum 200 m diameter.

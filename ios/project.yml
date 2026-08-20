@@ -4,7 +4,7 @@ options:
   bundleIdPrefix: de.nextstop
   createIntermediateGroups: true
   deploymentTarget:
-    iOS: "18.0"
+    iOS: "26.0"
   developmentLanguage: de
   generateEmptyDirectories: true
   groupSortPosition: top

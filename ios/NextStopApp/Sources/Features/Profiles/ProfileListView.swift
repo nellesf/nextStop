@@ -22,6 +22,97 @@ private struct RideSelection: Identifiable, Hashable {
   let source: RideSelectionSource
 }
 
+private struct ProfileCard: View {
+  @Environment(\.colorScheme) private var colorScheme
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  let profile: UserProfile
+  let onEdit: () -> Void
+  let onStartRide: () -> Void
+
+  var body: some View {
+    VStack(alignment: .leading, spacing: 20) {
+      if dynamicTypeSize.isAccessibilitySize {
+        VStack(alignment: .leading, spacing: 16) {
+          profileSummary
+          editButton
+        }
+      } else {
+        HStack(alignment: .center, spacing: 16) {
+          profileSummary
+          editButton
+        }
+      }
+
+      Button(action: onStartRide) {
+        Label("ride.start", systemImage: "bolt.car.fill")
+          .symbolRenderingMode(.monochrome)
+      }
+      .buttonStyle(.glassProminent)
+      .buttonSizing(.flexible)
+      .controlSize(.large)
+      .tint(.green)
+    }
+    .padding(20)
+    .background {
+      RoundedRectangle(cornerRadius: 30, style: .continuous)
+        .fill(.regularMaterial)
+    }
+    .overlay {
+      RoundedRectangle(cornerRadius: 30, style: .continuous)
+        .strokeBorder(Color(.separator).opacity(0.18), lineWidth: 0.5)
+    }
+    .shadow(
+      color: .black.opacity(colorScheme == .dark ? 0.16 : 0.06),
+      radius: 18,
+      y: 8
+    )
+  }
+
+  private var profileSummary: some View {
+    Button(action: onEdit) {
+      VStack(alignment: .leading, spacing: 5) {
+        Text(profile.name)
+          .font(.title2.weight(.semibold))
+          .foregroundStyle(.primary)
+        Text(profile.destination.displayName)
+          .font(.body)
+          .foregroundStyle(.secondary)
+      }
+      .frame(maxWidth: .infinity, minHeight: 60, alignment: .leading)
+      .contentShape(Rectangle())
+    }
+    .buttonStyle(.plain)
+  }
+
+  private var editButton: some View {
+    Button(action: onEdit) {
+      Label("action.edit", systemImage: "pencil")
+    }
+    .buttonStyle(.glass)
+    .controlSize(.large)
+  }
+}
+
+private struct ProfilesBackground: View {
+  @Environment(\.colorScheme) private var colorScheme
+
+  var body: some View {
+    ZStack {
+      Color(.systemGroupedBackground)
+      LinearGradient(
+        colors: [
+          Color.green.opacity(colorScheme == .dark ? 0.12 : 0.09),
+          Color.clear,
+        ],
+        startPoint: .topTrailing,
+        endPoint: .center
+      )
+    }
+    .ignoresSafeArea()
+  }
+}
+
 struct ProfileListView: View {
   @Environment(\.modelContext) private var modelContext
   @ObservedObject private var rideIntentRouter: RideIntentRouter
@@ -41,7 +132,9 @@ struct ProfileListView: View {
 
   var body: some View {
     NavigationStack {
-      Group {
+      ZStack {
+        ProfilesBackground()
+
         if profiles.isEmpty {
           ContentUnavailableView(
             "profiles.empty.title",
@@ -51,51 +144,22 @@ struct ProfileListView: View {
         } else {
           List {
             ForEach(profiles) { profile in
-              VStack(alignment: .leading, spacing: 16) {
-                Button {
-                  editorSelection = ProfileEditorSelection(profile: profile)
-                } label: {
-                  HStack(alignment: .center, spacing: 16) {
-                    VStack(alignment: .leading, spacing: 4) {
-                      Text(profile.name)
-                        .font(.title3.weight(.semibold))
-                        .foregroundStyle(.primary)
-                      Text(profile.destination.displayName)
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity, alignment: .leading)
-
-                    Text("action.edit")
-                      .font(.callout.weight(.semibold))
-                      .foregroundStyle(.primary)
-                      .padding(.horizontal, 16)
-                      .frame(minHeight: 44)
-                      .profileEditControlStyle()
+              HStack {
+                Spacer(minLength: 0)
+                ProfileCard(
+                  profile: profile,
+                  onEdit: {
+                    editorSelection = ProfileEditorSelection(profile: profile)
+                  },
+                  onStartRide: {
+                    startRide(profile)
                   }
-                  .frame(minHeight: 64)
-                  .contentShape(Rectangle())
-                }
-                .buttonStyle(.plain)
-
-                Button {
-                  startRide(profile)
-                } label: {
-                  Label("ride.start", systemImage: "bolt.car.fill")
-                    .symbolRenderingMode(.monochrome)
-                    .frame(maxWidth: .infinity)
-                }
-                .profilePrimaryActionStyle()
-                .controlSize(.large)
-                .tint(.green)
+                )
+                .frame(maxWidth: 720)
+                Spacer(minLength: 0)
               }
-              .padding(16)
-              .background(
-                Color(.secondarySystemGroupedBackground),
-                in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-              )
               .listRowInsets(
-                EdgeInsets(top: 6, leading: 16, bottom: 6, trailing: 16)
+                EdgeInsets(top: 8, leading: 16, bottom: 8, trailing: 16)
               )
               .listRowSeparator(.hidden)
               .listRowBackground(Color.clear)
@@ -108,7 +172,7 @@ struct ProfileListView: View {
           }
           .listStyle(.plain)
           .scrollContentBackground(.hidden)
-          .background(Color(.systemGroupedBackground))
+          .background(Color.clear)
         }
       }
       .navigationTitle("profiles.title")
@@ -119,7 +183,6 @@ struct ProfileListView: View {
           } label: {
             Label("licenses.title", systemImage: "info.circle")
           }
-          .profileToolbarActionStyle()
         }
         ToolbarItem(placement: .primaryAction) {
           Button {
@@ -127,7 +190,6 @@ struct ProfileListView: View {
           } label: {
             Label("action.add", systemImage: "plus")
           }
-          .profileToolbarActionStyle()
         }
       }
       .sheet(item: $editorSelection) { selection in
@@ -207,36 +269,6 @@ struct ProfileListView: View {
       rideIntentRouter.consumePendingDestination()
     } catch {
       showsError = true
-    }
-  }
-}
-
-extension View {
-  @ViewBuilder
-  fileprivate func profileEditControlStyle() -> some View {
-    if #available(iOS 26.0, *) {
-      glassEffect(.clear.interactive(), in: Capsule())
-    } else {
-      background(Color(.tertiarySystemFill), in: Capsule())
-    }
-  }
-
-  @ViewBuilder
-  fileprivate func profilePrimaryActionStyle() -> some View {
-    if #available(iOS 26.0, *) {
-      buttonStyle(.glass(.clear.tint(.green)))
-    } else {
-      buttonStyle(.borderedProminent)
-    }
-  }
-
-  @ViewBuilder
-  fileprivate func profileToolbarActionStyle() -> some View {
-    if #available(iOS 26.0, *) {
-      buttonStyle(.glass(.clear))
-        .buttonBorderShape(.circle)
-    } else {
-      self
     }
   }
 }

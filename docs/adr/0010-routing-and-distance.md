@@ -4,6 +4,7 @@
 - Date: 2026-08-13
 - Amended: 2026-08-16
 - Amended: 2026-08-19
+- Amended: 2026-08-20
 
 ## Context
 
@@ -68,5 +69,5 @@ record.
 
 MapKit is canonical and truthful, while candidate batching/concurrency/caching are
 needed for latency. The backend API returns candidates and lower bounds, not final
-driving-distance claims. The multistop handoff requires iOS 18.4 or later; iOS
-18.0–18.3 falls back to automobile directions to the matched restaurant.
+driving-distance claims. The accepted iOS 26 deployment target supports the
+multistop handoff without an older-system fallback.

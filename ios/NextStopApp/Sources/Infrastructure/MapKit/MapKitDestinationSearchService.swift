@@ -23,18 +23,8 @@ final class MapKitDestinationSearchService: DestinationSearching {
       return nil
     }
 
-    let location: CLLocation
-    let address: String?
-    if #available(iOS 26.0, *) {
-      location = mapItem.location
-      address = mapItem.address?.fullAddress
-    } else {
-      guard let legacyLocation = legacyLocationAndAddress(for: mapItem) else {
-        return nil
-      }
-      location = legacyLocation.location
-      address = legacyLocation.address
-    }
+    let location = mapItem.location
+    let address = mapItem.address?.fullAddress
     let coordinate: Coordinate
     do {
       coordinate = try Coordinate(
@@ -63,15 +53,5 @@ final class MapKitDestinationSearchService: DestinationSearching {
       destination: destination,
       subtitle: address == name ? nil : address
     )
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private static func legacyLocationAndAddress(for mapItem: MKMapItem) -> (
-    location: CLLocation, address: String?
-  )? {
-    guard let location = mapItem.placemark.location else {
-      return nil
-    }
-    return (location, mapItem.placemark.title)
   }
 }

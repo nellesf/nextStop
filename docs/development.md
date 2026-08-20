@@ -80,13 +80,9 @@ xcodebuild \
 ```
 
 Replace the simulator name with one installed by the selected Xcode version. The
-app requires an Xcode 26 SDK to compile its current MapKit compatibility adapter
-while retaining the accepted iOS 18 deployment target.
-
-MapKit deprecated `MKMapItem.placemark` in iOS 26 when it introduced the modern
-`location` and `address` properties. The adapter uses the modern API on iOS 26+
-and keeps the old call isolated behind an availability branch solely for devices
-running the still-supported iOS 18–25 versions.
+app requires Xcode 26 and an iOS 26 simulator because iOS 26 is the accepted
+deployment target. The app uses the modern `MKMapItem.location` and `address`
+APIs and the native Liquid Glass control and navigation system.
 
 ### Backend
 

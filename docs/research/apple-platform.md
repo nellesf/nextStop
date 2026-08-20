@@ -114,12 +114,10 @@ stable.
 
 ## Accepted minimum version
 
-iOS 18.0 is accepted as a product support policy rather than the first availability
-of the CarPlay templates. It supports the chosen modern SwiftUI, App Intents,
-SwiftData, and concurrency baseline while avoiding a three-generation-old minimum
-at implementation time. iOS 17.0 is the compatibility alternative. The actual
-deployment target must be revalidated in the selected Xcode SDK and entitlement
-test before ADR 0001 is accepted.
+iOS 26.0 is accepted as the product and design baseline. During private TestFlight
+validation, the owner chose a single native Liquid Glass interface over maintaining
+an iOS 18 compatibility presentation. The target must still be validated with the
+selected Xcode 26 SDK, the intended test devices, and the CarPlay entitlement.
 
 ## Remaining Apple validation
 

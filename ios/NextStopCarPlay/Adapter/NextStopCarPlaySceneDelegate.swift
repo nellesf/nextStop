@@ -481,19 +481,9 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       latitude: coordinate.latitude,
       longitude: coordinate.longitude
     )
-    let mapItem: MKMapItem
-    if #available(iOS 26.0, *) {
-      mapItem = MKMapItem(location: location, address: nil)
-    } else {
-      mapItem = makeLegacyMapItem(for: location)
-    }
+    let mapItem = MKMapItem(location: location, address: nil)
     mapItem.name = name
     return mapItem
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private func makeLegacyMapItem(for location: CLLocation) -> MKMapItem {
-    MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
   }
 }
 

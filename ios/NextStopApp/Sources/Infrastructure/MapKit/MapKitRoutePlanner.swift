@@ -51,16 +51,7 @@ final class MapKitRoutePlanner: RoutePlanning {
       latitude: coordinate.latitude,
       longitude: coordinate.longitude
     )
-    if #available(iOS 26.0, *) {
-      return MKMapItem(location: location, address: nil)
-    } else {
-      return makeLegacyMapItem(for: location)
-    }
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private static func makeLegacyMapItem(for location: CLLocation) -> MKMapItem {
-    MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
+    return MKMapItem(location: location, address: nil)
   }
 }
 

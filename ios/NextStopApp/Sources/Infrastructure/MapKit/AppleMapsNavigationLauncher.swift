@@ -20,8 +20,7 @@ protocol AppleMapsLaunching: AnyObject {
 final class AppleMapsLauncher: AppleMapsLaunching {
   @discardableResult
   func openPlace(_ mapItem: MKMapItem) -> Bool {
-    if #available(iOS 18.4, *),
-      let placeIdentifier = mapItem.identifier?.rawValue,
+    if let placeIdentifier = mapItem.identifier?.rawValue,
       let placeURL = Self.placeURL(placeIdentifier: placeIdentifier)
     {
       guard UIApplication.shared.canOpenURL(placeURL) else {
@@ -39,8 +38,7 @@ final class AppleMapsLauncher: AppleMapsLaunching {
     via foodPOI: FoodPOI?,
     finalDestination: SavedDestination
   ) -> Bool {
-    if #available(iOS 18.4, *),
-      let foodPOI,
+    if let foodPOI,
       let directionsURL = Self.multistopDirectionsURL(
         waypoint: foodPOI,
         finalDestination: finalDestination
@@ -113,18 +111,8 @@ final class AppleMapsLauncher: AppleMapsLaunching {
       latitude: coordinate.latitude,
       longitude: coordinate.longitude
     )
-    let mapItem: MKMapItem
-    if #available(iOS 26.0, *) {
-      mapItem = MKMapItem(location: location, address: nil)
-    } else {
-      mapItem = makeLegacyMapItem(for: location)
-    }
+    let mapItem = MKMapItem(location: location, address: nil)
     mapItem.name = name
     return mapItem
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private func makeLegacyMapItem(for location: CLLocation) -> MKMapItem {
-    MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
   }
 }

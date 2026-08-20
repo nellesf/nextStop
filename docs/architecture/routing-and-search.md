@@ -125,9 +125,8 @@ requests remain compatible across pages regardless of serializer key order.
 
 When a result has a matched restaurant, open Apple's documented unified Maps
 `/directions` URL with that restaurant as a waypoint and the ride's original
-destination as the final destination. This multistop handoff is available on iOS
-18.4 and later. On iOS 18.0–18.3, open automobile directions to the restaurant as
-the safe documented fallback. Without a food match, create an `MKMapItem` from the
+destination as the final destination. The iOS 26 deployment target supports this
+multistop handoff directly. Without a food match, create an `MKMapItem` from the
 chosen park access coordinate and open automobile directions to the park. Do not
 claim navigation has begun until the handoff succeeds. The app does not render
 maneuvers or request the navigation entitlement.

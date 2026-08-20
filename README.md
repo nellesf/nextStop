@@ -5,7 +5,8 @@ destination and a small set of explicit criteria, it finds at most the next five
 matching charging stops along the current MapKit route and hands the selected
 restaurant or park to Apple Maps. With a food filter, one stop represents one
 restaurant and combines all qualifying nearby parks by charging operator. It does
-not provide turn-by-turn navigation.
+not provide turn-by-turn navigation. The iPhone and CarPlay app requires iOS 26
+and uses the native Liquid Glass design system.
 
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13.
 Implementation includes the portable, entitlement-independent Swift core, a

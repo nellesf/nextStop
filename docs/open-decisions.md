@@ -6,11 +6,11 @@ accepted ADR boundaries.
 
 ## 1. Minimum iOS version
 
-**Decision: iOS 18.0.** It keeps a contemporary support window in 2026,
-supports modern SwiftUI, MapKit, App Intents, and SwiftData, and still leaves the
-CarPlay code on mature system templates. iOS 17.0 is the compatibility alternative
-and is technically sufficient for the core MVP, but expands the test matrix and
-support horizon.
+**Decision: iOS 26.0.** The owner amended the original iOS 18 decision on
+2026-08-20 during private TestFlight design validation. The app now uses one native
+Liquid Glass design and the modern MapKit APIs without maintaining a parallel
+pre-iOS-26 presentation. iOS 18 remains technically possible but is no longer in
+the supported test matrix.
 
 See ADR 0001.
 

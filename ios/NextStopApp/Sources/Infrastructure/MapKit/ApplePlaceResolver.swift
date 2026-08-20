@@ -315,27 +315,11 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   }
 
   private func mapItemLocation(_ item: MKMapItem) -> CLLocation? {
-    if #available(iOS 26.0, *) {
-      return item.location
-    }
-    return legacyLocation(item)
+    item.location
   }
 
   private func mapItemAddress(_ item: MKMapItem) -> String? {
-    if #available(iOS 26.0, *) {
-      return item.address?.fullAddress
-    }
-    return legacyAddress(item)
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private func legacyLocation(_ item: MKMapItem) -> CLLocation? {
-    item.placemark.location
-  }
-
-  @available(iOS, introduced: 18.0, obsoleted: 26.0)
-  private func legacyAddress(_ item: MKMapItem) -> String? {
-    item.placemark.title
+    item.address?.fullAddress
   }
 }
 
