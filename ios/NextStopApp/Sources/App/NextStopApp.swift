@@ -29,3 +29,7 @@ struct NextStopApp: App {
     .modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])
   }
 }
+
+extension Color {
+  static let nextStopHighlight = Color(red: 0.78, green: 1, blue: 0.18)
+}

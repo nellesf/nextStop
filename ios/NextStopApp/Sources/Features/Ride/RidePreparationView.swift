@@ -83,7 +83,10 @@ struct RidePreparationView: View {
       }
       .padding()
     }
-    .background(Color(.systemGroupedBackground))
+    .background(
+      Color(.systemGroupedBackground)
+        .overlay(Color.nextStopHighlight.opacity(0.025))
+    )
     .navigationTitle("ride.title")
     .navigationBarTitleDisplayMode(.inline)
     .task {
@@ -212,27 +215,10 @@ struct RidePreparationView: View {
   private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
     let results = outcome.results
     let allCandidateLocations = results.flatMap(\.locationLookups)
-    return VStack(alignment: .leading, spacing: 16) {
+    return VStack(alignment: .leading, spacing: 12) {
       coverageNotice(outcome.coverage)
 
-      ViewThatFits(in: .horizontal) {
-        HStack(alignment: .center, spacing: 12) {
-          resultsHeading
-          Spacer()
-          resultCountBadge(results.count)
-        }
-
-        VStack(alignment: .leading, spacing: 10) {
-          resultsHeading
-          resultCountBadge(results.count)
-        }
-      }
-      .padding(.horizontal, 4)
-
-      Label("ride.results.sorted_by_driving_distance", systemImage: "arrow.up.arrow.down")
-        .font(.caption)
-        .foregroundStyle(.secondary)
-        .padding(.horizontal, 4)
+      resultsHeader(count: results.count)
 
       ForEach(Array(results.enumerated()), id: \.element.resultCardID) { index, result in
         resultCard(
@@ -254,35 +240,65 @@ struct RidePreparationView: View {
           .frame(maxWidth: .infinity)
       }
       .buttonStyle(.bordered)
+      .tint(Color(.label))
     }
   }
 
-  private var resultsHeading: some View {
-    VStack(alignment: .leading, spacing: 4) {
-      Text("ride.results.screen.title")
-        .font(.title2.weight(.bold))
+  private func resultsHeader(count: Int) -> some View {
+    VStack(alignment: .leading, spacing: 7) {
+      HStack(alignment: .firstTextBaseline, spacing: 10) {
+        Text("ride.results.screen.title")
+          .font(.title3.weight(.bold))
+          .foregroundStyle(.primary)
 
-      Label {
-        Text(
-          verbatim: LocalizedFormat.direction(
-            to: viewModel.draft.destination.displayName
-          )
-        )
-      } icon: {
-        Image(systemName: "arrow.up.right")
+        Spacer(minLength: 8)
+
+        resultCountBadge(count)
       }
-      .font(.subheadline)
-      .foregroundStyle(.secondary)
+
+      ViewThatFits(in: .horizontal) {
+        HStack(spacing: 10) {
+          resultDirectionMeta
+          Spacer(minLength: 8)
+          resultSortMeta
+        }
+
+        VStack(alignment: .leading, spacing: 4) {
+          resultDirectionMeta
+          resultSortMeta
+        }
+      }
     }
+    .padding(.horizontal, 2)
+  }
+
+  private var resultDirectionMeta: some View {
+    Label {
+      Text(
+        verbatim: LocalizedFormat.direction(
+          to: viewModel.draft.destination.displayName
+        )
+      )
+    } icon: {
+      Image(systemName: "arrow.up.right")
+    }
+    .font(.caption)
+    .foregroundStyle(.secondary)
+  }
+
+  private var resultSortMeta: some View {
+    Label("ride.results.sorted_by_driving_distance", systemImage: "arrow.up.arrow.down")
+      .font(.caption)
+      .foregroundStyle(.secondary)
   }
 
   private func resultCountBadge(_ count: Int) -> some View {
     Text(verbatim: LocalizedFormat.resultCount(count))
-      .font(.headline.weight(.bold).monospacedDigit())
-      .foregroundStyle(.primary)
-      .frame(minHeight: 36)
-      .padding(.horizontal, 12)
-      .background(Color.accentColor.opacity(0.12), in: Capsule())
+      .font(.caption.weight(.bold).monospacedDigit())
+      .foregroundStyle(.black.opacity(0.86))
+      .frame(minHeight: 28)
+      .padding(.horizontal, 10)
+      .background(Color.nextStopHighlight, in: Capsule())
       .fixedSize(horizontal: true, vertical: false)
   }
 
@@ -353,17 +369,17 @@ struct RidePreparationView: View {
     position: Int,
     lookupLocations: [ChargingLocationLookup]
   ) -> some View {
-    return Card {
-      HStack(alignment: .top, spacing: 12) {
+    return ResultCard {
+      HStack(alignment: .center, spacing: 10) {
         resultPositionBadge(position)
 
-        VStack(alignment: .leading, spacing: 8) {
-          Label(foodPOI.name, systemImage: "fork.knife")
-            .font(.title3.weight(.bold))
-            .foregroundStyle(.primary)
-
-          resultMetrics(result)
+        Label {
+          Text(foodPOI.name)
+        } icon: {
+          Image(systemName: "fork.knife")
         }
+        .font(.headline.weight(.bold))
+        .foregroundStyle(.primary)
         .frame(maxWidth: .infinity, alignment: .leading)
 
         ApplePlaceButton(
@@ -372,6 +388,10 @@ struct RidePreparationView: View {
           launcher: navigationLauncher
         )
       }
+
+      resultMetrics(result)
+        .padding(.top, 4)
+        .padding(.bottom, 9)
 
       Divider()
 
@@ -393,19 +413,19 @@ struct RidePreparationView: View {
   ) -> some View {
     let chargingOperators = result.operatorChargingPoints
 
-    return Card {
-      HStack(alignment: .top, spacing: 12) {
+    return ResultCard {
+      HStack(alignment: .center, spacing: 10) {
         resultPositionBadge(position)
 
-        VStack(alignment: .leading, spacing: 8) {
-          Label(result.candidate.park.name, systemImage: "bolt.car.fill")
-            .font(.title3.weight(.bold))
-            .foregroundStyle(.primary)
-
-          resultMetrics(result)
-        }
-        .frame(maxWidth: .infinity, alignment: .leading)
+        Label(result.candidate.park.name, systemImage: "bolt.car.fill")
+          .font(.headline.weight(.bold))
+          .foregroundStyle(.primary)
+          .frame(maxWidth: .infinity, alignment: .leading)
       }
+
+      resultMetrics(result)
+        .padding(.top, 4)
+        .padding(.bottom, 9)
 
       Divider()
 
@@ -422,28 +442,50 @@ struct RidePreparationView: View {
 
   private func resultPositionBadge(_ position: Int) -> some View {
     Text(verbatim: "\(position)")
-      .font(.subheadline.weight(.bold).monospacedDigit())
-      .foregroundStyle(.black.opacity(0.82))
-      .frame(width: 32, height: 32)
-      .background(Color.accentColor, in: Circle())
+      .font(.caption.weight(.bold).monospacedDigit())
+      .foregroundStyle(
+        position == 1
+          ? Color.black.opacity(0.86)
+          : Color(.systemBackground)
+      )
+      .frame(width: 26, height: 26)
+      .background(
+        position == 1 ? Color.nextStopHighlight : Color(.label),
+        in: Circle()
+      )
+      .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
       .accessibilityLabel(Text(verbatim: LocalizedFormat.resultRank(position)))
   }
 
   private func resultMetrics(_ result: RouteSearchResult) -> some View {
-    VStack(alignment: .leading, spacing: 6) {
-      drivingDistanceLabel(result.candidate.actualDrivingDistance.value)
-      chargingPointLabel(result.chargingPointCount)
+    ViewThatFits(in: .horizontal) {
+      HStack(spacing: 6) {
+        drivingDistanceLabel(result.candidate.actualDrivingDistance.value)
+
+        Divider()
+          .frame(height: 14)
+
+        chargingPointLabel(result.chargingPointCount)
+      }
+
+      VStack(alignment: .leading, spacing: 3) {
+        drivingDistanceLabel(result.candidate.actualDrivingDistance.value)
+        chargingPointLabel(result.chargingPointCount)
+      }
     }
   }
 
   private func drivingDistanceLabel(_ meters: Int) -> some View {
     Label {
       Text(verbatim: LocalizedFormat.drivingDistanceToStop(meters))
-        .font(.title3.weight(.bold).monospacedDigit())
+        .monospacedDigit()
     } icon: {
       Image(systemName: "car.side.fill")
     }
+    .font(.caption.weight(.semibold))
     .foregroundStyle(.primary)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(verbatim: LocalizedFormat.drivingDistanceToStop(meters)))
   }
 
   private func chargingPointLabel(_ count: Int) -> some View {
@@ -453,8 +495,10 @@ struct RidePreparationView: View {
     } icon: {
       Image(systemName: "ev.charger.fill")
     }
-    .font(.subheadline.weight(.medium))
+    .font(.caption2.weight(.medium))
     .foregroundStyle(.secondary)
+    .accessibilityElement(children: .ignore)
+    .accessibilityLabel(Text(verbatim: LocalizedFormat.matchingChargingPoints(count)))
   }
 
   private func operatorSection(
@@ -465,10 +509,11 @@ struct RidePreparationView: View {
   ) -> some View {
     VStack(alignment: .leading, spacing: 0) {
       Text("ride.result.operators")
-        .font(.caption.weight(.semibold))
+        .font(.caption2.weight(.semibold))
         .foregroundStyle(.secondary)
         .textCase(.uppercase)
-        .padding(.bottom, 4)
+        .padding(.top, 7)
+        .padding(.bottom, 2)
 
       ForEach(Array(chargingOperators.enumerated()), id: \.element.id) {
         index, chargingOperator in
@@ -481,7 +526,7 @@ struct RidePreparationView: View {
 
         if index < chargingOperators.count - 1 {
           Divider()
-            .padding(.leading, 42)
+            .padding(.leading, 32)
         }
       }
     }
@@ -507,20 +552,20 @@ struct RidePreparationView: View {
         operatorName: chargingOperator.name
       )
 
-    return HStack(alignment: .center, spacing: 10) {
+    return HStack(alignment: .center, spacing: 8) {
       Image(systemName: "bolt.fill")
-        .font(.caption.weight(.bold))
-        .foregroundStyle(.tint)
-        .frame(width: 32, height: 32)
-        .background(Color.accentColor.opacity(0.1), in: RoundedRectangle(cornerRadius: 10))
+        .font(.caption2.weight(.bold))
+        .foregroundStyle(.black.opacity(0.82))
+        .frame(width: 24, height: 24)
+        .background(Color.nextStopHighlight, in: RoundedRectangle(cornerRadius: 8))
         .accessibilityHidden(true)
 
-      VStack(alignment: .leading, spacing: 3) {
+      VStack(alignment: .leading, spacing: 1) {
         Text(chargingOperator.name)
-          .font(.headline)
+          .font(.subheadline.weight(.semibold))
 
         Text(verbatim: LocalizedFormat.chargingPoints(chargingOperator.chargingPointCount))
-          .font(.subheadline.monospacedDigit())
+          .font(.caption.monospacedDigit())
           .foregroundStyle(.secondary)
       }
       .frame(maxWidth: .infinity, alignment: .leading)
@@ -540,7 +585,7 @@ struct RidePreparationView: View {
         )
       }
     }
-    .padding(.vertical, 6)
+    .frame(minHeight: 48)
   }
 
   @ViewBuilder
@@ -552,10 +597,11 @@ struct RidePreparationView: View {
         Text(verbatim: availability)
       } icon: {
         Image(systemName: "wave.3.right.circle.fill")
-          .foregroundStyle(.tint)
+          .foregroundStyle(.primary)
       }
-      .font(.subheadline)
+      .font(.caption)
       .foregroundStyle(.secondary)
+      .padding(.vertical, 8)
     }
   }
 
@@ -653,22 +699,24 @@ private struct ApplePlaceButton: View {
       Group {
         if isLoading {
           ProgressView()
+            .controlSize(.small)
         } else {
           Image(systemName: "map.fill")
-            .font(.body.weight(.semibold))
+            .font(.caption.weight(.semibold))
             .foregroundStyle(.primary)
         }
       }
-      .frame(width: 48, height: 48)
+      .frame(width: 34, height: 34)
       .background(
-        Color.accentColor.opacity(0.12),
-        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+        Color(.secondarySystemFill),
+        in: RoundedRectangle(cornerRadius: 10, style: .continuous)
       )
       .overlay {
-        RoundedRectangle(cornerRadius: 14, style: .continuous)
-          .stroke(Color.accentColor.opacity(0.18), lineWidth: 1)
+        RoundedRectangle(cornerRadius: 10, style: .continuous)
+          .stroke(Color.primary.opacity(0.08), lineWidth: 1)
       }
-      .contentShape(RoundedRectangle(cornerRadius: 14, style: .continuous))
+      .frame(width: 48, height: 48)
+      .contentShape(Rectangle())
     }
     .buttonStyle(.plain)
     .disabled(isLoading)
@@ -779,10 +827,30 @@ private struct Card<Content: View>: View {
     }
     .padding()
     .frame(maxWidth: .infinity, alignment: .leading)
-    .background(Color(.secondarySystemGroupedBackground), in: shape)
+    .background(Color(.systemBackground), in: shape)
     .overlay {
       shape.stroke(Color.primary.opacity(0.06), lineWidth: 1)
     }
     .shadow(color: Color.black.opacity(0.04), radius: 12, y: 4)
+  }
+}
+
+private struct ResultCard<Content: View>: View {
+  @ViewBuilder let content: Content
+
+  var body: some View {
+    let shape = RoundedRectangle(cornerRadius: 16, style: .continuous)
+
+    VStack(alignment: .leading, spacing: 0) {
+      content
+    }
+    .padding(.horizontal, 14)
+    .padding(.vertical, 10)
+    .frame(maxWidth: .infinity, alignment: .leading)
+    .background(Color(.systemBackground), in: shape)
+    .overlay {
+      shape.stroke(Color.primary.opacity(0.07), lineWidth: 1)
+    }
+    .shadow(color: Color.black.opacity(0.035), radius: 8, y: 3)
   }
 }

@@ -24,14 +24,15 @@ struct ProfileEditorView: View {
   var body: some View {
     NavigationStack {
       ScrollView {
-        VStack(spacing: 18) {
-          generalCard
+        VStack(spacing: 14) {
+          identitySection
+          destinationCard
           chargingCard
           foodCard
         }
         .padding(.horizontal, 16)
-        .padding(.top, 12)
-        .padding(.bottom, 24)
+        .padding(.top, 8)
+        .padding(.bottom, 18)
       }
       .scrollDismissesKeyboard(.interactively)
       .background(Color(.systemGroupedBackground))
@@ -65,31 +66,33 @@ struct ProfileEditorView: View {
     }
   }
 
-  private var generalCard: some View {
+  private var identitySection: some View {
+    VStack(alignment: .leading, spacing: 7) {
+      Text("profile.name")
+        .font(.subheadline.weight(.semibold))
+
+      TextField("profile.name", text: $form.name)
+        .textInputAutocapitalization(.words)
+        .padding(.horizontal, 14)
+        .frame(minHeight: 48)
+        .background(Color(.secondarySystemGroupedBackground))
+        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+        .overlay {
+          RoundedRectangle(cornerRadius: 12, style: .continuous)
+            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+        }
+    }
+    .frame(maxWidth: .infinity, alignment: .leading)
+  }
+
+  private var destinationCard: some View {
     EditorCard {
-      Text("profile.section.general")
-        .font(.title3.weight(.bold))
-
-      VStack(alignment: .leading, spacing: 6) {
-        Text("profile.name")
-          .font(.subheadline.weight(.medium))
-
-        TextField("profile.name", text: $form.name)
-          .textInputAutocapitalization(.words)
-          .padding(.horizontal, 14)
-          .frame(minHeight: 48)
-          .background(Color(.tertiarySystemGroupedBackground))
-          .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-      }
-
-      Divider()
-
       Button {
         isDestinationSearchPresented = true
       } label: {
         HStack(alignment: .center, spacing: 12) {
           Image(systemName: "mappin.and.ellipse")
-            .foregroundStyle(.tint)
+            .foregroundStyle(.primary)
             .frame(width: 22)
             .accessibilityHidden(true)
 
@@ -115,9 +118,17 @@ struct ProfileEditorView: View {
             .foregroundStyle(.tertiary)
             .accessibilityHidden(true)
         }
+        .frame(minHeight: 44)
         .contentShape(Rectangle())
       }
       .buttonStyle(.plain)
+      .accessibilityLabel(Text("profile.destination"))
+      .accessibilityValue(
+        Text(
+          verbatim: form.destination?.displayName
+            ?? String(localized: "destination.empty")
+        )
+      )
     }
   }
 
@@ -126,44 +137,15 @@ struct ProfileEditorView: View {
       Text("profile.section.charging")
         .font(.title3.weight(.bold))
 
-      VStack(alignment: .leading, spacing: 3) {
-        Picker("profile.minimum_power", selection: $form.minimumPower) {
-          ForEach(MinimumPowerOption.allCases, id: \.self) { option in
-            Text(LocalizedFormat.kilowatts(option.rawValue)).tag(option)
-          }
-        }
-        .pickerStyle(.menu)
-
-        Text(verbatim: LocalizedFormat.powerOptionCount(MinimumPowerOption.allCases.count))
-          .font(.caption)
-          .foregroundStyle(.secondary)
-      }
+      minimumPowerMenu
 
       Divider()
 
-      Picker("profile.distance_to_stop", selection: $form.distanceRange) {
-        ForEach(DistanceRangeOption.allCases, id: \.self) { option in
-          Text(LocalizedStringKey(option.localizationKey)).tag(option)
-        }
-      }
-      .pickerStyle(.menu)
+      distanceRangeMenu
 
       Divider()
 
-      Stepper(
-        value: minimumChargingPointsBinding,
-        in: minimumChargingPointBounds,
-        step: 1
-      ) {
-        LabeledContent("profile.charging_points") {
-          Text(
-            verbatim: LocalizedFormat.chargingPoints(
-              form.minimumChargingPoints.rawValue
-            )
-          )
-          .font(.body.monospacedDigit())
-        }
-      }
+      chargingPointControl
 
       Divider()
 
@@ -174,10 +156,158 @@ struct ProfileEditorView: View {
           )
         )
       } icon: {
-        Image(systemName: "road.lanes")
+        Image(systemName: "info.circle")
       }
-      .font(.subheadline)
+      .font(.footnote)
       .foregroundStyle(.secondary)
+    }
+  }
+
+  private var minimumPowerMenu: some View {
+    Menu {
+      ForEach(MinimumPowerOption.allCases, id: \.self) { option in
+        Button {
+          form.minimumPower = option
+        } label: {
+          if form.minimumPower == option {
+            Label {
+              Text(verbatim: LocalizedFormat.kilowatts(option.rawValue))
+            } icon: {
+              Image(systemName: "checkmark")
+            }
+          } else {
+            Text(verbatim: LocalizedFormat.kilowatts(option.rawValue))
+          }
+        }
+      }
+    } label: {
+      EditorSelectionRow {
+        VStack(alignment: .leading, spacing: 3) {
+          Text("profile.minimum_power")
+            .font(.body)
+
+          Text(verbatim: LocalizedFormat.powerOptionCount(MinimumPowerOption.allCases.count))
+            .font(.caption)
+            .foregroundStyle(.secondary)
+        }
+      } selection: {
+        Text(verbatim: LocalizedFormat.kilowatts(form.minimumPower.rawValue))
+          .font(.body.weight(.medium))
+          .foregroundStyle(Color.black.opacity(0.86))
+          .padding(.horizontal, 8)
+          .padding(.vertical, 4)
+          .background(Color.nextStopHighlight, in: Capsule())
+      }
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text("profile.minimum_power"))
+    .accessibilityValue(
+      Text(verbatim: LocalizedFormat.kilowatts(form.minimumPower.rawValue))
+    )
+  }
+
+  private var distanceRangeMenu: some View {
+    Menu {
+      ForEach(DistanceRangeOption.allCases, id: \.self) { option in
+        Button {
+          form.distanceRange = option
+        } label: {
+          if form.distanceRange == option {
+            Label {
+              Text(LocalizedStringKey(option.localizationKey))
+            } icon: {
+              Image(systemName: "checkmark")
+            }
+          } else {
+            Text(LocalizedStringKey(option.localizationKey))
+          }
+        }
+      }
+    } label: {
+      EditorSelectionRow {
+        Text("profile.distance_to_stop")
+          .font(.body)
+      } selection: {
+        Text(LocalizedStringKey(form.distanceRange.localizationKey))
+          .font(.body.weight(.medium))
+      }
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text("profile.distance_to_stop"))
+    .accessibilityValue(Text(LocalizedStringKey(form.distanceRange.localizationKey)))
+  }
+
+  private var chargingPointControl: some View {
+    VStack(alignment: .leading, spacing: 8) {
+      Text("profile.charging_points")
+        .font(.subheadline.weight(.medium))
+
+      HStack(spacing: 0) {
+        Button {
+          form.selectPreviousMinimumChargingPoints()
+        } label: {
+          Image(systemName: "minus")
+            .font(.body.weight(.medium))
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .contentShape(Rectangle())
+        }
+        .disabled(!canSelectPreviousMinimumChargingPoints)
+        .foregroundStyle(
+          canSelectPreviousMinimumChargingPoints
+            ? Color.primary
+            : Color.secondary.opacity(0.4)
+        )
+
+        Divider()
+          .frame(height: 46)
+
+        Text(verbatim: form.minimumChargingPoints.rawValue.formatted())
+          .font(.body.weight(.semibold).monospacedDigit())
+          .frame(maxWidth: .infinity, minHeight: 46)
+
+        Divider()
+          .frame(height: 46)
+
+        Button {
+          form.selectNextMinimumChargingPoints()
+        } label: {
+          Image(systemName: "plus")
+            .font(.body.weight(.medium))
+            .frame(maxWidth: .infinity, minHeight: 46)
+            .contentShape(Rectangle())
+        }
+        .disabled(!canSelectNextMinimumChargingPoints)
+        .foregroundStyle(
+          canSelectNextMinimumChargingPoints
+            ? Color.primary
+            : Color.secondary.opacity(0.4)
+        )
+      }
+      .background(Color(.tertiarySystemGroupedBackground))
+      .clipShape(RoundedRectangle(cornerRadius: 11, style: .continuous))
+      .overlay {
+        RoundedRectangle(cornerRadius: 11, style: .continuous)
+          .stroke(Color.primary.opacity(0.12), lineWidth: 1)
+      }
+      .accessibilityElement(children: .ignore)
+      .accessibilityLabel(Text("profile.charging_points"))
+      .accessibilityValue(
+        Text(
+          verbatim: LocalizedFormat.chargingPoints(
+            form.minimumChargingPoints.rawValue
+          )
+        )
+      )
+      .accessibilityAdjustableAction { direction in
+        switch direction {
+        case .increment:
+          form.selectNextMinimumChargingPoints()
+        case .decrement:
+          form.selectPreviousMinimumChargingPoints()
+        @unknown default:
+          break
+        }
+      }
     }
   }
 
@@ -186,13 +316,44 @@ struct ProfileEditorView: View {
       Text("profile.section.break")
         .font(.title3.weight(.bold))
 
-      Picker("profile.preferred_food_chain", selection: $form.foodChain) {
-        Text("food.any").tag(nil as FoodChain?)
+      Menu {
+        Button {
+          form.foodChain = nil
+        } label: {
+          if form.foodChain == nil {
+            Label("food.any", systemImage: "checkmark")
+          } else {
+            Text("food.any")
+          }
+        }
+
         ForEach(FoodChain.allCases, id: \.self) { option in
-          Text(LocalizedStringKey(option.localizationKey)).tag(Optional(option))
+          Button {
+            form.foodChain = option
+          } label: {
+            if form.foodChain == option {
+              Label {
+                Text(LocalizedStringKey(option.localizationKey))
+              } icon: {
+                Image(systemName: "checkmark")
+              }
+            } else {
+              Text(LocalizedStringKey(option.localizationKey))
+            }
+          }
+        }
+      } label: {
+        EditorSelectionRow {
+          Text("profile.preferred_food_chain")
+            .font(.body)
+        } selection: {
+          selectedFoodChainText
+            .font(.body.weight(.medium))
         }
       }
-      .pickerStyle(.menu)
+      .buttonStyle(.plain)
+      .accessibilityLabel(Text("profile.preferred_food_chain"))
+      .accessibilityValue(selectedFoodChainAccessibilityValue)
 
       if form.foodChain != nil {
         Divider()
@@ -206,10 +367,50 @@ struct ProfileEditorView: View {
         } icon: {
           Image(systemName: "figure.walk")
         }
-        .font(.subheadline)
+        .font(.footnote)
         .foregroundStyle(.secondary)
       }
     }
+  }
+
+  @ViewBuilder
+  private var selectedFoodChainText: some View {
+    if let foodChain = form.foodChain {
+      Text(LocalizedStringKey(foodChain.localizationKey))
+    } else {
+      Text("food.any")
+    }
+  }
+
+  private var selectedFoodChainAccessibilityValue: Text {
+    if let foodChain = form.foodChain {
+      Text(LocalizedStringKey(foodChain.localizationKey))
+    } else {
+      Text("food.any")
+    }
+  }
+
+  private var canSelectPreviousMinimumChargingPoints: Bool {
+    guard
+      let currentIndex = MinimumChargingPointsOption.allCases.firstIndex(
+        of: form.minimumChargingPoints
+      )
+    else {
+      return false
+    }
+    return currentIndex > MinimumChargingPointsOption.allCases.startIndex
+  }
+
+  private var canSelectNextMinimumChargingPoints: Bool {
+    guard
+      let currentIndex = MinimumChargingPointsOption.allCases.firstIndex(
+        of: form.minimumChargingPoints
+      )
+    else {
+      return false
+    }
+    return MinimumChargingPointsOption.allCases.index(after: currentIndex)
+      < MinimumChargingPointsOption.allCases.endIndex
   }
 
   private var saveButton: some View {
@@ -217,43 +418,33 @@ struct ProfileEditorView: View {
       save()
     } label: {
       HStack(spacing: 12) {
+        Image(systemName: "arrow.right")
+          .font(.headline.weight(.bold))
+          .hidden()
+          .accessibilityHidden(true)
+
         Text("profile.save.action")
           .font(.headline)
-        Spacer()
+          .frame(maxWidth: .infinity)
+
         Image(systemName: "arrow.right")
-          .font(.headline)
+          .font(.headline.weight(.bold))
+          .foregroundStyle(Color.nextStopHighlight)
           .accessibilityHidden(true)
       }
       .frame(maxWidth: .infinity)
-      .padding(.horizontal, 4)
-      .padding(.vertical, 6)
+      .padding(.horizontal, 18)
+      .frame(minHeight: 56)
+      .foregroundStyle(Color(.systemBackground))
+      .background(
+        Color(.label),
+        in: RoundedRectangle(cornerRadius: 14, style: .continuous)
+      )
     }
-    .buttonStyle(.borderedProminent)
-    .controlSize(.large)
-    .foregroundStyle(.black)
+    .buttonStyle(.plain)
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
-    .background(.ultraThinMaterial)
-  }
-
-  private var minimumChargingPointBounds: ClosedRange<Int> {
-    let values = MinimumChargingPointsOption.allCases.map(\.rawValue)
-    let lowerBound = values.first ?? form.minimumChargingPoints.rawValue
-    let upperBound = values.last ?? form.minimumChargingPoints.rawValue
-    return lowerBound...upperBound
-  }
-
-  private var minimumChargingPointsBinding: Binding<Int> {
-    Binding(
-      get: { form.minimumChargingPoints.rawValue },
-      set: { proposedValue in
-        if proposedValue > form.minimumChargingPoints.rawValue {
-          form.selectNextMinimumChargingPoints()
-        } else if proposedValue < form.minimumChargingPoints.rawValue {
-          form.selectPreviousMinimumChargingPoints()
-        }
-      }
-    )
+    .background(.bar)
   }
 
   private func save() {
@@ -269,21 +460,74 @@ struct ProfileEditorView: View {
   }
 }
 
+private struct EditorSelectionRow<Leading: View, Selection: View>: View {
+  @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+  let leading: Leading
+  let selection: Selection
+
+  init(
+    @ViewBuilder leading: () -> Leading,
+    @ViewBuilder selection: () -> Selection
+  ) {
+    self.leading = leading()
+    self.selection = selection()
+  }
+
+  var body: some View {
+    Group {
+      if dynamicTypeSize.isAccessibilitySize {
+        VStack(alignment: .leading, spacing: 8) {
+          leading
+
+          HStack(alignment: .firstTextBaseline, spacing: 8) {
+            selection
+              .multilineTextAlignment(.leading)
+
+            Spacer(minLength: 8)
+            chevron
+          }
+          .frame(maxWidth: .infinity, alignment: .leading)
+        }
+      } else {
+        HStack(alignment: .center, spacing: 12) {
+          leading
+            .frame(maxWidth: .infinity, alignment: .leading)
+
+          selection
+            .multilineTextAlignment(.trailing)
+
+          chevron
+        }
+      }
+    }
+    .frame(minHeight: 44)
+    .contentShape(Rectangle())
+  }
+
+  private var chevron: some View {
+    Image(systemName: "chevron.right")
+      .font(.caption.weight(.bold))
+      .foregroundStyle(.tertiary)
+      .accessibilityHidden(true)
+  }
+}
+
 private struct EditorCard<Content: View>: View {
   @ViewBuilder let content: Content
 
   var body: some View {
-    VStack(alignment: .leading, spacing: 14) {
+    VStack(alignment: .leading, spacing: 12) {
       content
     }
     .padding(16)
     .frame(maxWidth: .infinity, alignment: .leading)
     .background(Color(.secondarySystemGroupedBackground))
-    .clipShape(RoundedRectangle(cornerRadius: 20, style: .continuous))
+    .clipShape(RoundedRectangle(cornerRadius: 18, style: .continuous))
     .overlay {
-      RoundedRectangle(cornerRadius: 20, style: .continuous)
-        .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+      RoundedRectangle(cornerRadius: 18, style: .continuous)
+        .stroke(Color.primary.opacity(0.07), lineWidth: 1)
     }
-    .shadow(color: Color.black.opacity(0.05), radius: 10, y: 3)
+    .shadow(color: Color.black.opacity(0.04), radius: 8, y: 2)
   }
 }
