@@ -214,7 +214,6 @@ struct RidePreparationView: View {
 
   private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
     let results = outcome.results
-    let allCandidateLocations = results.flatMap(\.locationLookups)
     return VStack(alignment: .leading, spacing: 12) {
       coverageNotice(outcome.coverage)
 
@@ -224,8 +223,7 @@ struct RidePreparationView: View {
         resultCard(
           result,
           position: index + 1,
-          lookupLocations: result.matchingFoodPOI == nil
-            ? allCandidateLocations : result.locationLookups
+          lookupLocations: result.locationLookups
         )
       }
 
@@ -544,6 +542,13 @@ struct RidePreparationView: View {
         candidateLocations: lookupLocations,
         operatorName: chargingOperator.name
       )
+    let resultGroup = AppleChargingPlaceResultGroup(
+      id: result.resultCardID,
+      kind: result.matchingFoodPOI == nil ? .noFoodCampus : .restaurant,
+      evidenceLocations: result.locationLookups,
+      searchCoordinates: result.candidates.map(\.park.navigationCoordinate),
+      restaurantCoordinate: result.matchingFoodPOI?.coordinate
+    )
 
     return HStack(alignment: .center, spacing: 8) {
       Image(systemName: "bolt.fill")
@@ -567,15 +572,12 @@ struct RidePreparationView: View {
       if let representativePark = result.representativePark(
         for: chargingOperator.name
       ) {
-        let matchScope: AppleChargingPlaceMatchPolicy.Scope =
-          usesRestaurantGroupLookupScope ? .operatorOnly : .noFoodCampus
         ApplePlaceButton(
           target: .charging(
             park: representativePark,
             operatorName: chargingOperator.name,
             relatedLocations: relatedLocations,
-            campusLocations: matchScope == .noFoodCampus ? result.locationLookups : [],
-            matchScope: matchScope
+            resultGroup: resultGroup
           ),
           resolver: placeResolver,
           launcher: navigationLauncher
@@ -786,14 +788,13 @@ private enum ApplePlaceTarget: Hashable {
     park: ChargingPark,
     operatorName: String,
     relatedLocations: [ChargingLocationLookup],
-    campusLocations: [ChargingLocationLookup],
-    matchScope: AppleChargingPlaceMatchPolicy.Scope
+    resultGroup: AppleChargingPlaceResultGroup
   )
   case restaurant(FoodPOI)
 
   var displayName: String {
     switch self {
-    case .charging(_, let operatorName, _, _, _):
+    case .charging(_, let operatorName, _, _):
       return operatorName
     case .restaurant(let foodPOI):
       return foodPOI.name
@@ -807,15 +808,13 @@ private enum ApplePlaceTarget: Hashable {
       let park,
       let operatorName,
       let relatedLocations,
-      let campusLocations,
-      let matchScope
+      let resultGroup
     ):
       return await resolver.resolveChargingPlace(
         park: park,
         operatorName: operatorName,
         relatedLocations: relatedLocations,
-        campusLocations: campusLocations,
-        matchScope: matchScope
+        resultGroup: resultGroup
       )
     case .restaurant(let foodPOI):
       return await resolver.resolveRestaurantPlace(foodPOI)

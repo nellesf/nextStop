@@ -1,6 +1,6 @@
 # System architecture
 
-Status: Accepted on 2026-08-13; clustering/search identity and no-food
+Status: Accepted on 2026-08-13; clustering/search identity and group-bounded
 Apple-place matching amended on 2026-08-20.
 
 ## Goals
@@ -74,10 +74,14 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
   reports that Apple details are unavailable.
 - Requires a matching operator name and Apple's `.evCharger` category for every
   native charger match. The operator-specific 60 m direct rule and 300 m
-  exact-address rule remain primary. Only without food, one unique stable Apple
-  place may additionally use the selected bounded campus as spatial evidence when
-  it has the same postal code or normalized city and lies within 60 m of any
-  qualifying campus location. Food-mode operator scopes remain unchanged.
+  exact-address rule remain primary. In one no-food campus, a unique stable Apple
+  place may additionally use any qualifying campus location as spatial evidence.
+  In one concrete restaurant result, it may use any power-qualified location in a
+  member fine park assigned to that exact restaurant POI. The place must have the
+  same postal code or normalized city, lie within 60 m of that evidence, and, in
+  food mode, lie within 500 m geodesic distance of the exact grouping restaurant
+  POI. Another operator's location is evidence only and never changes the
+  requested operator identity.
 - For CarPlay, opens Apple Maps with driving directions. A matched restaurant is
   inserted as a waypoint before the original ride destination; without a food
   match, the campus navigation coordinate remains the navigation destination.
@@ -183,23 +187,35 @@ coordinate, normalized address when available, and name with a bounded MapKit
 search. The ride-local match is cached and the native place is opened through its
 Apple Place ID. Apple Place IDs identify only Apple records and are never treated
 as cross-source identities. For a restaurant result, one operator lookup considers
-all of that operator's authority locations in the group but opens only one
-conservatively matched native Apple POI. For a no-food campus, an operator-matched
-Apple `.evCharger` that fails the primary operator-coordinate/address rules may use
-another qualifying location in that same campus only as <=60 m spatial evidence.
-The Apple place must share the requested operator's postal code or normalized city
-and be the single qualifying stable Place ID across the bounded lookup. This does
-not alter operator identity, campus membership, search results, or food behavior.
+all of that operator's authority locations in the group for the primary rules.
+Fallback evidence may come from any power-qualified location in a member fine park
+assigned to the exact grouping restaurant POI, although another operator's
+location provides only <=60 m spatial evidence. The Apple charger itself must also
+be within 500 m geodesic distance of that restaurant POI. In a no-food campus, any
+qualifying campus location may provide evidence and no restaurant-distance
+condition applies. The Apple place must share the requested operator's postal code
+or normalized city and be the single qualifying stable Place ID across the
+bounded lookup. This does not alter operator identity, campus or restaurant-result
+membership, search results, or grouping.
 
-Charging-place lookup first performs the bounded category-only `.evCharger`
-search. Food mode has no second charging search pass. Only for a no-food campus,
-collect campus-fallback evidence across the category-only pass. A primary
-operator-specific match may return immediately; one unambiguous campus match is
-accepted after that pass. Otherwise a second bounded natural-language search for
-the requested operator uses the same `.evCharger` filter and campus scope.
-Ambiguous category campus candidates remain evidence in that second-pass
-decision. Both passes use the same identity, locality, distance, and ambiguity
-rules; no broad or unfiltered search is allowed.
+Charging-place lookup uses bounded centers with a 75 m minimum separation, not one
+request per raw evidence location. Both modes use the result's representative
+navigation coordinate and the requested operator's authority lookup coordinates.
+A restaurant group additionally uses each member fine park's deterministic
+navigation coordinate; no-food uses only the campus navigation coordinate plus
+the operator lookups. Power-qualified raw locations remain match evidence.
+
+The category-only `.evCharger` searches across those centers form one pass. A
+primary operator-specific match may return immediately; one unambiguous fallback
+match is accepted after the complete category pass. A center failure makes that
+pass incomplete and disables its uniqueness-dependent fallback while leaving a
+primary operator-specific match eligible. If that pass has no secure
+match, a second bounded natural-language search for the requested operator uses
+the same centers, `.evCharger` filter, and evidence scope. Ambiguous category
+candidates remain evidence in that second-pass decision. Both passes use the same
+identity, locality, distance, and ambiguity rules, including the food-only
+restaurant-distance condition; no broad, unfiltered, or out-of-scope search is
+allowed. A combined fallback requires every center in both passes to succeed.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work and retains

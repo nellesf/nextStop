@@ -72,6 +72,46 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
+  func testAppleChargingCacheAddressSignatureIncludesPartialLocalityEvidence() {
+    let first = ChargingLocationAddress(
+      street: nil,
+      houseNumber: nil,
+      postalCode: " 97877 ",
+      city: "WERTHEIM"
+    )
+    let equivalent = ChargingLocationAddress(
+      street: nil,
+      houseNumber: nil,
+      postalCode: "97877",
+      city: "Wertheim"
+    )
+    let changedPostalCode = ChargingLocationAddress(
+      street: nil,
+      houseNumber: nil,
+      postalCode: "97878",
+      city: "Wertheim"
+    )
+    let missingPostalCode = ChargingLocationAddress(
+      street: nil,
+      houseNumber: nil,
+      postalCode: nil,
+      city: "Wertheim"
+    )
+
+    XCTAssertEqual(
+      AppleChargingPlaceLookupScope.addressEvidenceSignature(first),
+      AppleChargingPlaceLookupScope.addressEvidenceSignature(equivalent)
+    )
+    XCTAssertNotEqual(
+      AppleChargingPlaceLookupScope.addressEvidenceSignature(first),
+      AppleChargingPlaceLookupScope.addressEvidenceSignature(changedPostalCode)
+    )
+    XCTAssertNotEqual(
+      AppleChargingPlaceLookupScope.addressEvidenceSignature(first),
+      AppleChargingPlaceLookupScope.addressEvidenceSignature(missingPostalCode)
+    )
+  }
+
   func testRestaurantGroupLookupScopeIncludesEveryExactOperatorLocation() throws {
     let first = try ChargingLocationLookup(
       id: UUID(),
@@ -110,7 +150,56 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(locations.map(\.id), [first.id, second.id])
   }
 
-  func testAppleChargingPlaceMatchAllowsLargeCampusOnlyWithExactAddress() {
+  func testChargingSearchCentersIncludeGroupNavigationsAndDeduplicateNearbyCoordinates()
+    throws
+  {
+    let park = try Coordinate(latitude: 50, longitude: 8)
+    let operatorNearPark = try Coordinate(latitude: 50.0001, longitude: 8)
+    let operatorCenter = try Coordinate(latitude: 50.001, longitude: 8)
+    let groupNearOperator = try Coordinate(latitude: 50.0011, longitude: 8)
+    let groupCenter = try Coordinate(latitude: 50.002, longitude: 8)
+
+    let centers = AppleChargingPlaceSearchCenterPolicy.centers(
+      parkNavigationCoordinate: park,
+      operatorCoordinates: [operatorNearPark, operatorCenter],
+      resultGroupCoordinates: [park, groupNearOperator, groupCenter]
+    )
+
+    XCTAssertEqual(centers, [park, operatorCenter, groupCenter])
+  }
+
+  func testResultGroupFallbackRequiresEverySearchCenterInEachUsedPass() {
+    XCTAssertTrue(
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: true
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: false
+      )
+    )
+    XCTAssertTrue(
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: false
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: false,
+        naturalLanguagePassComplete: true
+      )
+    )
+  }
+
+  func testPrimaryChargingPlaceMatchKeepsDirectAndExactAddressBounds() {
     XCTAssertTrue(
       AppleChargingPlaceMatchPolicy.accepts(
         distanceMeters: 60,
@@ -137,119 +226,160 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
-  func testNoFoodCampusMatchAcceptsWertheimShapedGeometryEvidence() {
+  func testResultGroupFallbackCanonicalOperatorKeyMustBeNonempty() {
+    XCTAssertTrue(
+      AppleChargingPlaceMatchPolicy.canonicalOperatorKeysMatch("tesla", "tesla")
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceMatchPolicy.canonicalOperatorKeysMatch("", "")
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceMatchPolicy.canonicalOperatorKeysMatch("tesla", "")
+    )
+    XCTAssertFalse(
+      AppleChargingPlaceMatchPolicy.canonicalOperatorKeysMatch("tesla", "ionity")
+    )
+  }
+
+  func testRestaurantResultGroupAcceptsWertheimShapedGeometryEvidence() {
     let match = AppleChargingPlaceMatchPolicy.match(
-      evidence: campusEvidence(),
-      scope: .noFoodCampus
+      evidence: resultGroupEvidence(
+        resultGroupDistanceMeters: 57.2,
+        restaurantDistanceMeters: 257.2
+      ),
+      resultGroupKind: .restaurant
     )
 
     XCTAssertEqual(
       match,
-      .campus(distanceMeters: 44, stablePlaceIdentifier: "I19TESLA")
+      .resultGroup(distanceMeters: 57.2, stablePlaceIdentifier: "I19TESLA")
     )
   }
 
-  func testFoodModeKeepsAppleChargingMatchOperatorScoped() {
+  func testRestaurantResultGroupFallbackKeepsFiveHundredMeterBoundary() {
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: resultGroupEvidence(restaurantDistanceMeters: 500),
+        resultGroupKind: .restaurant
+      ),
+      .resultGroup(distanceMeters: 44, stablePlaceIdentifier: "I19TESLA")
+    )
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(),
-        scope: .operatorOnly
+        evidence: resultGroupEvidence(restaurantDistanceMeters: 501),
+        resultGroupKind: .restaurant
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: resultGroupEvidence(restaurantDistanceMeters: nil),
+        resultGroupKind: .restaurant
       )
     )
   }
 
-  func testNoFoodCampusPrefersOperatorScopedEvidence() {
+  func testResultGroupFallbackRejectsMissingGeometryEvidence() {
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: resultGroupEvidence(resultGroupDistanceMeters: nil),
+        resultGroupKind: .noFoodCampus
+      )
+    )
+  }
+
+  func testResultGroupMatchPrefersOperatorScopedEvidence() {
     let evidence = AppleChargingPlaceMatchPolicy.Evidence(
       operatorNameMatches: true,
       canonicalOperatorNameMatches: true,
       operatorScopedDistanceMeters: 60,
       hasExactOperatorAddressMatch: false,
       isEVCharger: true,
-      campusDistanceMeters: 20,
-      hasCampusLocalityMatch: true,
+      resultGroupDistanceMeters: 20,
+      hasOperatorLocalityMatch: true,
+      restaurantDistanceMeters: nil,
       stablePlaceIdentifier: "I19TESLA"
     )
 
     XCTAssertEqual(
       AppleChargingPlaceMatchPolicy.match(
         evidence: evidence,
-        scope: .noFoodCampus
+        resultGroupKind: .restaurant
       ),
       .operatorScoped(distanceMeters: 60)
     )
   }
 
-  func testCampusMatchRejectsWrongCategoryLocalityAndCanonicalOperator() {
+  func testResultGroupMatchRejectsWrongCategoryLocalityAndCanonicalOperator() {
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(isEVCharger: false),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(isEVCharger: false),
+        resultGroupKind: .noFoodCampus
       )
     )
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(hasCampusLocalityMatch: false),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(hasOperatorLocalityMatch: false),
+        resultGroupKind: .noFoodCampus
       )
     )
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(canonicalOperatorNameMatches: false),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(canonicalOperatorNameMatches: false),
+        resultGroupKind: .noFoodCampus
       )
     )
   }
 
-  func testCampusMatchKeepsSixtyMeterBoundaryAndRequiresStableIdentity() {
+  func testResultGroupMatchKeepsSixtyMeterBoundaryAndRequiresStableIdentity() {
     XCTAssertEqual(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(campusDistanceMeters: 60),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(resultGroupDistanceMeters: 60),
+        resultGroupKind: .noFoodCampus
       ),
-      .campus(distanceMeters: 60, stablePlaceIdentifier: "I19TESLA")
+      .resultGroup(distanceMeters: 60, stablePlaceIdentifier: "I19TESLA")
     )
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(campusDistanceMeters: 61),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(resultGroupDistanceMeters: 61),
+        resultGroupKind: .noFoodCampus
       )
     )
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(stablePlaceIdentifier: nil),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(stablePlaceIdentifier: nil),
+        resultGroupKind: .noFoodCampus
       )
     )
   }
 
-  func testCampusMatchRequiresOneStableApplePlaceIdentity() throws {
+  func testResultGroupMatchRequiresOneStableApplePlaceIdentity() throws {
     let first = try XCTUnwrap(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(stablePlaceIdentifier: "FIRST"),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(stablePlaceIdentifier: "FIRST"),
+        resultGroupKind: .noFoodCampus
       )
     )
     let duplicate = try XCTUnwrap(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(stablePlaceIdentifier: "FIRST"),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(stablePlaceIdentifier: "FIRST"),
+        resultGroupKind: .noFoodCampus
       )
     )
     let second = try XCTUnwrap(
       AppleChargingPlaceMatchPolicy.match(
-        evidence: campusEvidence(stablePlaceIdentifier: "SECOND"),
-        scope: .noFoodCampus
+        evidence: resultGroupEvidence(stablePlaceIdentifier: "SECOND"),
+        resultGroupKind: .noFoodCampus
       )
     )
 
     XCTAssertEqual(
-      AppleChargingPlaceMatchPolicy.unambiguousCampusPlaceIdentifier(
+      AppleChargingPlaceMatchPolicy.unambiguousResultGroupPlaceIdentifier(
         in: [first, duplicate]
       ),
       "FIRST"
     )
     XCTAssertNil(
-      AppleChargingPlaceMatchPolicy.unambiguousCampusPlaceIdentifier(
+      AppleChargingPlaceMatchPolicy.unambiguousResultGroupPlaceIdentifier(
         in: [first, second]
       )
     )
@@ -262,8 +392,9 @@ final class RidePreparationViewModelTests: XCTestCase {
       operatorScopedDistanceMeters: 60,
       hasExactOperatorAddressMatch: false,
       isEVCharger: true,
-      campusDistanceMeters: nil,
-      hasCampusLocalityMatch: false,
+      resultGroupDistanceMeters: nil,
+      hasOperatorLocalityMatch: false,
+      restaurantDistanceMeters: nil,
       stablePlaceIdentifier: nil
     )
     let wrongCategoryEvidence = AppleChargingPlaceMatchPolicy.Evidence(
@@ -272,28 +403,29 @@ final class RidePreparationViewModelTests: XCTestCase {
       operatorScopedDistanceMeters: 60,
       hasExactOperatorAddressMatch: false,
       isEVCharger: false,
-      campusDistanceMeters: nil,
-      hasCampusLocalityMatch: false,
+      resultGroupDistanceMeters: nil,
+      hasOperatorLocalityMatch: false,
+      restaurantDistanceMeters: nil,
       stablePlaceIdentifier: nil
     )
 
     XCTAssertEqual(
       AppleChargingPlaceMatchPolicy.match(
         evidence: evidence,
-        scope: .operatorOnly
+        resultGroupKind: .restaurant
       ),
       .operatorScoped(distanceMeters: 60)
     )
     XCTAssertNil(
       AppleChargingPlaceMatchPolicy.match(
         evidence: wrongCategoryEvidence,
-        scope: .operatorOnly
+        resultGroupKind: .restaurant
       )
     )
   }
 
-  func testCampusLocalityAcceptsCityOrPostalCode() {
-    let campusAddress = ChargingLocationAddress(
+  func testOperatorLocalityAcceptsCityOrPostalCode() {
+    let operatorAddress = ChargingLocationAddress(
       street: "Am Fuchsenacker",
       houseNumber: "2",
       postalCode: "97877",
@@ -303,19 +435,19 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertTrue(
       AppleChargingPlaceLookupScope.localityMatches(
         "Almosenberg 12, Bettingen, 97877 Wertheim, Deutschland",
-        referenceAddresses: [campusAddress]
+        referenceAddresses: [operatorAddress]
       )
     )
     XCTAssertTrue(
       AppleChargingPlaceLookupScope.localityMatches(
         "Andere Straße 1, Wertheim, Deutschland",
-        referenceAddresses: [campusAddress]
+        referenceAddresses: [operatorAddress]
       )
     )
     XCTAssertFalse(
       AppleChargingPlaceLookupScope.localityMatches(
         "Andere Straße 1, 97070 Würzburg, Deutschland",
-        referenceAddresses: [campusAddress]
+        referenceAddresses: [operatorAddress]
       )
     )
     XCTAssertFalse(
@@ -333,11 +465,10 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
-  func testChargingPlaceFallbackQueryKeepsExactSelectedOperatorName() {
+  func testRestaurantResultFallbackQueryKeepsExactSelectedOperatorName() {
     XCTAssertEqual(
       AppleChargingPlaceSearchQuery.naturalLanguageQuery(
         for: "  Tesla Germany GmbH  ",
-        scope: .noFoodCampus,
         hasSecureCategoryMatch: false
       ),
       "Tesla Germany GmbH"
@@ -345,35 +476,27 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(
       AppleChargingPlaceSearchQuery.naturalLanguageQuery(
         for: "IONITY",
-        scope: .noFoodCampus,
         hasSecureCategoryMatch: false
       ),
       "IONITY"
     )
   }
 
-  func testChargingPlaceFallbackQueryRequiresNoFoodScopeAndCategoryMiss() {
+  func testChargingPlaceFallbackQueryRequiresCategoryMiss() {
     XCTAssertNil(
       AppleChargingPlaceSearchQuery.naturalLanguageQuery(
         for: "Tesla Germany GmbH",
-        scope: .operatorOnly,
-        hasSecureCategoryMatch: false
-      )
-    )
-    XCTAssertNil(
-      AppleChargingPlaceSearchQuery.naturalLanguageQuery(
-        for: "Tesla Germany GmbH",
-        scope: .noFoodCampus,
         hasSecureCategoryMatch: true
       )
     )
   }
 
-  private func campusEvidence(
+  private func resultGroupEvidence(
     canonicalOperatorNameMatches: Bool = true,
     isEVCharger: Bool = true,
-    campusDistanceMeters: Double = 44,
-    hasCampusLocalityMatch: Bool = true,
+    resultGroupDistanceMeters: Double? = 44,
+    hasOperatorLocalityMatch: Bool = true,
+    restaurantDistanceMeters: Double? = nil,
     stablePlaceIdentifier: String? = "I19TESLA"
   ) -> AppleChargingPlaceMatchPolicy.Evidence {
     AppleChargingPlaceMatchPolicy.Evidence(
@@ -382,8 +505,9 @@ final class RidePreparationViewModelTests: XCTestCase {
       operatorScopedDistanceMeters: nil,
       hasExactOperatorAddressMatch: false,
       isEVCharger: isEVCharger,
-      campusDistanceMeters: campusDistanceMeters,
-      hasCampusLocalityMatch: hasCampusLocalityMatch,
+      resultGroupDistanceMeters: resultGroupDistanceMeters,
+      hasOperatorLocalityMatch: hasOperatorLocalityMatch,
+      restaurantDistanceMeters: restaurantDistanceMeters,
       stablePlaceIdentifier: stablePlaceIdentifier
     )
   }

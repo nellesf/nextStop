@@ -146,12 +146,27 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Verify charger matching accepts an operator within 60 m without address evidence,
   permits up to 300 m only with matching street, house number, and postal code or
   city, and rejects 301 m even when the address matches.
-- Verify visible parks with the same operator and complete address share their
-  charging-location lookup scope, while a different address or operator remains
-  isolated.
-- Verify equivalent normalized addresses share one ride-local charger cache key
-  and that distinct coordinate groups in the address scope are searched without
-  widening the accepted 300 m match distance.
+- Verify the result-group fallback still requires the canonical operator,
+  Apple's charger category, matching operator locality, a stable Apple Place ID,
+  and exactly one qualifying Apple place within 60 m of power-qualified group
+  evidence. The no-food scope is the selected campus. The food scope is the exact
+  restaurant group and additionally requires the Apple charger itself to be no
+  more than 500 m from that restaurant; cover the 60/61 m and 500/501 m boundaries.
+- Verify charging-location lookup scope never crosses the current result group.
+  Within a restaurant group it may include the exact operator across its member
+  fine parks; within a no-food result it remains inside the selected campus.
+- Verify a ride-local charger cache entry is reused only for the same result-group
+  identity, kind, operator, lookup IDs and coordinates, evidence IDs and
+  coordinates, search coordinates, restaurant coordinate, and normalized
+  operator-address scope.
+- Verify bounded charger searches use the representative navigation coordinate and
+  requested-operator locations; restaurant groups also use their member fine-park
+  navigation coordinates. Deduplicate centers less than 75 m apart, do not search
+  once per raw evidence location, and never widen the accepted match distances.
+- Verify a primary operator-scoped match may still succeed immediately, but a
+  uniqueness-dependent group fallback is rejected when any category-pass center
+  fails, or when any category or natural-language center fails before the final
+  combined fallback decision.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.
