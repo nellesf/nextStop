@@ -119,6 +119,7 @@ struct ProfileListView: View {
           } label: {
             Label("licenses.title", systemImage: "info.circle")
           }
+          .profileToolbarActionStyle()
         }
         ToolbarItem(placement: .primaryAction) {
           Button {
@@ -126,6 +127,7 @@ struct ProfileListView: View {
           } label: {
             Label("action.add", systemImage: "plus")
           }
+          .profileToolbarActionStyle()
         }
       }
       .sheet(item: $editorSelection) { selection in
@@ -213,7 +215,7 @@ extension View {
   @ViewBuilder
   fileprivate func profileEditControlStyle() -> some View {
     if #available(iOS 26.0, *) {
-      glassEffect(.regular.interactive(), in: Capsule())
+      glassEffect(.clear.interactive(), in: Capsule())
     } else {
       background(Color(.tertiarySystemFill), in: Capsule())
     }
@@ -222,9 +224,19 @@ extension View {
   @ViewBuilder
   fileprivate func profilePrimaryActionStyle() -> some View {
     if #available(iOS 26.0, *) {
-      buttonStyle(.glassProminent)
+      buttonStyle(.glass(.clear.tint(.green)))
     } else {
       buttonStyle(.borderedProminent)
+    }
+  }
+
+  @ViewBuilder
+  fileprivate func profileToolbarActionStyle() -> some View {
+    if #available(iOS 26.0, *) {
+      buttonStyle(.glass(.clear))
+        .buttonBorderShape(.circle)
+    } else {
+      self
     }
   }
 }
