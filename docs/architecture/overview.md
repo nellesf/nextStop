@@ -194,9 +194,9 @@ location provides only <=60 m spatial evidence. The Apple charger itself must al
 be within 500 m geodesic distance of that restaurant POI. In a no-food campus, any
 qualifying campus location may provide evidence and no restaurant-distance
 condition applies. The Apple place must share the requested operator's postal code
-or normalized city and be the single qualifying stable Place ID across the
-bounded lookup. This does not alter operator identity, campus or restaurant-result
-membership, search results, or grouping.
+or normalized city, have a stable Place ID, and be the one ID resolved by the
+complete bounded-pass policy below. This does not alter operator identity, campus
+or restaurant-result membership, search results, or grouping.
 
 Charging-place lookup uses bounded centers with a 75 m minimum separation, not one
 request per raw evidence location. Both modes use the result's representative
@@ -212,10 +212,14 @@ pass incomplete and disables its uniqueness-dependent fallback while leaving a
 primary operator-specific match eligible. If that pass has no secure
 match, a second bounded natural-language search for the requested operator uses
 the same centers, `.evCharger` filter, and evidence scope. Ambiguous category
-candidates remain evidence in that second-pass decision. Both passes use the same
+candidates remain separate as corroborating evidence in that second-pass decision.
+Both passes use the same
 identity, locality, distance, and ambiguity rules, including the food-only
 restaurant-distance condition; no broad, unfiltered, or out-of-scope search is
-allowed. A combined fallback requires every center in both passes to succeed.
+allowed. If the category set is empty, the natural-language set must identify one
+stable place. If the category set is ambiguous, exactly one stable Place ID must
+occur in both fully validated sets. The second-pass fallback requires every center
+in both passes to succeed.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work and retains

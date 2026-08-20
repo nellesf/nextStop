@@ -4,7 +4,8 @@
 - Date: 2026-08-13
 - Amended: 2026-08-16
 - Amended: 2026-08-19
-- Amended: 2026-08-20 (candidate identity and group-bounded Apple-place matching)
+- Amended: 2026-08-20 (candidate identity, group-bounded Apple-place matching,
+  and pass corroboration)
 
 ## Context
 
@@ -76,8 +77,9 @@ place, accept an Apple charger only when all of the following hold:
    corroborating location's operator;
 4. in food mode only, its coordinate is within 500 m geodesic distance of the
    exact restaurant POI that defines the displayed group; and
-5. after collecting the bounded searches and deduplicating by stable Apple Place
-   ID, exactly one Apple place satisfies these conditions.
+5. it has a stable Apple Place ID and the complete bounded-pass policy below
+   resolves exactly one ID, either directly or through unique cross-pass
+   corroboration.
 
 The other location is spatial corroboration only; it never supplies or changes the
 requested operator identity. In a restaurant result, another operator's location
@@ -103,12 +105,15 @@ and cannot establish a uniqueness-dependent fallback; a primary operator-specifi
 match may still return safely. If the complete pass yields no secure match,
 including when its qualifying candidates are ambiguous, perform a second bounded
 natural-language search for the requested operator with the same `.evCharger`
-filter and the same centers and evidence scope. Retain the category-pass
-candidates as evidence when evaluating the second pass. Do not issue a broad or
-unfiltered fallback search. Apply the same operator, category, locality, distance,
-and ambiguity rules to both passes, and deduplicate their combined evidence by
-stable Apple Place ID. The combined fallback requires both passes to have completed
-without a center failure.
+filter and the same centers and evidence scope. Keep the two fully validated match
+sets separate. If the category set is empty, the natural-language set must contain
+exactly one stable Apple Place ID. If the category set is ambiguous, accept only
+when exactly one stable Place ID occurs in both sets; this lets the second pass
+corroborate one duplicate Apple record without hiding a disjoint or still-ambiguous
+result. Do not issue a broad or unfiltered fallback search. Apply the same
+operator, category, locality, distance, and ambiguity rules to both passes. The
+second-pass fallback requires both passes to have completed without a center
+failure.
 
 Cache the successful native match ride-locally under the resolved operator and
 lookup scope; a group-fallback cache key also includes the stable campus or

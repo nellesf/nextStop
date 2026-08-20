@@ -181,13 +181,14 @@ and disables that uniqueness-dependent fallback while a primary match remains
 eligible. If that pass has no secure match,
 including an ambiguous set of qualifying candidates, perform a second bounded
 natural-language search for the requested operator with the same centers,
-`.evCharger` filter, and evidence scope. Retain the ambiguous category candidates
-as evidence alongside the second-pass results. Never issue a broad, unfiltered,
+`.evCharger` filter, and evidence scope. Keep the fully validated pass sets
+separate. When the category set is empty, require exactly one stable Place ID in
+the natural-language set. When the category set is ambiguous, require exactly one
+stable Place ID in the intersection of both sets. Never issue a broad, unfiltered,
 or out-of-scope fallback search. Apply the same identity, locality, and distance
-rules, including the food-only 500 m restaurant-distance condition, deduplicate
-the combined evidence by stable Apple Place ID, and require exactly one fallback
-place. The combined fallback additionally requires every center in both passes to
-have completed successfully.
+rules, including the food-only 500 m restaurant-distance condition. The
+second-pass fallback additionally requires every center in both passes to have
+completed successfully.
 
 In a restaurant result, any power-qualified location in a member fine park assigned
 to the exact grouping restaurant POI may provide spatial evidence. A different

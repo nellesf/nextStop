@@ -385,6 +385,86 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
+  func testNaturalLanguageFallbackCorroboratesOneAmbiguousCategoryIdentity() throws {
+    let first = try resultGroupMatch(stablePlaceIdentifier: "I5TESLA")
+    let second = try resultGroupMatch(stablePlaceIdentifier: "I19TESLA")
+
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: [first, second],
+        naturalLanguageMatches: [second],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      ),
+      "I19TESLA"
+    )
+  }
+
+  func testNaturalLanguageFallbackRejectsDisjointPassIdentities() throws {
+    let category = try resultGroupMatch(stablePlaceIdentifier: "I5TESLA")
+    let naturalLanguage = try resultGroupMatch(stablePlaceIdentifier: "I19TESLA")
+
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: [category],
+        naturalLanguageMatches: [naturalLanguage],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+  }
+
+  func testNaturalLanguageFallbackRejectsMultipleSharedIdentities() throws {
+    let first = try resultGroupMatch(stablePlaceIdentifier: "I5TESLA")
+    let second = try resultGroupMatch(stablePlaceIdentifier: "I19TESLA")
+
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: [first, second],
+        naturalLanguageMatches: [first, second],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+  }
+
+  func testNaturalLanguageFallbackRequiresCompletePasses() throws {
+    let firstCategory = try resultGroupMatch(stablePlaceIdentifier: "I5TESLA")
+    let secondCategory = try resultGroupMatch(stablePlaceIdentifier: "I19TESLA")
+    let naturalLanguage = try resultGroupMatch(stablePlaceIdentifier: "I19TESLA")
+
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: [firstCategory, secondCategory],
+        naturalLanguageMatches: [naturalLanguage],
+        categoryPassComplete: false,
+        naturalLanguagePassComplete: true
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: [],
+        naturalLanguageMatches: [naturalLanguage],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: false
+      )
+    )
+  }
+
+  func testNaturalLanguageFallbackAcceptsOneIdentityAfterEmptyCategoryPass() throws {
+    let naturalLanguage = try resultGroupMatch(stablePlaceIdentifier: "I19TESLA")
+
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: [],
+        naturalLanguageMatches: [naturalLanguage],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      ),
+      "I19TESLA"
+    )
+  }
+
   func testOperatorScopedMatchPreservesExistingBroaderNameRule() {
     let evidence = AppleChargingPlaceMatchPolicy.Evidence(
       operatorNameMatches: true,
@@ -509,6 +589,19 @@ final class RidePreparationViewModelTests: XCTestCase {
       hasOperatorLocalityMatch: hasOperatorLocalityMatch,
       restaurantDistanceMeters: restaurantDistanceMeters,
       stablePlaceIdentifier: stablePlaceIdentifier
+    )
+  }
+
+  private func resultGroupMatch(
+    stablePlaceIdentifier: String
+  ) throws -> AppleChargingPlaceMatchPolicy.Match {
+    try XCTUnwrap(
+      AppleChargingPlaceMatchPolicy.match(
+        evidence: resultGroupEvidence(
+          stablePlaceIdentifier: stablePlaceIdentifier
+        ),
+        resultGroupKind: .noFoodCampus
+      )
     )
   }
 

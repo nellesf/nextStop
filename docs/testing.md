@@ -148,8 +148,8 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
   city, and rejects 301 m even when the address matches.
 - Verify the result-group fallback still requires the canonical operator,
   Apple's charger category, matching operator locality, a stable Apple Place ID,
-  and exactly one qualifying Apple place within 60 m of power-qualified group
-  evidence. The no-food scope is the selected campus. The food scope is the exact
+  and one safely resolved Apple place within 60 m of power-qualified group evidence.
+  The no-food scope is the selected campus. The food scope is the exact
   restaurant group and additionally requires the Apple charger itself to be no
   more than 500 m from that restaurant; cover the 60/61 m and 500/501 m boundaries.
 - Verify charging-location lookup scope never crosses the current result group.
@@ -166,7 +166,11 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Verify a primary operator-scoped match may still succeed immediately, but a
   uniqueness-dependent group fallback is rejected when any category-pass center
   fails, or when any category or natural-language center fails before the final
-  combined fallback decision.
+  second-pass fallback decision.
+- Verify a complete natural-language pass can recover one identity when the
+  complete category pass found none, or can disambiguate an ambiguous category
+  pass only when exactly one fully validated stable Place ID occurs in both sets.
+  Reject disjoint sets and intersections containing multiple IDs.
 
 Manual CarPlay tests remain blocked until full Xcode and managed entitlement/
 provisioning are available.

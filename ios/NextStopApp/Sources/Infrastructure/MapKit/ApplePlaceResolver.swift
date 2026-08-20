@@ -137,17 +137,52 @@ enum AppleChargingPlaceMatchPolicy {
   static func unambiguousResultGroupPlaceIdentifier(
     in matches: [Match]
   ) -> String? {
-    let identifiers = Set(
+    let identifiers = resultGroupPlaceIdentifiers(in: matches)
+    guard identifiers.count == 1 else {
+      return nil
+    }
+    return identifiers.first
+  }
+
+  static func naturalLanguageFallbackPlaceIdentifier(
+    categoryMatches: [Match],
+    naturalLanguageMatches: [Match],
+    categoryPassComplete: Bool,
+    naturalLanguagePassComplete: Bool
+  ) -> String? {
+    guard
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: categoryPassComplete,
+        naturalLanguagePassComplete: naturalLanguagePassComplete
+      )
+    else {
+      return nil
+    }
+
+    let categoryIdentifiers = resultGroupPlaceIdentifiers(in: categoryMatches)
+    let naturalLanguageIdentifiers = resultGroupPlaceIdentifiers(
+      in: naturalLanguageMatches
+    )
+    let eligibleIdentifiers =
+      categoryIdentifiers.isEmpty
+      ? naturalLanguageIdentifiers
+      : categoryIdentifiers.intersection(naturalLanguageIdentifiers)
+    guard eligibleIdentifiers.count == 1 else {
+      return nil
+    }
+    return eligibleIdentifiers.first
+  }
+
+  private static func resultGroupPlaceIdentifiers(
+    in matches: [Match]
+  ) -> Set<String> {
+    Set(
       matches.compactMap { match -> String? in
         guard case .resultGroup(_, let identifier) = match else {
           return nil
         }
         return identifier
       })
-    guard identifiers.count == 1 else {
-      return nil
-    }
-    return identifiers.first
   }
 }
 
@@ -210,7 +245,7 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       lookups: lookups,
       resultGroupCoordinates: resultGroup.searchCoordinates
     )
-    var resultGroupMatches: [ChargingItemMatch] = []
+    var categoryResultGroupMatches: [ChargingItemMatch] = []
     var categoryPassComplete = true
 
     for center in centers {
@@ -234,18 +269,25 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
         }
         return operatorMatch.item
       }
-      resultGroupMatches.append(contentsOf: matches.filter(\.isResultGroupMatch))
+      categoryResultGroupMatches.append(
+        contentsOf: matches.filter(\.isResultGroupMatch)
+      )
     }
 
     if AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
       categoryPassComplete: categoryPassComplete
-    ), let resultGroupMatch = unambiguousResultGroupMatch(in: resultGroupMatches) {
+    ),
+      let resultGroupMatch = unambiguousResultGroupMatch(
+        in: categoryResultGroupMatches
+      )
+    {
       if let cacheKey {
         chargingPlaceCache[cacheKey] = resultGroupMatch.item
       }
       return resultGroupMatch.item
     }
 
+    var naturalLanguageResultGroupMatches: [ChargingItemMatch] = []
     var naturalLanguagePassComplete = false
     if let query = AppleChargingPlaceSearchQuery.naturalLanguageQuery(
       for: operatorName,
@@ -276,16 +318,25 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
           }
           return operatorMatch.item
         }
-        resultGroupMatches.append(contentsOf: matches.filter(\.isResultGroupMatch))
+        naturalLanguageResultGroupMatches.append(
+          contentsOf: matches.filter(\.isResultGroupMatch)
+        )
       }
     }
 
     guard
-      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
-        categoryPassComplete: categoryPassComplete,
-        naturalLanguagePassComplete: naturalLanguagePassComplete
-      ),
-      let resultGroupMatch = unambiguousResultGroupMatch(in: resultGroupMatches)
+      let identifier =
+        AppleChargingPlaceMatchPolicy
+        .naturalLanguageFallbackPlaceIdentifier(
+          categoryMatches: categoryResultGroupMatches.map(\.match),
+          naturalLanguageMatches: naturalLanguageResultGroupMatches.map(\.match),
+          categoryPassComplete: categoryPassComplete,
+          naturalLanguagePassComplete: naturalLanguagePassComplete
+        ),
+      let resultGroupMatch = bestResultGroupMatch(
+        withStablePlaceIdentifier: identifier,
+        in: categoryResultGroupMatches + naturalLanguageResultGroupMatches
+      )
     else {
       return nil
     }
@@ -521,7 +572,17 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     else {
       return nil
     }
-    return matches.filter { $0.stablePlaceIdentifier == identifier }.min {
+    return bestResultGroupMatch(
+      withStablePlaceIdentifier: identifier,
+      in: matches
+    )
+  }
+
+  private func bestResultGroupMatch(
+    withStablePlaceIdentifier identifier: String,
+    in matches: [ChargingItemMatch]
+  ) -> ChargingItemMatch? {
+    matches.filter { $0.stablePlaceIdentifier == identifier }.min {
       if $0.distance != $1.distance {
         return $0.distance < $1.distance
       }
