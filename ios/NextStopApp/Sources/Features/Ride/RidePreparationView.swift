@@ -443,16 +443,9 @@ struct RidePreparationView: View {
   private func resultPositionBadge(_ position: Int) -> some View {
     Text(verbatim: "\(position)")
       .font(.caption.weight(.bold).monospacedDigit())
-      .foregroundStyle(
-        position == 1
-          ? Color.black.opacity(0.86)
-          : Color(.systemBackground)
-      )
+      .foregroundStyle(Color.black.opacity(0.86))
       .frame(width: 26, height: 26)
-      .background(
-        position == 1 ? Color.nextStopHighlight : Color(.label),
-        in: Circle()
-      )
+      .background(Color.nextStopHighlight, in: Circle())
       .dynamicTypeSize(...DynamicTypeSize.xxxLarge)
       .accessibilityLabel(Text(verbatim: LocalizedFormat.resultRank(position)))
   }
