@@ -71,7 +71,7 @@ struct ProfileListView: View {
                       .foregroundStyle(.primary)
                       .padding(.horizontal, 16)
                       .frame(minHeight: 44)
-                      .background(Color(.tertiarySystemFill), in: Capsule())
+                      .profileEditControlStyle()
                   }
                   .frame(minHeight: 64)
                   .contentShape(Rectangle())
@@ -85,7 +85,7 @@ struct ProfileListView: View {
                     .symbolRenderingMode(.monochrome)
                     .frame(maxWidth: .infinity)
                 }
-                .buttonStyle(.borderedProminent)
+                .profilePrimaryActionStyle()
                 .controlSize(.large)
                 .tint(.green)
               }
@@ -205,6 +205,26 @@ struct ProfileListView: View {
       rideIntentRouter.consumePendingDestination()
     } catch {
       showsError = true
+    }
+  }
+}
+
+extension View {
+  @ViewBuilder
+  fileprivate func profileEditControlStyle() -> some View {
+    if #available(iOS 26.0, *) {
+      glassEffect(.regular.interactive(), in: Capsule())
+    } else {
+      background(Color(.tertiarySystemFill), in: Capsule())
+    }
+  }
+
+  @ViewBuilder
+  fileprivate func profilePrimaryActionStyle() -> some View {
+    if #available(iOS 26.0, *) {
+      buttonStyle(.glassProminent)
+    } else {
+      buttonStyle(.borderedProminent)
     }
   }
 }
