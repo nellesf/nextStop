@@ -47,6 +47,9 @@ private struct ProfileCard: View {
       Button(action: onStartRide) {
         Label("ride.start", systemImage: "bolt.car.fill")
           .symbolRenderingMode(.monochrome)
+          .lineLimit(1)
+          .minimumScaleFactor(0.8)
+          .allowsTightening(true)
       }
       .buttonStyle(.glassProminent)
       .buttonSizing(.flexible)
@@ -88,9 +91,13 @@ private struct ProfileCard: View {
   private var editButton: some View {
     Button(action: onEdit) {
       Label("action.edit", systemImage: "pencil")
+        .lineLimit(1)
+        .minimumScaleFactor(0.8)
+        .allowsTightening(true)
     }
     .buttonStyle(.glass)
     .controlSize(.large)
+    .fixedSize(horizontal: true, vertical: false)
   }
 }
 
