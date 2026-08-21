@@ -1,12 +1,8 @@
-"action.add" = "Hinzufügen";
 "action.cancel" = "Abbrechen";
 "action.delete" = "Löschen";
 "action.done" = "Fertig";
-"action.edit" = "Bearbeiten";
 "action.open_settings" = "Einstellungen öffnen";
 "action.retry" = "Erneut versuchen";
-"action.save" = "Sichern";
-"action.search" = "Suchen";
 "Destination" = "Fahrziel";
 "Destination found. Opening ride preparation." = "Fahrziel gefunden. Die Fahrtvorbereitung wird geöffnet.";
 "Destination search is currently unavailable." = "Die Fahrzielsuche ist gerade nicht verfügbar.";
@@ -24,8 +20,6 @@
 "carplay.attribution.detail" = "Lizenzdetails in der iPhone-App";
 "carplay.alert.ok" = "OK";
 "carplay.navigation.error" = "Apple Maps konnte nicht geöffnet werden.";
-"carplay.profiles.empty.description" = "Lege zuerst in der iPhone-App ein Profil mit Fahrziel an.";
-"carplay.profiles.empty.title" = "Keine Profile vorhanden";
 "carplay.profiles.title" = "Profile";
 "carplay.refresh" = "Aktualisieren";
 "carplay.retry" = "Erneut versuchen";
@@ -36,7 +30,6 @@
 "carplay.saved_rides.empty.title" = "Keine Fahrten vorbereitet";
 "carplay.saved_rides.title" = "Fahrt wählen";
 "destination.empty" = "Noch kein Fahrziel gewählt";
-"destination.search.empty" = "Keine Ziele gefunden";
 "destination.search.error" = "Das Fahrziel konnte nicht gesucht werden.";
 "destination.search.placeholder" = "Ort oder Adresse";
 "destination.search.title" = "Fahrziel suchen";
@@ -76,7 +69,6 @@
 "profile.search.start" = "Suche starten";
 "profile.section.break" = "Pause";
 "profile.section.charging" = "Ladepark";
-"profile.section.general" = "Profil";
 "profile.validation.destination" = "Bitte wähle ein Fahrziel aus den Suchergebnissen.";
 "profile.validation.name" = "Bitte gib einen Profilnamen ein.";
 "profile.validation.restaurant_chain" = "Bitte wähle eine Restaurantkette aus.";
@@ -138,7 +130,6 @@
 "ride.search.error.title" = "Ladeparks konnten nicht gesucht werden";
 "ride.search.progress.combined" = "Route und Ladeparks werden gesucht …";
 "ride.search.refresh" = "Suche aktualisieren";
-"ride.start" = "Ladestationen finden";
 "ride.title" = "Fahrt vorbereiten";
 "search.distance_range.15_50_km" = "15–50 km";
 "search.distance_range.50_100_km" = "50–100 km";

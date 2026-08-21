@@ -163,7 +163,7 @@ with an explicitly appropriate `HOST`. Use this only on a trusted local network;
 the checked-in Debug and Release configurations always use the TLS-protected
 staging service.
 
-Tap “Ladestationen finden” for a profile or saved destination. The app calculates
+Tap “Suche starten” for a profile. The app calculates
 the MapKit route and then starts the charging-park search automatically as one
 flow. It fetches a stable PostGIS candidate snapshot, asks MapKit for actual
 automobile distance to candidates in bounded groups of four, applies the exact

@@ -28,6 +28,7 @@ struct ProfileListView: View {
   @State private var profiles: [UserProfile] = []
   @State private var editorSelection: ProfileEditorSelection?
   @State private var rideSelection: RideSelection?
+  @State private var showsDataSources = false
   @State private var showsError = false
   private let directionsRequestGate: DirectionsRequestGate
 
@@ -81,6 +82,18 @@ struct ProfileListView: View {
           try reload()
         }
       }
+      .sheet(isPresented: $showsDataSources) {
+        NavigationStack {
+          DataSourcesView()
+            .toolbar {
+              ToolbarItem(placement: .confirmationAction) {
+                Button("action.done") {
+                  showsDataSources = false
+                }
+              }
+            }
+        }
+      }
       .navigationDestination(item: $rideSelection) { selection in
         switch selection.source {
         case .profile(let profile):
@@ -123,33 +136,23 @@ struct ProfileListView: View {
 
         Spacer(minLength: 12)
 
-        NavigationLink {
-          DestinationLibraryView(directionsRequestGate: directionsRequestGate)
-            .toolbar(.visible, for: .navigationBar)
+        Button {
+          showsDataSources = true
         } label: {
-          Label("destinations.title", systemImage: "star")
-            .labelStyle(.iconOnly)
-            .font(.body.weight(.semibold))
+          Image(systemName: "info")
+            .font(.system(size: 18, weight: .bold))
             .frame(width: 44, height: 44)
+            .foregroundStyle(.primary)
             .background(Color(.secondarySystemGroupedBackground), in: Circle())
+            .overlay {
+              Circle()
+                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+            }
+            .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
             .contentShape(Circle())
         }
         .buttonStyle(.plain)
-        .foregroundStyle(.primary)
-
-        NavigationLink {
-          DataSourcesView()
-            .toolbar(.visible, for: .navigationBar)
-        } label: {
-          Label("licenses.title", systemImage: "info.circle")
-            .labelStyle(.iconOnly)
-            .font(.body.weight(.semibold))
-            .frame(width: 44, height: 44)
-            .background(Color(.secondarySystemGroupedBackground), in: Circle())
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .foregroundStyle(.primary)
+        .accessibilityLabel(Text("licenses.title"))
       }
 
       Text("profiles.title")

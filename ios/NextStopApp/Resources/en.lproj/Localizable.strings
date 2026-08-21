@@ -1,12 +1,8 @@
-"action.add" = "Add";
 "action.cancel" = "Cancel";
 "action.delete" = "Delete";
 "action.done" = "Done";
-"action.edit" = "Edit";
 "action.open_settings" = "Open Settings";
 "action.retry" = "Try Again";
-"action.save" = "Save";
-"action.search" = "Search";
 "Destination" = "Destination";
 "Destination found. Opening ride preparation." = "Destination found. Opening ride preparation.";
 "Destination search is currently unavailable." = "Destination search is currently unavailable.";
@@ -24,8 +20,6 @@
 "carplay.attribution.detail" = "License details in the iPhone app";
 "carplay.alert.ok" = "OK";
 "carplay.navigation.error" = "Apple Maps could not be opened.";
-"carplay.profiles.empty.description" = "First create a profile with a destination in the iPhone app.";
-"carplay.profiles.empty.title" = "No profiles available";
 "carplay.profiles.title" = "Profiles";
 "carplay.refresh" = "Refresh";
 "carplay.retry" = "Try again";
@@ -36,7 +30,6 @@
 "carplay.saved_rides.empty.title" = "No rides prepared";
 "carplay.saved_rides.title" = "Choose ride";
 "destination.empty" = "No destination selected";
-"destination.search.empty" = "No destinations found";
 "destination.search.error" = "The destination could not be searched.";
 "destination.search.placeholder" = "Place or address";
 "destination.search.title" = "Search destination";
@@ -76,7 +69,6 @@
 "profile.search.start" = "Start search";
 "profile.section.break" = "Break";
 "profile.section.charging" = "Charging park";
-"profile.section.general" = "Profile";
 "profile.validation.destination" = "Select a destination from the search results.";
 "profile.validation.name" = "Enter a profile name.";
 "profile.validation.restaurant_chain" = "Please choose a restaurant chain.";
@@ -138,7 +130,6 @@
 "ride.search.error.title" = "Charging parks could not be searched";
 "ride.search.progress.combined" = "Searching the route and charging parks…";
 "ride.search.refresh" = "Refresh search";
-"ride.start" = "Find charging stations";
 "ride.title" = "Prepare ride";
 "search.distance_range.15_50_km" = "15–50 km";
 "search.distance_range.50_100_km" = "50–100 km";

@@ -12,7 +12,7 @@ router in the MVP because different road graphs/options could rank a different
 
 ## End-to-end algorithm
 
-On iPhone, choosing “Ladestationen finden” starts this entire algorithm as one
+On iPhone, choosing “Suche starten” starts this entire algorithm as one
 user action. Re-entering an already prepared view does not implicitly refresh its
 stable snapshot; retry and refresh remain explicit after an error or result.
 
