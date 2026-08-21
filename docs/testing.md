@@ -120,11 +120,16 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - `foodChain: null` returns at most one stable-ID candidate per bounded campus with
   campus-wide qualifying EVSE/operator counts; non-null food returns fine-park
   candidates with an exact restaurant match, without changing the v1 wire shape.
-- Oversized route, too many coordinates, NaN/invalid ranges, unsupported region,
-  unrecognized enum, cursor mismatch, and injection payloads.
-- 429 retry metadata, provider-degraded response, error IDs, and no sensitive body
-  in logs.
-- TLS/headers and database least privilege in staging checks.
+- Oversized body, over-8,000-point route, over-250-km segment, over-2,500-km route,
+  NaN/invalid ranges, unsupported region, unrecognized enum, cursor mismatch, and
+  injection payloads.
+- Public health, missing/malformed/wrong bearer credentials, authorized search,
+  four-search admission, 429 retry metadata, provider-degraded response, error
+  IDs, and no sensitive body or Authorization value in logs.
+- TLS/headers and database least privilege in staging checks. Apply the idempotent
+  role initializer to real Postgres and assert that API DML/provider-raw access,
+  worker DDL/migration-registry access, unsafe attributes, and inherited role
+  memberships remain denied after a second run.
 
 ## iPhone and CarPlay tests
 

@@ -13,10 +13,27 @@ info:
 servers:
   - url: https://api.nextstop.tech
 paths:
+  /health:
+    get:
+      operationId: getHealth
+      summary: Report process health without requiring credentials
+      responses:
+        '200':
+          description: Process is accepting requests.
+          content:
+            application/json:
+              schema:
+                type: object
+                additionalProperties: false
+                required: [status]
+                properties:
+                  status: { const: ok }
   /v1/charging-parks/search:
     post:
       operationId: searchChargingParkCandidates
       summary: Return a stable page of route-corridor charging candidates
+      security:
+        - bearerAuth: []
       requestBody:
         required: true
         content:
@@ -32,6 +49,22 @@ paths:
                 $ref: '#/components/schemas/SearchResponse'
         '400':
           $ref: '#/components/responses/BadRequest'
+        '401':
+          description: Missing, malformed, or invalid API bearer credential.
+          headers:
+            WWW-Authenticate:
+              schema:
+                type: string
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
+        '413':
+          description: Request body exceeds 512 KiB.
+          content:
+            application/problem+json:
+              schema:
+                $ref: '#/components/schemas/Problem'
         '409':
           description: Cursor does not belong to the supplied snapshot/request.
           content:
@@ -39,7 +72,7 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
         '429':
-          description: Rate limited.
+          description: Rate limited or all bounded search slots are occupied.
           headers:
             Retry-After:
               schema:
@@ -56,6 +89,14 @@ paths:
               schema:
                 $ref: '#/components/schemas/Problem'
 components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      description: >
+        Revocable staging access credential. Inject it at deployment and build
+        time; never commit it. Replace this shared-secret control with attested,
+        short-lived client credentials before a public production launch.
   responses:
     BadRequest:
       description: Invalid route or criteria.
@@ -98,17 +139,21 @@ components:
         coordinates:
           type: array
           minItems: 2
-          maxItems: 20000
+          maxItems: 8000
+          description: >
+            Detailed MapKit route. Every coordinate must be within the supported
+            European envelope; route length is limited to 2,500 km and individual
+            segments to 250 km. Geometry is rejected, never silently simplified.
           items:
             type: array
             prefixItems:
               - type: number
-                minimum: -180
-                maximum: 180
+                minimum: -25
+                maximum: 45
                 description: Longitude.
               - type: number
-                minimum: -90
-                maximum: 90
+                minimum: 34
+                maximum: 72
                 description: Latitude.
             minItems: 2
             maxItems: 2
@@ -414,4 +459,9 @@ components:
         title: { type: string }
         status: { type: integer, minimum: 400, maximum: 599 }
         detail: { type: string }
-        errorId: { type: string, format: uuid }
+        errorId:
+          type: string
+          minLength: 16
+          maxLength: 128
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: Opaque support identifier; do not infer UUID semantics.

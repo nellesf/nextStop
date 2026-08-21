@@ -132,6 +132,20 @@ services:
 - `api`: authentication/rate limiting, OpenAPI DTO validation, and redaction.
 - `operations`: provider health, freshness, quarantine, and metrics.
 
+The one backend artifact has separate execution roles. The stateless API process
+only reads the search projection through a read-only database login. A listenerless
+worker performs provider ingestion and transactional projection publication with a
+DML-only login. A release-scoped migrator applies DDL with the database owner
+before either long-running process starts. These are privilege and failure
+boundaries inside the modular monolith, not microservices.
+
+Candidate search is authenticated and has explicit resource budgets before it
+reaches PostGIS: 512 KiB, 8,000 route coordinates, a supported-Europe envelope,
+250 km per segment, 2,500 km total, and four concurrent searches per API process.
+The read-only API database role adds a 15-second statement deadline. Geometry over
+a boundary is rejected rather than simplified, preserving the exact corridor
+contract.
+
 ### PostgreSQL + PostGIS
 
 - Raw source payload metadata and content hash for replay/audit.

@@ -86,36 +86,29 @@ protocol CandidatePageSearching: AnyObject {
 final class HTTPCandidateSearchService: CandidatePageSearching {
   private static let maximumResponseBytes = 2 * 1_024 * 1_024
   private let baseURL: URL?
+  private let bearerToken: String?
   private let session: URLSession
   private let encoder: JSONEncoder
   private let decoder: JSONDecoder
 
   convenience init(session: URLSession = .shared) {
-    self.init(baseURL: Self.configuredBaseURL(), session: session)
+    self.init(
+      baseURL: Self.configuredBaseURL(),
+      bearerToken: Self.configuredBearerToken(),
+      session: session
+    )
   }
 
-  init(baseURL: URL?, session: URLSession = .shared) {
+  init(baseURL: URL?, bearerToken: String?, session: URLSession = .shared) {
     self.baseURL = baseURL
+    self.bearerToken = Self.validatedBearerToken(bearerToken)
     self.session = session
     encoder = JSONEncoder()
     decoder = JSONDecoder()
   }
 
   func search(request: RouteSearchRequest) async throws -> CandidateSearchPage {
-    guard let baseURL else {
-      throw CandidateSearchServiceError.invalidConfiguration
-    }
-    let url = baseURL.appending(path: "v1/charging-parks/search")
-    var urlRequest = URLRequest(url: url)
-    urlRequest.httpMethod = "POST"
-    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
-    urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
-    urlRequest.timeoutInterval = 20
-    do {
-      urlRequest.httpBody = try encoder.encode(CandidateSearchRequestDTO(request: request))
-    } catch {
-      throw CandidateSearchServiceError.invalidRequest
-    }
+    let urlRequest = try makeURLRequest(request: request)
 
     let data: Data
     let response: URLResponse
@@ -144,6 +137,25 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     }
   }
 
+  func makeURLRequest(request: RouteSearchRequest) throws -> URLRequest {
+    guard let baseURL, let bearerToken else {
+      throw CandidateSearchServiceError.invalidConfiguration
+    }
+    let url = baseURL.appending(path: "v1/charging-parks/search")
+    var urlRequest = URLRequest(url: url)
+    urlRequest.httpMethod = "POST"
+    urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
+    urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
+    urlRequest.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+    urlRequest.timeoutInterval = 20
+    do {
+      urlRequest.httpBody = try encoder.encode(CandidateSearchRequestDTO(request: request))
+    } catch {
+      throw CandidateSearchServiceError.invalidRequest
+    }
+    return urlRequest
+  }
+
   private static func configuredBaseURL(bundle: Bundle = .main) -> URL? {
     if let override = ProcessInfo.processInfo.environment["NEXTSTOP_API_BASE_URL"],
       !override.isEmpty
@@ -158,6 +170,27 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     return URL(string: value)
   }
 
+  private static func configuredBearerToken(bundle: Bundle = .main) -> String? {
+    if let override = ProcessInfo.processInfo.environment["NEXTSTOP_API_BEARER_TOKEN"] {
+      return override
+    }
+    return bundle.object(forInfoDictionaryKey: "NextStopAPIBearerToken") as? String
+  }
+
+  static func validatedBearerToken(_ value: String?) -> String? {
+    guard let value else {
+      return nil
+    }
+    let token = value.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard token.utf8.count >= 32,
+      !token.contains(where: { $0.isWhitespace }),
+      !token.contains("$(")
+    else {
+      return nil
+    }
+    return token
+  }
+
   static func error(
     for statusCode: Int,
     data: Data,
@@ -169,6 +202,10 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
       return statusCode >= 500 ? .unavailable : .invalidResponse
     }
     switch (statusCode, problem.type) {
+    case (401, "urn:nextstop:error:unauthorized"):
+      return .invalidConfiguration
+    case (429, "urn:nextstop:error:search-capacity-exhausted"):
+      return .unavailable
     case (503, "urn:nextstop:error:projection-unavailable"):
       return .dataPreparing
     case (503, "urn:nextstop:error:food-poi-unavailable"):

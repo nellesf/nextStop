@@ -15,6 +15,17 @@ public enum DomainValidationError: Error, Equatable, Sendable {
   case routeRequiresAtLeastTwoCoordinates
   case routeRequiresDistinctCoordinates
   case routeHasTooManyCoordinates(maximum: Int, actual: Int)
+  case routeCoordinateOutsideSupportedEnvelope(
+    index: Int,
+    latitude: Double,
+    longitude: Double
+  )
+  case routeSegmentExceedsMaximumLength(
+    startCoordinateIndex: Int,
+    maximum: Meters,
+    actual: Meters
+  )
+  case routeExceedsMaximumLength(maximum: Meters, actual: Meters)
 }
 
 public struct Meters: Hashable, Comparable, Codable, Sendable {

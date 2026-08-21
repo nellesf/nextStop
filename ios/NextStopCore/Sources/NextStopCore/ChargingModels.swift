@@ -368,6 +368,45 @@ public struct RoutePolyline: Hashable, Codable, Sendable {
     guard Set(coordinates).count >= 2 else {
       throw DomainValidationError.routeRequiresDistinctCoordinates
     }
+
+    var totalLengthMeters = 0.0
+    for (index, coordinate) in coordinates.enumerated() {
+      guard
+        SearchConfiguration.supportedRouteLatitudeRange.contains(coordinate.latitude),
+        SearchConfiguration.supportedRouteLongitudeRange.contains(coordinate.longitude)
+      else {
+        throw DomainValidationError.routeCoordinateOutsideSupportedEnvelope(
+          index: index,
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude
+        )
+      }
+
+      guard index > 0 else {
+        continue
+      }
+
+      let segmentLengthMeters = Geodesy.distanceMeters(
+        from: coordinates[index - 1],
+        to: coordinate
+      )
+      guard segmentLengthMeters <= Double(SearchConfiguration.maximumRouteSegmentLength.value)
+      else {
+        throw DomainValidationError.routeSegmentExceedsMaximumLength(
+          startCoordinateIndex: index - 1,
+          maximum: SearchConfiguration.maximumRouteSegmentLength,
+          actual: Meters(Int(ceil(segmentLengthMeters)))
+        )
+      }
+
+      totalLengthMeters += segmentLengthMeters
+      guard totalLengthMeters <= Double(SearchConfiguration.maximumRouteLength.value) else {
+        throw DomainValidationError.routeExceedsMaximumLength(
+          maximum: SearchConfiguration.maximumRouteLength,
+          actual: Meters(Int(ceil(totalLengthMeters)))
+        )
+      }
+    }
     self.coordinates = coordinates
   }
 }

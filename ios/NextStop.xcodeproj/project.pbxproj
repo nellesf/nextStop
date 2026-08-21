@@ -121,6 +121,7 @@
 		A7FB416E577738CAF4A0AFE1 /* NextStopCarPlayTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopCarPlayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD868339BFFD12E7F0EB6EB1 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
 		B2ABDF371BB69CB13EF7857C /* CarPlayRideSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayRideSearchService.swift; sourceTree = "<group>"; };
+		B2C8CD43EF81F85A28A762F0 /* NextStop.xcconfig */ = {isa = PBXFileReference; lastKnownFileType = text.xcconfig; path = NextStop.xcconfig; sourceTree = "<group>"; };
 		B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchRequestDTOTests.swift; sourceTree = "<group>"; };
 		B572FEA58A55B29CC334EB61 /* DestinationRepository.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationRepository.swift; sourceTree = "<group>"; };
 		C3030EE927C626E8E2A4ED24 /* ProfileEditorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorView.swift; sourceTree = "<group>"; };
@@ -218,6 +219,7 @@
 		2BD15C362C23DF92E71B4B27 = {
 			isa = PBXGroup;
 			children = (
+				722C1F1871C81B870F9C999C /* Config */,
 				AB54FB826B6C7A6417C9525C /* NextStopApp */,
 				8A4D78933B68333449C8A8F3 /* NextStopAppTests */,
 				6D02AE3C7E70861F3524B622 /* NextStopCarPlay */,
@@ -314,6 +316,14 @@
 				A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */,
 			);
 			path = NextStopCarPlayTests;
+			sourceTree = "<group>";
+		};
+		722C1F1871C81B870F9C999C /* Config */ = {
+			isa = PBXGroup;
+			children = (
+				B2C8CD43EF81F85A28A762F0 /* NextStop.xcconfig */,
+			);
+			path = Config;
 			sourceTree = "<group>";
 		};
 		8A41B0156DE9B0AB7A08E27A /* Features */ = {
@@ -454,6 +464,7 @@
 			isa = PBXNativeTarget;
 			buildConfigurationList = C6C062F0A482D203A31D4B22 /* Build configuration list for PBXNativeTarget "NextStopApp" */;
 			buildPhases = (
+				FDC68D4C28FF5AACAF857209 /* Validate Release Search Credential */,
 				AAED34EC24FBC26DFF040848 /* Sources */,
 				34664D73E7BD429E6F5014ED /* Resources */,
 				9AF8C8D79214116B07944F32 /* Frameworks */,
@@ -530,6 +541,28 @@
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXResourcesBuildPhase section */
+
+/* Begin PBXShellScriptBuildPhase section */
+		FDC68D4C28FF5AACAF857209 /* Validate Release Search Credential */ = {
+			isa = PBXShellScriptBuildPhase;
+			alwaysOutOfDate = 1;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			inputFileListPaths = (
+			);
+			inputPaths = (
+			);
+			name = "Validate Release Search Credential";
+			outputFileListPaths = (
+			);
+			outputPaths = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+			shellPath = /bin/sh;
+			shellScript = "if [ \"${CONFIGURATION:-}\" != \"Release\" ]; then\n  exit 0\nfi\ntoken=${NEXTSTOP_API_BEARER_TOKEN:-}\nif [ \"${#token}\" -eq 64 ] && ! printf '%s' \"$token\" | grep -q '[^0-9A-Fa-f]'; then\n  exit 0\nfi\necho \"error: Release requires a 64-character hexadecimal NEXTSTOP_API_BEARER_TOKEN. Run ios/configure-staging-auth.sh first.\"\nexit 1\n";
+		};
+/* End PBXShellScriptBuildPhase section */
 
 /* Begin PBXSourcesBuildPhase section */
 		3926FDFC58DCC0E1EF986944 /* Sources */ = {
@@ -661,6 +694,7 @@
 		};
 		0D4180E7DE647D83975A70CD /* Release */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B2C8CD43EF81F85A28A762F0 /* NextStop.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
@@ -860,6 +894,7 @@
 		};
 		DC8B34C04D8963D621F4195D /* Debug */ = {
 			isa = XCBuildConfiguration;
+			baseConfigurationReference = B2C8CD43EF81F85A28A762F0 /* NextStop.xcconfig */;
 			buildSettings = {
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				CODE_SIGN_IDENTITY = "iPhone Developer";

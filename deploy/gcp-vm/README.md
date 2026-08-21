@@ -2,10 +2,10 @@
 
 Status: Implemented for the owner-approved private TestFlight staging environment.
 
-This deployment intentionally mirrors the local modular monolith on one Compute
-Engine VM. PostgreSQL/PostGIS, the API, authority ingestion, Swiss live ingestion,
-and the single OSM worker run together. It is not the production high-availability
-topology.
+This deployment intentionally keeps the modular monolith on one Compute Engine
+VM. PostgreSQL/PostGIS, a read-only API process, one DML-only ingestion worker,
+and a release-scoped owner/migrator run on the same VM from one artifact. It is not
+the production high-availability topology.
 
 ## Fixed resources
 
@@ -54,6 +54,29 @@ Certbot renews the certificate automatically. The checked-in Nginx configuration
 does not record route request bodies or client access logs. Backend output contains
 only ingestion event names, outcomes or failure classes, and timestamps.
 
+On every release, the installer preserves the existing `POSTGRES_PASSWORD` and
+generates missing `API_DATABASE_PASSWORD` and `WORKER_DATABASE_PASSWORD` values in
+`/etc/nextstop/backend.env`, along with a missing `SEARCH_API_BEARER_TOKEN`. Only
+the HTTP API receives the search token. The one-shot migrator applies pending
+migrations with the legacy `nextstop_app` owner. A second one-shot service then
+creates or updates the restricted roles and grants before the API and worker
+start. This is an in-place privilege upgrade: it neither recreates the database
+nor rebuilds the active charging or restaurant projections.
+
+After the first authenticated-search deployment, configure the same secret for
+the private iOS build without printing or committing it, then rebuild the app:
+
+```bash
+ios/configure-staging-auth.sh
+```
+
+The script retrieves the value through IAP into the ignored, mode-`0600` file
+`ios/Config/Secrets.xcconfig`. Builds without a valid credential fail closed and
+Release/archive builds are rejected before compilation when it is absent. Older
+installed builds receive `401`. Rotating the staging token therefore requires
+rebuilding and redistributing the private app. No database or projection rebuild
+is involved.
+
 ## Operations
 
 ```bash
@@ -63,17 +86,17 @@ gcloud compute ssh nextstop-backend \
   --tunnel-through-iap
 
 cd /opt/nextstop/current
-sudo docker compose --env-file /etc/nextstop/backend.env \
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
   -f deploy/gcp-vm/compose.yaml ps
-sudo docker compose --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml logs --tail=200 backend
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
+  -f deploy/gcp-vm/compose.yaml logs --tail=200 backend worker
 
-sudo docker compose --env-file /etc/nextstop/backend.env \
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
   -f deploy/gcp-vm/compose.yaml exec -T database \
   psql -U nextstop_app -d nextstop -c \
   'SELECT status, charging_point_count, park_count, published_at FROM nextstop.projection_versions ORDER BY built_at DESC LIMIT 3;'
 
-sudo docker compose --env-file /etc/nextstop/backend.env \
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
   -f deploy/gcp-vm/compose.yaml exec -T database \
   psql -U nextstop_app -d nextstop -c \
   'SELECT status, poi_count, quarantine_count, published_at FROM nextstop.food_poi_projection_versions ORDER BY built_at DESC LIMIT 3;'
@@ -81,3 +104,14 @@ sudo docker compose --env-file /etc/nextstop/backend.env \
 
 `GET /health` confirms process liveness. A food-filtered search remains retryable
 until the first Germany and Switzerland OSM import has published successfully.
+
+To verify the effective database boundaries without printing credentials:
+
+```bash
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
+  -f deploy/gcp-vm/compose.yaml exec -T backend node -e \
+  "import('pg').then(async({Client})=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();console.log((await c.query('select current_user')).rows,(await c.query('show statement_timeout')).rows);await c.end()})"
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
+  -f deploy/gcp-vm/compose.yaml exec -T worker node -e \
+  "import('pg').then(async({Client})=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();console.log((await c.query('select current_user')).rows);await c.end()})"
+```

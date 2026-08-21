@@ -76,6 +76,12 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     let foodPreparing = Data(
       #"{"type":"urn:nextstop:error:food-poi-unavailable","status":503}"#.utf8
     )
+    let unauthorized = Data(
+      #"{"type":"urn:nextstop:error:unauthorized","status":401}"#.utf8
+    )
+    let capacityExhausted = Data(
+      #"{"type":"urn:nextstop:error:search-capacity-exhausted","status":429}"#.utf8
+    )
 
     XCTAssertEqual(
       HTTPCandidateSearchService.error(for: 503, data: preparing),
@@ -88,6 +94,14 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     XCTAssertEqual(
       HTTPCandidateSearchService.error(for: 503, data: foodPreparing),
       .foodDataPreparing
+    )
+    XCTAssertEqual(
+      HTTPCandidateSearchService.error(for: 401, data: unauthorized),
+      .invalidConfiguration
+    )
+    XCTAssertEqual(
+      HTTPCandidateSearchService.error(for: 429, data: capacityExhausted),
+      .unavailable
     )
   }
 

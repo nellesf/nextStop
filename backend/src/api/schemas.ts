@@ -1,12 +1,23 @@
 import { minimumPowerOptions } from "../domain/candidate-search.js";
+import { searchRequestLimits } from "./search-request-limits.js";
+
+const routeEnvelope = searchRequestLimits.supportedRouteEnvelope;
 
 const coordinateTupleSchema = {
   type: "array",
   minItems: 2,
   maxItems: 2,
   items: [
-    { type: "number", minimum: -180, maximum: 180 },
-    { type: "number", minimum: -90, maximum: 90 },
+    {
+      type: "number",
+      minimum: routeEnvelope.minimumLongitude,
+      maximum: routeEnvelope.maximumLongitude,
+    },
+    {
+      type: "number",
+      minimum: routeEnvelope.minimumLatitude,
+      maximum: routeEnvelope.maximumLatitude,
+    },
   ],
   additionalItems: false,
 } as const;
@@ -50,7 +61,7 @@ export const searchRequestSchema = {
         coordinates: {
           type: "array",
           minItems: 2,
-          maxItems: 20_000,
+          maxItems: searchRequestLimits.maximumRouteCoordinateCount,
           items: coordinateTupleSchema,
         },
       },
@@ -262,6 +273,11 @@ export const problemSchema = {
     title: { type: "string" },
     status: { type: "integer", minimum: 400, maximum: 599 },
     detail: { type: "string" },
-    errorId: { type: "string", format: "uuid" },
+    errorId: {
+      type: "string",
+      minLength: 16,
+      maxLength: 128,
+      pattern: "^[A-Za-z0-9_-]+$",
+    },
   },
 } as const;

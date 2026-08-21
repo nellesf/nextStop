@@ -7,10 +7,25 @@ exception implemented on 2026-08-18. See ADR 0014.
 
 The two-to-three-user TestFlight phase runs the complete modular monolith and
 PostgreSQL/PostGIS on one `e2-standard-2` Compute Engine VM in Frankfurt. The API,
-charging ingestion, Swiss live refresh, and exactly one OSM importer are one
-process, matching local behavior. A separately attached persistent disk holds the
-database and OSM cache. Nginx terminates TLS at `api.nextstop.tech`; PostgreSQL is
-not publicly reachable and SSH uses Google IAP.
+one charging/Swiss-live/OSM worker, and a release-scoped migrator use the same
+artifact as separate processes and separate database credentials. A separately
+attached persistent disk holds the database and OSM cache. Nginx terminates TLS at
+`api.nextstop.tech`; only the API has a listener, PostgreSQL is not publicly
+reachable, and SSH uses Google IAP.
+
+The API login is read-only and table-scoped with a 15-second statement timeout.
+The worker login has DML and projection-function privileges but no DDL or access to
+the migration registry. The legacy bootstrap owner is used only by the one-shot
+migrator and idempotent grant initializer. Deployments add or rotate the restricted
+roles on an existing volume without recreating data or rebuilding projections.
+
+Private staging requires a revocable bearer credential for candidate search;
+`/health` remains unauthenticated. The credential is injected into the private
+TestFlight build and provides only a staging abuse barrier because an app-bundled
+shared secret is extractable. Public production must replace it with attested,
+short-lived client credentials and per-client quotas. The API also rejects routes
+outside its explicit size, point-count, region, segment-length, and total-length
+budgets before PostGIS search.
 
 The owner explicitly declined scheduled backups for this disposable staging
 corpus. This exception does not satisfy the production availability or recovery
@@ -26,7 +41,7 @@ separate process roles:
 - `worker`: scheduled provider ingestion and transactional projection rebuilds.
 
 Run the resource-heavy OSM PBF ingestion in exactly one designated worker with a
-persistent private cache volume. API replicas set `INGESTION_ENABLED=false`; a
+persistent private cache volume. API processes never run ingestion; a
 charging-only worker can set `OSM_INGESTION_ENABLED=false`.
 
 They share code and database but can scale/restart independently. Do not introduce
@@ -59,7 +74,8 @@ need.
 
 - Provider/API credentials, DB credentials, signing material, and edge keys live in
   the deployment secret manager.
-- iOS contains only the public backend base URL and no provider keys.
+- iOS contains no provider keys. Private staging injects its revocable shared
+  search credential at build time from an ignored local configuration file.
 - Rotate independently by environment. Document owner, purpose, creation, expiry,
   and emergency revocation without storing the value in Git.
 

@@ -35,7 +35,10 @@ async function main(): Promise<void> {
   if (connectionString === undefined) {
     throw new Error("DATABASE_URL is required.");
   }
-  const pool = createDatabasePool(connectionString);
+  const pool = createDatabasePool(connectionString, {
+    applicationName: "nextstop-migrator",
+    maxConnections: 1,
+  });
   try {
     await applyMigrations(pool);
   } finally {

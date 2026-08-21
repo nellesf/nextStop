@@ -117,13 +117,19 @@ informational availability behavior, GiST index use, automatic authority-feed re
 Swiss live-status joins, atomic publication, and stable pagination across
 projection changes.
 
-With `DATABASE_URL` configured, the server applies pending migrations and starts
-the provider coordinator automatically. It immediately discovers and downloads
-the current official Bundesnetzagentur CSV, downloads Swiss static data, publishes
-the combined projection, and refreshes Swiss live availability every minute. Set
-`INGESTION_ENABLED=false` only for a deliberately API-only process role. The
-manual import command remains a recovery tool documented in
+With `DATABASE_URL` configured, run pending migrations explicitly and start the
+API and provider worker as separate processes. The worker immediately discovers
+and downloads the current official Bundesnetzagentur CSV, downloads Swiss static
+data, publishes the combined projection, and refreshes Swiss live availability
+every minute. The API never runs migrations or ingestion. The manual import
+command remains a recovery tool documented in
 [`docs/operations/bundesnetzagentur-import.md`](operations/bundesnetzagentur-import.md).
+
+```bash
+npm run db:migrate
+npm run dev
+npm run dev:worker
+```
 
 With `OSM_INGESTION_ENABLED=true` (the default), a separate daily job downloads
 the configured Geofabrik OSM PBF extracts, keeps them in `OSM_CACHE_DIRECTORY`,
@@ -139,6 +145,19 @@ Production should run this resource-heavy job in one designated process.
 Debug and Release builds default to the owner-approved Google Cloud staging
 service at `https://api.nextstop.tech`. The Simulator therefore uses the same
 automatic charging and OSM projections as TestFlight without a local server.
+Before building against staging, retrieve its revocable private-test credential
+into the ignored local Xcode configuration:
+
+```bash
+ios/configure-staging-auth.sh
+```
+
+Alternatively copy `ios/Config/Secrets.xcconfig.example` to
+`ios/Config/Secrets.xcconfig` and provide a matching local-development token.
+Never commit `Secrets.xcconfig`; a build without a valid token fails closed when a
+search starts. Release/archive builds additionally fail during the build unless a
+64-character hexadecimal staging token is present, preventing an unusable
+TestFlight archive.
 
 For deliberate local backend development, set the Xcode scheme environment
 variable `NEXTSTOP_API_BASE_URL` to `http://127.0.0.1:3000`, then start the
@@ -148,8 +167,23 @@ populated backend on the same Mac that runs the Simulator:
 cd backend
 DATABASE_URL=postgresql://127.0.0.1/nextstop \
 SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
-npm run dev
+npm run db:migrate
 ```
+
+Then start the API and worker in separate terminals. Give the API a local token of
+at least 32 non-whitespace bytes, and set the same value as the Xcode scheme
+environment variable `NEXTSTOP_API_BEARER_TOKEN`:
+
+```bash
+DATABASE_URL=postgresql://127.0.0.1/nextstop \
+SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
+SEARCH_API_BEARER_TOKEN=local-development-search-token-000000000000 \
+npm run dev
+
+DATABASE_URL=postgresql://127.0.0.1/nextstop npm run dev:worker
+```
+
+Only staging/production require the distinct restricted database credentials.
 
 No charging or restaurant rows need to be entered manually. `GET /health` reports process
 liveness immediately; candidate search honestly returns `503` until the first
@@ -167,13 +201,13 @@ Tap “Suche starten” for a profile. The app calculates
 the MapKit route and then starts the charging-park search automatically as one
 flow. It fetches a stable PostGIS candidate snapshot, asks MapKit for actual
 automobile distance to candidates in bounded groups of four, applies the exact
-configured range after the backend's exact optional 500 m OSM food rule, sorts only by actual driving
-distance, and displays at most five. Each result shows the deduplicated EVSE count
-for every operator. Its compact row shows the charger icon and count without
-repeating the already-visible power criterion. The 48-point Maps button beside an
-operator or restaurant lazily performs a bounded Apple lookup and opens the native
-place by stable Place ID. Navigation may be started from that native place card;
-the iPhone result card has no duplicate navigation button.
+configured range after the backend's exact optional 500 m OSM food rule, sorts only
+by actual driving distance, and displays at most five. Each result shows the
+deduplicated EVSE count for every operator. Its compact row shows the charger icon
+and count without repeating the already-visible power criterion. The 48-point Maps
+button beside an operator or restaurant lazily performs a bounded Apple lookup and
+opens the native place by stable Place ID. Navigation may be started from that
+native place card; the iPhone result card has no duplicate navigation button.
 
 ### CarPlay acceptance gate
 

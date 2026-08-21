@@ -22,6 +22,7 @@ backend/data/
 .env
 .env.*
 !.env.example
+ios/Config/Secrets.xcconfig
 
 # Logs and local database artifacts
 *.log

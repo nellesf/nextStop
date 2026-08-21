@@ -43,6 +43,8 @@ Transmit over TLS:
 - fixed search criteria;
 - opaque per-request ID generated anew;
 - pagination/snapshot token.
+- one shared, revocable private-staging access credential in the Authorization
+  header; it is not a device or user identifier.
 
 Do not transmit:
 
@@ -94,6 +96,8 @@ permission later on iPhone rather than trying to force a driving-time prompt.
 
 - TLS only, HSTS at the edge, modern cipher policy.
 - Request size/coordinate-count/region validation and rate limiting.
+- Segment/total-route limits, bounded concurrent search admission, and database
+  statement deadlines.
 - Parameterized SQL and least-privilege DB roles.
 - Provider keys in deployment secret storage, rotated and never shipped to iOS.
 - Signed/pinned deployment artifacts and dependency/vulnerability scanning.

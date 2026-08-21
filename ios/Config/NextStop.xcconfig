@@ -1,0 +1,4 @@
+// The optional local file is intentionally ignored by Git. Release and simulator
+// builds fail closed at runtime until a staging or local search token is supplied.
+NEXTSTOP_API_BEARER_TOKEN =
+#include? "Secrets.xcconfig"

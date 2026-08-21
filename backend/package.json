@@ -13,8 +13,10 @@
     "refresh:providers": "tsx src/jobs/refresh-providers.ts",
     "refresh:osm": "tsx src/jobs/refresh-food-pois.ts",
     "dev": "tsx watch src/server.ts",
+    "dev:worker": "tsx watch src/worker.ts",
     "lint": "eslint . --max-warnings 0",
     "start": "node dist/src/server.js",
+    "start:worker": "node dist/src/worker.js",
     "test": "node --import tsx --test tests/unit/**/*.test.ts",
     "test:integration": "node --import tsx --test tests/integration/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"

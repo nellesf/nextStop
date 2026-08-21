@@ -27,31 +27,64 @@ services:
     volumes:
       - osm-cache:/var/lib/nextstop/osm-cache
 
+  migrator:
+    image: nextstop-backend:staging
+    restart: "no"
+    depends_on:
+      database:
+        condition: service_healthy
+    command: ["node", "dist/src/persistence/migrate.js"]
+    environment:
+      DATABASE_URL: postgresql://nextstop_app:${POSTGRES_PASSWORD}@database:5432/nextstop
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  database-role-initializer:
+    image: postgis/postgis:17-3.5
+    restart: "no"
+    depends_on:
+      migrator:
+        condition: service_completed_successfully
+    environment:
+      PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
+      API_DATABASE_PASSWORD: ${API_DATABASE_PASSWORD:?API_DATABASE_PASSWORD is required}
+      WORKER_DATABASE_PASSWORD: ${WORKER_DATABASE_PASSWORD:?WORKER_DATABASE_PASSWORD is required}
+    entrypoint: ["/bin/bash", "-euc"]
+    command:
+      - >-
+        psql --host=database --username=nextstop_app --dbname=nextstop
+        --variable=api_password="$${API_DATABASE_PASSWORD}"
+        --variable=worker_password="$${WORKER_DATABASE_PASSWORD}"
+        --file=/opt/nextstop/database-roles.sql
+    volumes:
+      - ./database-roles.sql:/opt/nextstop/database-roles.sql:ro
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
   backend:
+    image: nextstop-backend:staging
     build:
       context: ../../backend
       dockerfile: Dockerfile
     restart: unless-stopped
     init: true
     depends_on:
-      database:
-        condition: service_healthy
-      cache-initializer:
+      database-role-initializer:
         condition: service_completed_successfully
     environment:
-      DATABASE_URL: postgresql://nextstop_app:${POSTGRES_PASSWORD}@database:5432/nextstop
+      DATABASE_URL: postgresql://nextstop_api:${API_DATABASE_PASSWORD}@database:5432/nextstop
       SNAPSHOT_SIGNING_KEY: ${SNAPSHOT_SIGNING_KEY:?SNAPSHOT_SIGNING_KEY is required}
+      SEARCH_API_BEARER_TOKEN: ${SEARCH_API_BEARER_TOKEN:?SEARCH_API_BEARER_TOKEN is required}
       HOST: 0.0.0.0
       PORT: "3000"
-      INGESTION_ENABLED: "true"
-      OSM_INGESTION_ENABLED: "true"
-      OSM_GEOFABRIK_PBF_URLS: https://download.geofabrik.de/europe/germany-latest.osm.pbf,https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
-      OSM_CACHE_DIRECTORY: /var/lib/nextstop/osm-cache
-      NODE_OPTIONS: --max-old-space-size=4608
     ports:
       - 127.0.0.1:3000:3000
-    volumes:
-      - osm-cache:/var/lib/nextstop/osm-cache
     healthcheck:
       test:
         - CMD
@@ -62,6 +95,30 @@ services:
       timeout: 5s
       retries: 3
       start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  worker:
+    image: nextstop-backend:staging
+    restart: unless-stopped
+    init: true
+    depends_on:
+      database-role-initializer:
+        condition: service_completed_successfully
+      cache-initializer:
+        condition: service_completed_successfully
+    command: ["node", "dist/src/worker.js"]
+    environment:
+      DATABASE_URL: postgresql://nextstop_worker:${WORKER_DATABASE_PASSWORD}@database:5432/nextstop
+      OSM_INGESTION_ENABLED: "true"
+      OSM_GEOFABRIK_PBF_URLS: https://download.geofabrik.de/europe/germany-latest.osm.pbf,https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
+      OSM_CACHE_DIRECTORY: /var/lib/nextstop/osm-cache
+      NODE_OPTIONS: --max-old-space-size=4608
+    volumes:
+      - osm-cache:/var/lib/nextstop/osm-cache
     logging:
       driver: json-file
       options:
