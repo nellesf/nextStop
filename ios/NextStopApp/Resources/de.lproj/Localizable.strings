@@ -122,6 +122,7 @@
 "ride.search.action" = "Ladeparks suchen";
 "ride.search.empty.description" = "Für die gewählten Kriterien wurden entlang dieser Route keine sicheren Treffer gefunden. Filter werden nicht automatisch gelockert.";
 "ride.search.empty.title" = "Keine passenden Ladeparks";
+"ride.search.error.authentication" = "Die App konnte für die Ladeparksuche nicht sicher bestätigt werden. Prüfe die Internetverbindung und versuche es erneut.";
 "ride.search.error.driving" = "Apple Maps konnte für die Kandidaten keine Fahrstrecken berechnen. Versuche es mit stabiler Internetverbindung erneut.";
 "ride.search.error.food" = "Die gewählte Restaurantkette konnte gerade nicht zuverlässig geprüft werden. Es wird nicht fälschlich „kein Treffer“ angezeigt.";
 "ride.search.error.preparing" = "Der Server lädt und prüft gerade die offiziellen Ladedaten. Versuche die Suche in Kürze erneut.";

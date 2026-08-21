@@ -5,6 +5,9 @@ BEGIN
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nextstop_api') THEN
     CREATE ROLE nextstop_api LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
   END IF;
+  IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nextstop_auth') THEN
+    CREATE ROLE nextstop_auth LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
+  END IF;
   IF NOT EXISTS (SELECT 1 FROM pg_roles WHERE rolname = 'nextstop_worker') THEN
     CREATE ROLE nextstop_worker LOGIN NOSUPERUSER NOCREATEDB NOCREATEROLE NOREPLICATION;
   END IF;
@@ -16,11 +19,12 @@ DECLARE
   membership record;
 BEGIN
   FOR membership IN
-    SELECT granted.rolname AS granted_role, member.rolname AS member_role
+    SELECT DISTINCT granted.rolname AS granted_role, member.rolname AS member_role
     FROM pg_auth_members AS membership_link
     JOIN pg_roles AS granted ON granted.oid = membership_link.roleid
     JOIN pg_roles AS member ON member.oid = membership_link.member
-    WHERE member.rolname IN ('nextstop_api', 'nextstop_worker')
+    WHERE member.rolname IN ('nextstop_api', 'nextstop_auth', 'nextstop_worker')
+       OR granted.rolname IN ('nextstop_api', 'nextstop_auth', 'nextstop_worker')
   LOOP
     EXECUTE format(
       'REVOKE %I FROM %I',
@@ -32,6 +36,7 @@ END
 $memberships$;
 
 SELECT format('ALTER ROLE nextstop_api PASSWORD %L', :'api_password') \gexec
+SELECT format('ALTER ROLE nextstop_auth PASSWORD %L', :'auth_password') \gexec
 SELECT format('ALTER ROLE nextstop_worker PASSWORD %L', :'worker_password') \gexec
 
 ALTER ROLE nextstop_api
@@ -41,6 +46,13 @@ ALTER ROLE nextstop_api SET statement_timeout = '15s';
 ALTER ROLE nextstop_api SET lock_timeout = '2s';
 ALTER ROLE nextstop_api SET idle_in_transaction_session_timeout = '10s';
 
+ALTER ROLE nextstop_auth
+  NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
+ALTER ROLE nextstop_auth SET default_transaction_read_only = off;
+ALTER ROLE nextstop_auth SET statement_timeout = '5s';
+ALTER ROLE nextstop_auth SET lock_timeout = '2s';
+ALTER ROLE nextstop_auth SET idle_in_transaction_session_timeout = '10s';
+
 ALTER ROLE nextstop_worker
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 ALTER ROLE nextstop_worker SET default_transaction_read_only = off;
@@ -48,11 +60,11 @@ ALTER ROLE nextstop_worker SET lock_timeout = '5s';
 ALTER ROLE nextstop_worker SET idle_in_transaction_session_timeout = '30s';
 
 REVOKE ALL ON DATABASE nextstop FROM PUBLIC;
-GRANT CONNECT ON DATABASE nextstop TO nextstop_api, nextstop_worker;
+GRANT CONNECT ON DATABASE nextstop TO nextstop_api, nextstop_auth, nextstop_worker;
 
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON SCHEMA nextstop FROM PUBLIC;
-GRANT USAGE ON SCHEMA nextstop TO nextstop_api, nextstop_worker;
+GRANT USAGE ON SCHEMA nextstop TO nextstop_api, nextstop_auth, nextstop_worker;
 
 REVOKE ALL ON ALL TABLES IN SCHEMA nextstop FROM PUBLIC;
 REVOKE ALL ON ALL SEQUENCES IN SCHEMA nextstop FROM PUBLIC;
@@ -82,6 +94,12 @@ GRANT SELECT ON TABLE
   nextstop.charging_campus_park_memberships,
   nextstop.charging_campus_power_projection
 TO nextstop_api;
+
+REVOKE ALL ON ALL TABLES IN SCHEMA nextstop FROM nextstop_auth;
+GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
+  nextstop.app_attest_keys,
+  nextstop.app_attest_challenges
+TO nextstop_auth;
 
 REVOKE ALL ON ALL TABLES IN SCHEMA nextstop FROM nextstop_worker;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
@@ -118,7 +136,7 @@ BEGIN
     SELECT rolname, rolsuper, rolinherit, rolcreaterole, rolcreatedb,
            rolreplication, rolbypassrls
     FROM pg_roles
-    WHERE rolname IN ('nextstop_api', 'nextstop_worker')
+    WHERE rolname IN ('nextstop_api', 'nextstop_auth', 'nextstop_worker')
   LOOP
     IF role_attributes.rolsuper
        OR role_attributes.rolinherit
@@ -133,10 +151,22 @@ BEGIN
   IF EXISTS (
     SELECT 1
     FROM pg_auth_members AS membership_link
+    JOIN pg_roles AS granted ON granted.oid = membership_link.roleid
     JOIN pg_roles AS member ON member.oid = membership_link.member
-    WHERE member.rolname IN ('nextstop_api', 'nextstop_worker')
+    WHERE member.rolname IN ('nextstop_api', 'nextstop_auth', 'nextstop_worker')
+       OR granted.rolname IN ('nextstop_api', 'nextstop_auth', 'nextstop_worker')
   ) THEN
-    RAISE EXCEPTION 'Runtime database roles still inherit another role';
+    RAISE EXCEPTION 'Runtime database roles still have an inherited or assumable membership';
+  END IF;
+
+  IF NOT has_table_privilege(
+    'nextstop_auth', 'nextstop.app_attest_keys', 'SELECT,INSERT,UPDATE,DELETE'
+  ) OR NOT has_table_privilege(
+    'nextstop_auth', 'nextstop.app_attest_challenges', 'SELECT,INSERT,UPDATE,DELETE'
+  ) OR has_table_privilege(
+    'nextstop_auth', 'nextstop.projection_versions', 'SELECT,INSERT,UPDATE,DELETE'
+  ) OR has_schema_privilege('nextstop_auth', 'nextstop', 'CREATE') THEN
+    RAISE EXCEPTION 'nextstop_auth grants do not match the authentication contract';
   END IF;
 
   IF NOT has_table_privilege(

@@ -69,6 +69,7 @@ struct CandidateSearchCoverage: Hashable, Sendable {
 
 enum CandidateSearchServiceError: Error, Equatable {
   case invalidConfiguration
+  case authenticationUnavailable
   case invalidRequest
   case invalidResponse
   case dataPreparing
@@ -86,29 +87,34 @@ protocol CandidatePageSearching: AnyObject {
 final class HTTPCandidateSearchService: CandidatePageSearching {
   private static let maximumResponseBytes = 2 * 1_024 * 1_024
   private let baseURL: URL?
-  private let bearerToken: String?
+  private let accessTokenProvider: (any SearchAccessTokenProviding)?
   private let session: URLSession
   private let encoder: JSONEncoder
   private let decoder: JSONDecoder
 
-  convenience init(session: URLSession = .shared) {
-    self.init(
-      baseURL: Self.configuredBaseURL(),
-      bearerToken: Self.configuredBearerToken(),
-      session: session
-    )
-  }
-
-  init(baseURL: URL?, bearerToken: String?, session: URLSession = .shared) {
+  init(
+    baseURL: URL?,
+    accessTokenProvider: (any SearchAccessTokenProviding)?,
+    session: URLSession = .shared
+  ) {
     self.baseURL = baseURL
-    self.bearerToken = Self.validatedBearerToken(bearerToken)
+    self.accessTokenProvider = accessTokenProvider
     self.session = session
     encoder = JSONEncoder()
     decoder = JSONDecoder()
   }
 
   func search(request: RouteSearchRequest) async throws -> CandidateSearchPage {
-    let urlRequest = try makeURLRequest(request: request)
+    let token = try await accessToken(forceRefresh: false)
+    return try await search(request: request, accessToken: token, mayRefreshToken: true)
+  }
+
+  private func search(
+    request: RouteSearchRequest,
+    accessToken: String,
+    mayRefreshToken: Bool
+  ) async throws -> CandidateSearchPage {
+    let urlRequest = try makeURLRequest(request: request, accessToken: accessToken)
 
     let data: Data
     let response: URLResponse
@@ -125,6 +131,17 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     guard data.count <= Self.maximumResponseBytes else {
       throw CandidateSearchServiceError.invalidResponse
     }
+    if httpResponse.statusCode == 401 {
+      guard mayRefreshToken else {
+        throw CandidateSearchServiceError.authenticationUnavailable
+      }
+      let refreshedToken = try await self.accessToken(forceRefresh: true)
+      return try await search(
+        request: request,
+        accessToken: refreshedToken,
+        mayRefreshToken: false
+      )
+    }
     guard httpResponse.statusCode == 200 else {
       throw Self.error(for: httpResponse.statusCode, data: data, decoder: decoder)
     }
@@ -137,8 +154,13 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     }
   }
 
-  func makeURLRequest(request: RouteSearchRequest) throws -> URLRequest {
-    guard let baseURL, let bearerToken else {
+  func makeURLRequest(
+    request: RouteSearchRequest,
+    accessToken: String
+  ) throws -> URLRequest {
+    guard let baseURL,
+      Self.validatedAccessToken(accessToken) != nil
+    else {
       throw CandidateSearchServiceError.invalidConfiguration
     }
     let url = baseURL.appending(path: "v1/charging-parks/search")
@@ -146,7 +168,7 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     urlRequest.httpMethod = "POST"
     urlRequest.setValue("application/json", forHTTPHeaderField: "Content-Type")
     urlRequest.setValue("application/json", forHTTPHeaderField: "Accept")
-    urlRequest.setValue("Bearer \(bearerToken)", forHTTPHeaderField: "Authorization")
+    urlRequest.setValue("Bearer \(accessToken)", forHTTPHeaderField: "Authorization")
     urlRequest.timeoutInterval = 20
     do {
       urlRequest.httpBody = try encoder.encode(CandidateSearchRequestDTO(request: request))
@@ -156,7 +178,26 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     return urlRequest
   }
 
-  private static func configuredBaseURL(bundle: Bundle = .main) -> URL? {
+  private func accessToken(forceRefresh: Bool) async throws -> String {
+    guard let accessTokenProvider else {
+      throw CandidateSearchServiceError.invalidConfiguration
+    }
+    do {
+      let value = try await accessTokenProvider.accessToken(forceRefresh: forceRefresh)
+      guard let token = Self.validatedAccessToken(value) else {
+        throw CandidateSearchServiceError.authenticationUnavailable
+      }
+      return token
+    } catch is CancellationError {
+      throw CancellationError()
+    } catch let error as CandidateSearchServiceError {
+      throw error
+    } catch {
+      throw CandidateSearchServiceError.authenticationUnavailable
+    }
+  }
+
+  static func configuredBaseURL(bundle: Bundle = .main) -> URL? {
     if let override = ProcessInfo.processInfo.environment["NEXTSTOP_API_BASE_URL"],
       !override.isEmpty
     {
@@ -170,19 +211,10 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     return URL(string: value)
   }
 
-  private static func configuredBearerToken(bundle: Bundle = .main) -> String? {
-    if let override = ProcessInfo.processInfo.environment["NEXTSTOP_API_BEARER_TOKEN"] {
-      return override
-    }
-    return bundle.object(forInfoDictionaryKey: "NextStopAPIBearerToken") as? String
-  }
-
-  static func validatedBearerToken(_ value: String?) -> String? {
-    guard let value else {
-      return nil
-    }
+  static func validatedAccessToken(_ value: String) -> String? {
     let token = value.trimmingCharacters(in: .whitespacesAndNewlines)
     guard token.utf8.count >= 32,
+      token.utf8.count <= 4_096,
       !token.contains(where: { $0.isWhitespace }),
       !token.contains("$(")
     else {
@@ -203,7 +235,7 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     }
     switch (statusCode, problem.type) {
     case (401, "urn:nextstop:error:unauthorized"):
-      return .invalidConfiguration
+      return .authenticationUnavailable
     case (429, "urn:nextstop:error:search-capacity-exhausted"):
       return .unavailable
     case (503, "urn:nextstop:error:projection-unavailable"):

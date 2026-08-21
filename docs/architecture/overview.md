@@ -23,8 +23,10 @@ iPhone SwiftUI app <---- local store ----> CarPlay adapter <-+
   | destination search       | ride draft     | CPList / CPPOI / CPInformation
   | route and directions     v                |
   +-----------------------> MapKit             +----> Apple Maps navigation
+  | App Attest key/assertion
+  +-----------------------> authentication exchange
   |
-  | POST /v1/charging-parks/search
+  | POST /v1/charging-parks/search + short-lived access token
   | route LineString + non-personal criteria; no saved profile
   v
 Backend modular monolith
@@ -52,6 +54,12 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Local SwiftData repository behind domain protocols.
 - Location authorization onboarding on iPhone before a driving flow.
 - German localization resources with localization keys in presentation code.
+- App Attest key lifecycle on supported physical devices, with the key identifier
+  and transient retry challenge in a device-only non-synchronizing Keychain item,
+  one injected coordinator shared by iPhone and CarPlay, and access tokens in memory.
+- A compile-time Debug-only loopback token provider when App Attest is unsupported.
+  A Mac helper authenticates through Google Cloud IAP and keeps the short-lived
+  token out of project files; distributed builds fail closed instead.
 
 ### MapKit infrastructure
 
@@ -129,15 +137,18 @@ services:
 - `projections`: power-specific fine-park and campus search summaries with
   candidate-wide EVSE deduplication and aggregation.
 - `search`: PostGIS corridor and preliminary-filter query.
-- `api`: authentication/rate limiting, OpenAPI DTO validation, and redaction.
+- `api`: App Attest challenge/verification, short-lived token authentication,
+  rate limiting, OpenAPI DTO validation, and redaction.
 - `operations`: provider health, freshness, quarantine, and metrics.
 
-The one backend artifact has separate execution roles. The stateless API process
-only reads the search projection through a read-only database login. A listenerless
-worker performs provider ingestion and transactional projection publication with a
-DML-only login. A release-scoped migrator applies DDL with the database owner
-before either long-running process starts. These are privilege and failure
-boundaries inside the modular monolith, not microservices.
+The one backend artifact has separate execution roles. Candidate search reads the
+search projection through a read-only database login. The API uses a separate
+authentication pool whose login may modify only installation-key and single-use
+challenge records. A listenerless worker performs provider ingestion and
+transactional projection publication with a DML-only login. A release-scoped
+migrator applies DDL with the database owner before either long-running process
+starts. These are privilege and failure boundaries inside the modular monolith,
+not microservices.
 
 Candidate search is authenticated and has explicit resource budgets before it
 reaches PostGIS: 512 KiB, 8,000 route coordinates, a supported-Europe envelope,
@@ -151,6 +162,9 @@ contract.
 - Raw source payload metadata and content hash for replay/audit.
 - Normalized relational charging model with field-level observations.
 - Current authoritative projection and conflict records.
+- Hashed App Attest key identifiers, verified public keys/receipts, assertion
+  counters, and short-lived single-use challenges under separate grants; no
+  profile, destination, or route association.
 - GiST-indexed `geography(Point, 4326)` fine-park and campus navigation locations.
 - Separately versioned OSM restaurant POIs plus cached broad fine-park/POI pairs
   built from each fine park's base navigation coordinate.
@@ -281,6 +295,11 @@ a new snapshot after explicit confirmation.
 - MapKit route failure: no search; offer retry/destination change.
 - Backend failure: no stale local European corpus is assumed. Show a clear retry
   path and preserve the ride draft.
+- App Attest unavailable or rejected: a distributed build fails closed with a
+  distinct authentication error. A Debug Simulator may use only its loopback Mac
+  broker after the developer authenticates through Google Cloud IAP. Its remote
+  one-shot minter receives only the signing key and has no container network. One
+  `401` triggers one bounded token refresh and search retry.
 - Apple-place match failure: keep the authority/OSM-backed result visible and
   explain that no unambiguous native Apple place was found for that item.
 - Apple Maps launch failure: keep details visible and report that navigation could
@@ -295,4 +314,5 @@ a new snapshot after explicit confirmation.
   progress and allow cancellation.
 
 These are engineering targets, not externally promised SLOs. Instrument aggregate
-latency without retaining route geometry or persistent user identifiers.
+latency without retaining route geometry or logging the installation-scoped App
+Attest credential, key hash, or access token.

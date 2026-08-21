@@ -2,7 +2,7 @@
 
 - Status: Accepted
 - Date: 2026-08-18
-- Amended: 2026-08-21 (bounded authenticated search and least-privilege roles)
+- Amended: 2026-08-21 (bounded search, least-privilege roles, and App Attest rollout)
 
 ## Context
 
@@ -29,12 +29,15 @@ migrations and then an idempotent role/grant initializer before starting the API
 and worker. Existing persistent volumes are upgraded in place; this separation
 does not rebuild or republish projections.
 
-Require a revocable bearer credential on the private-staging candidate-search
-endpoint while leaving `/health` public. The same secret is injected into the
-private TestFlight build and is never committed. This shared credential is an
-abuse barrier for a two-to-three-user staging environment, not user authentication:
-it is extractable from an installed app and must be replaced by attested,
-short-lived credentials before public production.
+Authenticate physical-device search with Apple App Attest and a server-issued,
+15-minute access token while leaving `/health` public. App Attest authentication
+uses a separate database role that can modify only its challenge and credential
+tables; candidate search remains read-only. During the private-staging rollout,
+an explicit compatibility flag may retain the former revocable bearer so already
+installed builds continue to work. The Debug Simulator instead receives a
+short-lived token through a loopback helper authenticated to the VM over Google
+Cloud IAP. The shared bearer is never a production credential and is disabled
+after physical-device and TestFlight verification. See ADR 0015.
 
 Reject candidate requests above 512 KiB, over 8,000 route coordinates, outside
 the supported European envelope, over 250 km for one segment, or over 2,500 km in
@@ -61,6 +64,7 @@ are isolated, but a resource-heavy OSM import can still contend with the API for
 VM and database resources. There is no automated backup or point-in-time recovery;
 source projections must be rebuilt after data loss. Before public production,
 place API and worker roles in independently scalable deployment domains, adopt
-managed PostGIS with recovery, replace the shared staging credential, and review
-availability, capacity, and operational ownership. Deploying this amendment
-requires a matching iOS build credential; older builds fail closed with `401`.
+managed PostGIS with recovery, disable the shared staging compatibility
+credential, and review availability, capacity, and operational ownership. App
+Attest activation requires the exact App ID prefix, matching provisioning, and a
+physical-device verification; it does not rebuild search projections.

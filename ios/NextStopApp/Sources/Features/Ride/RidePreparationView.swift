@@ -10,25 +10,36 @@ struct RidePreparationView: View {
   private let placeResolver: any ApplePlaceResolving
 
   @MainActor
-  init(profile: UserProfile, directionsRequestGate: DirectionsRequestGate) {
+  init(
+    profile: UserProfile,
+    directionsRequestGate: DirectionsRequestGate,
+    candidatePageSearcher: any CandidatePageSearching
+  ) {
     self.init(
       draft: RideSearchDraft(profile: profile),
-      directionsRequestGate: directionsRequestGate
+      directionsRequestGate: directionsRequestGate,
+      candidatePageSearcher: candidatePageSearcher
     )
   }
 
   @MainActor
-  init(destination: SavedDestination, directionsRequestGate: DirectionsRequestGate) {
+  init(
+    destination: SavedDestination,
+    directionsRequestGate: DirectionsRequestGate,
+    candidatePageSearcher: any CandidatePageSearching
+  ) {
     self.init(
       draft: RideSearchDraft(destination: destination),
-      directionsRequestGate: directionsRequestGate
+      directionsRequestGate: directionsRequestGate,
+      candidatePageSearcher: candidatePageSearcher
     )
   }
 
   @MainActor
   private init(
     draft: RideSearchDraft,
-    directionsRequestGate: DirectionsRequestGate
+    directionsRequestGate: DirectionsRequestGate,
+    candidatePageSearcher: any CandidatePageSearching
   ) {
     let routePlanner = RetryingRoutePlanner(
       base: RateLimitedRoutePlanner(
@@ -37,7 +48,7 @@ struct RidePreparationView: View {
       )
     )
     let candidateSearcher = RideCandidateSearchCoordinator(
-      pageSearcher: HTTPCandidateSearchService(),
+      pageSearcher: candidatePageSearcher,
       enricher: MapKitCandidateEnricher(routePlanner: routePlanner)
     )
     _viewModel = StateObject(

@@ -21,9 +21,15 @@ struct DestinationLibraryView: View {
   @State private var showsError = false
   @State private var clearSelection: DestinationClearSelection?
   private let directionsRequestGate: DirectionsRequestGate
+  private let candidatePageSearcher: any CandidatePageSearching
 
-  init(directionsRequestGate: DirectionsRequestGate) {
+  @MainActor
+  init(
+    directionsRequestGate: DirectionsRequestGate,
+    candidatePageSearcher: any CandidatePageSearching
+  ) {
     self.directionsRequestGate = directionsRequestGate
+    self.candidatePageSearcher = candidatePageSearcher
   }
 
   var body: some View {
@@ -86,7 +92,8 @@ struct DestinationLibraryView: View {
     .navigationDestination(item: $rideSelection) { selection in
       RidePreparationView(
         destination: selection.destination,
-        directionsRequestGate: directionsRequestGate
+        directionsRequestGate: directionsRequestGate,
+        candidatePageSearcher: candidatePageSearcher
       )
     }
     .alert("error.generic", isPresented: $showsError) {

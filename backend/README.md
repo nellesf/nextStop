@@ -6,8 +6,12 @@ candidate API.
 ## Current behavior
 
 - `POST /v1/charging-parks/search` validates the accepted request contract.
-- Candidate search requires a configured bearer credential; `/health` remains
+- Candidate search requires either a short-lived server-signed access token or
+  the explicitly enabled private-staging compatibility bearer; `/health` remains
   public for load-balancer and container liveness checks.
+- A separate authentication process verifies Apple App Attest challenges,
+  attestations, and assertions before issuing 15-minute search access tokens. It
+  uses an isolated database role that can modify only its security tables.
 - Unknown fields are rejected, including profile names and destination text that
   must remain on-device.
 - Route requests are bounded by body size, point count, supported region, segment
@@ -47,9 +51,11 @@ npm run dev:worker
 `npm run refresh:providers` is an explicit operational run. `npm run dev` starts
 only the HTTP API and `npm run dev:worker` starts the scheduled provider
 coordinator. Staging gives the API a table-scoped read-only database login, the
-worker a DML-only login, and reserves the owner login for `npm run db:migrate`.
-The API fails at startup unless `SEARCH_API_BEARER_TOKEN` contains at least 32
-bytes without whitespace.
+authentication process a login limited to App Attest security tables, the worker
+a DML-only login, and reserves the owner login for `npm run db:migrate`. The
+search API accepts signed tokens when `SEARCH_ACCESS_TOKEN_SIGNING_KEY` is
+configured. It reads `SEARCH_API_BEARER_TOKEN` only when the transitional
+`ALLOW_LEGACY_STAGING_BEARER=true` flag is explicitly enabled.
 
 Node.js 24 LTS is pinned through `package.json`; exact package versions are locked
 in `package-lock.json`.

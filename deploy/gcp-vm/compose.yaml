@@ -51,12 +51,14 @@ services:
     environment:
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       API_DATABASE_PASSWORD: ${API_DATABASE_PASSWORD:?API_DATABASE_PASSWORD is required}
+      AUTH_DATABASE_PASSWORD: ${AUTH_DATABASE_PASSWORD:?AUTH_DATABASE_PASSWORD is required}
       WORKER_DATABASE_PASSWORD: ${WORKER_DATABASE_PASSWORD:?WORKER_DATABASE_PASSWORD is required}
     entrypoint: ["/bin/bash", "-euc"]
     command:
       - >-
         psql --host=database --username=nextstop_app --dbname=nextstop
         --variable=api_password="$${API_DATABASE_PASSWORD}"
+        --variable=auth_password="$${AUTH_DATABASE_PASSWORD}"
         --variable=worker_password="$${WORKER_DATABASE_PASSWORD}"
         --file=/opt/nextstop/database-roles.sql
     volumes:
@@ -80,6 +82,8 @@ services:
     environment:
       DATABASE_URL: postgresql://nextstop_api:${API_DATABASE_PASSWORD}@database:5432/nextstop
       SNAPSHOT_SIGNING_KEY: ${SNAPSHOT_SIGNING_KEY:?SNAPSHOT_SIGNING_KEY is required}
+      SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:?SEARCH_ACCESS_TOKEN_SIGNING_KEY is required}
+      ALLOW_LEGACY_STAGING_BEARER: ${ALLOW_LEGACY_STAGING_BEARER:-true}
       SEARCH_API_BEARER_TOKEN: ${SEARCH_API_BEARER_TOKEN:?SEARCH_API_BEARER_TOKEN is required}
       HOST: 0.0.0.0
       PORT: "3000"
@@ -100,6 +104,56 @@ services:
       options:
         max-size: 10m
         max-file: "5"
+
+  auth-backend:
+    image: nextstop-backend:staging
+    restart: unless-stopped
+    init: true
+    depends_on:
+      database-role-initializer:
+        condition: service_completed_successfully
+    command: ["node", "dist/src/auth-server.js"]
+    environment:
+      AUTH_DATABASE_URL: postgresql://nextstop_auth:${AUTH_DATABASE_PASSWORD}@database:5432/nextstop
+      SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:?SEARCH_ACCESS_TOKEN_SIGNING_KEY is required}
+      APP_ATTEST_APP_ID: ${APP_ATTEST_APP_ID:-}
+      APP_ATTEST_ALLOW_DEVELOPMENT: ${APP_ATTEST_ALLOW_DEVELOPMENT:-false}
+      APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS: ${APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS:?APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS is required}
+      HOST: 0.0.0.0
+      PORT: "3001"
+    ports:
+      - 127.0.0.1:3001:3001
+    healthcheck:
+      test:
+        - CMD
+        - node
+        - -e
+        - fetch('http://127.0.0.1:3001/health').then((response)=>{if(!response.ok)process.exit(1)}).catch(()=>process.exit(1))
+      interval: 30s
+      timeout: 5s
+      retries: 3
+      start_period: 30s
+    logging:
+      driver: json-file
+      options:
+        max-size: 10m
+        max-file: "5"
+
+  simulator-token-mint:
+    image: nextstop-backend:staging
+    profiles: ["development-tools"]
+    restart: "no"
+    init: true
+    user: node
+    network_mode: none
+    read_only: true
+    cap_drop: ["ALL"]
+    security_opt: ["no-new-privileges:true"]
+    command: ["node", "dist/src/jobs/mint-development-access-token.js"]
+    environment:
+      SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:?SEARCH_ACCESS_TOKEN_SIGNING_KEY is required}
+    logging:
+      driver: none
 
   worker:
     image: nextstop-backend:staging

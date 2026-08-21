@@ -3,6 +3,7 @@ import Foundation
 import NextStopCore
 
 enum CarPlayRideSearchError: Error, Equatable {
+  case authenticationUnavailable
   case phoneSetupRequired
   case locationUnavailable
   case routeUnavailable
@@ -52,7 +53,7 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
   private let candidateSearcher: any RideCandidateSearching
   private let makeRequestID: () -> UUID
 
-  convenience init() {
+  convenience init(candidatePageSearcher: any CandidatePageSearching) {
     let routePlanner = RetryingRoutePlanner(
       base: RateLimitedRoutePlanner(
         base: MapKitRoutePlanner(),
@@ -64,7 +65,7 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
       locationProvider: CoreLocationProvider(),
       routePlanner: routePlanner,
       candidateSearcher: RideCandidateSearchCoordinator(
-        pageSearcher: HTTPCandidateSearchService(),
+        pageSearcher: candidatePageSearcher,
         enricher: MapKitCandidateEnricher(routePlanner: routePlanner)
       )
     )
@@ -135,6 +136,8 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
 
   private static func map(_ error: RideCandidateSearchError) -> CarPlayRideSearchError {
     switch error {
+    case .authenticationUnavailable:
+      .authenticationUnavailable
     case .candidateDataPreparing:
       .dataPreparing
     case .candidateServiceUnavailable:

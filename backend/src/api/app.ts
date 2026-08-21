@@ -12,6 +12,7 @@ import { InvalidPaginationTokenError } from "../application/signed-pagination.js
 import type { SearchRequest } from "../domain/candidate-search.js";
 import {
   BearerTokenAuthenticator,
+  RejectingSearchAuthenticator,
   type SearchAuthenticating,
 } from "./bearer-authentication.js";
 import {
@@ -34,9 +35,9 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
   const makeErrorId = dependencies.makeErrorId ?? randomUUID;
   const searchAuthenticator =
     dependencies.searchAuthenticator ??
-    new BearerTokenAuthenticator(
-      dependencies.searchBearerToken ?? requiredEnvironmentValue("SEARCH_API_BEARER_TOKEN"),
-    );
+    (dependencies.searchBearerToken === undefined
+      ? new RejectingSearchAuthenticator()
+      : new BearerTokenAuthenticator(dependencies.searchBearerToken));
   const searchAdmission = new SearchAdmissionController(
     dependencies.maximumConcurrentSearches ?? searchRequestLimits.maximumConcurrentSearches,
   );
@@ -70,7 +71,7 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
         type: "urn:nextstop:error:request-too-large",
         title: "Request body too large",
         status: 413,
-        detail: "The request exceeds the candidate-search body limit.",
+        detail: "The request exceeds the endpoint body limit.",
         errorId,
       });
     }
@@ -120,7 +121,7 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
     "/v1/charging-parks/search",
     {
       onRequest: async (request, reply) => {
-        if (!searchAuthenticator.isAuthorized(request.headers.authorization)) {
+        if (!(await searchAuthenticator.isAuthorized(request.headers.authorization))) {
           const errorId = makeErrorId();
           await reply
             .status(401)
@@ -198,14 +199,6 @@ class SearchAdmissionController {
       }
     };
   }
-}
-
-function requiredEnvironmentValue(name: string): string {
-  const value = process.env[name];
-  if (value === undefined || value.length === 0) {
-    throw new Error(`${name} must be configured.`);
-  }
-  return value;
 }
 
 function isFastifyValidationError(error: unknown): boolean {

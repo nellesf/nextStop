@@ -2,6 +2,7 @@ import Foundation
 import NextStopCore
 
 enum RideCandidateSearchError: Error, Equatable {
+  case authenticationUnavailable
   case candidateDataPreparing
   case candidateServiceUnavailable
   case candidateSnapshotExpired
@@ -97,6 +98,10 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         throw RideCandidateSearchError.foodSearchUnavailable
       } catch CandidateSearchServiceError.snapshotExpired {
         throw RideCandidateSearchError.candidateSnapshotExpired
+      } catch CandidateSearchServiceError.authenticationUnavailable,
+        CandidateSearchServiceError.invalidConfiguration
+      {
+        throw RideCandidateSearchError.authenticationUnavailable
       } catch CandidateSearchServiceError.invalidResponse {
         throw RideCandidateSearchError.candidateResponseInvalid
       } catch {

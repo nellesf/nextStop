@@ -1,4 +1,2 @@
-// The optional local file is intentionally ignored by Git. Release and simulator
-// builds fail closed at runtime until a staging or local search token is supplied.
-NEXTSTOP_API_BEARER_TOKEN =
-#include? "Secrets.xcconfig"
+// Shared non-secret Xcode settings live here. DEBUG Simulator authentication is
+// obtained at runtime from a loopback-only Mac broker; Release uses App Attest.

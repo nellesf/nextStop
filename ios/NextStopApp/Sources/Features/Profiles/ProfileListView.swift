@@ -31,13 +31,16 @@ struct ProfileListView: View {
   @State private var showsDataSources = false
   @State private var showsError = false
   private let directionsRequestGate: DirectionsRequestGate
+  private let candidatePageSearcher: any CandidatePageSearching
 
   init(
     rideIntentRouter: RideIntentRouter,
-    directionsRequestGate: DirectionsRequestGate
+    directionsRequestGate: DirectionsRequestGate,
+    candidatePageSearcher: any CandidatePageSearching
   ) {
     self.rideIntentRouter = rideIntentRouter
     self.directionsRequestGate = directionsRequestGate
+    self.candidatePageSearcher = candidatePageSearcher
   }
 
   var body: some View {
@@ -103,13 +106,15 @@ struct ProfileListView: View {
         case .profile(let profile):
           RidePreparationView(
             profile: profile,
-            directionsRequestGate: directionsRequestGate
+            directionsRequestGate: directionsRequestGate,
+            candidatePageSearcher: candidatePageSearcher
           )
           .toolbar(.visible, for: .navigationBar)
         case .destination(let destination):
           RidePreparationView(
             destination: destination,
-            directionsRequestGate: directionsRequestGate
+            directionsRequestGate: directionsRequestGate,
+            candidatePageSearcher: candidatePageSearcher
           )
           .toolbar(.visible, for: .navigationBar)
         }

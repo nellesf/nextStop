@@ -4,6 +4,8 @@ import SwiftUI
 
 @main
 struct NextStopApp: App {
+  @UIApplicationDelegateAdaptor(NextStopAppDelegate.self)
+  private var appDelegate
   @StateObject private var rideIntentRouter: RideIntentRouter
   private let directionsRequestGate: DirectionsRequestGate
 
@@ -23,7 +25,8 @@ struct NextStopApp: App {
     WindowGroup {
       ProfileListView(
         rideIntentRouter: rideIntentRouter,
-        directionsRequestGate: directionsRequestGate
+        directionsRequestGate: directionsRequestGate,
+        candidatePageSearcher: appDelegate.candidatePageSearcher
       )
     }
     .modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])

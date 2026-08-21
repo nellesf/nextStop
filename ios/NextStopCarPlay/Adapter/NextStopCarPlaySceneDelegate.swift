@@ -14,11 +14,11 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var noResultsTemplate: CPListTemplate?
   private var searchTask: Task<Void, Never>?
   private var resultsByID: [UUID: RouteSearchResult] = [:]
+  private var searchService: (any CarPlayRideSearchExecuting)?
 
   private let localizer = CarPlayLocalizer()
   private let presenter = CarPlayPresenter()
   private let draftController = CarPlayRideDraftController()
-  private let searchService: any CarPlayRideSearchExecuting = CarPlayRideSearchService()
   private let navigationLauncher: any AppleMapsLaunching = AppleMapsLauncher()
 
   func templateApplicationScene(
@@ -26,6 +26,11 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     didConnect interfaceController: CPInterfaceController
   ) {
     self.interfaceController = interfaceController
+    if let appDelegate = UIApplication.shared.delegate as? NextStopAppDelegate {
+      searchService = CarPlayRideSearchService(
+        candidatePageSearcher: appDelegate.candidatePageSearcher
+      )
+    }
     showProfiles(animated: false)
   }
 
@@ -38,6 +43,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     resultsByID = [:]
     rideSummaryTemplate = nil
     noResultsTemplate = nil
+    searchService = nil
     self.interfaceController = nil
   }
 
@@ -286,6 +292,11 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     )
     interfaceController?.pushTemplate(loading, animated: true) { _, _ in }
 
+    guard let searchService else {
+      showSearchError(.authenticationUnavailable, in: loading)
+      return
+    }
+
     searchTask = Task { [weak self] in
       guard let self else {
         return
@@ -509,6 +520,8 @@ extension NextStopCarPlaySceneDelegate: CPPointOfInterestTemplateDelegate {
 extension CarPlayRideSearchError {
   fileprivate var localizationKey: String {
     switch self {
+    case .authenticationUnavailable:
+      "ride.search.error.authentication"
     case .phoneSetupRequired:
       "carplay.search.error.phone_setup"
     case .locationUnavailable:

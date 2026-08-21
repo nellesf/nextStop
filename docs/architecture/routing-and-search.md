@@ -23,13 +23,18 @@ stable snapshot; retry and refresh remain explicit after an error or result.
 4. Validate and serialize the detailed polyline as a GeoJSON LineString. Reject
    invalid coordinates, degenerate lines, excessive point counts, and routes
    outside the supported region.
-5. Send the route plus ride criteria to the backend. Do not send profile name,
-   saved destination text, favorites, account ID, or a persistent device ID.
-6. Backend chooses the search entity before any filter or pagination. With
+5. Obtain or reuse a memory-only short-lived search token. Supported physical
+   devices prove the installation through App Attest; a Debug Simulator may use
+   only the loopback/IAP broker. The App Attest key exchange is separate from the
+   route request and never carries route, profile, or destination data.
+6. Send the route plus ride criteria to the backend. Do not send profile name,
+   saved destination text, favorites, account ID, or a persistent device ID in the
+   search payload.
+7. Backend chooses the search entity before any filter or pagination. With
    `foodChain = null`, it selects one bounded `ChargingCampus` per stable campus ID.
    With a selected chain, it selects complete-link `ChargingPark` rows and never
    uses campus membership for restaurant matching.
-7. Backend selects the entity's precomputed power projection, then applies the
+8. Backend selects the entity's precomputed power projection, then applies the
    entity-wide minimum qualifying EVSE count, the exact 5,000 m route-corridor
    predicate, and the safe origin bound against its power-filtered navigation
    coordinate. A bounding box may prefilter but is never the final corridor
@@ -37,7 +42,7 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    park's base navigation coordinate; the candidate query then applies the exact
    inclusive 500 m check against the power-filtered fine-park navigation
    coordinate and returns the selected restaurant plus attribution.
-8. iOS requests MapKit automobile directions from the current location to each
+9. iOS requests MapKit automobile directions from the current location to each
    candidate navigation coordinate in bounded batches behind a shared rolling
    request gate. Without a food filter it applies safe lower-bound stopping after
    every batch. With a food filter it scans candidates within the selected maximum
@@ -47,18 +52,18 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    other restaurants need no MapKit request.
    `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
    departure from the main route.
-9. Discard exact distances outside the selected range.
-10. If a food chain is selected, require the backend-provided OSM match. Opening
+10. Discard exact distances outside the selected range.
+11. If a food chain is selected, require the backend-provided OSM match. Opening
     information is optional and not a predicate.
-11. With a food filter, group matches by stable restaurant POI ID. Sum qualifying
+12. With a food filter, group matches by stable restaurant POI ID. Sum qualifying
     EVSE counts by exact operator name across all member fine parks and expose one
     Apple place action per operator. The member fine park with the shortest actual
     driving distance represents the group for distance and ordering. Without food,
     every matching campus is already one result with campus-wide deduplicated EVSE
     and exact-name operator counts.
-12. Sort matches only by actual driving distance ascending, with the stable campus,
+13. Sort matches only by actual driving distance ascending, with the stable campus,
     fine-park, or restaurant identity as a non-user-visible deterministic tie-breaker.
-13. Return the first five campuses or restaurant groups. If fewer exist, return
+14. Return the first five campuses or restaurant groups. If fewer exist, return
     fewer. If pagination is not exhausted and correctness cannot yet be proven,
     request the next batch.
 

@@ -6,14 +6,17 @@ import XCTest
 
 @MainActor
 final class CandidateSearchRequestDTOTests: XCTestCase {
-  func testHTTPServiceAddsConfiguredBearerCredential() throws {
+  func testHTTPServiceAddsProvidedAccessToken() throws {
     let token = String(repeating: "a", count: 64)
     let service = HTTPCandidateSearchService(
       baseURL: URL(string: "https://api.nextstop.tech"),
-      bearerToken: token
+      accessTokenProvider: StubSearchAccessTokenProvider(tokens: [token])
     )
 
-    let request = try service.makeURLRequest(request: makeSearchRequest())
+    let request = try service.makeURLRequest(
+      request: makeSearchRequest(),
+      accessToken: token
+    )
 
     XCTAssertEqual(request.value(forHTTPHeaderField: "Authorization"), "Bearer \(token)")
     XCTAssertEqual(
@@ -22,17 +25,19 @@ final class CandidateSearchRequestDTOTests: XCTestCase {
     )
   }
 
-  func testHTTPServiceFailsClosedWithoutValidBearerCredential() throws {
-    let invalidTokens: [String?] = [
-      nil, "", "short", "$(NEXTSTOP_API_BEARER_TOKEN)", "valid token with spaces",
+  func testHTTPServiceFailsClosedWithoutValidAccessToken() throws {
+    let invalidTokens = [
+      "", "short", "$(UNRESOLVED_BUILD_SETTING)", "valid token with spaces",
     ]
     for token in invalidTokens {
       let service = HTTPCandidateSearchService(
         baseURL: URL(string: "https://api.nextstop.tech"),
-        bearerToken: token
+        accessTokenProvider: StubSearchAccessTokenProvider(tokens: [token])
       )
 
-      XCTAssertThrowsError(try service.makeURLRequest(request: makeSearchRequest())) { error in
+      XCTAssertThrowsError(
+        try service.makeURLRequest(request: makeSearchRequest(), accessToken: token)
+      ) { error in
         XCTAssertEqual(error as? CandidateSearchServiceError, .invalidConfiguration)
       }
     }
@@ -115,5 +120,20 @@ final class CandidateSearchRequestDTOTests: XCTestCase {
       ),
       criteria: SearchConfiguration.defaultCriteria
     )
+  }
+}
+
+private actor StubSearchAccessTokenProvider: SearchAccessTokenProviding {
+  private var tokens: [String]
+
+  init(tokens: [String]) {
+    self.tokens = tokens
+  }
+
+  func accessToken(forceRefresh: Bool) async throws -> String {
+    guard !tokens.isEmpty else {
+      throw SearchAccessTokenProviderError.unavailable
+    }
+    return tokens.removeFirst()
   }
 }

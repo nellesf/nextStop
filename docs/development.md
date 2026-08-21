@@ -118,11 +118,13 @@ Swiss live-status joins, atomic publication, and stable pagination across
 projection changes.
 
 With `DATABASE_URL` configured, run pending migrations explicitly and start the
-API and provider worker as separate processes. The worker immediately discovers
-and downloads the current official Bundesnetzagentur CSV, downloads Swiss static
-data, publishes the combined projection, and refreshes Swiss live availability
-every minute. The API never runs migrations or ingestion. The manual import
-command remains a recovery tool documented in
+search API and provider worker as separate processes. Physical-device App Attest
+also uses the separately started authentication service described below. The
+worker immediately discovers and downloads the current official
+Bundesnetzagentur CSV, downloads Swiss static data, publishes the combined
+projection, and refreshes Swiss live availability every minute. Neither HTTP
+service runs migrations or ingestion. The manual import command remains a
+recovery tool documented in
 [`docs/operations/bundesnetzagentur-import.md`](operations/bundesnetzagentur-import.md).
 
 ```bash
@@ -140,50 +142,157 @@ runs send ETag/Last-Modified validators and reuse unchanged cached files.
 Production should run this resource-heavy job in one designated process.
 `npm run refresh:osm` is the manual recovery/validation command.
 
-### Connected Simulator search
+### Search authentication on a physical device
 
-Debug and Release builds default to the owner-approved Google Cloud staging
-service at `https://api.nextstop.tech`. The Simulator therefore uses the same
-automatic charging and OSM projections as TestFlight without a local server.
-Before building against staging, retrieve its revocable private-test credential
-into the ignored local Xcode configuration:
+Supported physical devices use Apple App Attest; there is no manually configured
+or static search token in the app. Debug device builds request a development
+attestation and Release/TestFlight builds request a production attestation. The
+app retains the App Attest key identifier, lifecycle, and a transient pending
+attestation challenge in a non-synchronizing, device-only Keychain item. An Apple
+`serverUnavailable` retry reuses that exact key and client-data hash; other
+attestation failures discard the key with at most one immediate replacement
+attempt. The iPhone and CarPlay scenes share one injected authentication
+coordinator. Server-issued search access tokens remain only in memory. A challenge
+is single use and valid for three minutes; an access token is valid for 15 minutes
+and is refreshed with a 60-second margin. The backend stores only a hash of the key
+identifier plus the verification material and replay counter; inactive or revoked
+key records are purged after 90 days.
 
-```bash
-ios/configure-staging-auth.sh
+Before a physical-device exchange can succeed, enable App Attest for the App ID
+`de.nextstop.app`, refresh the matching provisioning profile, and set the staging
+backend's `APP_ATTEST_APP_ID` to the exact full App ID:
+
+```text
+<exact App ID prefix>.de.nextstop.app
 ```
 
-Alternatively copy `ios/Config/Secrets.xcconfig.example` to
-`ios/Config/Secrets.xcconfig` and provide a matching local-development token.
-Never commit `Secrets.xcconfig`; a build without a valid token fails closed when a
-search starts. Release/archive builds additionally fail during the build unless a
-64-character hexadecimal staging token is present, preventing an unusable
-TestFlight archive.
+The App ID prefix is an external Apple Developer value and must not be inferred
+from the Team ID. Until it is known and configured, the App Attest endpoints
+intentionally return `503`; this remains an external activation blocker. Set
+`APP_ATTEST_ALLOW_DEVELOPMENT=true` only for the bounded development-signed device
+check. The verifier accepts Apple's current sandbox AAGUID and the legacy
+development AAGUID only while that flag is enabled. Setting it back to `false`
+rejects both new development attestations and assertions from development keys
+registered earlier; production keys remain valid. TestFlight/App Store
+attestations use the production environment. Neither path is testable in the iOS
+Simulator.
+
+Set `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` to the comma-separated, whitespace-free
+allowlist of shipped `CFBundleVersion` values (currently `1`). Add a new build
+number before distributing that build; keep still-supported older build numbers
+during the rollout. For iOS 27 proofs, Apple's validation category and bundle
+version extensions must either both be present or both be absent. When present,
+every attestation and assertion is checked independently: category `3` is allowed
+only for a development key, categories `2` (TestFlight) and `4` (App Store) only
+for a production key, and the build must be in the server allowlist. Absence is
+the accepted legacy pre-iOS-27 proof shape. The assertion values need not equal
+the initial attestation values, so a legitimate allowlisted app update can keep
+using its existing key.
+
+### Connected Debug Simulator search through staging
+
+The checked-in Debug configuration targets `https://api.nextstop.tech`. Nginx on
+that origin routes only `/v1/auth/app-attest/*` to the isolated authentication
+service on VM loopback port `3001`; health and candidate search go to the
+read-only search API on VM loopback port `3000`. Because
+Apple reports App Attest as unsupported in the Simulator, only a
+`DEBUG && targetEnvironment(simulator)` build may fall back to the loopback Mac
+broker. Release builds do not compile this fallback and fail closed when App
+Attest is unavailable.
+
+Install the Google Cloud CLI, authenticate the developer account, and ensure it
+has IAP/SSH access to the `nextstop-tech-staging` VM. Then run from the repository
+root and keep the process open while using the Simulator:
+
+```bash
+gcloud auth login
+ios/start-simulator-auth-broker.sh
+```
+
+The broker binds only to `127.0.0.1:9482`. It uses `gcloud compute ssh` with
+`--tunnel-through-iap` to invoke the VM's non-HTTP development-token mint command,
+implemented as the isolated `simulator-token-mint` service. That one-shot container
+receives only the token signing key, has no network, uses a read-only filesystem,
+drops Linux capabilities, and does not persist stdout through a container logging
+driver. The broker caches the resulting 15-minute token in memory and refreshes it
+one minute before expiry. The Simulator sends an empty `POST /token` with
+`X-NextStop-Simulator-Auth: 1`; the broker returns the normal access-token JSON
+shape. The developer never copies a bearer or signing key into Xcode, a file, or
+the app.
+
+The defaults may be overridden before starting the broker with
+`NEXTSTOP_GCP_PROJECT`, `NEXTSTOP_GCP_ZONE`, `NEXTSTOP_GCP_INSTANCE`, and
+`NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT`. A Debug Simulator may override
+`NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL`, but the app accepts only an `http`
+URL on `127.0.0.1` or `::1` whose path is exactly `/token`; user info, query, and
+fragment are rejected. Staging is the default broker mode.
+
+### Debug Simulator search against a local backend
 
 For deliberate local backend development, set the Xcode scheme environment
-variable `NEXTSTOP_API_BASE_URL` to `http://127.0.0.1:3000`, then start the
-populated backend on the same Mac that runs the Simulator:
+variable `NEXTSTOP_API_BASE_URL` to `http://127.0.0.1:3000`. Build the backend,
+apply migrations, and then start the populated search API with a local signing
+key of at least 32 non-whitespace bytes:
 
 ```bash
 cd backend
 DATABASE_URL=postgresql://127.0.0.1/nextstop \
 SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
 npm run db:migrate
+npm run build
 ```
 
-Then start the API and worker in separate terminals. Give the API a local token of
-at least 32 non-whitespace bytes, and set the same value as the Xcode scheme
-environment variable `NEXTSTOP_API_BEARER_TOKEN`:
+Start these long-running processes in separate terminals:
 
 ```bash
+cd backend
+
 DATABASE_URL=postgresql://127.0.0.1/nextstop \
 SNAPSHOT_SIGNING_KEY=replace-with-at-least-32-random-bytes \
-SEARCH_API_BEARER_TOKEN=local-development-search-token-000000000000 \
+SEARCH_ACCESS_TOKEN_SIGNING_KEY=local-development-signing-key-00000000000 \
 npm run dev
+```
 
+```bash
+cd backend
 DATABASE_URL=postgresql://127.0.0.1/nextstop npm run dev:worker
 ```
 
-Only staging/production require the distinct restricted database credentials.
+In a separate terminal, start the same loopback broker in local mode with the
+identical signing key:
+
+```bash
+NEXTSTOP_SIMULATOR_AUTH_MODE=local \
+SEARCH_ACCESS_TOKEN_SIGNING_KEY=local-development-signing-key-00000000000 \
+ios/start-simulator-auth-broker.sh
+```
+
+Local mode executes the built token-minting job directly and still gives the app
+only a 15-minute memory credential. It does not require `gcloud`, App Attest, a
+legacy bearer, or a manually synchronized Xcode secret. Only staging/production
+require distinct restricted database credentials; staging uses the separate
+`nextstop_api`, `nextstop_auth`, and `nextstop_worker` roles.
+
+To exercise App Attest from a physical device against a local deployment, expose
+a trusted TLS reverse proxy and route only `/v1/auth/app-attest/*` to a separately
+started auth process on port `3001`; keep candidate search on port `3000`. In
+another terminal, supply the exact external App ID prefix rather than the literal
+placeholder:
+
+```bash
+cd backend
+AUTH_DATABASE_URL=postgresql://127.0.0.1/nextstop \
+SEARCH_ACCESS_TOKEN_SIGNING_KEY=local-development-signing-key-00000000000 \
+APP_ATTEST_APP_ID='<exact App ID prefix>.de.nextstop.app' \
+APP_ATTEST_ALLOW_DEVELOPMENT=true \
+APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS=1 \
+HOST=127.0.0.1 \
+PORT=3001 \
+npm run start:auth
+```
+
+Do not expose port `3001` directly. The TLS proxy is the single client-facing
+origin for both services.
 
 No charging or restaurant rows need to be entered manually. `GET /health` reports process
 liveness immediately; candidate search honestly returns `503` until the first
@@ -194,8 +303,8 @@ import is much larger and can take considerably longer.
 If Xcode and a development backend run on different Macs, set
 `NEXTSTOP_API_BASE_URL` to that backend's reachable base URL and start the server
 with an explicitly appropriate `HOST`. Use this only on a trusted local network;
-the checked-in Debug and Release configurations always use the TLS-protected
-staging service.
+the token broker must still be loopback-local to the Simulator Mac. The checked-in
+Debug and Release configurations always use the TLS-protected staging service.
 
 Tap “Suche starten” for a profile. The app calculates
 the MapKit route and then starts the charging-park search automatically as one

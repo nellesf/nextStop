@@ -16,14 +16,17 @@
     "dev:worker": "tsx watch src/worker.ts",
     "lint": "eslint . --max-warnings 0",
     "start": "node dist/src/server.js",
+    "start:auth": "node dist/src/auth-server.js",
     "start:worker": "node dist/src/worker.js",
-    "test": "node --import tsx --test tests/unit/**/*.test.ts",
+    "test": "node --import tsx --test tests/unit/**/*.test.ts ../ios/SimulatorAuthBroker/*.test.mjs",
     "test:integration": "node --import tsx --test tests/integration/**/*.test.ts",
     "typecheck": "tsc --noEmit -p tsconfig.json"
   },
   "dependencies": {
+    "cbor": "10.0.12",
     "csv-parse": "^7.0.2",
     "fastify": "5.12.0",
+    "node-app-attest": "1.0.1",
     "osm-pbf-parser-node": "1.1.4",
     "pg": "^8.23.0"
   },

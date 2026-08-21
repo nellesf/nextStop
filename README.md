@@ -34,7 +34,10 @@ Bundesnetzagentur register automatically, joins the official Swiss
 `ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic
 complete-link charging parks plus bounded no-food campuses, publishes versioned
 PostGIS static/live snapshots atomically, and serves exact 5 km route-corridor
-candidates through signed stable snapshots. A
+candidates through signed stable snapshots. Supported physical devices use Apple
+App Attest to obtain short-lived search access tokens; Debug Simulator builds use
+a loopback Mac broker authenticated through Google Cloud IAP and contain no shared
+staging secret. A
 separate daily OSM projection imports supported chains from cached Geofabrik PBF
 extracts and enforces the exact 500 m restaurant predicate.
 
@@ -76,6 +79,7 @@ iPhone + CarPlay
   CarPlay system templates
   App Intents / Siri
   MapKit route + exact per-candidate driving distance
+  App Attest + memory-only short-lived search token
               |
               | TLS; route geometry + search criteria only
               v
@@ -170,8 +174,9 @@ still run on the separate Xcode Mac. See
 
 ## Current next step
 
-Obtain Apple's managed EV-charging CarPlay entitlement for the App ID and matching
-provisioning. After that external gate is satisfied, perform one integrated
-acceptance run with the automatic authority-provider pipeline. German authority
-records currently have no official nationwide live state; Swiss
-`ich-tanke-strom` results do and German results remain explicitly unknown.
+Enable App Attest for `de.nextstop.app`, provide the exact App ID prefix to staging,
+and verify one development-signed physical-device exchange plus one production
+TestFlight exchange. Separately obtain Apple's managed EV-charging CarPlay
+entitlement and matching provisioning. German authority records currently have no
+official nationwide live state; Swiss `ich-tanke-strom` results do and German
+results remain explicitly unknown.

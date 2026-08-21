@@ -3,7 +3,7 @@ import { createHash, timingSafeEqual } from "node:crypto";
 const minimumBearerTokenBytes = 32;
 
 export interface SearchAuthenticating {
-  isAuthorized(authorizationHeader: string | undefined): boolean;
+  isAuthorized(authorizationHeader: string | undefined): boolean | Promise<boolean>;
 }
 
 export class BearerTokenAuthenticator implements SearchAuthenticating {
@@ -25,9 +25,28 @@ export class BearerTokenAuthenticator implements SearchAuthenticating {
   }
 }
 
-function bearerToken(authorizationHeader: string | undefined): string | undefined {
+export function bearerToken(authorizationHeader: string | undefined): string | undefined {
   const match = authorizationHeader?.match(/^Bearer ([^\s]+)$/iu);
   return match?.[1];
+}
+
+export class CompositeSearchAuthenticator implements SearchAuthenticating {
+  constructor(private readonly authenticators: readonly SearchAuthenticating[]) {}
+
+  async isAuthorized(authorizationHeader: string | undefined): Promise<boolean> {
+    for (const authenticator of this.authenticators) {
+      if (await authenticator.isAuthorized(authorizationHeader)) {
+        return true;
+      }
+    }
+    return false;
+  }
+}
+
+export class RejectingSearchAuthenticator implements SearchAuthenticating {
+  isAuthorized(): boolean {
+    return false;
+  }
 }
 
 function digest(value: string): Buffer {

@@ -1,7 +1,7 @@
 openapi: 3.1.0
 info:
   title: nextStop Candidate Search API
-  version: 1.0.0-draft
+  version: 1.1.0-draft
   description: |
     Draft architecture-gate contract. The v1 wire shape is unchanged across two
     candidate modes. With foodChain omitted or null, the backend emits one bounded
@@ -10,6 +10,21 @@ info:
     predicate from a pinned OSM projection. The backend performs exact route
     corridor filtering. MapKit on iOS calculates actual driving distance, applies
     the exact selected distance range, and performs final distance-only ranking.
+    Supported physical devices obtain a 15-minute search token through Apple App
+    Attest. Challenges are single use and expire after three minutes. A Debug
+    Simulator obtains the same short-lived token shape from a loopback-only Mac
+    broker; that local broker is not part of this public HTTPS API. Behind the
+    public origin, Nginx routes only `/v1/auth/app-attest/*` to the isolated
+    authentication service on VM loopback port 3001. Health and candidate search
+    remain on the read-only search API on VM loopback port 3000.
+    For iOS 27 proofs that carry Apple's validation extensions, validation
+    category and bundle version must appear together and are checked on every
+    attestation and assertion. Development keys accept category 3; production
+    keys accept TestFlight category 2 or App Store category 4. Bundle versions
+    must be in the server's `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` allowlist. A
+    proof without either extension is accepted as the legacy pre-iOS-27 shape;
+    partial or unknown extensions fail closed. Values are not required to equal
+    the initial attestation, so an allowlisted app update remains valid.
 servers:
   - url: https://api.nextstop.tech
 paths:
@@ -28,6 +43,114 @@ paths:
                 required: [status]
                 properties:
                   status: { const: ok }
+  /v1/auth/app-attest/challenge:
+    post:
+      operationId: createAppAttestChallenge
+      summary: Create one single-use App Attest challenge
+      description: |
+        Creates 32 random client-data bytes bound to the supplied App Attest key
+        identifier and purpose. The challenge expires after three minutes and is
+        consumed atomically by the corresponding proof exchange. This endpoint
+        does not require an existing search credential. The raw request body is
+        limited to 1 KiB. At the public gateway, all App Attest endpoints share a
+        12-request-per-minute limit per client IP with a burst of four; the auth
+        process additionally permits at most 120 challenges globally per minute.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppAttestChallengeRequest'
+      responses:
+        '200':
+          description: A fresh challenge valid for at most three minutes.
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AppAttestChallenge'
+        '400':
+          $ref: '#/components/responses/InvalidAppAttestRequest'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/AuthenticationRateLimited'
+        '503':
+          $ref: '#/components/responses/AppAttestUnavailable'
+  /v1/auth/app-attest/attest:
+    post:
+      operationId: registerAppAttestKey
+      summary: Verify a first App Attest attestation and issue a search token
+      description: |
+        Consumes an `attestation` challenge, verifies the Apple attestation for
+        the configured full App ID and environment, registers the installation
+        key, and returns a memory-only 15-minute bearer token. The attestation
+        object is canonical padded Base64 and decodes to at most 128 KiB; the raw
+        request body is limited to 192 KiB. At the public gateway, all App Attest
+        endpoints share a 12-request-per-minute limit per client IP with a burst
+        of four. The auth process additionally permits at most 60 proof exchanges
+        globally per minute and two concurrent cryptographic proof verifications.
+        When Apple's iOS 27 validation extensions are present, both are required
+        and their category/build values must pass the current server allowlists.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppAttestAttestationRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SearchAccessToken'
+        '400':
+          $ref: '#/components/responses/InvalidAppAttestRequest'
+        '401':
+          $ref: '#/components/responses/AppAttestRejected'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/AuthenticationRateLimited'
+        '503':
+          $ref: '#/components/responses/AppAttestUnavailable'
+  /v1/auth/app-attest/assert:
+    post:
+      operationId: verifyAppAttestAssertion
+      summary: Verify an App Attest assertion and issue a search token
+      description: |
+        Consumes an `assertion` challenge for an already registered key, verifies
+        the assertion and its strictly increasing counter, and returns a
+        memory-only 15-minute bearer token. The assertion object is canonical
+        padded Base64 and decodes to at most 16 KiB; the raw request body is
+        limited to 24 KiB. At the public gateway, all App Attest endpoints share a
+        12-request-per-minute limit per client IP with a burst of four. The auth
+        process additionally permits at most 60 proof exchanges globally per
+        minute and two concurrent cryptographic proof verifications. Any iOS 27
+        validation-extension pair is checked afresh; it need not equal the pair
+        stored from initial attestation, which permits allowlisted app updates.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AppAttestAssertionRequest'
+      responses:
+        '200':
+          $ref: '#/components/responses/SearchAccessToken'
+        '400':
+          $ref: '#/components/responses/InvalidAppAttestRequest'
+        '401':
+          $ref: '#/components/responses/AppAttestRejected'
+        '404':
+          $ref: '#/components/responses/AppAttestKeyNotRegistered'
+        '409':
+          $ref: '#/components/responses/AppAttestCounterConflict'
+        '413':
+          $ref: '#/components/responses/RequestTooLarge'
+        '429':
+          $ref: '#/components/responses/AuthenticationRateLimited'
+        '503':
+          $ref: '#/components/responses/AppAttestUnavailable'
   /v1/charging-parks/search:
     post:
       operationId: searchChargingParkCandidates
@@ -50,11 +173,12 @@ paths:
         '400':
           $ref: '#/components/responses/BadRequest'
         '401':
-          description: Missing, malformed, or invalid API bearer credential.
+          description: Missing, malformed, expired, or invalid search bearer credential.
           headers:
             WWW-Authenticate:
               schema:
                 type: string
+                const: 'Bearer realm="nextstop-search"'
           content:
             application/problem+json:
               schema:
@@ -93,10 +217,14 @@ components:
     bearerAuth:
       type: http
       scheme: bearer
-      description: >
-        Revocable staging access credential. Inject it at deployment and build
-        time; never commit it. Replace this shared-secret control with attested,
-        short-lived client credentials before a public production launch.
+      bearerFormat: JWT
+      description: |
+        A server-signed search access token issued after App Attest verification
+        and valid for exactly 15 minutes. A Debug Simulator may present the same
+        token shape after its loopback Mac broker mints one through Google Cloud
+        IAP. During the private staging migration only, the server may also accept
+        the former revocable bearer when `ALLOW_LEGACY_STAGING_BEARER=true`; that
+        compatibility credential is not part of distributed App Attest builds.
   responses:
     BadRequest:
       description: Invalid route or criteria.
@@ -104,7 +232,168 @@ components:
         application/problem+json:
           schema:
             $ref: '#/components/schemas/Problem'
+    InvalidAppAttestRequest:
+      description: |
+        Malformed, non-canonical, or semantically invalid App Attest request.
+        Problem type: `urn:nextstop:error:invalid-app-attest-request`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AppAttestRejected:
+      description: |
+        The challenge was missing, expired, already consumed, or bound to another
+        key/purpose, or the submitted attestation/assertion failed cryptographic
+        verification, or the initial key registration could not be accepted.
+        Problem type: `urn:nextstop:error:app-attest-rejected`.
+      headers:
+        WWW-Authenticate:
+          schema:
+            type: string
+            const: 'Bearer realm="nextstop-attestation"'
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AppAttestKeyNotRegistered:
+      description: |
+        The assertion's key is missing or revoked. The response deliberately does
+        not disclose which state applies, and no assertion counter is advanced.
+        Problem type: `urn:nextstop:error:app-attest-key-not-registered`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AppAttestCounterConflict:
+      description: |
+        Another assertion already advanced this key's counter. The client must
+        request a fresh assertion challenge and retry with a fresh assertion.
+        Problem type: `urn:nextstop:error:app-attest-counter-conflict`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    RequestTooLarge:
+      description: |
+        Request body exceeds the endpoint-specific body limit.
+        Problem type: `urn:nextstop:error:request-too-large`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AuthenticationRateLimited:
+      description: |
+        Authentication rate or concurrent-proof capacity is exhausted.
+        Problem type: `urn:nextstop:error:authentication-rate-limited`.
+      headers:
+        Retry-After:
+          schema:
+            type: integer
+            const: 60
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    AppAttestUnavailable:
+      description: |
+        App Attest authentication is not configured in this environment.
+        Problem type: `urn:nextstop:error:app-attest-unavailable`.
+      content:
+        application/problem+json:
+          schema:
+            $ref: '#/components/schemas/Problem'
+    SearchAccessToken:
+      description: Short-lived credential for candidate search.
+      content:
+        application/json:
+          schema:
+            $ref: '#/components/schemas/SearchAccessToken'
   schemas:
+    AppAttestKeyID:
+      type: string
+      minLength: 40
+      maxLength: 64
+      pattern: '^[A-Za-z0-9+/]+={0,2}$'
+      description: |
+        Canonical padded Base64 returned by `DCAppAttestService.generateKey()`;
+        semantic validation requires it to decode to exactly 32 bytes. The server
+        stores only its SHA-256 hash.
+    AppAttestChallengeID:
+      type: string
+      format: uuid
+      pattern: '^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$'
+      description: Canonical lowercase UUIDv4 generated by the server.
+    AppAttestChallengeRequest:
+      type: object
+      additionalProperties: false
+      required: [keyId, purpose]
+      properties:
+        keyId:
+          $ref: '#/components/schemas/AppAttestKeyID'
+        purpose:
+          type: string
+          enum: [attestation, assertion]
+    AppAttestChallenge:
+      type: object
+      additionalProperties: false
+      required: [challengeId, clientData, expiresAt]
+      properties:
+        challengeId:
+          $ref: '#/components/schemas/AppAttestChallengeID'
+        clientData:
+          type: string
+          minLength: 43
+          maxLength: 43
+          pattern: '^[A-Za-z0-9_-]+$'
+          description: Exactly 32 random bytes encoded as unpadded Base64URL.
+        expiresAt:
+          type: string
+          format: date-time
+          description: Exactly three minutes after challenge creation.
+    AppAttestAttestationRequest:
+      type: object
+      additionalProperties: false
+      required: [keyId, challengeId, attestationObject]
+      properties:
+        keyId:
+          $ref: '#/components/schemas/AppAttestKeyID'
+        challengeId:
+          $ref: '#/components/schemas/AppAttestChallengeID'
+        attestationObject:
+          type: string
+          minLength: 1
+          maxLength: 174768
+          pattern: '^[A-Za-z0-9+/]+={0,2}$'
+          description: Canonical padded Base64; decoded size is at most 128 KiB.
+    AppAttestAssertionRequest:
+      type: object
+      additionalProperties: false
+      required: [keyId, challengeId, assertionObject]
+      properties:
+        keyId:
+          $ref: '#/components/schemas/AppAttestKeyID'
+        challengeId:
+          $ref: '#/components/schemas/AppAttestChallengeID'
+        assertionObject:
+          type: string
+          minLength: 1
+          maxLength: 21848
+          pattern: '^[A-Za-z0-9+/]+={0,2}$'
+          description: Canonical padded Base64; decoded size is at most 16 KiB.
+    SearchAccessToken:
+      type: object
+      additionalProperties: false
+      required: [accessToken, tokenType, expiresInSeconds]
+      properties:
+        accessToken:
+          type: string
+          minLength: 1
+          maxLength: 2048
+          description: Opaque to the client and retained only in memory.
+        tokenType:
+          const: Bearer
+        expiresInSeconds:
+          const: 900
     SearchRequest:
       type: object
       additionalProperties: false

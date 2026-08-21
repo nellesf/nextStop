@@ -49,6 +49,7 @@ enum RidePreparationState: Equatable {
 }
 
 enum RideCandidateSearchFailure: Equatable {
+  case authenticationUnavailable
   case dataPreparing
   case serviceUnavailable
   case snapshotExpired
@@ -58,6 +59,8 @@ enum RideCandidateSearchFailure: Equatable {
 
   var localizationKey: String {
     switch self {
+    case .authenticationUnavailable:
+      "ride.search.error.authentication"
     case .dataPreparing:
       "ride.search.error.preparing"
     case .serviceUnavailable:
@@ -197,6 +200,8 @@ final class RidePreparationViewModel: ObservableObject {
     _ error: RideCandidateSearchError
   ) -> RideCandidateSearchFailure {
     switch error {
+    case .authenticationUnavailable:
+      .authenticationUnavailable
     case .candidateDataPreparing:
       .dataPreparing
     case .candidateServiceUnavailable:

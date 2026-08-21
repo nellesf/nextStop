@@ -2,6 +2,11 @@
 
 - The Apple EV-charging CarPlay entitlement has not been shown to be available for
   this project. CarPlay runtime behavior cannot be claimed as verified.
+- App Attest activation is prepared but cannot be claimed as end-to-end verified
+  until the exact App ID prefix is configured, the capability/provisioning profile
+  for `de.nextstop.app` is refreshed, and development plus TestFlight exchanges
+  pass on physical devices. Apple App Attest is unavailable in the Simulator; its
+  Debug-only loopback/IAP token flow is a development aid, not attestation.
 - The portable Swift domain core, SwiftUI/SwiftData/MapKit iPhone app, connected
   PostGIS search, automatic German/Swiss authority ingestion, and Swiss live
   availability are implemented. The entitlement-independent CarPlay presenter,

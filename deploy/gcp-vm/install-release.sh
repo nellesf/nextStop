@@ -24,9 +24,20 @@ ensure_secret() {
 }
 ensure_secret POSTGRES_PASSWORD
 ensure_secret API_DATABASE_PASSWORD
+ensure_secret AUTH_DATABASE_PASSWORD
 ensure_secret WORKER_DATABASE_PASSWORD
 ensure_secret SNAPSHOT_SIGNING_KEY
+ensure_secret SEARCH_ACCESS_TOKEN_SIGNING_KEY
 ensure_secret SEARCH_API_BEARER_TOKEN
+if ! grep -q '^ALLOW_LEGACY_STAGING_BEARER=' "$environment_file"; then
+  printf '%s=%s\n' ALLOW_LEGACY_STAGING_BEARER true >> "$environment_file"
+fi
+if ! grep -q '^APP_ATTEST_ALLOW_DEVELOPMENT=' "$environment_file"; then
+  printf '%s=%s\n' APP_ATTEST_ALLOW_DEVELOPMENT false >> "$environment_file"
+fi
+if ! grep -q '^APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS=' "$environment_file"; then
+  printf '%s=%s\n' APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS 1 >> "$environment_file"
+fi
 chmod 600 "$environment_file"
 
 ln -sfn "$release_directory" /opt/nextstop/current
@@ -52,12 +63,12 @@ compose=(
 )
 
 "${compose[@]}" build backend
-"${compose[@]}" stop backend worker
+"${compose[@]}" stop backend auth-backend worker
 "${compose[@]}" up -d --wait database
 "${compose[@]}" run --rm --no-deps migrator
 "${compose[@]}" run --rm --no-deps database-role-initializer
 "${compose[@]}" run --rm --no-deps cache-initializer
-"${compose[@]}" up -d --wait --wait-timeout 120 --no-deps --remove-orphans backend worker
+"${compose[@]}" up -d --wait --wait-timeout 120 --no-deps --remove-orphans backend auth-backend worker
 
 find /opt/nextstop/releases -mindepth 1 -maxdepth 1 -type d \
   ! -path "$release_directory" -mtime +7 -exec rm -rf -- {} +

@@ -40,8 +40,6 @@
 	<string>nextStop uses your location to calculate the driving route and find matching charging parks along it.</string>
 	<key>NextStopAPIBaseURL</key>
 	<string>$(NEXTSTOP_API_BASE_URL)</string>
-	<key>NextStopAPIBearerToken</key>
-	<string>$(NEXTSTOP_API_BEARER_TOKEN)</string>
 	<key>UIApplicationSceneManifest</key>
 	<dict>
 		<key>UIApplicationSupportsMultipleScenes</key>

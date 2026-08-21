@@ -18,6 +18,7 @@ import type {
   NormalizedLocationObservation,
 } from "../../src/domain/normalized-charging.js";
 import { createDatabasePool } from "../../src/persistence/database.js";
+import { PostgresAppAttestAuthenticationRepository } from "../../src/persistence/postgres-app-attest-authentication.js";
 import { AvailabilitySnapshotWriter } from "../../src/persistence/availability-snapshot-writer.js";
 import { FoodPOIProjectionWriter } from "../../src/persistence/food-poi-projection-writer.js";
 import { applyMigrations } from "../../src/persistence/migrate.js";
@@ -65,6 +66,88 @@ void test(
     context.after(async () => pool.end());
     await pool.query("DROP SCHEMA IF EXISTS nextstop CASCADE");
     await applyMigrations(pool);
+
+    await context.test(
+      "atomically consumes App Attest challenges, counters and bounded retention",
+      async () => {
+        const repository = new PostgresAppAttestAuthenticationRepository(pool);
+        const now = new Date("2026-08-21T12:00:00.000Z");
+        const keyIdHash = Buffer.alloc(32, 1);
+        const challengeId = "aaaaaaaa-bbbb-4ccc-8ddd-eeeeeeeeeeee";
+        await repository.insertChallenge({
+          challengeId,
+          keyIdHash,
+          purpose: "assertion",
+          clientData: Buffer.alloc(32, 2),
+          createdAt: now,
+          expiresAt: new Date("2026-08-21T12:03:00.000Z"),
+        });
+
+        const consumed = await Promise.all([
+          repository.consumeChallenge({
+            challengeId,
+            keyIdHash,
+            purpose: "assertion",
+            now,
+          }),
+          repository.consumeChallenge({
+            challengeId,
+            keyIdHash,
+            purpose: "assertion",
+            now,
+          }),
+        ]);
+        assert.equal(consumed.filter((value) => value !== undefined).length, 1);
+
+        assert.equal(
+          await repository.insertKey(
+            {
+              keyIdHash,
+              publicKeyPEM:
+                "-----BEGIN PUBLIC KEY-----\n" + "a".repeat(64) + "\n-----END PUBLIC KEY-----",
+              receipt: Buffer.from("receipt"),
+              environment: "production",
+              signCount: 0,
+              revoked: false,
+            },
+            now,
+          ),
+          true,
+        );
+        const counterUpdates = await Promise.all([
+          repository.advanceCounter({
+            keyIdHash,
+            previousSignCount: 0,
+            nextSignCount: 1,
+            assertedAt: now,
+          }),
+          repository.advanceCounter({
+            keyIdHash,
+            previousSignCount: 0,
+            nextSignCount: 1,
+            assertedAt: now,
+          }),
+        ]);
+        assert.equal(counterUpdates.filter(Boolean).length, 1);
+
+        const staleKeyHash = Buffer.alloc(32, 3);
+        await repository.insertKey(
+          {
+            keyIdHash: staleKeyHash,
+            publicKeyPEM:
+              "-----BEGIN PUBLIC KEY-----\n" + "b".repeat(64) + "\n-----END PUBLIC KEY-----",
+            receipt: Buffer.from("receipt"),
+            environment: "production",
+            signCount: 0,
+            revoked: false,
+          },
+          new Date("2026-05-01T00:00:00.000Z"),
+        );
+        assert.equal(await repository.deleteStaleKeys(now, 1, keyIdHash), 1);
+        assert.equal(await repository.findKey(staleKeyHash), undefined);
+        assert.notEqual(await repository.findKey(keyIdHash), undefined);
+      },
+    );
 
     await context.test("imports normalized fixture rows and publishes atomically", async () => {
       await resetDatabase(pool);

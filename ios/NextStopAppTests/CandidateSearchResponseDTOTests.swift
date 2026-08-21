@@ -97,7 +97,7 @@ final class CandidateSearchResponseDTOTests: XCTestCase {
     )
     XCTAssertEqual(
       HTTPCandidateSearchService.error(for: 401, data: unauthorized),
-      .invalidConfiguration
+      .authenticationUnavailable
     )
     XCTAssertEqual(
       HTTPCandidateSearchService.error(for: 429, data: capacityExhausted),

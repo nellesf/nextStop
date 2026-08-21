@@ -13,19 +13,23 @@ attached persistent disk holds the database and OSM cache. Nginx terminates TLS 
 `api.nextstop.tech`; only the API has a listener, PostgreSQL is not publicly
 reachable, and SSH uses Google IAP.
 
-The API login is read-only and table-scoped with a 15-second statement timeout.
-The worker login has DML and projection-function privileges but no DDL or access to
-the migration registry. The legacy bootstrap owner is used only by the one-shot
-migrator and idempotent grant initializer. Deployments add or rotate the restricted
-roles on an existing volume without recreating data or rebuilding projections.
+The candidate-search login is read-only and table-scoped with a 15-second
+statement timeout. A separate authentication login can modify only App Attest
+challenge and credential tables. The worker login has DML and projection-function
+privileges but no DDL or access to the migration registry. The legacy bootstrap
+owner is used only by the one-shot migrator and idempotent grant initializer.
+Deployments add or rotate the restricted roles on an existing volume without
+recreating data or rebuilding projections.
 
-Private staging requires a revocable bearer credential for candidate search;
-`/health` remains unauthenticated. The credential is injected into the private
-TestFlight build and provides only a staging abuse barrier because an app-bundled
-shared secret is extractable. Public production must replace it with attested,
-short-lived client credentials and per-client quotas. The API also rejects routes
-outside its explicit size, point-count, region, segment-length, and total-length
-budgets before PostGIS search.
+Physical-device staging search uses Apple App Attest and server-issued 15-minute
+access tokens; `/health` remains unauthenticated. During rollout, an explicit
+compatibility flag may retain the prior revocable bearer for existing private
+builds. The Debug Simulator uses a loopback Mac helper that obtains a short-lived
+development token through Google Cloud IAP instead. Release builds contain neither
+path, and the compatibility flag must be disabled after the App Attest TestFlight
+gate passes.
+The API also rejects routes outside its explicit size, point-count, region,
+segment-length, and total-length budgets before PostGIS search.
 
 The owner explicitly declined scheduled backups for this disposable staging
 corpus. This exception does not satisfy the production availability or recovery
@@ -37,7 +41,8 @@ Use one regional deployment of the backend modular monolith and one managed
 PostgreSQL service with PostGIS. Start with a single API/worker artifact that runs
 separate process roles:
 
-- `api`: stateless HTTP candidate search;
+- `api`: HTTP candidate search plus bounded App Attest exchanges; search and auth
+  use separate database pools and roles;
 - `worker`: scheduled provider ingestion and transactional projection rebuilds.
 
 Run the resource-heavy OSM PBF ingestion in exactly one designated worker with a
@@ -72,10 +77,11 @@ need.
 
 ## Secrets
 
-- Provider/API credentials, DB credentials, signing material, and edge keys live in
-  the deployment secret manager.
-- iOS contains no provider keys. Private staging injects its revocable shared
-  search credential at build time from an ignored local configuration file.
+- Provider/API credentials, DB credentials, App Attest configuration, token
+  signing material, and edge keys live in the deployment secret manager.
+- iOS contains no provider or production search secrets. A private Debug Simulator
+  may request a short-lived token from a loopback-only Mac helper authenticated
+  through Google Cloud IAP; Release builds exclude that provider.
 - Rotate independently by environment. Document owner, purpose, creation, expiry,
   and emergency revocation without storing the value in Git.
 
@@ -92,7 +98,8 @@ need.
   API sessions retain PostgreSQL defaults and cannot multiply that memory budget.
 - A separate GiST-indexed OSM food-POI projection and version-pinned derived
   fine-park/POI cache; do not merge it into redistributed charging source tables.
-- Separate roles for migrations, worker writes, API read/search, and operations.
+- Separate roles for migrations, worker writes, API read/search, App Attest auth
+  state, and operations.
 - Retain provider raw payloads only as allowed/needed for replay; route requests are
   never stored in domain tables or backups.
 
@@ -102,8 +109,9 @@ need.
 - Readiness: schema version and ability to query the active projection.
 - Provider health/freshness: separate operational status, never make the API
   process unready solely because one provider is down.
-- Metrics: candidate latency/count, DB timings, provider import counts/failures,
-  quarantine, source age, projection age. No route coordinates or persistent IDs.
+- Metrics: candidate latency/count, DB timings, coarse App Attest outcome,
+  provider import counts/failures, quarantine, source age, projection age. No
+  route coordinates, key identifiers/hashes, assertions, or access tokens.
 - Alerts: no active projection, expiry beyond policy, repeated import failure,
   elevated 5xx/429, DB saturation, projection publish failure.
 
@@ -119,6 +127,11 @@ need.
 ## iOS distribution
 
 - Separate bundle/team configurations for development and production.
+- Enable App Attest for `de.nextstop.app`, configure the exact App ID prefix on
+  the backend, and regenerate provisioning profiles. Development-signed physical
+  builds use the development environment; TestFlight/App Store use production.
+- Verify App Attest on a physical device. The iOS Simulator is covered only by the
+  compile-time Debug loopback provider and cannot satisfy the distribution gate.
 - Managed EV-charging entitlement must match the App ID and provisioning profile.
 - No entitlement file with an unapproved capability in a distribution build.
 - TestFlight/App Store release requires current privacy manifest, German

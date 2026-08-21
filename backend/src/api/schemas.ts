@@ -1,6 +1,82 @@
 import { minimumPowerOptions } from "../domain/candidate-search.js";
 import { searchRequestLimits } from "./search-request-limits.js";
 
+const appAttestKeyIdSchema = {
+  type: "string",
+  minLength: 40,
+  maxLength: 64,
+  pattern: "^[A-Za-z0-9+/]+={0,2}$",
+} as const;
+
+const appAttestChallengeIdSchema = { type: "string", format: "uuid" } as const;
+
+export const appAttestChallengeRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["keyId", "purpose"],
+  properties: {
+    keyId: appAttestKeyIdSchema,
+    purpose: { type: "string", enum: ["attestation", "assertion"] },
+  },
+} as const;
+
+export const appAttestChallengeResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["challengeId", "clientData", "expiresAt"],
+  properties: {
+    challengeId: appAttestChallengeIdSchema,
+    clientData: { type: "string", minLength: 43, maxLength: 43, pattern: "^[A-Za-z0-9_-]+$" },
+    expiresAt: { type: "string", format: "date-time" },
+  },
+} as const;
+
+const appAttestProofRequestProperties = {
+  keyId: appAttestKeyIdSchema,
+  challengeId: appAttestChallengeIdSchema,
+} as const;
+
+export const appAttestAttestationRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["keyId", "challengeId", "attestationObject"],
+  properties: {
+    ...appAttestProofRequestProperties,
+    attestationObject: {
+      type: "string",
+      minLength: 1,
+      maxLength: 174_768,
+      pattern: "^[A-Za-z0-9+/]+={0,2}$",
+    },
+  },
+} as const;
+
+export const appAttestAssertionRequestSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["keyId", "challengeId", "assertionObject"],
+  properties: {
+    ...appAttestProofRequestProperties,
+    assertionObject: {
+      type: "string",
+      minLength: 1,
+      maxLength: 21_848,
+      pattern: "^[A-Za-z0-9+/]+={0,2}$",
+    },
+  },
+} as const;
+
+export const accessTokenResponseSchema = {
+  type: "object",
+  additionalProperties: false,
+  required: ["accessToken", "tokenType", "expiresInSeconds"],
+  properties: {
+    accessToken: { type: "string", minLength: 1, maxLength: 2_048 },
+    tokenType: { const: "Bearer" },
+    expiresInSeconds: { const: 900 },
+  },
+} as const;
+
 const routeEnvelope = searchRequestLimits.supportedRouteEnvelope;
 
 const coordinateTupleSchema = {

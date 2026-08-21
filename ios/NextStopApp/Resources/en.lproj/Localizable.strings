@@ -122,6 +122,7 @@
 "ride.search.action" = "Find charging parks";
 "ride.search.empty.description" = "No verified matches were found along this route for the selected criteria. Filters are not relaxed automatically.";
 "ride.search.empty.title" = "No matching charging parks";
+"ride.search.error.authentication" = "The app could not be securely verified for charging-park search. Check the internet connection and try again.";
 "ride.search.error.driving" = "Apple Maps could not calculate driving distances for the candidates. Try again with a stable connection.";
 "ride.search.error.food" = "The selected restaurant chain could not be checked reliably. The app will not incorrectly claim there are no matches.";
 "ride.search.error.preparing" = "The server is downloading and validating the official charging data. Try the search again shortly.";

@@ -123,13 +123,22 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Oversized body, over-8,000-point route, over-250-km segment, over-2,500-km route,
   NaN/invalid ranges, unsupported region, unrecognized enum, cursor mismatch, and
   injection payloads.
-- Public health, missing/malformed/wrong bearer credentials, authorized search,
-  four-search admission, 429 retry metadata, provider-degraded response, error
-  IDs, and no sensitive body or Authorization value in logs.
+- Public health, missing/malformed/wrong access credentials, valid short-lived
+  token search, legacy-staging flag isolation, four-search admission, 429 retry
+  metadata, provider-degraded response, error IDs, and no sensitive body or
+  Authorization value in logs.
+- App Attest challenge uniqueness, key/purpose binding, three-minute expiry,
+  atomic single use, malformed/oversized CBOR rejection, certificate/nonce/App-ID/
+  environment/key checks, assertion signature and unsigned monotonic counter,
+  replay rejection, concurrent assertion races, 15-minute token claims/rotation,
+  and cleanup of expired challenges/inactive credentials.
 - TLS/headers and database least privilege in staging checks. Apply the idempotent
-  role initializer to real Postgres and assert that API DML/provider-raw access,
-  worker DDL/migration-registry access, unsafe attributes, and inherited role
-  memberships remain denied after a second run.
+  role initializer to real Postgres and assert that search API DML/provider-raw
+  access, auth-role projection access, worker auth-table access, worker DDL/
+  migration-registry access, unsafe attributes, inherited role memberships, and
+  grants allowing another login to `SET ROLE` into a runtime role remain denied
+  after a second run. Assert that the Simulator token minter receives no database,
+  snapshot-signing, or legacy-bearer secret and has no container network.
 
 ## iPhone and CarPlay tests
 
@@ -138,6 +147,15 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - SwiftData create/update/delete round trips without a cloud container.
 - SwiftUI CRUD and German localization with long text/Dynamic Type.
 - Permission denied/restricted/reduced accuracy/no GPS/no internet.
+- App Attest first registration, existing-key assertion, exact challenge hashing,
+  non-synchronizing device-only Keychain policy, memory-only token reuse/early
+  refresh, persisted same-hash retry after Apple `serverUnavailable`, rotation after
+  other attestation failures, shared iPhone/CarPlay refresh coalescing, one search
+  retry after `401`, and no retry loop after a second `401`.
+- Debug Simulator selects the loopback Mac-broker provider only when App Attest
+  reports unsupported. Cover strict loopback URL/response handling and token
+  refresh. Release cannot compile/select that provider and reports a localized
+  authentication error when App Attest is unavailable.
 - App Intent resolution, cancellation, and destination-not-found.
 - Presenter tests for loading, results, unknown/partial availability, no results,
   relaxation actions, and errors.

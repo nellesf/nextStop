@@ -94,6 +94,9 @@ storage limits. This is easy to change but should be product-owned.
 
 - Apple must approve the EV-charging CarPlay entitlement before end-to-end CarPlay
   execution and distribution.
+- App Attest must be enabled for `de.nextstop.app`; deployment requires the exact
+  App ID prefix (which must not be assumed to equal the Team ID), refreshed
+  provisioning, and physical-device development/TestFlight verification.
 - A full Xcode installation must be selected locally before iOS builds.
 - A production EU/EEA hosting vendor, managed PostGIS service, and operational
   secret manager still require owner selection before deployment.

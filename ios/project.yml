@@ -32,19 +32,6 @@ targets:
     configFiles:
       Debug: Config/NextStop.xcconfig
       Release: Config/NextStop.xcconfig
-    preBuildScripts:
-      - name: Validate Release Search Credential
-        basedOnDependencyAnalysis: false
-        script: |
-          if [ "${CONFIGURATION:-}" != "Release" ]; then
-            exit 0
-          fi
-          token=${NEXTSTOP_API_BEARER_TOKEN:-}
-          if [ "${#token}" -eq 64 ] && ! printf '%s' "$token" | grep -q '[^0-9A-Fa-f]'; then
-            exit 0
-          fi
-          echo "error: Release requires a 64-character hexadecimal NEXTSTOP_API_BEARER_TOKEN. Run ios/configure-staging-auth.sh first."
-          exit 1
     sources:
       - path: NextStopApp/Sources
       - path: NextStopCarPlay
@@ -52,6 +39,7 @@ targets:
         buildPhase: resources
         excludes:
           - Info.plist
+          - NextStopApp.entitlements
     dependencies:
       - package: NextStopCore
     info:
@@ -69,7 +57,6 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NextStopAPIBaseURL: $(NEXTSTOP_API_BASE_URL)
-        NextStopAPIBearerToken: $(NEXTSTOP_API_BEARER_TOKEN)
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           UISceneConfigurations:
@@ -87,6 +74,7 @@ targets:
           - UIInterfaceOrientationLandscapeRight
     settings:
       base:
+        CODE_SIGN_ENTITLEMENTS: NextStopApp/Resources/NextStopApp.entitlements
         CODE_SIGN_STYLE: Automatic
         CURRENT_PROJECT_VERSION: 1
         GENERATE_INFOPLIST_FILE: NO
@@ -95,8 +83,10 @@ targets:
         TARGETED_DEVICE_FAMILY: "1,2"
       configs:
         Debug:
+          NEXTSTOP_APP_ATTEST_ENVIRONMENT: development
           NEXTSTOP_API_BASE_URL: https://api.nextstop.tech
         Release:
+          NEXTSTOP_APP_ATTEST_ENVIRONMENT: production
           NEXTSTOP_API_BASE_URL: https://api.nextstop.tech
 
   NextStopAppTests:

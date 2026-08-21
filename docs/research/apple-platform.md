@@ -1,7 +1,8 @@
 # Apple platform research
 
-Research date: 2026-08-13. Use primary Apple documentation and re-check before
-submission because entitlements, SDK availability, and review rules can change.
+Research date: 2026-08-13; App Attest section refreshed 2026-08-21. Use primary
+Apple documentation and re-check before submission because entitlements, SDK
+availability, and review rules can change.
 
 ## Findings
 
@@ -112,6 +113,37 @@ Consequence: request When In Use during iPhone onboarding, not after CarPlay beg
 Do not request Always/background tracking for a search that intentionally remains
 stable.
 
+### App Attest
+
+`DCAppAttestService` creates an installation-scoped hardware-backed key and asks
+Apple to attest that the key belongs to an authentic instance of the configured
+app. The backend, not the app, must validate the attestation certificate chain,
+nonce, full App ID, key identity, environment, and later assertion signatures and
+strictly increasing counters. Every attestation or assertion uses a unique
+server-provided challenge.
+
+App Attest availability must be checked at runtime. It is not supported in the
+iOS Simulator, so simulator development needs a separately isolated fallback;
+unsupported status in a distributed build is not proof of a valid app. Key
+identifiers survive normal launches but can become invalid after reinstall,
+restore, or device migration, requiring bounded recovery rather than unlimited
+key generation. Apple currently identifies sandbox attestations with the exact
+16-byte `appattestsandbox` AAGUID. The backend retains compatibility with the
+legacy `appattestdevelop` AAGUID for the supported iOS range, and accepts either
+development value only behind the explicit deployment flag.
+
+Sources:
+
+- [Establishing your app's integrity](https://developer.apple.com/documentation/devicecheck/establishing-your-app-s-integrity)
+- [Validating apps that connect to your server](https://developer.apple.com/documentation/devicecheck/validating-apps-that-connect-to-your-server)
+- [Preparing to use App Attest](https://developer.apple.com/documentation/devicecheck/preparing-to-use-the-app-attest-service)
+- [App Attest Environment entitlement](https://developer.apple.com/documentation/bundleresources/entitlements/com.apple.developer.devicecheck.appattest-environment)
+
+Consequence: physical-device search uses App Attest to obtain a short-lived server
+token. Only a Debug build running where App Attest is unsupported may contact a
+loopback Mac helper that authenticates through Google Cloud IAP and returns a
+short-lived development token; Release excludes that path.
+
 ## Accepted minimum version
 
 iOS 18.0 is accepted as a product support policy rather than the first availability
@@ -125,6 +157,9 @@ test before ADR 0001 is accepted.
 
 - Obtain entitlement approval criteria/feedback for this exact product.
 - Confirm final target/template allow-list with the installed Xcode 26 SDK.
+- Enable App Attest for the exact App ID, record its App ID prefix without
+  assuming it equals the Team ID, and verify development plus TestFlight
+  attestations on physical devices.
 - Test locked-iPhone, knob/non-touch, wide/portrait displays, reduced location
   accuracy, Siri destination resolution, and Apple Maps handoff in CarPlay
   Simulator and at least one real vehicle.
