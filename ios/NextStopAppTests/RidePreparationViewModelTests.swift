@@ -150,6 +150,45 @@ final class RidePreparationViewModelTests: XCTestCase {
     XCTAssertEqual(locations.map(\.id), [first.id, second.id])
   }
 
+  func testZuchwilRestaurantGroupSuppliesOnlyAutosenseOperatorEvidence() throws {
+    let firstAutosense = try ChargingLocationLookup(
+      id: UUID(uuidString: "048cca5e-9d48-8221-a72e-14a4f5dba8e9")!,
+      operatorName: "Autosense",
+      coordinate: Coordinate(latitude: 47.202427, longitude: 7.571513),
+      address: ChargingLocationAddress(
+        street: "Langenfeldstrasse",
+        houseNumber: nil,
+        postalCode: "4528",
+        city: "Zuchwil"
+      )
+    )
+    let secondAutosense = try ChargingLocationLookup(
+      id: UUID(uuidString: "7a9b25a9-3a18-8f5c-a991-7a1722a960ec")!,
+      operatorName: "Autosense",
+      coordinate: Coordinate(latitude: 47.202427, longitude: 7.571513),
+      address: firstAutosense.address
+    )
+    let goFast = try ChargingLocationLookup(
+      id: UUID(uuidString: "2cfe6e20-b831-8dd0-90a0-4c427c00dc57")!,
+      operatorName: "GoFast",
+      coordinate: Coordinate(latitude: 47.20167023, longitude: 7.57141471),
+      address: ChargingLocationAddress(
+        street: "Schützenweg",
+        houseNumber: "2",
+        postalCode: "4528",
+        city: "Zuchwil"
+      )
+    )
+
+    let locations = AppleChargingPlaceLookupScope.restaurantGroupLocations(
+      candidateLocations: [firstAutosense, goFast, firstAutosense, secondAutosense],
+      operatorName: "Autosense"
+    )
+
+    XCTAssertEqual(locations.map(\.id), [firstAutosense.id, secondAutosense.id])
+    XCTAssertTrue(locations.allSatisfy { $0.operatorName == "Autosense" })
+  }
+
   func testChargingSearchCentersIncludeGroupNavigationsAndDeduplicateNearbyCoordinates()
     throws
   {
@@ -238,6 +277,128 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
     XCTAssertFalse(
       AppleChargingPlaceMatchPolicy.canonicalOperatorKeysMatch("tesla", "ionity")
+    )
+  }
+
+  func testKnownChargingCatalogAliasIsExactAndDoesNotMatchBroadAMAGNames() {
+    XCTAssertTrue(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: "AMAG Energy Charging",
+        requestedOperatorName: "Autosense"
+      )
+    )
+    XCTAssertTrue(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: " amag energy charging ",
+        requestedOperatorName: "AUTOSENSE"
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: "AMAG",
+        requestedOperatorName: "Autosense"
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: "AMAG Charging Station",
+        requestedOperatorName: "Autosense"
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: "AMAG Energy Charging Zürich",
+        requestedOperatorName: "Autosense"
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: "Autosense",
+        requestedOperatorName: "Autosense"
+      )
+    )
+    XCTAssertFalse(
+      AppleChargingOperatorCatalog.isKnownAlias(
+        applePlaceName: "AMAG Energy Charging",
+        requestedOperatorName: "AMAG Energy Charging"
+      )
+    )
+  }
+
+  func testKnownCatalogAliasMatchAcceptsZuchwilShapeAtOneHundredMeters() {
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(
+          operatorDistanceMeters: 78,
+          restaurantDistanceMeters: 51
+        ),
+        resultGroupKind: .restaurant
+      ),
+      .knownCatalogAlias(
+        distanceMeters: 78,
+        stablePlaceIdentifier: "IE82B5E47B23E56E7"
+      )
+    )
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(
+          operatorDistanceMeters: 100,
+          restaurantDistanceMeters: 500
+        ),
+        resultGroupKind: .restaurant
+      ),
+      .knownCatalogAlias(
+        distanceMeters: 100,
+        stablePlaceIdentifier: "IE82B5E47B23E56E7"
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(
+          operatorDistanceMeters: 101,
+          restaurantDistanceMeters: 51
+        ),
+        resultGroupKind: .restaurant
+      )
+    )
+  }
+
+  func testKnownCatalogAliasMatchKeepsCategoryLocalityIdentityAndRestaurantBounds() {
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(operatorNamesAreKnownAliases: false),
+        resultGroupKind: .restaurant
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(isEVCharger: false),
+        resultGroupKind: .restaurant
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(hasOperatorLocalityMatch: false),
+        resultGroupKind: .restaurant
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(stablePlaceIdentifier: nil),
+        resultGroupKind: .restaurant
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(restaurantDistanceMeters: nil),
+        resultGroupKind: .restaurant
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(restaurantDistanceMeters: 501),
+        resultGroupKind: .restaurant
+      )
     )
   }
 
@@ -465,6 +626,101 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
   }
 
+  func testKnownCatalogAliasRequiresSameUniqueIdentityAcrossBothCompletePasses() throws {
+    let zuchwil = try knownCatalogAliasMatch(
+      stablePlaceIdentifier: "IE82B5E47B23E56E7"
+    )
+
+    XCTAssertEqual(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil],
+        naturalLanguageMatches: [zuchwil],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      ),
+      "IE82B5E47B23E56E7"
+    )
+  }
+
+  func testKnownCatalogAliasRejectsMissingOrDifferentCrossPassIdentity() throws {
+    let zuchwil = try knownCatalogAliasMatch(
+      stablePlaceIdentifier: "IE82B5E47B23E56E7"
+    )
+    let other = try knownCatalogAliasMatch(stablePlaceIdentifier: "OTHER")
+
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [],
+        naturalLanguageMatches: [zuchwil],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil],
+        naturalLanguageMatches: [],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil],
+        naturalLanguageMatches: [other],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+  }
+
+  func testKnownCatalogAliasRejectsAmbiguousCrossPassIdentity() throws {
+    let zuchwil = try knownCatalogAliasMatch(
+      stablePlaceIdentifier: "IE82B5E47B23E56E7"
+    )
+    let other = try knownCatalogAliasMatch(stablePlaceIdentifier: "OTHER")
+
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil, other],
+        naturalLanguageMatches: [zuchwil],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil],
+        naturalLanguageMatches: [zuchwil, other],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: true
+      )
+    )
+  }
+
+  func testKnownCatalogAliasRejectsIncompleteCrossPassSearches() throws {
+    let zuchwil = try knownCatalogAliasMatch(
+      stablePlaceIdentifier: "IE82B5E47B23E56E7"
+    )
+
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil],
+        naturalLanguageMatches: [zuchwil],
+        categoryPassComplete: false,
+        naturalLanguagePassComplete: true
+      )
+    )
+    XCTAssertNil(
+      AppleChargingPlaceMatchPolicy.corroboratedKnownCatalogAliasPlaceIdentifier(
+        categoryMatches: [zuchwil],
+        naturalLanguageMatches: [zuchwil],
+        categoryPassComplete: true,
+        naturalLanguagePassComplete: false
+      )
+    )
+  }
+
   func testOperatorScopedMatchPreservesExistingBroaderNameRule() {
     let evidence = AppleChargingPlaceMatchPolicy.Evidence(
       operatorNameMatches: true,
@@ -601,6 +857,37 @@ final class RidePreparationViewModelTests: XCTestCase {
           stablePlaceIdentifier: stablePlaceIdentifier
         ),
         resultGroupKind: .noFoodCampus
+      )
+    )
+  }
+
+  private func knownCatalogAliasEvidence(
+    operatorNamesAreKnownAliases: Bool = true,
+    operatorDistanceMeters: Double? = 78,
+    isEVCharger: Bool = true,
+    hasOperatorLocalityMatch: Bool = true,
+    restaurantDistanceMeters: Double? = 51,
+    stablePlaceIdentifier: String? = "IE82B5E47B23E56E7"
+  ) -> AppleChargingPlaceMatchPolicy.KnownCatalogAliasEvidence {
+    AppleChargingPlaceMatchPolicy.KnownCatalogAliasEvidence(
+      operatorNamesAreKnownAliases: operatorNamesAreKnownAliases,
+      operatorDistanceMeters: operatorDistanceMeters,
+      isEVCharger: isEVCharger,
+      hasOperatorLocalityMatch: hasOperatorLocalityMatch,
+      restaurantDistanceMeters: restaurantDistanceMeters,
+      stablePlaceIdentifier: stablePlaceIdentifier
+    )
+  }
+
+  private func knownCatalogAliasMatch(
+    stablePlaceIdentifier: String
+  ) throws -> AppleChargingPlaceMatchPolicy.Match {
+    try XCTUnwrap(
+      AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+        evidence: knownCatalogAliasEvidence(
+          stablePlaceIdentifier: stablePlaceIdentifier
+        ),
+        resultGroupKind: .restaurant
       )
     )
   }

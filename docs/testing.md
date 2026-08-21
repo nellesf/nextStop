@@ -1,6 +1,7 @@
 # Test strategy
 
-Status: Accepted on 2026-08-13; clustering cases amended on 2026-08-20.
+Status: Accepted on 2026-08-13; clustering and Apple-place cases amended through
+2026-08-21.
 
 ## Pure Swift domain tests
 
@@ -146,6 +147,16 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - Verify charger matching accepts an operator within 60 m without address evidence,
   permits up to 300 m only with matching street, house number, and postal code or
   city, and rejects 301 m even when the address matches.
+- Verify the directed normalized catalog mapping from the exact Apple place name
+  `AMAG Energy Charging` to the exact requested backend operator `Autosense`,
+  including the Zuchwil regression at about 78 m from the requested operator's own
+  authority lookup and 51 m from the exact grouping McDonald's. It must require
+  `.evCharger`, matching locality, a stable Place ID, fully successful category and
+  natural-language passes, and the same single ID in both passes. Cover the 100/101
+  m authority-only boundary; reject the reverse direction, equal-name pairs, plain
+  `AMAG`, and another operator or group coordinate as 100 m evidence; reject
+  incomplete or differing pass results; and retain the food-only 500/501 m
+  restaurant boundary.
 - Verify the result-group fallback still requires the canonical operator,
   Apple's charger category, matching operator locality, a stable Apple Place ID,
   and one safely resolved Apple place within 60 m of power-qualified group evidence.

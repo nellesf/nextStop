@@ -1,7 +1,7 @@
 # Routing and candidate search
 
-Status: Accepted on 2026-08-13; candidate identity and group-bounded Apple-place
-matching amended on 2026-08-20.
+Status: Accepted on 2026-08-13; candidate identity and Apple-place matching
+amended through 2026-08-21.
 
 ## Canonical routing rule
 
@@ -154,6 +154,19 @@ authority location without address evidence, or within 300 m when street, house
 number, and postal code or city match. These primary rules apply in both search
 modes.
 
+One catalog-specific exception is directed: an Apple place whose normalized name
+is exactly `AMAG Energy Charging` may identify a requested backend operator whose
+normalized name is exactly `Autosense`. Only that direction may be within an
+inclusive 100 m of a qualifying authority lookup for the requested operator
+itself. The reverse direction, equal operator/place names, plain `AMAG`, and every
+other AMAG business receive no 100 m exception. No other operator or general group
+coordinate can supply that evidence. The candidate must have `.evCharger`,
+matching postal code or normalized city, and a stable Place ID. All category-only
+and filtered natural-language center requests must complete, and both complete
+passes must resolve the same one stable Place ID. In food mode, the charger must
+also be within 500 m of the exact grouping restaurant POI. The ordinary 60 m
+direct, 300 m exact-address, and 60 m group-fallback rules remain unchanged.
+
 Within either an already selected no-food `ChargingCampus` or one concrete
 restaurant-centered result group, a local fallback may accept a charger that fails
 both primary rules. Its address must share the postal code or normalized city of
@@ -199,6 +212,13 @@ The 2026-08-20 Wertheim regression fixes the intended boundary: Apple's Tesla
 place was 211.5 m from the Tesla authority point, 257.2 m from the exact grouping
 McDonald's, and 57.2 m from a power-qualified location of another member fine park
 in that restaurant group.
+
+The 2026-08-21 Zuchwil regression fixes the catalog-alias boundary: the Apple
+`AMAG Energy Charging` place (observed stable ID `IE82B5E47B23E56E7`) was about
+78 m from the requested `Autosense` authority lookup and about 51 m from the exact
+grouping McDonald's. It is accepted only through the explicit alias and the same
+single ID from both complete passes; the restaurant distance is additional
+evidence and does not replace the authority-only 100 m predicate.
 
 ## Apple Maps handoff
 

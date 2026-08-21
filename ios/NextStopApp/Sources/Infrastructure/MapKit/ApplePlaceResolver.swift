@@ -60,9 +60,35 @@ enum AppleChargingPlaceSearchCompletionPolicy {
   }
 }
 
+enum AppleChargingOperatorCatalog {
+  static func isKnownAlias(
+    applePlaceName: String,
+    requestedOperatorName: String
+  ) -> Bool {
+    normalized(applePlaceName) == "amag energy charging"
+      && normalized(requestedOperatorName) == "autosense"
+  }
+
+  private static func normalized(_ value: String) -> String {
+    value
+      .folding(options: [.diacriticInsensitive, .caseInsensitive], locale: .current)
+      .lowercased()
+      .unicodeScalars
+      .map { CharacterSet.alphanumerics.contains($0) ? Character(String($0)) : " " }
+      .reduce(into: "") { result, character in
+        if character == " ", result.last == " " {
+          return
+        }
+        result.append(character)
+      }
+      .trimmingCharacters(in: .whitespacesAndNewlines)
+  }
+}
+
 enum AppleChargingPlaceMatchPolicy {
   static let maximumDirectDistanceMeters: Double = 60
   static let maximumExactAddressDistanceMeters: Double = 300
+  static let maximumKnownCatalogAliasDistanceMeters: Double = 100
   static let maximumRestaurantDistanceMeters = Double(
     SearchConfiguration.maximumFoodDistance.value
   )
@@ -70,6 +96,7 @@ enum AppleChargingPlaceMatchPolicy {
   enum Match: Equatable {
     case operatorScoped(distanceMeters: Double)
     case resultGroup(distanceMeters: Double, stablePlaceIdentifier: String)
+    case knownCatalogAlias(distanceMeters: Double, stablePlaceIdentifier: String)
   }
 
   struct Evidence: Equatable {
@@ -79,6 +106,15 @@ enum AppleChargingPlaceMatchPolicy {
     let hasExactOperatorAddressMatch: Bool
     let isEVCharger: Bool
     let resultGroupDistanceMeters: Double?
+    let hasOperatorLocalityMatch: Bool
+    let restaurantDistanceMeters: Double?
+    let stablePlaceIdentifier: String?
+  }
+
+  struct KnownCatalogAliasEvidence: Equatable {
+    let operatorNamesAreKnownAliases: Bool
+    let operatorDistanceMeters: Double?
+    let isEVCharger: Bool
     let hasOperatorLocalityMatch: Bool
     let restaurantDistanceMeters: Double?
     let stablePlaceIdentifier: String?
@@ -134,6 +170,33 @@ enum AppleChargingPlaceMatchPolicy {
     )
   }
 
+  static func knownCatalogAliasMatch(
+    evidence: KnownCatalogAliasEvidence,
+    resultGroupKind: AppleChargingPlaceResultGroup.Kind
+  ) -> Match? {
+    guard evidence.operatorNamesAreKnownAliases,
+      evidence.isEVCharger,
+      let distance = evidence.operatorDistanceMeters,
+      distance <= maximumKnownCatalogAliasDistanceMeters,
+      evidence.hasOperatorLocalityMatch,
+      let identifier = evidence.stablePlaceIdentifier,
+      !identifier.isEmpty
+    else {
+      return nil
+    }
+    if resultGroupKind == .restaurant {
+      guard let restaurantDistance = evidence.restaurantDistanceMeters,
+        restaurantDistance <= maximumRestaurantDistanceMeters
+      else {
+        return nil
+      }
+    }
+    return .knownCatalogAlias(
+      distanceMeters: distance,
+      stablePlaceIdentifier: identifier
+    )
+  }
+
   static func unambiguousResultGroupPlaceIdentifier(
     in matches: [Match]
   ) -> String? {
@@ -173,12 +236,52 @@ enum AppleChargingPlaceMatchPolicy {
     return eligibleIdentifiers.first
   }
 
+  static func corroboratedKnownCatalogAliasPlaceIdentifier(
+    categoryMatches: [Match],
+    naturalLanguageMatches: [Match],
+    categoryPassComplete: Bool,
+    naturalLanguagePassComplete: Bool
+  ) -> String? {
+    guard
+      AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
+        categoryPassComplete: categoryPassComplete,
+        naturalLanguagePassComplete: naturalLanguagePassComplete
+      )
+    else {
+      return nil
+    }
+
+    let categoryIdentifiers = knownCatalogAliasPlaceIdentifiers(in: categoryMatches)
+    let naturalLanguageIdentifiers = knownCatalogAliasPlaceIdentifiers(
+      in: naturalLanguageMatches
+    )
+    guard categoryIdentifiers.count == 1,
+      naturalLanguageIdentifiers.count == 1,
+      categoryIdentifiers == naturalLanguageIdentifiers
+    else {
+      return nil
+    }
+    return categoryIdentifiers.first
+  }
+
   private static func resultGroupPlaceIdentifiers(
     in matches: [Match]
   ) -> Set<String> {
     Set(
       matches.compactMap { match -> String? in
         guard case .resultGroup(_, let identifier) = match else {
+          return nil
+        }
+        return identifier
+      })
+  }
+
+  private static func knownCatalogAliasPlaceIdentifiers(
+    in matches: [Match]
+  ) -> Set<String> {
+    Set(
+      matches.compactMap { match -> String? in
+        guard case .knownCatalogAlias(_, let identifier) = match else {
           return nil
         }
         return identifier
@@ -246,6 +349,7 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       resultGroupCoordinates: resultGroup.searchCoordinates
     )
     var categoryResultGroupMatches: [ChargingItemMatch] = []
+    var categoryKnownCatalogAliasMatches: [ChargingItemMatch] = []
     var categoryPassComplete = true
 
     for center in centers {
@@ -272,6 +376,9 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       categoryResultGroupMatches.append(
         contentsOf: matches.filter(\.isResultGroupMatch)
       )
+      categoryKnownCatalogAliasMatches.append(
+        contentsOf: matches.filter(\.isKnownCatalogAliasMatch)
+      )
     }
 
     if AppleChargingPlaceSearchCompletionPolicy.allowsResultGroupFallback(
@@ -288,6 +395,7 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     }
 
     var naturalLanguageResultGroupMatches: [ChargingItemMatch] = []
+    var naturalLanguageKnownCatalogAliasMatches: [ChargingItemMatch] = []
     var naturalLanguagePassComplete = false
     if let query = AppleChargingPlaceSearchQuery.naturalLanguageQuery(
       for: operatorName,
@@ -321,29 +429,51 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
         naturalLanguageResultGroupMatches.append(
           contentsOf: matches.filter(\.isResultGroupMatch)
         )
+        naturalLanguageKnownCatalogAliasMatches.append(
+          contentsOf: matches.filter(\.isKnownCatalogAliasMatch)
+        )
       }
+    }
+
+    if let identifier =
+      AppleChargingPlaceMatchPolicy
+      .naturalLanguageFallbackPlaceIdentifier(
+        categoryMatches: categoryResultGroupMatches.map(\.match),
+        naturalLanguageMatches: naturalLanguageResultGroupMatches.map(\.match),
+        categoryPassComplete: categoryPassComplete,
+        naturalLanguagePassComplete: naturalLanguagePassComplete
+      ),
+      let resultGroupMatch = bestResultGroupMatch(
+        withStablePlaceIdentifier: identifier,
+        in: categoryResultGroupMatches + naturalLanguageResultGroupMatches
+      )
+    {
+      if let cacheKey {
+        chargingPlaceCache[cacheKey] = resultGroupMatch.item
+      }
+      return resultGroupMatch.item
     }
 
     guard
       let identifier =
         AppleChargingPlaceMatchPolicy
-        .naturalLanguageFallbackPlaceIdentifier(
-          categoryMatches: categoryResultGroupMatches.map(\.match),
-          naturalLanguageMatches: naturalLanguageResultGroupMatches.map(\.match),
+        .corroboratedKnownCatalogAliasPlaceIdentifier(
+          categoryMatches: categoryKnownCatalogAliasMatches.map(\.match),
+          naturalLanguageMatches: naturalLanguageKnownCatalogAliasMatches.map(\.match),
           categoryPassComplete: categoryPassComplete,
           naturalLanguagePassComplete: naturalLanguagePassComplete
         ),
-      let resultGroupMatch = bestResultGroupMatch(
+      let knownCatalogAliasMatch = bestKnownCatalogAliasMatch(
         withStablePlaceIdentifier: identifier,
-        in: categoryResultGroupMatches + naturalLanguageResultGroupMatches
+        in: categoryKnownCatalogAliasMatches + naturalLanguageKnownCatalogAliasMatches
       )
     else {
       return nil
     }
     if let cacheKey {
-      chargingPlaceCache[cacheKey] = resultGroupMatch.item
+      chargingPlaceCache[cacheKey] = knownCatalogAliasMatch.item
     }
-    return resultGroupMatch.item
+    return knownCatalogAliasMatch.item
   }
 
   func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem? {
@@ -506,44 +636,64 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   ) -> [ChargingItemMatch] {
     let requestedOperatorKey = operatorKey(operatorName)
     return items.compactMap { item -> ChargingItemMatch? in
-      let operatorEvidence = lookups.compactMap {
+      let allOperatorEvidence = lookups.compactMap {
         operatorScopedEvidence(item: item, lookup: $0)
       }
-      .filter {
-        AppleChargingPlaceMatchPolicy.accepts(
-          distanceMeters: $0.distance,
-          hasExactAddressMatch: $0.hasExactAddressMatch
-        )
-      }
-      .min { $0.distance < $1.distance }
+      let operatorEvidence =
+        allOperatorEvidence
+        .filter {
+          AppleChargingPlaceMatchPolicy.accepts(
+            distanceMeters: $0.distance,
+            hasExactAddressMatch: $0.hasExactAddressMatch
+          )
+        }
+        .min { $0.distance < $1.distance }
       let resultGroupDistance = resultGroupLookups.compactMap {
         distance(from: item, to: $0)
       }.min()
       let restaurantDistance = resultGroup.restaurantCoordinate.flatMap {
         distance(from: item, to: $0)
       }
-      let match = AppleChargingPlaceMatchPolicy.match(
-        evidence: AppleChargingPlaceMatchPolicy.Evidence(
-          operatorNameMatches: operatorMatches(item.name ?? "", operatorName),
-          canonicalOperatorNameMatches:
-            AppleChargingPlaceMatchPolicy
-            .canonicalOperatorKeysMatch(
-              operatorKey(item.name ?? ""),
-              requestedOperatorKey
+      let match =
+        AppleChargingPlaceMatchPolicy.match(
+          evidence: AppleChargingPlaceMatchPolicy.Evidence(
+            operatorNameMatches: operatorMatches(item.name ?? "", operatorName),
+            canonicalOperatorNameMatches:
+              AppleChargingPlaceMatchPolicy
+              .canonicalOperatorKeysMatch(
+                operatorKey(item.name ?? ""),
+                requestedOperatorKey
+              ),
+            operatorScopedDistanceMeters: operatorEvidence?.distance,
+            hasExactOperatorAddressMatch: operatorEvidence?.hasExactAddressMatch ?? false,
+            isEVCharger: item.pointOfInterestCategory == .evCharger,
+            resultGroupDistanceMeters: resultGroupDistance,
+            hasOperatorLocalityMatch: AppleChargingPlaceLookupScope.localityMatches(
+              mapItemAddress(item),
+              referenceAddresses: lookups.map(\.address)
             ),
-          operatorScopedDistanceMeters: operatorEvidence?.distance,
-          hasExactOperatorAddressMatch: operatorEvidence?.hasExactAddressMatch ?? false,
-          isEVCharger: item.pointOfInterestCategory == .evCharger,
-          resultGroupDistanceMeters: resultGroupDistance,
-          hasOperatorLocalityMatch: AppleChargingPlaceLookupScope.localityMatches(
-            mapItemAddress(item),
-            referenceAddresses: lookups.map(\.address)
+            restaurantDistanceMeters: restaurantDistance,
+            stablePlaceIdentifier: item.identifier?.rawValue
           ),
-          restaurantDistanceMeters: restaurantDistance,
-          stablePlaceIdentifier: item.identifier?.rawValue
-        ),
-        resultGroupKind: resultGroup.kind
-      )
+          resultGroupKind: resultGroup.kind
+        )
+        ?? AppleChargingPlaceMatchPolicy.knownCatalogAliasMatch(
+          evidence: AppleChargingPlaceMatchPolicy.KnownCatalogAliasEvidence(
+            operatorNamesAreKnownAliases: AppleChargingOperatorCatalog.isKnownAlias(
+              applePlaceName: item.name ?? "",
+              requestedOperatorName: operatorName
+            ),
+            operatorDistanceMeters: allOperatorEvidence.map(\.distance).min(),
+            isEVCharger: item.pointOfInterestCategory == .evCharger,
+            hasOperatorLocalityMatch: AppleChargingPlaceLookupScope.localityMatches(
+              mapItemAddress(item),
+              referenceAddresses: lookups.map(\.address)
+            ),
+            restaurantDistanceMeters: restaurantDistance,
+            stablePlaceIdentifier: item.identifier?.rawValue
+          ),
+          resultGroupKind: resultGroup.kind
+        )
       guard let match else {
         return nil
       }
@@ -583,6 +733,20 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     in matches: [ChargingItemMatch]
   ) -> ChargingItemMatch? {
     matches.filter { $0.stablePlaceIdentifier == identifier }.min {
+      if $0.distance != $1.distance {
+        return $0.distance < $1.distance
+      }
+      return mapItemStableKey($0.item) < mapItemStableKey($1.item)
+    }
+  }
+
+  private func bestKnownCatalogAliasMatch(
+    withStablePlaceIdentifier identifier: String,
+    in matches: [ChargingItemMatch]
+  ) -> ChargingItemMatch? {
+    matches.filter {
+      $0.isKnownCatalogAliasMatch && $0.stablePlaceIdentifier == identifier
+    }.min {
       if $0.distance != $1.distance {
         return $0.distance < $1.distance
       }
@@ -893,7 +1057,8 @@ private struct ChargingItemMatch {
 
   var distance: CLLocationDistance {
     switch match {
-    case .operatorScoped(let distance), .resultGroup(let distance, _):
+    case .operatorScoped(let distance), .resultGroup(let distance, _),
+      .knownCatalogAlias(let distance, _):
       return distance
     }
   }
@@ -912,10 +1077,19 @@ private struct ChargingItemMatch {
     return false
   }
 
+  var isKnownCatalogAliasMatch: Bool {
+    if case .knownCatalogAlias = match {
+      return true
+    }
+    return false
+  }
+
   var stablePlaceIdentifier: String? {
-    guard case .resultGroup(_, let identifier) = match else {
+    switch match {
+    case .resultGroup(_, let identifier), .knownCatalogAlias(_, let identifier):
+      return identifier
+    case .operatorScoped:
       return nil
     }
-    return identifier
   }
 }

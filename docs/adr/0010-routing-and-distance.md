@@ -6,6 +6,7 @@
 - Amended: 2026-08-19
 - Amended: 2026-08-20 (candidate identity, group-bounded Apple-place matching,
   and pass corroboration)
+- Amended: 2026-08-21 (bounded known-catalog operator alias)
 
 ## Context
 
@@ -24,6 +25,15 @@ intended Apple place was a false negative; widening the rule outside the current
 displayed result group would be ambiguous. Food-mode evidence must remain inside
 the exact restaurant-POI group, and the Apple charger itself must pass an
 independent <=500 m geodesic check to that exact restaurant POI.
+
+A 2026-08-21 Zuchwil regression exposed a different Apple-catalog mismatch. The
+authority operator `Autosense` appears in Apple Maps as `AMAG Energy Charging`.
+Apple's charger was about 78 m from the requested operator's authority lookup and
+about 51 m from the exact grouping McDonald's. It therefore missed the ordinary
+60 m operator rule even though both bounded Apple searches returned the same
+`.evCharger` record (observed Place ID `IE82B5E47B23E56E7`). A general distance
+increase or a broad `AMAG` synonym would admit unrelated records, so this case
+requires a narrower catalog-specific rule.
 
 ## Decision
 
@@ -62,6 +72,25 @@ The existing operator-specific rules remain unchanged: accept a matching Apple
 place within 60 m of one of that operator's qualifying authority locations without
 address evidence, or within 300 m only when street, house number, and postal code
 or city match that operator location.
+
+Maintain one explicit directed normalized Apple-catalog mapping: an Apple place
+whose normalized name is exactly `AMAG Energy Charging` may identify the requested
+backend operator whose normalized name is exactly `Autosense`. Only this direction
+may use a separate inclusive 100 m limit, measured only to a qualifying authority
+lookup of the requested operator. The reverse direction, equal operator/place
+names, plain `AMAG`, and every other AMAG business receive no 100 m exception. The
+candidate cannot borrow another operator's location or general result-group
+evidence for that decision. It must still have Apple's `.evCharger` category,
+share the requested operator's postal code or normalized city, and expose a stable
+Apple Place ID. In addition, every bounded center request in both the category-only
+and filtered natural-language passes must succeed, and both complete passes must
+resolve the same single stable Place ID. In food mode, the charger must
+independently remain within 500 m geodesic distance of the exact restaurant POI
+that defines the displayed result.
+
+This catalog-alias path does not change the ordinary 60 m direct rule, the 300 m
+exact-address rule, or the 60 m result-group fallback. In particular, the Wertheim
+group-corroboration rule and all of its boundaries remain unchanged.
 
 Within either one currently displayed no-food `ChargingCampus` or one concrete
 restaurant-centered group, a third conservative rule may recover a local
@@ -145,11 +174,15 @@ claims. Corridor membership, the origin lower bound, and MapKit enrichment must
 all address that same coordinate. The multistop handoff requires iOS 18.4 or later;
 iOS 18.0–18.3 falls back to automobile directions to the matched restaurant.
 
-The group-bounded fallback can correct a presentation-only Apple catalog mismatch
-without relaxing campus or restaurant-result identity or treating a nearby
-operator as the requested operator. Regression coverage must include the Wertheim
-campus and food distances above, rejection outside the currently displayed group,
-rejection when the Apple charger exceeds 500 m geodesic distance to the exact
-grouping restaurant POI, rejection on missing category/locality, ambiguous Apple
-Place IDs, and an omitted category-only result recovered by the filtered operator
-search in each group type.
+The group-bounded fallback and the narrower known-catalog-alias path can correct
+presentation-only Apple catalog mismatches without relaxing campus or
+restaurant-result identity or treating a nearby operator as the requested
+operator. Regression coverage must include the Wertheim campus and food distances
+above, rejection outside the currently displayed group, rejection when the Apple
+charger exceeds 500 m geodesic distance to the exact grouping restaurant POI,
+rejection on missing category/locality, ambiguous Apple Place IDs, and an omitted
+category-only result recovered by the filtered operator search in each group type.
+It must also include the Zuchwil Autosense/AMAG Energy Charging case at about 78 m
+from the requested operator's authority lookup and 51 m from the exact restaurant,
+plus rejection at 101 m, for a plain `AMAG` name, for incomplete passes, and when
+the two complete passes resolve different IDs.

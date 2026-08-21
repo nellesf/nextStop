@@ -1,7 +1,7 @@
 # System architecture
 
-Status: Accepted on 2026-08-13; clustering/search identity and group-bounded
-Apple-place matching amended on 2026-08-20.
+Status: Accepted on 2026-08-13; clustering/search identity and Apple-place
+matching amended through 2026-08-21.
 
 ## Goals
 
@@ -82,6 +82,15 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
   food mode, lie within 500 m geodesic distance of the exact grouping restaurant
   POI. Another operator's location is evidence only and never changes the
   requested operator identity.
+- Recognizes one directed normalized Apple-catalog mapping: the exact Apple place
+  name `AMAG Energy Charging` may identify the exact requested backend operator
+  `Autosense`. Only this direction may use at most 100 m to the requested
+  operator's own qualifying authority lookup. The reverse direction, equal names,
+  plain `AMAG`, and other AMAG businesses receive no exception. The candidate
+  still requires `.evCharger`, matching locality, a stable Place ID, and the same
+  single ID from fully successful category-only and filtered natural-language
+  passes. Food mode still requires <=500 m to the exact grouping restaurant. This
+  does not widen the ordinary 60 m/300 m rules or the Wertheim group fallback.
 - For CarPlay, opens Apple Maps with driving directions. A matched restaurant is
   inserted as a waypoint before the original ride destination; without a food
   match, the campus navigation coordinate remains the navigation destination.
@@ -220,6 +229,14 @@ allowed. If the category set is empty, the natural-language set must identify on
 stable place. If the category set is ambiguous, exactly one stable Place ID must
 occur in both fully validated sets. The second-pass fallback requires every center
 in both passes to succeed.
+
+The directed `AMAG Energy Charging` Apple name -> requested `Autosense` backend
+operator mapping has a stricter cross-pass outcome despite its separate 100 m
+authority-only distance: every center in both passes must succeed and both passes
+must contain the same one stable Place ID. It cannot use another operator's
+coordinate as 100 m evidence, and the exception does not apply in reverse or to
+equal names. The ordinary 60 m direct, 300 m exact-address, and 60 m result-group
+rules remain unchanged.
 
 The backend's restaurant predicate uses an OSM snapshot pinned into the same
 signed pagination token. A 700 m materialized pair cache reduces work and retains
