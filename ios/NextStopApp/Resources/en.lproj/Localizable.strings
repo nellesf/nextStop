@@ -72,6 +72,7 @@
 "profile.validation.destination" = "Select a destination from the search results.";
 "profile.validation.name" = "Enter a profile name.";
 "profile.validation.restaurant_chain" = "Please choose a restaurant chain.";
+"profiles.empty.create" = "Create first profile";
 "profiles.empty.description" = "Create a profile to prepare a destination and charging criteria for CarPlay.";
 "profiles.empty.title" = "No profiles yet";
 "profiles.edit.accessibility_hint" = "Opens the profile for editing.";

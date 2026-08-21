@@ -42,39 +42,43 @@ struct ProfileListView: View {
 
   var body: some View {
     NavigationStack {
-      List {
-        screenHeader
-          .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 10, trailing: 20))
-          .listRowBackground(Color.clear)
-          .listRowSeparator(.hidden)
+      VStack(spacing: 0) {
+        fixedHeader
 
-        if profiles.isEmpty {
-          emptyState
-            .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 12, trailing: 16))
+        List {
+          screenTitle
+            .listRowInsets(EdgeInsets(top: 8, leading: 20, bottom: 10, trailing: 20))
             .listRowBackground(Color.clear)
             .listRowSeparator(.hidden)
-        } else {
-          ForEach(profiles) { profile in
-            profileCard(profile)
-              .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+
+          if profiles.isEmpty {
+            emptyState
+              .listRowInsets(EdgeInsets(top: 8, leading: 16, bottom: 12, trailing: 16))
               .listRowBackground(Color.clear)
               .listRowSeparator(.hidden)
-              .swipeActions {
-                Button("action.delete", role: .destructive) {
-                  delete(profile)
+
+            emptyProfileButton
+              .listRowInsets(EdgeInsets(top: 0, leading: 16, bottom: 24, trailing: 16))
+              .listRowBackground(Color.clear)
+              .listRowSeparator(.hidden)
+          } else {
+            ForEach(profiles) { profile in
+              profileCard(profile)
+                .listRowInsets(EdgeInsets(top: 5, leading: 16, bottom: 5, trailing: 16))
+                .listRowBackground(Color.clear)
+                .listRowSeparator(.hidden)
+                .swipeActions {
+                  Button("action.delete", role: .destructive) {
+                    delete(profile)
+                  }
                 }
-              }
+            }
           }
         }
-
-        newProfileButton
-          .listRowInsets(EdgeInsets(top: 12, leading: 16, bottom: 24, trailing: 16))
-          .listRowBackground(Color.clear)
-          .listRowSeparator(.hidden)
+        .listStyle(.plain)
+        .scrollContentBackground(.hidden)
       }
-      .listStyle(.plain)
-      .scrollContentBackground(.hidden)
-      .background(Color(.systemGroupedBackground))
+      .background(Color(.systemGroupedBackground).ignoresSafeArea())
       .toolbar(.hidden, for: .navigationBar)
       .fullScreenCover(item: $editorSelection) { selection in
         ProfileEditorView(profile: selection.profile) { profile in
@@ -127,34 +131,41 @@ struct ProfileListView: View {
     }
   }
 
-  private var screenHeader: some View {
-    VStack(alignment: .leading, spacing: 8) {
-      HStack(alignment: .center, spacing: 8) {
-        Text(verbatim: "nextStop")
-          .font(.title3.weight(.semibold))
-          .foregroundStyle(.primary)
+  private var fixedHeader: some View {
+    HStack(alignment: .center, spacing: 8) {
+      Text(verbatim: "nextStop")
+        .font(.title3.weight(.semibold))
+        .foregroundStyle(.primary)
 
-        Spacer(minLength: 12)
+      Spacer(minLength: 12)
 
-        Button {
-          showsDataSources = true
-        } label: {
-          Image(systemName: "info")
-            .font(.system(size: 18, weight: .bold))
-            .frame(width: 44, height: 44)
-            .foregroundStyle(.primary)
-            .background(Color(.secondarySystemGroupedBackground), in: Circle())
-            .overlay {
-              Circle()
-                .stroke(Color.primary.opacity(0.06), lineWidth: 1)
-            }
-            .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
-            .contentShape(Circle())
-        }
-        .buttonStyle(.plain)
-        .accessibilityLabel(Text("licenses.title"))
+      headerButton(
+        systemImage: "info",
+        foregroundStyle: .primary,
+        backgroundStyle: Color(.secondarySystemGroupedBackground),
+        accessibilityLabel: "licenses.title"
+      ) {
+        showsDataSources = true
       }
 
+      headerButton(
+        systemImage: "plus",
+        foregroundStyle: Color.black.opacity(0.84),
+        backgroundStyle: Color.nextStopHighlight,
+        accessibilityLabel: "profile.new.title"
+      ) {
+        editorSelection = ProfileEditorSelection()
+      }
+    }
+    .padding(.horizontal, 20)
+    .padding(.top, 8)
+    .padding(.bottom, 4)
+    .background(Color(.systemGroupedBackground))
+    .accessibilityElement(children: .contain)
+  }
+
+  private var screenTitle: some View {
+    VStack(alignment: .leading, spacing: 8) {
       Text("profiles.title")
         .font(.largeTitle.weight(.bold))
         .foregroundStyle(.primary)
@@ -164,6 +175,30 @@ struct ProfileListView: View {
         .foregroundStyle(.secondary)
     }
     .accessibilityElement(children: .contain)
+  }
+
+  private func headerButton(
+    systemImage: String,
+    foregroundStyle: Color,
+    backgroundStyle: Color,
+    accessibilityLabel: LocalizedStringKey,
+    action: @escaping () -> Void
+  ) -> some View {
+    Button(action: action) {
+      Image(systemName: systemImage)
+        .font(.system(size: 18, weight: .bold))
+        .frame(width: 44, height: 44)
+        .foregroundStyle(foregroundStyle)
+        .background(backgroundStyle, in: Circle())
+        .overlay {
+          Circle()
+            .stroke(Color.primary.opacity(0.06), lineWidth: 1)
+        }
+        .shadow(color: Color.black.opacity(0.05), radius: 5, y: 2)
+        .contentShape(Circle())
+    }
+    .buttonStyle(.plain)
+    .accessibilityLabel(Text(accessibilityLabel))
   }
 
   private var emptyState: some View {
@@ -357,12 +392,12 @@ struct ProfileListView: View {
       .padding(.leading, 30)
   }
 
-  private var newProfileButton: some View {
+  private var emptyProfileButton: some View {
     Button {
       editorSelection = ProfileEditorSelection()
     } label: {
       HStack(spacing: 10) {
-        Text("profile.new.title")
+        Text("profiles.empty.create")
           .font(.headline.weight(.semibold))
         Spacer()
         Image(systemName: "plus")
