@@ -210,7 +210,11 @@ export class HardenedAppAttestVerifier implements AppAttestCryptographicallyVeri
       throw new Error("Assertion App ID mismatch.");
     }
     const flags = authenticatorData[32];
-    if (flags === undefined || (flags & ~extensionDataFlag) !== 0) {
+    if (
+      flags === undefined ||
+      (flags & attestedCredentialDataFlag) === 0 ||
+      (flags & ~(attestedCredentialDataFlag | extensionDataFlag)) !== 0
+    ) {
       throw new Error("Invalid assertion authenticator flags.");
     }
     parseAssertionRemainder(
@@ -343,21 +347,25 @@ function parseAttestationRemainder(
     throw new Error("Invalid attestation authenticator data.");
   }
   validateCOSEKey(values[0]);
-  const hasExtensions = (authData[32] ?? 0) & extensionDataFlag;
-  if (hasExtensions === 0 && values.length !== 1) {
-    throw new Error("Unexpected attestation extension data.");
+  const extensionFlagIsSet = ((authData[32] ?? 0) & extensionDataFlag) !== 0;
+  if (values.length === 1) {
+    if (extensionFlagIsSet) {
+      throw new Error("Missing attestation extension data.");
+    }
+    return {};
   }
-  if (hasExtensions !== 0 && values.length !== 2) {
+  if (values[1] === undefined) {
     throw new Error("Missing attestation extension data.");
   }
-  if (hasExtensions !== 0) {
-    return parseKnownExtensions(
-      values[1],
-      allowedValidationCategories,
-      supportedBundleVersions,
-    );
-  }
-  return {};
+  // Apple's current App Attest objects append the extension dictionary without
+  // setting WebAuthn's ED flag. Treat the exact trailing CBOR shape as
+  // authoritative while still accepting standards-conforming proofs that set
+  // the flag. Unknown, partial, or additional objects remain fail-closed.
+  return parseKnownExtensions(
+    values[1],
+    allowedValidationCategories,
+    supportedBundleVersions,
+  );
 }
 
 function parseAssertionRemainder(
@@ -365,10 +373,10 @@ function parseAssertionRemainder(
   allowedValidationCategories: ReadonlySet<number>,
   supportedBundleVersions: ReadonlySet<string>,
 ): ParsedExtensions {
-  const hasExtensions = ((authData[32] ?? 0) & extensionDataFlag) !== 0;
-  if (!hasExtensions) {
-    if (authData.length !== 37) {
-      throw new Error("Unexpected assertion authenticator data.");
+  const extensionFlagIsSet = ((authData[32] ?? 0) & extensionDataFlag) !== 0;
+  if (authData.length === 37) {
+    if (extensionFlagIsSet) {
+      throw new Error("Missing assertion extension data.");
     }
     return {};
   }
@@ -376,6 +384,8 @@ function parseAssertionRemainder(
   if (values.length !== 1) {
     throw new Error("Invalid assertion extension data.");
   }
+  // iOS 27 assertions use the same appended extension structure as
+  // attestations and may likewise omit the ED flag.
   return parseKnownExtensions(
     values[0],
     allowedValidationCategories,
@@ -414,26 +424,25 @@ function parseKnownExtensions(
   ) {
     throw new Error("App Attest extension pair is incomplete or unknown.");
   }
-  const validationCategory = extensions.get("apple_validation_category_01");
+  const encodedValidationCategory = extensions.get("apple_validation_category_01");
   const bundleVersion = extensions.get("apple_bundle_version_01");
   if (
-    !Number.isSafeInteger(validationCategory) ||
-    (validationCategory as number) < 0 ||
-    (validationCategory as number) > 0xffff_ffff ||
+    !isBufferOfLength(encodedValidationCategory, 4) ||
     typeof bundleVersion !== "string" ||
     bundleVersion.length < 1 ||
     bundleVersion.length > 64
   ) {
     throw new Error("Invalid App Attest extension values.");
   }
+  const validationCategory = encodedValidationCategory.readUInt32LE(0);
   if (
-    !allowedValidationCategories.has(validationCategory as number) ||
+    !allowedValidationCategories.has(validationCategory) ||
     !supportedBundleVersions.has(bundleVersion)
   ) {
     throw new Error("Unsupported App Attest extension values.");
   }
   return {
-    validationCategory: validationCategory as number,
+    validationCategory,
     bundleVersion,
   };
 }
@@ -494,7 +503,7 @@ function requireSizedBuffer(value: unknown, minimum: number, maximum: number): B
   return value;
 }
 
-function isBufferOfLength(value: unknown, length: number): boolean {
+function isBufferOfLength(value: unknown, length: number): value is Buffer {
   return Buffer.isBuffer(value) && value.length === length;
 }
 
