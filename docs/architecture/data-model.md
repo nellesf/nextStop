@@ -3,6 +3,7 @@
 Status: Accepted on 2026-08-13.
 Amended on 2026-08-18 for request-scoped power filtering and OSM food POIs.
 Amended on 2026-08-20 for dual fine-park/no-food-campus identity.
+Amended on 2026-08-24 for passenger-car access exclusions.
 
 All IDs below are internal opaque UUIDs unless an explicit source/native identifier
 is named. Quantities use integer meters and kilowatts. Instants are UTC.
@@ -141,6 +142,17 @@ deduplicating, and aggregating every EVSE for every request. Fine-park and campu
 membership are stored as normalized relational rows for efficient joins. Fresh
 live observations remain separate and are merged only for the selected result
 page, preserving the rule that availability is informational.
+
+Passenger-car access is a boundary of the search projection. An evidence-backed
+exact-operator policy removes locations known to forbid passenger cars before
+fine-park and campus clustering. Provider records, normalized locations, EVSEs,
+and identity conflicts remain stored for provenance, but excluded locations do
+not contribute to candidate membership, counts, summaries, power projections, or
+navigation coordinates. A conflict caused only by excluded evidence is marked
+`audit_only`, so it cannot change search deduplication. Missing access evidence
+remains `unknown` and eligible; the initial exact rule covers only
+`Milence Germany GmbH`. Mixed operators such as Aral pulse remain eligible until
+an authoritative EVSE-level classification is available. See ADR 0016.
 
 ### `DataSource` / `SourceReference`
 

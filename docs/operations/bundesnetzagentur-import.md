@@ -1,6 +1,7 @@
 # Bundesnetzagentur import runbook
 
-Status: automatic ingestion implemented and locally verified on 2026-08-15.
+Status: automatic ingestion implemented and locally verified on 2026-08-15;
+passenger-car projection policy amended on 2026-08-24.
 
 ## Source and license
 
@@ -67,6 +68,14 @@ The job refuses a hash mismatch, validates the exact 47-column schema, enforces 
 raw and normalized observations in bounded batches, and builds the projection
 under a new UUID. It publishes only after stored row counts match validated
 counts and at least one fine park and one no-food campus exist.
+
+All valid provider and normalized observations remain stored for provenance. The
+passenger-car access policy then removes the exact operator
+`Milence Germany GmbH` before park and campus clustering. Conflicts caused only by
+excluded observations are retained as `audit_only`; they do not affect EVSE
+deduplication, power projections, live aggregation, or candidate lookup evidence.
+The automatic combined importer includes the policy version in its projection
+fingerprint, so a policy change rebuilds even when provider bytes are unchanged.
 
 Publication takes an advisory transaction lock, retires the prior active version,
 and activates the new one in the same transaction. API readers therefore see

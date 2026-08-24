@@ -8,6 +8,7 @@ import type { Pool } from "pg";
 
 import { PostGISCandidateSearch } from "../../src/application/postgis-candidate-search.js";
 import { SignedPaginationCodec } from "../../src/application/signed-pagination.js";
+import { importStaticProjection } from "../../src/application/static-projection-importer.js";
 import {
   buildChargingCampusProjection,
   buildChargingParkProjection,
@@ -238,6 +239,206 @@ void test(
       assert.equal(response.candidates[0]?.maximumPowerKW, 300);
       assert.deepEqual(response.coverage.activeSources, [bundesnetzagenturDescriptor.id]);
     });
+
+    await context.test(
+      "retains Milence source evidence but excludes it from passenger-car projections",
+      async () => {
+        await resetDatabase(pool);
+        const milenceLocationID = "a1000000-0000-4000-8000-000000000001";
+        const aralFirstLocationID = "a1000000-0000-4000-8000-000000000002";
+        const aralSecondLocationID = "a1000000-0000-4000-8000-000000000003";
+        const canonicalEVSEIdentity = "DEBPEPASSENGERCAR";
+        const observations = [
+          chargingObservation({
+            locationID: milenceLocationID,
+            operatorName: "Milence Germany GmbH",
+            northMeters: 400,
+            points: [{
+              id: "a2000000-0000-4000-8000-000000000001",
+              maximumPowerKW: 400,
+              canonicalEVSEIdentity,
+            }],
+          }),
+          chargingObservation({
+            locationID: aralFirstLocationID,
+            operatorName: "BP Europa SE",
+            northMeters: 0,
+            points: [{
+              id: "a2000000-0000-4000-8000-000000000002",
+              maximumPowerKW: 400,
+              canonicalEVSEIdentity,
+            }],
+          }),
+          chargingObservation({
+            locationID: aralSecondLocationID,
+            operatorName: "BP Europa SE",
+            northMeters: 50,
+            points: [{
+              id: "a2000000-0000-4000-8000-000000000003",
+              maximumPowerKW: 400,
+              canonicalEVSEIdentity,
+            }],
+          }),
+        ];
+
+        const imported = await importStaticProjection(
+          pool,
+          [{
+            providerId: bundesnetzagenturDescriptor.id,
+            datasetHash: "1".repeat(64),
+            observedAt: "2026-08-24T00:00:00.000Z",
+            records: observations.map((observation) => ({
+              kind: "observation" as const,
+              observation,
+            })),
+          }],
+          [],
+          () => new Date("2026-08-24T01:00:00.000Z"),
+        );
+        assert.equal(imported.kind, "published");
+        if (imported.kind !== "published") {
+          throw new Error("The passenger-car policy fixture was not published.");
+        }
+
+        const normalized = await pool.query<{
+          readonly operatorName: string;
+        }>(
+          `SELECT operator_name AS "operatorName"
+           FROM nextstop.normalized_charging_locations
+           WHERE projection_id = $1
+           ORDER BY operator_name`,
+          [imported.projectionId],
+        );
+        assert.deepEqual(
+          normalized.rows.map(({ operatorName }) => operatorName),
+          ["BP Europa SE", "BP Europa SE", "Milence Germany GmbH"],
+        );
+
+        const providerRecords = await pool.query<{
+          readonly fixture: string;
+          readonly sourceRecordId: string;
+        }>(
+          `SELECT source_record_id AS "sourceRecordId",
+                  raw_payload ->> 'fixture' AS fixture
+           FROM nextstop.provider_records
+           WHERE source_record_id = ANY($1::text[])
+           ORDER BY source_record_id`,
+          [observations.map(({ location }) => location.sourceReference.sourceRecordId)],
+        );
+        assert.deepEqual(providerRecords.rows, [
+          {
+            sourceRecordId: `location-${milenceLocationID}`,
+            fixture: "Milence Germany GmbH",
+          },
+          {
+            sourceRecordId: `location-${aralFirstLocationID}`,
+            fixture: "BP Europa SE",
+          },
+          {
+            sourceRecordId: `location-${aralSecondLocationID}`,
+            fixture: "BP Europa SE",
+          },
+        ]);
+
+        const conflicts = await pool.query<{
+          readonly canonicalEVSEIdentity: string;
+          readonly resolution: string;
+        }>(
+          `SELECT canonical_evse_identity AS "canonicalEVSEIdentity", resolution
+           FROM nextstop.projection_conflicts
+           WHERE projection_id = $1`,
+          [imported.projectionId],
+        );
+        assert.deepEqual(conflicts.rows, [{
+          canonicalEVSEIdentity,
+          resolution: "audit_only",
+        }]);
+
+        const projectedEntities = await pool.query<{
+          readonly chargingPointCount: number;
+          readonly kind: string;
+          readonly memberLocationIds: string[];
+          readonly operators: string[];
+        }>(
+          `SELECT 'park' AS kind,
+                  member_location_ids AS "memberLocationIds",
+                  operators,
+                  charging_point_count AS "chargingPointCount"
+           FROM nextstop.charging_park_projection
+           WHERE projection_id = $1
+           UNION ALL
+           SELECT 'campus' AS kind,
+                  member_location_ids AS "memberLocationIds",
+                  operators,
+                  charging_point_count AS "chargingPointCount"
+           FROM nextstop.charging_campus_projection
+           WHERE projection_id = $1
+           ORDER BY kind`,
+          [imported.projectionId],
+        );
+        assert.deepEqual(projectedEntities.rows, [
+          {
+            kind: "campus",
+            memberLocationIds: [aralFirstLocationID, aralSecondLocationID],
+            operators: ["BP Europa SE"],
+            chargingPointCount: 1,
+          },
+          {
+            kind: "park",
+            memberLocationIds: [aralFirstLocationID, aralSecondLocationID],
+            operators: ["BP Europa SE"],
+            chargingPointCount: 1,
+          },
+        ]);
+
+        const powerRows = await pool.query<{
+          readonly kind: string;
+          readonly operatorOnly: boolean;
+          readonly pointCountOnly: boolean;
+          readonly rowCount: number;
+        }>(
+          `SELECT kind,
+                  count(*)::integer AS "rowCount",
+                  bool_and(operators = ARRAY['BP Europa SE']::text[]) AS "operatorOnly",
+                  bool_and(charging_point_count = 1) AS "pointCountOnly"
+           FROM (
+             SELECT 'park' AS kind, operators, charging_point_count
+             FROM nextstop.charging_park_power_projection
+             WHERE projection_id = $1
+             UNION ALL
+             SELECT 'campus' AS kind, operators, charging_point_count
+             FROM nextstop.charging_campus_power_projection
+             WHERE projection_id = $1
+           ) AS power
+           GROUP BY kind
+           ORDER BY kind`,
+          [imported.projectionId],
+        );
+        assert.deepEqual(powerRows.rows, [
+          {
+            kind: "campus",
+            rowCount: minimumPowerOptions.length,
+            operatorOnly: true,
+            pointCountOnly: true,
+          },
+          {
+            kind: "park",
+            rowCount: minimumPowerOptions.length,
+            operatorOnly: true,
+            pointCountOnly: true,
+          },
+        ]);
+
+        assert.deepEqual(imported.counts, {
+          locationCount: 3,
+          chargingPointCount: 3,
+          parkCount: 1,
+          campusCount: 1,
+          quarantineCount: 0,
+          conflictCount: 1,
+        });
+      },
+    );
 
     await context.test(
       "filters EVSE power before operator counts and minimum park size",

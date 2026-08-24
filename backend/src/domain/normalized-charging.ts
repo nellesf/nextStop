@@ -112,5 +112,5 @@ export interface EVSEIdentityConflict {
   readonly locationIds: readonly string[];
   readonly chargingPointIds: readonly string[];
   readonly maximumDistanceMeters: number;
-  readonly resolution: "kept_distinct";
+  readonly resolution: "kept_distinct" | "audit_only";
 }

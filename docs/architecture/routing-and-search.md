@@ -1,7 +1,7 @@
 # Routing and candidate search
 
 Status: Accepted on 2026-08-13; candidate identity and Apple-place matching
-amended through 2026-08-21.
+amended through 2026-08-21; passenger-car access amended on 2026-08-24.
 
 ## Canonical routing rule
 
@@ -34,14 +34,16 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    `foodChain = null`, it selects one bounded `ChargingCampus` per stable campus ID.
    With a selected chain, it selects complete-link `ChargingPark` rows and never
    uses campus membership for restaurant matching.
-8. Backend selects the entity's precomputed power projection, then applies the
-   entity-wide minimum qualifying EVSE count, the exact 5,000 m route-corridor
-   predicate, and the safe origin bound against its power-filtered navigation
-   coordinate. A bounding box may prefilter but is never the final corridor
-   predicate. For food mode, the 700 m broad cache compares the POI with the fine
-   park's base navigation coordinate; the candidate query then applies the exact
-   inclusive 500 m check against the power-filtered fine-park navigation
-   coordinate and returns the selected restaurant plus attribution.
+8. The static publication has already removed exact, evidence-backed operators
+   known to forbid passenger cars before clustering, counting, and navigation
+   coordinate derivation. Backend selects the entity's precomputed power
+   projection, then applies the entity-wide minimum qualifying EVSE count, the
+   exact 5,000 m route-corridor predicate, and the safe origin bound against its
+   power-filtered navigation coordinate. A bounding box may prefilter but is never
+   the final corridor predicate. For food mode, the 700 m broad cache compares the
+   POI with the fine park's base navigation coordinate; the candidate query then
+   applies the exact inclusive 500 m check against the power-filtered fine-park
+   navigation coordinate and returns the selected restaurant plus attribution.
 9. iOS requests MapKit automobile directions from the current location to each
    candidate navigation coordinate in bounded batches behind a shared rolling
    request gate. Without a food filter it applies safe lower-bound stopping after
@@ -121,10 +123,12 @@ whereas distance/buffer-only patterns are less suitable:
 
 ## Search filter order
 
-The static projection build first discards EVSEs below each supported minimum
-power. It then deduplicates and derives count, operators, static availability,
-lookup evidence, and coordinates across each fine park and, independently, across
-each whole campus. A request reduces work in this order, subject to query planning:
+The static projection build first removes exact, evidence-backed locations known
+to forbid passenger cars before any park or campus clustering. It then discards
+EVSEs below each supported minimum power, deduplicates, and derives count,
+operators, static availability, lookup evidence, and coordinates across each fine
+park and, independently, across each whole campus. A request reduces work in this
+order, subject to query planning:
 
 1. select campus rows for `foodChain = null`, otherwise fine-park rows plus the
    pinned OSM projection;

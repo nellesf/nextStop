@@ -3,10 +3,8 @@ import { createReadStream } from "node:fs";
 import { fileURLToPath } from "node:url";
 
 import {
-  buildChargingCampusProjection,
-  buildChargingParkProjection,
-  findEVSEIdentityConflicts,
-} from "../domain/charging-park-projection.js";
+  buildPassengerCarChargingProjection,
+} from "../domain/passenger-car-charging-projection.js";
 import type {
   NormalizedChargingLocation,
   NormalizedLocationObservation,
@@ -82,9 +80,8 @@ async function main(): Promise<void> {
     await writer.writeObservations(projectionId, observations);
     await writer.writeQuarantines(projectionId, quarantines);
 
-    const parks = buildChargingParkProjection(locations);
-    const campuses = buildChargingCampusProjection(locations, parks);
-    const conflicts = findEVSEIdentityConflicts(locations);
+    const { parks, campuses, conflicts } =
+      buildPassengerCarChargingProjection(locations);
     for (let offset = 0; offset < parks.length; offset += writeBatchSize) {
       await writer.writeParks(projectionId, parks.slice(offset, offset + writeBatchSize));
     }

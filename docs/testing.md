@@ -1,7 +1,7 @@
 # Test strategy
 
 Status: Accepted on 2026-08-13; clustering and Apple-place cases amended through
-2026-08-21.
+2026-08-21; passenger-car access amended on 2026-08-24.
 
 ## Pure Swift domain tests
 
@@ -73,6 +73,13 @@ manual/integration routes validates assumptions against the real SDK.
 
 ## Clustering and projection tests
 
+- The exact `Milence Germany GmbH` policy removes its locations before fine-park
+  and campus clustering, so they cannot bridge, count toward, name, or determine
+  navigation for a passenger-car candidate. Unknown and non-exact operators,
+  including Aral's normalized operator, remain eligible. Provider records,
+  normalized entities, and conflict audit data remain retained. A conflict caused
+  only by excluded evidence is `audit_only` and cannot split an otherwise
+  deduplicated eligible EVSE in static power or live-availability aggregation.
 - Different operators at 100 m and 199 m can form one fine park.
 - Fine-park complete link: A–B 150 m, B–C 150 m, A–C 300 m cannot form one park;
   the deterministic split and park IDs are invariant under input permutations.

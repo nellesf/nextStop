@@ -27,6 +27,11 @@
 - European national-access-point coverage and data quality are heterogeneous. AFIR
   establishes access obligations but does not guarantee every field is present or
   operationally reliable in every country.
+- The current Bundesnetzagentur feed has no reliable structured passenger-car or
+  truck access field. The exact operator `Milence Germany GmbH` is excluded under
+  an evidence-backed truck-only policy, while unknown operators remain eligible.
+  Mixed sites such as Aral pulse still need an authoritative per-EVSE or
+  parking-place classification before truck-only equipment can be removed safely.
 - Bundesnetzagentur data is authoritative static data but does not provide the live
   availability needed for a complete German live-status experience. Current live
   status is available for Swiss `ich-tanke-strom` EVSEs; German results therefore

@@ -3,10 +3,9 @@ import { createHash, randomUUID } from "node:crypto";
 import type { Pool } from "pg";
 
 import {
-  buildChargingCampusProjection,
-  buildChargingParkProjection,
-  findEVSEIdentityConflicts,
-} from "../domain/charging-park-projection.js";
+  buildPassengerCarChargingProjection,
+} from "../domain/passenger-car-charging-projection.js";
+import { passengerCarAccessPolicyVersion } from "../domain/passenger-car-access.js";
 import type {
   NormalizedChargingLocation,
   NormalizedLocationObservation,
@@ -19,7 +18,8 @@ import {
 } from "../persistence/projection-writer.js";
 
 const writeBatchSize = 250;
-const projectionPolicyVersion = "conditional-charging-campus-v1";
+const projectionPolicyVersion =
+  `conditional-charging-campus-v1-${passengerCarAccessPolicyVersion}`;
 
 export type StaticProviderRecordResult =
   | Readonly<{ kind: "observation"; observation: NormalizedLocationObservation }>
@@ -101,9 +101,8 @@ export async function importStaticProjection(
     await writer.writeObservations(projectionId, observations);
     await writer.writeQuarantines(projectionId, quarantines);
 
-    const parks = buildChargingParkProjection(locations);
-    const campuses = buildChargingCampusProjection(locations, parks);
-    const conflicts = findEVSEIdentityConflicts(locations);
+    const { parks, campuses, conflicts } =
+      buildPassengerCarChargingProjection(locations);
     for (let offset = 0; offset < parks.length; offset += writeBatchSize) {
       await writer.writeParks(projectionId, parks.slice(offset, offset + writeBatchSize));
     }
