@@ -510,7 +510,7 @@ private final class TestHTTPURLProtocol: URLProtocol, @unchecked Sendable {
       return
     }
     do {
-      let (response, data) = try handler(request)
+      let (response, data) = try handler(Self.materializingHTTPBody(in: request))
       client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
       client?.urlProtocol(self, didLoad: data)
       client?.urlProtocolDidFinishLoading(self)
@@ -520,4 +520,30 @@ private final class TestHTTPURLProtocol: URLProtocol, @unchecked Sendable {
   }
 
   override func stopLoading() {}
+
+  private static func materializingHTTPBody(in request: URLRequest) throws -> URLRequest {
+    guard request.httpBody == nil, let stream = request.httpBodyStream else {
+      return request
+    }
+
+    stream.open()
+    defer { stream.close() }
+
+    var body = Data()
+    var buffer = [UInt8](repeating: 0, count: 4_096)
+    while true {
+      let byteCount = stream.read(&buffer, maxLength: buffer.count)
+      if byteCount < 0 {
+        throw stream.streamError ?? URLError(.cannotDecodeRawData)
+      }
+      if byteCount == 0 {
+        break
+      }
+      body.append(contentsOf: buffer.prefix(byteCount))
+    }
+
+    var materializedRequest = request
+    materializedRequest.httpBody = body
+    return materializedRequest
+  }
 }
