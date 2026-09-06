@@ -840,10 +840,11 @@ struct CarPlayTemplateTransitionGate {
 }
 
 extension NextStopCarPlaySceneDelegate: CPPointOfInterestTemplateDelegate {
-  func pointOfInterestTemplate(
+  nonisolated func pointOfInterestTemplate(
     _ pointOfInterestTemplate: CPPointOfInterestTemplate,
     didChangeMapRegion region: MKCoordinateRegion
   ) {
+    // CarPlay may deliver this callback off the main actor, so it must remain nonisolated.
     // A ride result is a stable snapshot. Panning never replaces or re-ranks its five parks.
   }
 }
