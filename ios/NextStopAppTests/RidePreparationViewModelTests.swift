@@ -949,6 +949,8 @@ final class RidePreparationViewModelTests: XCTestCase {
 
   func testPreparationUsesCurrentLocationAndCreatesPrivacyScopedRequest() async throws {
     let origin = try Coordinate(latitude: 48.1372, longitude: 11.5756)
+    let nuremberg = try Coordinate(latitude: 49.4521, longitude: 11.0767)
+    let leipzig = try Coordinate(latitude: 51.3397, longitude: 12.3731)
     let destination = try SavedDestination(
       displayName: "Berlin Hauptbahnhof",
       coordinate: Coordinate(latitude: 52.5251, longitude: 13.3694),
@@ -956,7 +958,9 @@ final class RidePreparationViewModelTests: XCTestCase {
     )
     let profile = try makeProfile(name: "Private profile name", destination: destination)
     let route = try PlannedRoute(
-      polyline: RoutePolyline(coordinates: [origin, destination.coordinate]),
+      polyline: RoutePolyline(
+        coordinates: [origin, nuremberg, leipzig, destination.coordinate]
+      ),
       actualDrivingDistance: Meters(585_000),
       expectedTravelTimeSeconds: 20_400
     )
@@ -992,12 +996,16 @@ final class RidePreparationViewModelTests: XCTestCase {
 
   func testPreparationAndCandidateSearchRunAsOneFlowExactlyOnce() async throws {
     let origin = try Coordinate(latitude: 50.1109, longitude: 8.6821)
+    let gottingen = try Coordinate(latitude: 51.5413, longitude: 9.9158)
+    let magdeburg = try Coordinate(latitude: 52.1205, longitude: 11.6276)
     let destination = try SavedDestination(
       displayName: "Rostock",
       coordinate: Coordinate(latitude: 54.0924, longitude: 12.0991)
     )
     let route = PlannedRoute(
-      polyline: try RoutePolyline(coordinates: [origin, destination.coordinate]),
+      polyline: try RoutePolyline(
+        coordinates: [origin, gottingen, magdeburg, destination.coordinate]
+      ),
       actualDrivingDistance: Meters(666_000),
       expectedTravelTimeSeconds: 22_000
     )
