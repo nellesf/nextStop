@@ -24,6 +24,7 @@
 "carplay.refresh" = "Refresh";
 "carplay.retry" = "Try again";
 "carplay.search.error.phone_setup" = "Open nextStop on the iPhone and allow precise location there before starting a CarPlay search.";
+"carplay.search.error.presentation" = "CarPlay could not update the search screen. Try again.";
 "carplay.search.loading.description" = "Checking the route, current charging status, and actual driving distances.";
 "carplay.search.loading.title" = "Finding charging parks…";
 "carplay.saved_rides.empty.description" = "Create a profile on the iPhone or search for a destination there once.";

@@ -1,3 +1,4 @@
+import CarPlay
 import Foundation
 import NextStopCore
 import XCTest
@@ -6,6 +7,111 @@ import XCTest
 
 @MainActor
 final class CarPlayPresentationTests: XCTestCase {
+  func testSearchStatusTemplateIsReusedAcrossRepeatedRetries() {
+    let root = CPListTemplate(title: "Profile", sections: [])
+    let summary = CPListTemplate(title: "Fahrt", sections: [])
+    var hierarchy: [CPTemplate] = [root, summary]
+    var store = CarPlaySearchTemplateStore()
+
+    for attempt in 0..<20 {
+      let resolution = store.resolve(in: hierarchy) {
+        CPListTemplate(title: "Suche \(attempt)", sections: [])
+      }
+      if resolution.requiresPush {
+        hierarchy.append(resolution.template)
+      }
+    }
+
+    XCTAssertEqual(hierarchy.count, 3)
+    XCTAssertTrue(hierarchy.last === store.current)
+  }
+
+  func testSearchStatusTemplateIsReplacedAfterLeavingTheHierarchy() {
+    let root = CPListTemplate(title: "Profile", sections: [])
+    let summary = CPListTemplate(title: "Fahrt", sections: [])
+    var hierarchy: [CPTemplate] = [root, summary]
+    var store = CarPlaySearchTemplateStore()
+    let first = store.resolve(in: hierarchy) {
+      CPListTemplate(title: "Erste Suche", sections: [])
+    }
+    hierarchy.append(first.template)
+    hierarchy.removeLast()
+
+    let second = store.resolve(in: hierarchy) {
+      CPListTemplate(title: "Zweite Suche", sections: [])
+    }
+
+    XCTAssertTrue(first.requiresPush)
+    XCTAssertTrue(second.requiresPush)
+    XCTAssertFalse(first.template === second.template)
+  }
+
+  func testSearchStatusTemplateIsNotReusedWhileAnotherTemplateIsVisible() {
+    let root = CPListTemplate(title: "Profile", sections: [])
+    let summary = CPListTemplate(title: "Fahrt", sections: [])
+    var hierarchy: [CPTemplate] = [root, summary]
+    var store = CarPlaySearchTemplateStore()
+    let first = store.resolve(in: hierarchy) {
+      CPListTemplate(title: "Suche", sections: [])
+    }
+    hierarchy.append(first.template)
+    hierarchy.append(CPListTemplate(title: "Optionen", sections: []))
+
+    let second = store.resolve(in: hierarchy) {
+      CPListTemplate(title: "Neue Suche", sections: [])
+    }
+
+    XCTAssertTrue(second.requiresPush)
+    XCTAssertFalse(first.template === second.template)
+  }
+
+  func testRetryAndResultRefreshSequenceKeepsHierarchyBounded() {
+    let root = CPListTemplate(title: "Profile", sections: [])
+    let summary = CPListTemplate(title: "Fahrt", sections: [])
+    var hierarchy: [CPTemplate] = [root, summary]
+    var store = CarPlaySearchTemplateStore()
+
+    for attempt in 0..<20 {
+      let retry = store.resolve(in: hierarchy) {
+        CPListTemplate(title: "Suche \(attempt)", sections: [])
+      }
+      if retry.requiresPush {
+        hierarchy.append(retry.template)
+      }
+    }
+    XCTAssertEqual(hierarchy.count, 3)
+
+    hierarchy = [root, summary]
+    store.clear()
+    hierarchy.append(CPListTemplate(title: "Treffer", sections: []))
+    XCTAssertEqual(hierarchy.count, 3)
+
+    hierarchy = [root, summary]
+    let refresh = store.resolve(in: hierarchy) {
+      CPListTemplate(title: "Neue Suche", sections: [])
+    }
+    hierarchy.append(refresh.template)
+
+    XCTAssertTrue(refresh.requiresPush)
+    XCTAssertEqual(hierarchy.count, 3)
+  }
+
+  func testTemplateTransitionGateRejectsOverlappingAndStaleCompletions() throws {
+    var gate = CarPlayTemplateTransitionGate()
+    let first = try XCTUnwrap(gate.begin())
+
+    XCTAssertTrue(gate.isActive)
+    XCTAssertNil(gate.begin())
+
+    gate.reset()
+    let second = try XCTUnwrap(gate.begin())
+
+    XCTAssertFalse(gate.finish(first))
+    XCTAssertTrue(gate.isActive(second))
+    XCTAssertTrue(gate.finish(second))
+    XCTAssertFalse(gate.isActive)
+  }
+
   func testDestinationSelectionUsesDefaultsWithoutAProfileReference() throws {
     let destination = try SavedDestination(
       displayName: "Hamburg",
