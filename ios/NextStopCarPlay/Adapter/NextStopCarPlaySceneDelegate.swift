@@ -8,6 +8,7 @@ import UIKit
 
 @MainActor
 final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
+  private weak var templateApplicationScene: CPTemplateApplicationScene?
   private var interfaceController: CPInterfaceController?
   private var dataContainer: ModelContainer?
   private var rideSummaryTemplate: CPListTemplate?
@@ -27,13 +28,10 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     _ templateApplicationScene: CPTemplateApplicationScene,
     didConnect interfaceController: CPInterfaceController
   ) {
+    self.templateApplicationScene = templateApplicationScene
     self.interfaceController = interfaceController
     templateTransitionGate.reset()
-    if let appDelegate = UIApplication.shared.delegate as? NextStopAppDelegate {
-      searchService = CarPlayRideSearchService(
-        candidatePageSearcher: appDelegate.candidatePageSearcher
-      )
-    }
+    searchService = makeSearchService(for: templateApplicationScene)
     showProfiles(animated: false)
   }
 
@@ -50,6 +48,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     templateTransitionGate.reset()
     searchService = nil
     self.interfaceController = nil
+    self.templateApplicationScene = nil
   }
 
   private func showProfiles(animated: Bool, handlerCompletion: (() -> Void)? = nil) {
@@ -453,8 +452,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   }
 
   private func performSearch(draft: RideSearchDraft, in loading: CPListTemplate) {
-    guard let searchService else {
-      showSearchError(.authenticationUnavailable, in: loading)
+    guard let searchService = resolvedSearchService() else {
+      showSearchError(.configurationUnavailable, in: loading)
       return
     }
 
@@ -484,6 +483,34 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         showSearchError(.serviceUnavailable, in: loading)
       }
     }
+  }
+
+  private func resolvedSearchService() -> (any CarPlayRideSearchExecuting)? {
+    if let searchService {
+      return searchService
+    }
+    guard let templateApplicationScene,
+      let service = makeSearchService(for: templateApplicationScene)
+    else {
+      return nil
+    }
+    searchService = service
+    return service
+  }
+
+  private func makeSearchService(
+    for templateApplicationScene: CPTemplateApplicationScene
+  ) -> (any CarPlayRideSearchExecuting)? {
+    guard
+      let dependencies = NextStopSceneDependencyBridge.dependencies(
+        from: templateApplicationScene.session
+      )
+    else {
+      return nil
+    }
+    return CarPlayRideSearchService(
+      candidatePageSearcher: dependencies.candidatePageSearcher
+    )
   }
 
   private func showNoResults(
@@ -834,6 +861,8 @@ extension NextStopCarPlaySceneDelegate: CPPointOfInterestTemplateDelegate {
 extension CarPlayRideSearchError {
   fileprivate var localizationKey: String {
     switch self {
+    case .configurationUnavailable:
+      "carplay.search.error.configuration"
     case .authenticationUnavailable:
       "ride.search.error.authentication"
     case .phoneSetupRequired:

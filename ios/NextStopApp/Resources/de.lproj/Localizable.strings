@@ -23,6 +23,7 @@
 "carplay.profiles.title" = "Profile";
 "carplay.refresh" = "Aktualisieren";
 "carplay.retry" = "Erneut versuchen";
+"carplay.search.error.configuration" = "CarPlay konnte nicht mit nextStop verbunden werden. Trenne CarPlay und verbinde es erneut.";
 "carplay.search.error.phone_setup" = "Öffne nextStop auf dem iPhone und erlaube dort den genauen Standort, bevor du die Suche in CarPlay startest.";
 "carplay.search.error.presentation" = "CarPlay konnte die Suchansicht nicht aktualisieren. Versuche es erneut.";
 "carplay.search.loading.description" = "Route, aktueller Ladestatus und echte Fahrstrecken werden geprüft.";

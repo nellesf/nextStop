@@ -3,6 +3,7 @@ import Foundation
 import NextStopCore
 
 enum CarPlayRideSearchError: Error, Equatable {
+  case configurationUnavailable
   case authenticationUnavailable
   case phoneSetupRequired
   case locationUnavailable

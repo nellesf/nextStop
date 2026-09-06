@@ -3,6 +3,8 @@
 
   actor SimulatorSearchAccessTokenProvider: SearchAccessTokenProviding {
     static let defaultBrokerURL = URL(string: "http://127.0.0.1:9482/token")!
+    // The staging broker allows its remote credential mint up to 90 seconds.
+    static let brokerRequestTimeout: TimeInterval = 95
     private static let maximumResponseBytes = 16 * 1_024
     private static let refreshLeeway: TimeInterval = 60
 
@@ -79,7 +81,7 @@
       if forceRefresh {
         request.setValue("1", forHTTPHeaderField: "X-NextStop-Simulator-Force-Refresh")
       }
-      request.timeoutInterval = 2
+      request.timeoutInterval = Self.brokerRequestTimeout
 
       let data: Data
       let response: URLResponse

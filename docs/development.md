@@ -226,6 +226,8 @@ The defaults may be overridden before starting the broker with
 `NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL`, but the app accepts only an `http`
 URL on `127.0.0.1` or `::1` whose path is exactly `/token`; user info, query, and
 fragment are rejected. Staging is the default broker mode.
+The Debug Simulator client allows the broker up to 95 seconds to complete a
+credential refresh because the staging SSH mint itself can take up to 90 seconds.
 
 ### Debug Simulator search against a local backend
 

@@ -22,6 +22,26 @@ final class AuthenticationTransportTests: XCTestCase {
     )
   }
 
+  func testSceneDependencyBridgePreservesTheSharedCompositionRoot() throws {
+    let searcher = SharedCandidatePageSearcherStub()
+    let appDelegate = NextStopAppDelegate(candidatePageSearcher: searcher)
+
+    let userInfo = NextStopSceneDependencyBridge.userInfo(
+      merging: ["existing": "preserved"],
+      dependencies: appDelegate.dependencies
+    )
+    let bridgedDependencies = try XCTUnwrap(
+      NextStopSceneDependencyBridge.dependencies(from: userInfo)
+    )
+
+    XCTAssertTrue(bridgedDependencies === appDelegate.dependencies)
+    XCTAssertEqual(
+      ObjectIdentifier(bridgedDependencies.candidatePageSearcher),
+      ObjectIdentifier(searcher)
+    )
+    XCTAssertEqual(userInfo["existing"] as? String, "preserved")
+  }
+
   func testAppAttestClientUsesStrictDTOsAndCanonicalArtifactBase64() async throws {
     let sequence = HTTPResponseSequence(responses: [
       HTTPResponseSequence.Response.json(
@@ -335,6 +355,14 @@ final class AuthenticationTransportTests: XCTestCase {
       XCTAssertNotEqual(first, refreshed)
       XCTAssertEqual(sequence.recordedRequests.count, 2)
       XCTAssertEqual(sequence.recordedRequests.first?.httpMethod, "POST")
+      XCTAssertEqual(
+        sequence.recordedRequests.first?.timeoutInterval,
+        SimulatorSearchAccessTokenProvider.brokerRequestTimeout
+      )
+      XCTAssertEqual(
+        sequence.recordedRequests.last?.timeoutInterval,
+        SimulatorSearchAccessTokenProvider.brokerRequestTimeout
+      )
       XCTAssertEqual(
         sequence.recordedRequests.first?.value(
           forHTTPHeaderField: "X-NextStop-Simulator-Auth"
