@@ -7,8 +7,9 @@ import SwiftData
 import UIKit
 
 @MainActor
-final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate {
-  private weak var templateApplicationScene: CPTemplateApplicationScene?
+final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate,
+  NextStopSceneDependencyReceiving
+{
   private var interfaceController: CPInterfaceController?
   private var dataContainer: ModelContainer?
   private var rideSummaryTemplate: CPListTemplate?
@@ -17,6 +18,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var templateTransitionGate = CarPlayTemplateTransitionGate()
   private var searchTask: Task<Void, Never>?
   private var resultsByID: [UUID: RouteSearchResult] = [:]
+  private var dependencies: NextStopSceneDependencies?
   private var searchService: (any CarPlayRideSearchExecuting)?
 
   private let localizer = CarPlayLocalizer()
@@ -28,11 +30,20 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     _ templateApplicationScene: CPTemplateApplicationScene,
     didConnect interfaceController: CPInterfaceController
   ) {
-    self.templateApplicationScene = templateApplicationScene
     self.interfaceController = interfaceController
     templateTransitionGate.reset()
-    searchService = makeSearchService(for: templateApplicationScene)
+    if searchService == nil, let dependencies {
+      searchService = makeSearchService(using: dependencies)
+    }
     showProfiles(animated: false)
+  }
+
+  func receiveSceneDependencies(_ dependencies: NextStopSceneDependencies) {
+    let dependenciesChanged = self.dependencies !== dependencies
+    self.dependencies = dependencies
+    if dependenciesChanged || searchService == nil {
+      searchService = makeSearchService(using: dependencies)
+    }
   }
 
   func templateApplicationScene(
@@ -48,7 +59,6 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     templateTransitionGate.reset()
     searchService = nil
     self.interfaceController = nil
-    self.templateApplicationScene = nil
   }
 
   private func showProfiles(animated: Bool, handlerCompletion: (() -> Void)? = nil) {
@@ -452,7 +462,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   }
 
   private func performSearch(draft: RideSearchDraft, in loading: CPListTemplate) {
-    guard let searchService = resolvedSearchService() else {
+    guard let searchService else {
       showSearchError(.configurationUnavailable, in: loading)
       return
     }
@@ -485,29 +495,9 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
   }
 
-  private func resolvedSearchService() -> (any CarPlayRideSearchExecuting)? {
-    if let searchService {
-      return searchService
-    }
-    guard let templateApplicationScene,
-      let service = makeSearchService(for: templateApplicationScene)
-    else {
-      return nil
-    }
-    searchService = service
-    return service
-  }
-
   private func makeSearchService(
-    for templateApplicationScene: CPTemplateApplicationScene
-  ) -> (any CarPlayRideSearchExecuting)? {
-    guard
-      let dependencies = NextStopSceneDependencyBridge.dependencies(
-        from: templateApplicationScene.session
-      )
-    else {
-      return nil
-    }
+    using dependencies: NextStopSceneDependencies
+  ) -> any CarPlayRideSearchExecuting {
     return CarPlayRideSearchService(
       candidatePageSearcher: dependencies.candidatePageSearcher
     )

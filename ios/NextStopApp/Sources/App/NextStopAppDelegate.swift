@@ -2,7 +2,7 @@ import Foundation
 import UIKit
 
 @MainActor
-final class NextStopSceneDependencies: NSObject {
+final class NextStopSceneDependencies {
   let candidatePageSearcher: any CandidatePageSearching
 
   init(candidatePageSearcher: any CandidatePageSearching) {
@@ -11,35 +11,8 @@ final class NextStopSceneDependencies: NSObject {
 }
 
 @MainActor
-enum NextStopSceneDependencyBridge {
-  static let userInfoKey = "de.nextstop.app.scene-dependencies"
-
-  static func install(
-    _ dependencies: NextStopSceneDependencies,
-    in session: UISceneSession
-  ) {
-    session.userInfo = userInfo(
-      merging: session.userInfo,
-      dependencies: dependencies
-    )
-  }
-
-  static func dependencies(from session: UISceneSession) -> NextStopSceneDependencies? {
-    dependencies(from: session.userInfo)
-  }
-
-  static func dependencies(from userInfo: [String: Any]?) -> NextStopSceneDependencies? {
-    userInfo?[userInfoKey] as? NextStopSceneDependencies
-  }
-
-  static func userInfo(
-    merging existing: [String: Any]?,
-    dependencies: NextStopSceneDependencies
-  ) -> [String: Any] {
-    var result = existing ?? [:]
-    result[userInfoKey] = dependencies
-    return result
-  }
+protocol NextStopSceneDependencyReceiving: AnyObject {
+  func receiveSceneDependencies(_ dependencies: NextStopSceneDependencies)
 }
 
 @MainActor
@@ -72,10 +45,29 @@ final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
 
   func application(
     _ application: UIApplication,
-    configurationForConnecting connectingSceneSession: UISceneSession,
-    options: UIScene.ConnectionOptions
-  ) -> UISceneConfiguration {
-    NextStopSceneDependencyBridge.install(dependencies, in: connectingSceneSession)
-    return connectingSceneSession.configuration
+    didFinishLaunchingWithOptions launchOptions: [UIApplication.LaunchOptionsKey: Any]? = nil
+  ) -> Bool {
+    NotificationCenter.default.addObserver(
+      self,
+      selector: #selector(sceneDidActivate(_:)),
+      name: UIScene.didActivateNotification,
+      object: nil
+    )
+    return true
+  }
+
+  func injectDependencies(into sceneDelegate: Any?) {
+    guard let receiver = sceneDelegate as? any NextStopSceneDependencyReceiving else {
+      return
+    }
+    receiver.receiveSceneDependencies(dependencies)
+  }
+
+  @objc
+  private func sceneDidActivate(_ notification: Notification) {
+    guard let scene = notification.object as? UIScene else {
+      return
+    }
+    injectDependencies(into: scene.delegate)
   }
 }

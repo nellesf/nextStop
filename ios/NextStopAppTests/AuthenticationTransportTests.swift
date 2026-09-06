@@ -22,24 +22,19 @@ final class AuthenticationTransportTests: XCTestCase {
     )
   }
 
-  func testSceneDependencyBridgePreservesTheSharedCompositionRoot() throws {
+  func testAppDelegateInjectsTheSharedCompositionRootIntoSceneReceiver() throws {
     let searcher = SharedCandidatePageSearcherStub()
     let appDelegate = NextStopAppDelegate(candidatePageSearcher: searcher)
+    let receiver = SceneDependencyReceiverStub()
 
-    let userInfo = NextStopSceneDependencyBridge.userInfo(
-      merging: ["existing": "preserved"],
-      dependencies: appDelegate.dependencies
-    )
-    let bridgedDependencies = try XCTUnwrap(
-      NextStopSceneDependencyBridge.dependencies(from: userInfo)
-    )
+    appDelegate.injectDependencies(into: receiver)
 
-    XCTAssertTrue(bridgedDependencies === appDelegate.dependencies)
+    let receivedDependencies = try XCTUnwrap(receiver.dependencies)
+    XCTAssertTrue(receivedDependencies === appDelegate.dependencies)
     XCTAssertEqual(
-      ObjectIdentifier(bridgedDependencies.candidatePageSearcher),
+      ObjectIdentifier(receivedDependencies.candidatePageSearcher),
       ObjectIdentifier(searcher)
     )
-    XCTAssertEqual(userInfo["existing"] as? String, "preserved")
   }
 
   func testAppAttestClientUsesStrictDTOsAndCanonicalArtifactBase64() async throws {
@@ -453,6 +448,15 @@ final class AuthenticationTransportTests: XCTestCase {
 private final class SharedCandidatePageSearcherStub: CandidatePageSearching {
   func search(request: RouteSearchRequest) async throws -> CandidateSearchPage {
     throw CandidateSearchServiceError.unavailable
+  }
+}
+
+@MainActor
+private final class SceneDependencyReceiverStub: NextStopSceneDependencyReceiving {
+  private(set) var dependencies: NextStopSceneDependencies?
+
+  func receiveSceneDependencies(_ dependencies: NextStopSceneDependencies) {
+    self.dependencies = dependencies
   }
 }
 
