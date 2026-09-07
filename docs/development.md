@@ -338,12 +338,25 @@ target, refresh signing assets, and run one integrated acceptance pass:
 3. Invoke “Plane eine Fahrt mit nextStop” through Siri and confirm that the spoken
    destination opens the same ride preparation with visible default criteria.
 4. Connect the CarPlay Simulator and confirm that “Fahrt wählen” lists profiles,
-   favorites, and recent destinations.
-5. Search a route, verify at most five distance-sorted system-template results and
-   the EVSE count for each operator, refresh once, and hand one result to Apple
-   Maps. For a food-filtered result, verify the restaurant is a waypoint and the
-   original ride destination remains the final destination.
-6. Use a Swiss route to verify current `ich-tanke-strom` availability. On German
+   favorites, and recent destinations. Selecting either a profile or saved
+   destination shows “Suche starten”, “Filter ändern”, and all four current
+   criteria. Verify direct search, then edit a fixed-choice filter, return through
+   the editor/summary, and search from the editor's navigation bar. The changed
+   value applies to the ride and leaves the saved profile intact.
+5. Search a route, verify at most five distance-sorted system-template results,
+   compact driving-distance/EVSE/operator summaries, and each operator's EVSE
+   count in the detail/list. Refresh once. Select “Ladeanbieter wählen” and an
+   operator, then verify Apple Maps opens that operator's native place, as on
+   iPhone. In a food result, “Zum Restaurant” opens the matched restaurant's native
+   place. Neither action automatically starts directions or adds a waypoint;
+   no-food results have only the operator action. A missing native match must show
+   an error without opening a guessed place.
+6. While a place lookup is pending, select another POI in the same result template,
+   navigate back from the operator list/result screen, start a new ride/search,
+   and disconnect/reconnect CarPlay. Each abandoned lookup must be cancelled or
+   invalidated; a late result must neither open Maps nor show an error over the
+   current screen. Repeat one successful target to verify ride-local cache reuse.
+7. Use a Swiss route to verify current `ich-tanke-strom` availability. On German
    Bundesnetzagentur-only records, verify the honest “unbekannt” state; the static
    German authority feed does not contain nationwide live availability.
 

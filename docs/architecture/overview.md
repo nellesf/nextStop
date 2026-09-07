@@ -1,7 +1,8 @@
 # System architecture
 
 Status: Accepted on 2026-08-13; clustering/search identity and Apple-place
-matching amended through 2026-08-21.
+matching amended through 2026-08-21; CarPlay flow and native-place handoff amended on
+2026-09-07.
 
 ## Goals
 
@@ -69,9 +70,10 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Resolves actual automobile routes from current location to each candidate's
   power-filtered navigation coordinate.
 - Consumes the backend's validated restaurant match; it does not perform local POI
-  discovery for filtering. On iPhone, tapping an operator or restaurant Maps button
-  performs a bounded Apple lookup for only that already-selected item; this lookup
-  never changes inclusion, counts, ranking, or the CarPlay navigation waypoint.
+  discovery for filtering. Selecting an operator or restaurant Maps action on
+  either iPhone or CarPlay performs a bounded Apple lookup for only that
+  already-selected item; this lookup never changes inclusion, counts, ranking,
+  or the canonical search route.
 - When a food chain is selected, groups qualifying fine-park candidates by the
   stable backend restaurant POI ID. One restaurant becomes one result, operator
   EVSE counts are summed across its member fine parks, and each exact operator name
@@ -99,15 +101,26 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
   single ID from fully successful category-only and filtered natural-language
   passes. Food mode still requires <=500 m to the exact grouping restaurant. This
   does not widen the ordinary 60 m/300 m rules or the Wertheim group fallback.
-- For CarPlay, opens Apple Maps with driving directions. A matched restaurant is
-  inserted as a waypoint before the original ride destination; without a food
-  match, the campus navigation coordinate remains the navigation destination.
+- For CarPlay, resolves a selected operator or restaurant with the same bounded
+  native-place matcher and ride-local cache used by the iPhone, scoped to the
+  selected campus or exact restaurant group. Both actions open that native Apple
+  place; the user may start navigation from Apple Maps. An unavailable match
+  produces an error without a guessed coordinate fallback. CarPlay does not
+  automatically launch directions or insert a restaurant waypoint.
 
 ### CarPlay adapter
 
 - Owns `CPTemplateApplicationSceneDelegate` and template navigation only.
 - Maps application presentation models to `CPListTemplate`,
   `CPPointOfInterestTemplate`, alerts, and `CPInformationTemplate`.
+- Shows immediate search and filter-edit actions with all four criteria on the
+  ride summary. Fixed-choice edits apply only to the current draft, with search
+  available from the filter editor's navigation bar.
+- Presents compact distance/EVSE/operator POI summaries and an exact-name operator
+  list with aggregated qualifying EVSE counts. Place resolution is delegated
+  to an application interface. New rides/searches, another place action, and
+  disconnects cancel pending work. Completions also verify the original source
+  screen and selected POI before opening Maps or reporting errors.
 - Contains no provider, geometry, filter, ranking, or persistence logic.
 - Is absent/disabled in configurations that lack the managed entitlement while the
   iPhone app and core remain buildable and testable.
@@ -218,10 +231,10 @@ MapKit can truthfully provide:
    park's actual driving distance for a restaurant group and the single campus
    candidate distance without food.
 
-After the user taps an operator or restaurant Maps button, Apple-place matching is
-presentation enrichment only. It combines the selected item's authority/OSM
-coordinate, normalized address when available, and name with a bounded MapKit
-search. The ride-local match is cached and the native place is opened through its
+After the user selects an operator or restaurant Maps action on iPhone or CarPlay,
+Apple-place matching is presentation enrichment only. It combines the selected
+item's authority/OSM coordinate, normalized address when available, and name with a
+bounded MapKit search. The ride-local match is cached and the native place is opened through its
 Apple Place ID. Apple Place IDs identify only Apple records and are never treated
 as cross-source identities. For a restaurant result, one operator lookup considers
 all of that operator's authority locations in the group for the primary rules.

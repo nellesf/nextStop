@@ -13,10 +13,15 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var interfaceController: CPInterfaceController?
   private var dataContainer: ModelContainer?
   private var rideSummaryTemplate: CPListTemplate?
+  private var criteriaTemplate: CPListTemplate?
   private var noResultsTemplate: CPListTemplate?
+  private var noResultsAttributions: [DataAttribution] = []
   private var searchTemplateStore = CarPlaySearchTemplateStore()
   private var templateTransitionGate = CarPlayTemplateTransitionGate()
   private var searchTask: Task<Void, Never>?
+  private var placeTask: Task<Void, Never>?
+  private var placeRequestID: UUID?
+  private var placeResolver: any CarPlayResultPlaceResolving = CarPlayResultPlaceResolver()
   private var resultsByID: [UUID: RouteSearchResult] = [:]
   private var dependencies: NextStopSceneDependencies?
   private var searchService: (any CarPlayRideSearchExecuting)?
@@ -52,9 +57,13 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   ) {
     searchTask?.cancel()
     searchTask = nil
+    cancelPlaceSelection()
+    placeResolver = CarPlayResultPlaceResolver()
     resultsByID = [:]
     rideSummaryTemplate = nil
+    criteriaTemplate = nil
     noResultsTemplate = nil
+    noResultsAttributions = []
     searchTemplateStore.clear()
     templateTransitionGate.reset()
     searchService = nil
@@ -70,8 +79,12 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     searchTask?.cancel()
     searchTask = nil
+    cancelPlaceSelection()
+    placeResolver = CarPlayResultPlaceResolver()
     rideSummaryTemplate = nil
+    criteriaTemplate = nil
     noResultsTemplate = nil
+    noResultsAttributions = []
     searchTemplateStore.clear()
     resultsByID = [:]
 
@@ -218,6 +231,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return
     }
     recordRecent(profile.destination)
+    cancelPlaceSelection()
+    placeResolver = CarPlayResultPlaceResolver()
     draftController.select(profile: profile)
     showRideSummary(handlerCompletion: handlerCompletion)
   }
@@ -231,6 +246,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return
     }
     recordRecent(destination)
+    cancelPlaceSelection()
+    placeResolver = CarPlayResultPlaceResolver()
     draftController.select(destination: destination)
     showRideSummary(handlerCompletion: handlerCompletion)
   }
@@ -244,7 +261,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return
     }
     let template = CPListTemplate(
-      title: presenter.rideSummary(draft).title,
+      title: presenter.rideSummary(draft).destination,
       sections: makeRideSummarySections(draft)
     )
     rideSummaryTemplate = template
@@ -272,13 +289,77 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
 
   private func makeRideSummarySections(_ draft: RideSearchDraft) -> [CPListSection] {
     let presentation = presenter.rideSummary(draft)
-    let destination = CPListItem(
-      text: localizer.text("profile.destination"),
-      detailText: presentation.destination
+    let search = CPListItem(
+      text: presentation.searchActionTitle,
+      detailText: presentation.searchActionDetail,
+      image: UIImage(systemName: "magnifyingglass")
     )
-    destination.isEnabled = false
+    search.handler = { [weak self] _, completion in
+      guard let self else {
+        completion()
+        return
+      }
+      startSearch(handlerCompletion: completion)
+    }
+    let edit = CPListItem(
+      text: presentation.editActionTitle,
+      detailText: presentation.editActionDetail,
+      image: UIImage(systemName: "slider.horizontal.3")
+    )
+    edit.accessoryType = .disclosureIndicator
+    edit.handler = { [weak self] _, completion in
+      guard let self else {
+        completion()
+        return
+      }
+      showCriteria(handlerCompletion: completion)
+    }
+    let summary = CPListItem(
+      text: presentation.criteriaSummaryTitle,
+      detailText: presentation.criteriaSummaryDetail
+    )
+    summary.isEnabled = false
+    return [
+      CPListSection(items: [search, edit]),
+      CPListSection(items: [summary]),
+    ]
+  }
 
-    let criteria = presentation.criteria.map { criterion in
+  private func showCriteria(handlerCompletion: @escaping () -> Void) {
+    guard let draft = draftController.draft,
+      let interfaceController,
+      interfaceController.templates.last === rideSummaryTemplate,
+      let transitionID = templateTransitionGate.begin()
+    else {
+      handlerCompletion()
+      return
+    }
+    let template = CPListTemplate(
+      title: localizer.text("carplay.filters.title"),
+      sections: makeCriteriaSections(draft)
+    )
+    template.trailingNavigationBarButtons = [
+      CPBarButton(title: presenter.rideSummary(draft).searchActionTitle) { [weak self] _ in
+        self?.startSearch()
+      }
+    ]
+    criteriaTemplate = template
+    interfaceController.pushTemplate(template, animated: true) { [weak self] success, _ in
+      defer { handlerCompletion() }
+      guard let self,
+        self.interfaceController === interfaceController,
+        templateTransitionGate.finish(transitionID)
+      else {
+        return
+      }
+      if !success, criteriaTemplate === template {
+        criteriaTemplate = nil
+      }
+    }
+  }
+
+  private func makeCriteriaSections(_ draft: RideSearchDraft) -> [CPListSection] {
+    let criteria = presenter.rideSummary(draft).criteria.map { criterion in
       let item = CPListItem(text: criterion.title, detailText: criterion.value)
       item.accessoryType = .disclosureIndicator
       item.handler = { [weak self] _, completion in
@@ -291,20 +372,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return item
     }
 
-    let search = CPListItem(text: presentation.searchActionTitle, detailText: nil)
-    search.handler = { [weak self] _, completion in
-      guard let self else {
-        completion()
-        return
-      }
-      startSearch(handlerCompletion: completion)
-    }
-
-    return [
-      CPListSection(items: [destination]),
-      CPListSection(items: criteria),
-      CPListSection(items: [search]),
-    ]
+    return [CPListSection(items: criteria)]
   }
 
   private func showOptions(
@@ -374,7 +442,10 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return
     }
     rideSummaryTemplate?.updateSections(makeRideSummarySections(draft))
-    noResultsTemplate?.updateSections(makeNoResultsSections(draft))
+    criteriaTemplate?.updateSections(makeCriteriaSections(draft))
+    noResultsTemplate?.updateSections(
+      makeNoResultsSections(draft, attributions: noResultsAttributions)
+    )
   }
 
   private func startSearch(handlerCompletion: (() -> Void)? = nil) {
@@ -387,6 +458,28 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return
     }
     let topTemplate = interfaceController.templates.last
+    if let criteriaTemplate, topTemplate === criteriaTemplate {
+      guard interfaceController.templates.contains(where: { $0 === summary }),
+        let transitionID = templateTransitionGate.begin()
+      else {
+        handlerCompletion?()
+        return
+      }
+      interfaceController.pop(to: summary, animated: false) { [weak self] success, _ in
+        guard let self,
+          self.interfaceController === interfaceController,
+          templateTransitionGate.finish(transitionID),
+          success,
+          interfaceController.templates.last === summary
+        else {
+          handlerCompletion?()
+          return
+        }
+        self.criteriaTemplate = nil
+        startSearch(handlerCompletion: handlerCompletion)
+      }
+      return
+    }
     let isSummaryVisible = topTemplate === summary
     let isSearchVisible = searchTemplateStore.current.map { topTemplate === $0 } ?? false
     guard isSummaryVisible || isSearchVisible else {
@@ -394,7 +487,9 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       return
     }
     searchTask?.cancel()
+    cancelPlaceSelection()
     noResultsTemplate = nil
+    noResultsAttributions = []
 
     let resolution = searchTemplateStore.resolve(in: interfaceController.templates) {
       makeLoadingTemplate()
@@ -443,7 +538,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
 
   private func makeLoadingTemplate() -> CPListTemplate {
     CPListTemplate(
-      title: localizer.text("ride.results.title"),
+      title: localizer.text("ride.results.screen.title"),
       sections: makeLoadingSections()
     )
   }
@@ -509,6 +604,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     outcome: RideCandidateSearchOutcome
   ) {
     noResultsTemplate = template
+    noResultsAttributions = outcome.attributions
     template.updateSections(makeNoResultsSections(draft, attributions: outcome.attributions))
     template.emptyViewTitleVariants = [localizer.text("ride.search.empty.title")]
     template.emptyViewSubtitleVariants = [localizer.text("ride.search.empty.description")]
@@ -719,29 +815,213 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     )
     point.userInfo = presentation.id as NSUUID
     point.primaryButton = CPTextButton(
-      title: presentation.navigationActionTitle,
+      title: presentation.operatorsActionTitle,
       textStyle: .confirm
     ) { [weak self] _ in
-      self?.startNavigation(to: presentation.id)
+      self?.showOperators(for: presentation.id)
+    }
+    if let restaurantActionTitle = presentation.restaurantActionTitle {
+      point.secondaryButton = CPTextButton(
+        title: restaurantActionTitle,
+        textStyle: .normal
+      ) { [weak self] button in
+        guard let self,
+          let template = interfaceController?.templates.last as? CPPointOfInterestTemplate,
+          button.title == restaurantActionTitle
+        else {
+          return
+        }
+        button.title = localizer.text("carplay.place.opening")
+        openPlace(for: presentation.id, from: template) { [weak button] in
+          button?.title = restaurantActionTitle
+        }
+      }
     }
     return point
   }
 
-  private func startNavigation(to resultID: UUID) {
-    guard let result = resultsByID[resultID],
-      let destination = draftController.draft?.destination,
-      navigationLauncher.startNavigation(
-        to: result.candidate.park,
-        via: result.matchingFoodPOI,
-        finalDestination: destination
-      )
+  private func showOperators(for resultID: UUID) {
+    guard let interfaceController,
+      let resultsTemplate = interfaceController.templates.last as? CPPointOfInterestTemplate,
+      CarPlayPlaceSelectionContext.isCurrent(
+        resultID: resultID, source: resultsTemplate, visible: resultsTemplate
+      ),
+      let result = resultsByID[resultID],
+      let transitionID = templateTransitionGate.begin()
     else {
-      showNavigationFailure()
       return
+    }
+    cancelPlaceSelection()
+    let template = CPListTemplate(
+      title: localizer.text("carplay.operators.title"),
+      sections: []
+    )
+    template.emptyViewTitleVariants = [localizer.text("carplay.operators.empty")]
+    updateOperators(in: template, result: result, offset: 0)
+    interfaceController.pushTemplate(template, animated: true) { [weak self] success, _ in
+      guard let self,
+        self.interfaceController === interfaceController,
+        templateTransitionGate.finish(transitionID)
+      else {
+        return
+      }
+      if !success {
+        showPlaceFailure(message: localizer.text("carplay.search.error.presentation"))
+      }
     }
   }
 
+  private func updateOperators(
+    in template: CPListTemplate,
+    result: RouteSearchResult,
+    offset: Int
+  ) {
+    let operators = presenter.operators(for: result)
+    let pageSize = max(1, CPListTemplate.maximumItemCount)
+    let page = operators.dropFirst(offset).prefix(pageSize)
+    let items = page.map { chargingOperator in
+      let item = CPListItem(
+        text: chargingOperator.name,
+        detailText: chargingOperator.detail,
+        image: UIImage(systemName: "ev.charger")
+      )
+      item.accessoryType = .disclosureIndicator
+      item.handler = { [weak self, weak template] _, completion in
+        guard let self, let template else {
+          completion()
+          return
+        }
+        openPlace(
+          for: result.id,
+          operatorName: chargingOperator.name,
+          from: template,
+          handlerCompletion: completion
+        )
+      }
+      return item
+    }
+    let context =
+      result.matchingFoodPOI.map {
+        localizer.format("carplay.operators.context.format", $0.name)
+      } ?? result.candidate.park.name
+    template.updateSections([
+      CPListSection(items: items, header: context, sectionIndexTitle: nil)
+    ])
+
+    var pagingButtons: [CPBarButton] = []
+    if offset > 0 {
+      pagingButtons.append(
+        CPBarButton(title: localizer.text("carplay.operators.previous_page")) {
+          [weak self, weak template] _ in
+          guard let self, let template,
+            interfaceController?.templates.last === template
+          else {
+            return
+          }
+          cancelPlaceSelection()
+          updateOperators(in: template, result: result, offset: max(0, offset - pageSize))
+        }
+      )
+    }
+    let nextOffset = offset + items.count
+    if nextOffset < operators.count {
+      pagingButtons.append(
+        CPBarButton(title: localizer.text("carplay.operators.next_page")) {
+          [weak self, weak template] _ in
+          guard let self, let template,
+            interfaceController?.templates.last === template
+          else {
+            return
+          }
+          cancelPlaceSelection()
+          updateOperators(in: template, result: result, offset: nextOffset)
+        }
+      )
+    }
+    template.trailingNavigationBarButtons = pagingButtons
+  }
+
+  private func openPlace(
+    for resultID: UUID,
+    operatorName: String? = nil,
+    from template: CPTemplate,
+    handlerCompletion: (() -> Void)? = nil
+  ) {
+    guard let interfaceController,
+      CarPlayPlaceSelectionContext.isCurrent(
+        resultID: resultID, source: template, visible: interfaceController.templates.last
+      ),
+      !templateTransitionGate.isActive,
+      let result = resultsByID[resultID]
+    else {
+      handlerCompletion?()
+      return
+    }
+    cancelPlaceSelection()
+    let requestID = UUID()
+    placeRequestID = requestID
+    let resolver = placeResolver
+    let placeName = operatorName ?? result.matchingFoodPOI?.name ?? result.candidate.park.name
+    placeTask = Task { [weak self, weak template, weak interfaceController] in
+      defer {
+        handlerCompletion?()
+        if let self, placeRequestID == requestID {
+          placeRequestID = nil
+          placeTask = nil
+        }
+      }
+      do {
+        try Task.checkCancellation()
+        let mapItem: MKMapItem
+        if let operatorName {
+          mapItem = try await resolver.resolveOperator(named: operatorName, in: result)
+        } else {
+          mapItem = try await resolver.resolveRestaurant(in: result)
+        }
+        try Task.checkCancellation()
+        guard let self, let template, let interfaceController,
+          self.interfaceController === interfaceController,
+          placeRequestID == requestID,
+          CarPlayPlaceSelectionContext.isCurrent(
+            resultID: resultID, source: template, visible: interfaceController.templates.last
+          )
+        else {
+          return
+        }
+        if !navigationLauncher.openPlace(mapItem) {
+          showNavigationFailure()
+        }
+      } catch is CancellationError {
+        return
+      } catch {
+        guard !Task.isCancelled,
+          let self, let template, let interfaceController,
+          self.interfaceController === interfaceController,
+          placeRequestID == requestID,
+          CarPlayPlaceSelectionContext.isCurrent(
+            resultID: resultID, source: template, visible: interfaceController.templates.last
+          )
+        else {
+          return
+        }
+        showPlaceFailure(
+          message: localizer.format("ride.result.apple_place.no_match.format", placeName)
+        )
+      }
+    }
+  }
+
+  private func cancelPlaceSelection() {
+    placeTask?.cancel()
+    placeTask = nil
+    placeRequestID = nil
+  }
+
   private func showNavigationFailure() {
+    showPlaceFailure(message: localizer.text("carplay.navigation.error"))
+  }
+
+  private func showPlaceFailure(message: String) {
     let dismiss = CPAlertAction(
       title: localizer.text("carplay.alert.ok"),
       style: .default
@@ -749,7 +1029,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       self?.interfaceController?.dismissTemplate(animated: true) { _, _ in }
     }
     let alert = CPAlertTemplate(
-      titleVariants: [localizer.text("carplay.navigation.error")],
+      titleVariants: [message],
       actions: [dismiss]
     )
     interfaceController?.presentTemplate(alert, animated: true) { _, _ in }
@@ -773,6 +1053,22 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   @available(iOS, introduced: 18.0, obsoleted: 26.0)
   private func makeLegacyMapItem(for location: CLLocation) -> MKMapItem {
     MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
+  }
+}
+
+@MainActor
+enum CarPlayPlaceSelectionContext {
+  static func isCurrent(resultID: UUID, source: CPTemplate, visible: CPTemplate?) -> Bool {
+    guard source === visible else {
+      return false
+    }
+    guard let results = source as? CPPointOfInterestTemplate else {
+      return true
+    }
+    guard results.pointsOfInterest.indices.contains(results.selectedIndex) else {
+      return false
+    }
+    return (results.pointsOfInterest[results.selectedIndex].userInfo as? UUID) == resultID
   }
 }
 

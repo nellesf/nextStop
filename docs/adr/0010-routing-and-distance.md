@@ -7,6 +7,7 @@
 - Amended: 2026-08-20 (candidate identity, group-bounded Apple-place matching,
   and pass corroboration)
 - Amended: 2026-08-21 (bounded known-catalog operator alias)
+- Amended: 2026-09-07 (owner-approved CarPlay native-place handoff parity with iPhone)
 
 ## Context
 
@@ -35,6 +36,13 @@ about 51 m from the exact grouping McDonald's. It therefore missed the ordinary
 increase or a broad `AMAG` synonym would admit unrelated records, so this case
 requires a narrower catalog-specific rule.
 
+On 2026-09-07, the owner approved the CarPlay flow with separate operator and
+restaurant actions. A restaurant-centered result must let the driver select a
+specific charging operator, as on iPhone; its title alone must not determine the
+Apple Maps destination. The owner also explicitly required the restaurant action
+to behave like iPhone: open the selected native Apple place rather than
+automatically start directions with the restaurant as an intermediate waypoint.
+
 ## Decision
 
 Create the destination route in MapKit, send its LineString to PostGIS for exact
@@ -44,10 +52,20 @@ on-device using those exact distances. ADR 0006 defines the candidate identity
 before filtering and pagination: a `ChargingCampus` when `foodChain` is null and a
 complete-link `ChargingPark` when it is non-null.
 
-When CarPlay launches a result that contains the selected restaurant match, use
-Apple's unified Maps URL to keep the original destination and insert the restaurant
-as an intermediate waypoint. Without a food match, hand the chosen campus
-navigation `MKMapItem` to Apple Maps.
+The primary CarPlay POI action opens a native operator list. Each exact operator
+name appears once with its aggregated qualifying EVSE count for the selected
+restaurant group or no-food campus. Selecting an operator uses the same bounded
+Apple-place matching and ride-local cache as iPhone, then opens the native Apple
+charger by stable Place ID through the existing place-opening interface. This
+also replaces the former direct campus-coordinate handoff for no-food results.
+If no unambiguous native match exists, show a localized error and keep the result;
+never substitute a campus coordinate or the restaurant for the selected operator.
+The restaurant action is present only for a matched restaurant. It resolves that
+restaurant through the same bounded iPhone matcher and opens its native Apple
+place by stable Place ID. An unavailable or ambiguous match is reported without
+a coordinate-only fallback. Both CarPlay actions leave navigation initiation to
+Apple Maps, as on iPhone. This replaces the former restaurant directions handoff
+that kept the original ride destination and inserted the restaurant as a waypoint.
 
 On iPhone, expose a 48-point Apple Maps button beside each charging operator and
 the matched restaurant. When food is selected, use the stable backend restaurant
@@ -66,7 +84,8 @@ operator totals are campus-wide. The ordinary lower-bound stopping rule is valid
 because no later candidate can contribute to an already emitted campus.
 
 Resolve the selected authority/OSM location against nearby Apple places only after
-the user taps its button. Every charging-place candidate must have Apple's
+the user selects an operator/restaurant action in CarPlay or taps its iPhone Maps
+button. Every charging-place candidate must have Apple's
 `.evCharger` category and a normalized name that matches the requested operator.
 The existing operator-specific rules remain unchanged: accept a matching Apple
 place within 60 m of one of that operator's qualifying authority locations without
@@ -149,12 +168,16 @@ lookup scope; a group-fallback cache key also includes the stable campus or
 restaurant-result identity. If no single unambiguous stable Apple place exists,
 report that condition instead of opening a coordinate-only or guessed place.
 Apple matching is presentation-only and cannot affect the search result, EVSE
-count, route, ranking, restaurant predicate, or CarPlay waypoint.
+count, canonical route, ranking, or restaurant predicate.
 
 The iPhone result card does not duplicate navigation; the user may start it from
-the native Apple place card. CarPlay retains its template navigation action and
-restaurant waypoint behavior. Do not embed a second route map or hand a group of
-caller-created pins to Apple Maps: those paths do not consistently expose the
+the native Apple place card. Both CarPlay actions open the same native places.
+Cancel pending CarPlay place resolution when a new ride/search or another place
+action starts, or the scene disconnects. Before opening Maps or displaying an
+error, verify that its source screen and selected POI are still current; stale
+completions must not affect an unrelated screen.
+Do not embed a second route map or hand a group of caller-created pins to Apple
+Maps: those paths do not consistently expose the
 native place details and live charging information available on Apple's own place
 record.
 
@@ -171,8 +194,17 @@ MapKit is canonical and truthful, while candidate batching/concurrency/caching a
 needed for latency. The backend API returns candidate identities, their single
 power-filtered navigation coordinate, and lower bounds, not final driving-distance
 claims. Corridor membership, the origin lower bound, and MapKit enrichment must
-all address that same coordinate. The multistop handoff requires iOS 18.4 or later;
-iOS 18.0–18.3 falls back to automobile directions to the matched restaurant.
+all address that same coordinate. The native-place handoff does not alter that
+search coordinate or claim that the displayed distance was recalculated to an
+Apple place. The former multistop handoff's iOS 18.4 availability and iOS 18.0–18.3
+restaurant-directions fallback no longer determine CarPlay result actions.
+
+The CarPlay operator and restaurant actions change only the explicit Apple Maps
+handoff. The existing template family, matching thresholds, candidate geometry,
+EVSE counts, filters, distance-only ranking, and five-result limit remain unchanged.
+Regression coverage must verify the selected operator/restaurant and group scope,
+cache reuse, unmatched errors without guessed fallback, and cancellation/stale
+completion guards.
 
 The group-bounded fallback and the narrower known-catalog-alias path can correct
 presentation-only Apple catalog mismatches without relaxing campus or

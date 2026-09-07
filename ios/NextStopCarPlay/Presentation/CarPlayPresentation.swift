@@ -62,6 +62,16 @@ struct CarPlayRideSummaryPresentation: Equatable, Sendable {
   let destination: String
   let criteria: [CarPlayCriterionPresentation]
   let searchActionTitle: String
+  let searchActionDetail: String
+  let editActionTitle: String
+  let editActionDetail: String
+  let criteriaSummaryTitle: String
+  let criteriaSummaryDetail: String
+}
+
+struct CarPlayOperatorPresentation: Equatable, Sendable {
+  let name: String
+  let detail: String
 }
 
 struct CarPlayResultPresentation: Equatable, Sendable {
@@ -73,7 +83,8 @@ struct CarPlayResultPresentation: Equatable, Sendable {
   let detailTitle: String
   let detailSubtitle: String
   let detailSummary: String?
-  let navigationActionTitle: String
+  let operatorsActionTitle: String
+  let restaurantActionTitle: String?
 }
 
 struct CarPlayResultsPresentation: Equatable, Sendable {
@@ -106,7 +117,21 @@ struct CarPlayPresenter {
       title: localizer.text("carplay.ride.title"),
       destination: draft.destination.displayName,
       criteria: CarPlayCriteriaField.allCases.map { criterion($0, draft: draft) },
-      searchActionTitle: localizer.text("ride.search.action")
+      searchActionTitle: localizer.text("carplay.search.action"),
+      searchActionDetail: localizer.text("carplay.search.action.detail"),
+      editActionTitle: localizer.text("carplay.filters.action"),
+      editActionDetail: localizer.text("carplay.filters.action.detail"),
+      criteriaSummaryTitle: localizer.format(
+        "carplay.criteria.summary.title.format",
+        localizer.text(draft.criteria.distanceRange.localizationKey),
+        Int64(draft.criteria.minimumChargingPoints.rawValue)
+      ),
+      criteriaSummaryDetail: localizer.format(
+        "carplay.criteria.summary.detail.format",
+        Int64(draft.criteria.minimumPower.rawValue),
+        draft.criteria.foodChain.map { localizer.text($0.localizationKey) }
+          ?? localizer.text("carplay.criteria.no_restaurant")
+      )
     )
   }
 
@@ -163,13 +188,26 @@ struct CarPlayPresenter {
   ) -> CarPlayResultsPresentation {
     precondition(outcome.results.count <= SearchConfiguration.maximumResultCount)
     return CarPlayResultsPresentation(
-      title: localizer.text("ride.results.title"),
+      title: localizer.text("ride.results.screen.title"),
       points: outcome.results.map { result($0, criteria: criteria) },
       coverageMessage: coverageMessage(outcome.coverage),
       attributionMessage: outcome.attributions.isEmpty
         ? nil
         : outcome.attributions.map(\.notice).joined(separator: " · ")
     )
+  }
+
+  func operators(for result: RouteSearchResult) -> [CarPlayOperatorPresentation] {
+    result.operatorChargingPoints.map { chargingOperator in
+      CarPlayOperatorPresentation(
+        name: chargingOperator.name,
+        detail: localizer.format(
+          "carplay.operator.detail.format",
+          chargingPoints(chargingOperator.chargingPointCount),
+          localizer.text("ride.result.navigate")
+        )
+      )
+    }
   }
 
   private func criterion(
@@ -213,52 +251,67 @@ struct CarPlayPresenter {
     let candidate = routeResult.candidate
     let park = candidate.park
     let foodPOI = routeResult.matchingFoodPOI
-    let drivingDistance = kilometers(candidate.actualDrivingDistance.value)
-    let routeDistance = localizer.format(
-      "carplay.result.route_distance.format",
-      Int64(roundedKilometers(candidate.distanceFromRoute.value))
+    let drivingDistance = localizer.format(
+      "carplay.result.driving_distance.format",
+      Int64(roundedKilometers(candidate.actualDrivingDistance.value))
     )
     let availability = availabilityText(routeResult.availability)
-    let chargingSummary = localizer.format(
-      "carplay.result.charging_summary.format",
-      Int64(routeResult.chargingPointCount),
-      minimumKilowatts(criteria.minimumPower.rawValue)
+    let matchingChargingPoints = localizer.format(
+      "ride.result.matching_charging_points.format",
+      Int64(routeResult.chargingPointCount)
     )
-    let summary = [chargingSummary, availability]
-      .compactMap { $0 }
-      .joined(separator: " · ")
-    let foodSummary = foodPOI.map { food in
-      localizer.format(
-        "carplay.result.food.format",
-        food.name,
-        Int64(food.distanceFromPark.value)
-      )
-    }
-    let operatorSummary = routeResult.operatorChargingPoints.map { chargingOperator in
+    let chargingOperators = routeResult.operatorChargingPoints
+    let operatorSummary = chargingOperators.map { chargingOperator in
       localizer.format(
         "carplay.result.operator.format",
         chargingOperator.name,
-        Int64(chargingOperator.chargingPointCount)
+        chargingPoints(chargingOperator.chargingPointCount)
       )
     }
     .joined(separator: "\n")
-    let detailSummary = [operatorSummary, summary, foodSummary]
-      .compactMap { $0 }
-      .joined(separator: "\n")
+    let detailSummary = [
+      matchingChargingPoints,
+      operatorSummary.isEmpty ? nil : operatorSummary,
+      minimumKilowatts(criteria.minimumPower.rawValue),
+      availability,
+    ]
+    .compactMap { $0 }
+    .joined(separator: "\n")
     let title = foodPOI?.name ?? park.name
     let coordinate = foodPOI?.coordinate ?? park.navigationCoordinate
     return CarPlayResultPresentation(
       id: routeResult.id,
       coordinate: coordinate,
       title: title,
-      subtitle: "\(drivingDistance) · \(routeDistance)",
-      summary: summary,
+      subtitle: localizer.format(
+        "carplay.result.metrics.format",
+        Int64(roundedKilometers(candidate.actualDrivingDistance.value)),
+        chargingPoints(routeResult.chargingPointCount)
+      ),
+      summary: compactOperatorSummary(chargingOperators),
       detailTitle: title,
-      detailSubtitle: availability.map { "\(drivingDistance) · \($0)" }
-        ?? drivingDistance,
+      detailSubtitle: drivingDistance,
       detailSummary: detailSummary,
-      navigationActionTitle: localizer.text("ride.result.navigate")
+      operatorsActionTitle: localizer.text("carplay.result.operators.action"),
+      restaurantActionTitle: foodPOI == nil
+        ? nil : localizer.text("carplay.result.restaurant.action")
     )
+  }
+
+  private func compactOperatorSummary(_ chargingOperators: [RouteSearchOperatorSummary]) -> String {
+    let visibleNames = chargingOperators.prefix(2).map(\.name)
+    let remainingCount = chargingOperators.count - visibleNames.count
+    guard remainingCount > 0 else {
+      return visibleNames.joined(separator: " · ")
+    }
+    return
+      (visibleNames + [
+        localizer.format(
+          remainingCount == 1
+            ? "carplay.result.more_operators.one" : "carplay.result.more_operators.format",
+          Int64(remainingCount)
+        )
+      ]).joined(separator: " · ")
   }
 
   private func coverageMessage(_ coverage: CandidateSearchCoverage) -> String? {
@@ -301,8 +354,11 @@ struct CarPlayPresenter {
     localizer.format("unit.minimum_kilowatts.format", Int64(value))
   }
 
-  private func kilometers(_ value: Int) -> String {
-    localizer.format("unit.kilometers.format", Int64(roundedKilometers(value)))
+  private func chargingPoints(_ value: Int) -> String {
+    localizer.format(
+      value == 1 ? "unit.charging_points.one" : "unit.charging_points.other",
+      Int64(value)
+    )
   }
 
   private func roundedKilometers(_ meters: Int) -> Int {

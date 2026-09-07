@@ -1,7 +1,8 @@
 # Routing and candidate search
 
 Status: Accepted on 2026-08-13; candidate identity and Apple-place matching
-amended through 2026-08-21; passenger-car access amended on 2026-08-24.
+amended through 2026-08-21; passenger-car access amended on 2026-08-24; CarPlay
+native-place handoff amended on 2026-09-07.
 
 ## Canonical routing rule
 
@@ -155,8 +156,9 @@ requests remain compatible across pages regardless of serializer key order.
 
 ## Native Apple-place enrichment
 
-Native Apple-place resolution starts only after the user taps an operator or
-restaurant Maps button and never participates in candidate inclusion or ranking.
+Native Apple-place resolution starts only after the user selects an operator or
+restaurant Maps action on iPhone or CarPlay and never participates in candidate
+inclusion or ranking.
 Every charging-place candidate must match the requested operator name and have
 Apple's `.evCharger` category. Accept it within 60 m of that operator's qualifying
 authority location without address evidence, or within 300 m when street, house
@@ -231,14 +233,26 @@ evidence and does not replace the authority-only 100 m predicate.
 
 ## Apple Maps handoff
 
-When a result has a matched restaurant, open Apple's documented unified Maps
-`/directions` URL with that restaurant as a waypoint and the ride's original
-destination as the final destination. This multistop handoff is available on iOS
-18.4 and later. On iOS 18.0–18.3, open automobile directions to the restaurant as
-the safe documented fallback. Without a food match, create an `MKMapItem` from the
-chosen campus navigation coordinate and open automobile directions to the campus.
-Do not claim navigation has begun until the handoff succeeds. The app does not
-render maneuvers or request the navigation entitlement.
+On iPhone and CarPlay, resolve the explicitly selected operator or restaurant
+with the same bounded native-place matcher and ride-local cache, then open its
+native Apple place by stable Place ID. In CarPlay, “Ladeanbieter wählen” first
+opens a list of the current result's exact-name operators and aggregated EVSE
+counts; selecting a row resolves only that operator in that result group.
+“Zum Restaurant” is available only for a matched restaurant and resolves that
+exact restaurant. The user starts navigation from Apple Maps. Neither action
+automatically starts directions or inserts a restaurant waypoint before the
+original destination.
+
+An unavailable or ambiguous native-place match keeps the result visible and
+shows a localized error. Do not fall back to a campus coordinate, substitute
+another result, or open the restaurant for a selected operator. The displayed
+driving distance remains the search result's MapKit distance to its power-filtered
+candidate navigation coordinate; place matching does not recalculate or relabel it.
+
+Cancel pending CarPlay place resolution when the ride/search changes, another
+place action starts, or the scene disconnects. Before opening Maps or presenting
+errors, verify that the original source screen and selected POI are still current.
+The app does not render maneuvers or request the navigation entitlement.
 
 ## Error mapping
 

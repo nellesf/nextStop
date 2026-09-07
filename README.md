@@ -2,11 +2,11 @@
 
 nextStop is an Apple CarPlay-focused iOS app for EV drivers. Given a
 destination and a small set of explicit criteria, it finds at most the next five
-matching charging stops along the current MapKit route and hands the selected
-restaurant or charging campus to Apple Maps. Without a food filter, one stop is a
-bounded charging campus. With a food filter, one stop represents one restaurant
-and combines all qualifying nearby fine parks by charging operator. It does not
-provide turn-by-turn navigation.
+matching charging stops along the current MapKit route and opens the selected
+restaurant or operator's native place in Apple Maps. Without a food filter, one
+stop is a bounded charging campus. With a food filter, one stop represents one
+restaurant and combines all qualifying nearby fine parks by charging operator.
+It does not provide turn-by-turn navigation.
 
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13; the
 charging-park clustering decision was amended on 2026-08-20.
@@ -20,15 +20,20 @@ combined EVSE count and one 48-point Apple Maps button; the restaurant has one t
 A tap performs a bounded, conservative place match
 and opens the native Apple place by stable Place ID so Apple Maps can show its own
 current details and navigation action. A missing unambiguous match is reported
-instead of opening a guessed place. CarPlay keeps its direct navigation handoff;
-when a restaurant is selected, it keeps the original destination and inserts the
-restaurant as a waypoint.
+instead of opening a guessed place. CarPlay offers an operator list with the same
+combined EVSE counts and bounded native-place matching. Its separate restaurant
+action also opens the native Apple place, just like iPhone; the user may start
+navigation from Apple Maps.
 The same application flow is connected to a template-native CarPlay scene with
-profile and saved-destination selection, ride-scoped fixed filter choices, stable
-maximum-five POI results, explicit refresh, no-result relaxation, and Apple Maps
-handoff. Local favorites and the capped recent-destination list are shared by the
-iPhone and CarPlay surfaces. A localized App Intent lets Siri resolve a spoken
-destination through MapKit and open the same ride preparation. The strict
+profile and saved-destination selection, a ride summary with immediate search or
+filter-edit actions and all four current criteria, ride-scoped fixed filter
+choices, and stable maximum-five POI results. Compact result summaries show actual
+driving distance, qualifying EVSE totals, and operator names; details retain power,
+known availability, coverage, and attribution. Explicit refresh, no-result
+relaxation, and Apple Maps handoff remain available. Local favorites and the capped
+recent-destination list are shared by the iPhone and CarPlay surfaces. A localized
+App Intent lets Siri resolve a spoken destination through MapKit and open the same
+ride preparation. The strict
 TypeScript/Fastify backend now discovers and imports the current official
 Bundesnetzagentur register automatically, joins the official Swiss
 `ich-tanke-strom` static and live feeds by EVSE identity, builds deterministic

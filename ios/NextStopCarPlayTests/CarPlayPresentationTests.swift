@@ -153,6 +153,12 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(summary.criteria[1].value, "mindestens 8")
     XCTAssertEqual(summary.criteria[2].value, "150 kW")
     XCTAssertEqual(summary.criteria[3].value, "McDonald's")
+    XCTAssertEqual(summary.searchActionTitle, "Suche starten")
+    XCTAssertEqual(summary.searchActionDetail, "Mit den aktuellen Filtern")
+    XCTAssertEqual(summary.editActionTitle, "Filter ändern")
+    XCTAssertEqual(summary.editActionDetail, "Nur für diese Fahrt")
+    XCTAssertEqual(summary.criteriaSummaryTitle, "100–150 km · mind. 8 Ladepunkte")
+    XCTAssertEqual(summary.criteriaSummaryDetail, "ab 150 kW · McDonald's")
     XCTAssertEqual(
       presenter.options(for: .minimumPower, draft: draft).filter(\.selected).count,
       1
@@ -171,6 +177,31 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(restaurantCriterion.value, "Kein Restaurant erforderlich")
     XCTAssertEqual(restaurantOptions.first?.title, "Kein Restaurant erforderlich")
     XCTAssertEqual(restaurantOptions.filter(\.selected).count, 1)
+    XCTAssertEqual(
+      presenter.rideSummary(draft).criteriaSummaryDetail,
+      "ab 150 kW · Ohne Restaurantfilter"
+    )
+  }
+
+  func testRideSummaryReflectsDraftEditsWithoutChangingSavedProfile() throws {
+    let profile = try makeProfile()
+    let controller = CarPlayRideDraftController()
+    controller.select(profile: profile)
+
+    controller.apply(.distanceRange(.kilometers50To100))
+    controller.apply(.minimumChargingPoints(.four))
+    controller.apply(.minimumPower(.threeHundredFifty))
+    controller.apply(.foodChain(nil))
+
+    let draft = try XCTUnwrap(controller.draft)
+    let summary = CarPlayPresenter(localizer: germanLocalizer()).rideSummary(draft)
+    XCTAssertEqual(summary.criteriaSummaryTitle, "50–100 km · mind. 4 Ladepunkte")
+    XCTAssertEqual(summary.criteriaSummaryDetail, "ab 350 kW · Ohne Restaurantfilter")
+    XCTAssertEqual(draft.sourceProfileID, profile.id)
+    XCTAssertEqual(profile.criteria.distanceRange, .kilometers100To150)
+    XCTAssertEqual(profile.criteria.minimumChargingPoints, .eight)
+    XCTAssertEqual(profile.criteria.minimumPower, .oneHundredFifty)
+    XCTAssertEqual(profile.criteria.foodChain, .mcdonalds)
   }
 
   func testResultsKeepDistanceOrderAndDescribePartialAvailabilityHonestly() throws {
@@ -214,21 +245,27 @@ final class CarPlayPresentationTests: XCTestCase {
       criteria: try makeProfile().criteria
     )
 
+    XCTAssertEqual(presentation.title, "Passende Ladestopps")
     XCTAssertEqual(presentation.points.map(\.title), ["Ladepark Eins", "Ladepark Zwei"])
-    XCTAssertEqual(presentation.points[0].subtitle, "80 km · 1 km von der Route")
-    XCTAssertEqual(
-      presentation.points[0].summary,
-      "4 Ladepunkte · 150 kW oder höher · 2 sicher frei, 2 unbekannt"
-    )
-    XCTAssertEqual(
-      presentation.points[1].summary,
-      "4 Ladepunkte · 150 kW oder höher"
-    )
+    XCTAssertEqual(presentation.points.map(\.id), [first.id, second.id])
+    XCTAssertEqual(presentation.points[0].coordinate, first.candidate.park.navigationCoordinate)
+    XCTAssertEqual(presentation.points[0].subtitle, "80 km Fahrstrecke · 4 Ladepunkte")
+    XCTAssertEqual(presentation.points[0].summary, "Operator")
+    XCTAssertEqual(presentation.points[1].summary, "Operator")
     XCTAssertEqual(
       presentation.points[0].detailSummary,
-      "Operator · 4 Ladepunkte\n4 Ladepunkte · 150 kW oder höher · 2 sicher frei, 2 unbekannt"
+      "4 passende Ladepunkte\nOperator · 4 Ladepunkte\n150 kW oder höher\n2 sicher frei, 2 unbekannt"
     )
-    XCTAssertEqual(presentation.points[1].detailSubtitle, "90 km")
+    XCTAssertEqual(
+      presentation.points[1].detailSummary,
+      "4 passende Ladepunkte\nOperator · 4 Ladepunkte\n150 kW oder höher"
+    )
+    XCTAssertEqual(
+      presentation.points[1].detailSubtitle,
+      "90 km Fahrstrecke"
+    )
+    XCTAssertEqual(presentation.points[0].operatorsActionTitle, "Ladeanbieter wählen")
+    XCTAssertNil(presentation.points[0].restaurantActionTitle)
     XCTAssertEqual(presentation.coverageMessage, "Live-Daten teilweise verfügbar")
     XCTAssertEqual(presentation.attributionMessage, "© OpenStreetMap contributors")
   }
@@ -239,14 +276,22 @@ final class CarPlayPresentationTests: XCTestCase {
       name: "Ladepark Eins",
       drivingMeters: 80_000,
       knownAvailable: 0,
-      unknown: 4
+      unknown: 4,
+      operators: [
+        try OperatorChargingPointSummary(name: "EnBW mobility+", chargingPointCount: 2),
+        try OperatorChargingPointSummary(name: "IONITY", chargingPointCount: 2),
+      ]
     )
     let second = try makeResult(
       id: "10000000-0000-4000-8000-000000000002",
       name: "Ladepark Zwei",
       drivingMeters: 81_000,
       knownAvailable: 0,
-      unknown: 4
+      unknown: 4,
+      operators: [
+        try OperatorChargingPointSummary(name: "EnBW mobility+", chargingPointCount: 1),
+        try OperatorChargingPointSummary(name: "Aral pulse", chargingPointCount: 3),
+      ]
     )
     let foodPOI = try FoodPOI(
       id: "osm:node:1",
@@ -271,18 +316,87 @@ final class CarPlayPresentationTests: XCTestCase {
       )
     )
 
-    let presentation = CarPlayPresenter(localizer: germanLocalizer()).results(
+    let presenter = CarPlayPresenter(localizer: germanLocalizer())
+    let presentation = presenter.results(
       outcome,
       criteria: try makeProfile().criteria
     )
 
     XCTAssertEqual(presentation.points.count, 1)
     XCTAssertEqual(presentation.points[0].title, "McDonald's")
-    XCTAssertEqual(presentation.points[0].summary, "8 Ladepunkte · 150 kW oder höher")
+    XCTAssertEqual(presentation.points[0].coordinate, foodPOI.coordinate)
+    XCTAssertEqual(presentation.points[0].subtitle, "80 km Fahrstrecke · 8 Ladepunkte")
+    XCTAssertEqual(presentation.points[0].summary, "Aral pulse · EnBW mobility+ · + 1 weiterer")
+    XCTAssertEqual(
+      presentation.points[0].detailSubtitle,
+      "80 km Fahrstrecke"
+    )
     XCTAssertEqual(
       presentation.points[0].detailSummary,
-      "Operator · 8 Ladepunkte\n8 Ladepunkte · 150 kW oder höher\nMcDonald's · 100 m"
+      "8 passende Ladepunkte\nAral pulse · 3 Ladepunkte\nEnBW mobility+ · 3 Ladepunkte\nIONITY · 2 Ladepunkte\n150 kW oder höher"
     )
+    XCTAssertEqual(presentation.points[0].restaurantActionTitle, "Zum Restaurant")
+    XCTAssertEqual(
+      presenter.operators(for: groupedResult),
+      [
+        CarPlayOperatorPresentation(
+          name: "Aral pulse", detail: "3 Ladepunkte · In Apple Maps öffnen"
+        ),
+        CarPlayOperatorPresentation(
+          name: "EnBW mobility+", detail: "3 Ladepunkte · In Apple Maps öffnen"
+        ),
+        CarPlayOperatorPresentation(
+          name: "IONITY", detail: "2 Ladepunkte · In Apple Maps öffnen"
+        ),
+      ]
+    )
+    XCTAssertNil(presentation.coverageMessage)
+    XCTAssertNil(presentation.attributionMessage)
+  }
+
+  func testOverviewCompactsProvidersWithoutRemovingAnyFromDetailsOrSelection() throws {
+    let result = try makeResult(
+      id: "10000000-0000-4000-8000-000000000001",
+      name: "Ladepark",
+      drivingMeters: 109_499,
+      knownAvailable: 4,
+      unknown: 0,
+      operators: [
+        try OperatorChargingPointSummary(name: "Tesla", chargingPointCount: 1),
+        try OperatorChargingPointSummary(name: "IONITY", chargingPointCount: 1),
+        try OperatorChargingPointSummary(name: "EnBW mobility+", chargingPointCount: 1),
+        try OperatorChargingPointSummary(name: "Aral pulse", chargingPointCount: 1),
+      ]
+    )
+    let outcome = RideCandidateSearchOutcome(
+      results: [result],
+      coverage: CandidateSearchCoverage(
+        status: .stale,
+        activeSourceIDs: ["bundesnetzagentur_ladesaeulenregister"],
+        unavailableSourceIDs: [],
+        projectionUpdatedAt: Date(timeIntervalSince1970: 0)
+      )
+    )
+    let presenter = CarPlayPresenter(localizer: germanLocalizer())
+
+    let presentation = presenter.results(outcome, criteria: try makeProfile().criteria)
+    let point = try XCTUnwrap(presentation.points.first)
+
+    XCTAssertEqual(point.subtitle, "109 km Fahrstrecke · 4 Ladepunkte")
+    XCTAssertEqual(point.summary, "Aral pulse · EnBW mobility+ · + 2 weitere")
+    XCTAssertEqual(
+      point.detailSummary,
+      "4 passende Ladepunkte\nAral pulse · 1 Ladepunkt\nEnBW mobility+ · 1 Ladepunkt\nIONITY · 1 Ladepunkt\nTesla · 1 Ladepunkt\n150 kW oder höher\n4 Ladepunkte frei"
+    )
+    XCTAssertEqual(
+      presenter.operators(for: result).map(\.name),
+      ["Aral pulse", "EnBW mobility+", "IONITY", "Tesla"]
+    )
+    XCTAssertEqual(
+      presenter.operators(for: result).map(\.detail),
+      Array(repeating: "1 Ladepunkt · In Apple Maps öffnen", count: 4)
+    )
+    XCTAssertEqual(presentation.coverageMessage, "Ladedaten nicht aktuell")
   }
 
   private func makeProfile(foodChain: FoodChain? = .mcdonalds) throws -> UserProfile {
@@ -309,14 +423,20 @@ final class CarPlayPresentationTests: XCTestCase {
     name: String,
     drivingMeters: Int,
     knownAvailable: Int,
-    unknown: Int
+    unknown: Int,
+    operators: [OperatorChargingPointSummary]? = nil
   ) throws -> RouteSearchResult {
     let coordinate = try Coordinate(latitude: 52, longitude: 10)
+    let chargingOperators =
+      try operators ?? [
+        OperatorChargingPointSummary(name: "Operator", chargingPointCount: 4)
+      ]
+    let chargingPointCount = chargingOperators.reduce(0) { $0 + $1.chargingPointCount }
     let availability = try ParkAvailability(
       knownAvailableCount: knownAvailable,
-      knownUnavailableCount: 4 - knownAvailable - unknown,
+      knownUnavailableCount: chargingPointCount - knownAvailable - unknown,
       unknownCount: unknown,
-      totalCount: 4
+      totalCount: chargingPointCount
     )
     let source = try DataSourceReference(
       sourceID: "authority",
@@ -330,10 +450,8 @@ final class CarPlayPresentationTests: XCTestCase {
       name: name,
       coordinate: coordinate,
       navigationCoordinate: coordinate,
-      operatorChargingPoints: [
-        try OperatorChargingPointSummary(name: "Operator", chargingPointCount: 4)
-      ],
-      chargingPointCount: 4,
+      operatorChargingPoints: chargingOperators,
+      chargingPointCount: chargingPointCount,
       availability: availability,
       maximumPower: Kilowatts(150),
       sourceReferences: [source]
@@ -352,26 +470,40 @@ final class CarPlayPresentationTests: XCTestCase {
   private func germanLocalizer() -> CarPlayLocalizer {
     let values = [
       "carplay.ride.title": "Fahrt",
-      "ride.search.action": "Ladeparks suchen",
+      "carplay.search.action": "Suche starten",
+      "carplay.search.action.detail": "Mit den aktuellen Filtern",
+      "carplay.filters.action": "Filter ändern",
+      "carplay.filters.action.detail": "Nur für diese Fahrt",
+      "carplay.criteria.summary.title.format": "%@ · mind. %lld Ladepunkte",
+      "carplay.criteria.summary.detail.format": "ab %lld kW · %@",
+      "carplay.criteria.no_restaurant": "Ohne Restaurantfilter",
       "profile.distance_range": "Ladestopp",
       "profile.minimum_charging_points": "Mindestens Ladepunkte",
       "profile.minimum_power": "Mindestleistung",
       "profile.restaurant.title": "Restaurant",
       "profile.restaurant.not_required": "Kein Restaurant erforderlich",
       "search.distance_range.100_150_km": "100–150 km",
+      "search.distance_range.50_100_km": "50–100 km",
       "unit.minimum_count.format": "mindestens %lld",
       "unit.kilowatts.format": "%lld kW",
       "unit.minimum_kilowatts.format": "%lld kW oder höher",
       "unit.kilometers.format": "%lld km",
+      "unit.charging_points.one": "%lld Ladepunkt",
+      "unit.charging_points.other": "%lld Ladepunkte",
       "search.food_chain.mcdonalds": "McDonald's",
-      "carplay.result.route_distance.format": "%lld km von der Route",
-      "carplay.result.charging_summary.format": "%lld Ladepunkte · %@",
-      "carplay.result.food.format": "%@ · %lld m",
-      "carplay.result.operator.format": "%@ · %lld Ladepunkte",
+      "carplay.result.metrics.format": "%lld km Fahrstrecke · %@",
+      "carplay.result.driving_distance.format": "%lld km Fahrstrecke",
+      "carplay.result.operator.format": "%@ · %@",
+      "carplay.result.more_operators.one": "+ %lld weiterer",
+      "carplay.result.more_operators.format": "+ %lld weitere",
+      "carplay.result.operators.action": "Ladeanbieter wählen",
+      "carplay.result.restaurant.action": "Zum Restaurant",
+      "carplay.operator.detail.format": "%@ · %@",
+      "ride.result.matching_charging_points.format": "%lld passende Ladepunkte",
       "ride.result.availability.complete.format": "%lld Ladepunkte frei",
       "ride.result.availability.partial.format": "%lld sicher frei, %lld unbekannt",
       "ride.result.navigate": "In Apple Maps öffnen",
-      "ride.results.title": "Passende Ladeparks",
+      "ride.results.screen.title": "Passende Ladestopps",
       "carplay.coverage.degraded": "Live-Daten teilweise verfügbar",
       "carplay.coverage.stale": "Ladedaten nicht aktuell",
     ]

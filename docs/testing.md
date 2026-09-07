@@ -1,7 +1,8 @@
 # Test strategy
 
 Status: Accepted on 2026-08-13; clustering and Apple-place cases amended through
-2026-08-21; passenger-car access amended on 2026-08-24.
+2026-08-21; passenger-car access amended on 2026-08-24; CarPlay flow and native-place
+handoff amended on 2026-09-07.
 
 ## Pure Swift domain tests
 
@@ -51,9 +52,11 @@ surplus power, availability count, and restaurant distance do not change order.
   excessive geometries.
 - Candidate displayed distance uses the candidate `MKRoute.distance` adapter result,
   not route progress or geodesic distance.
-- For no-food mode, exact corridor, straight-line lower bound, MapKit distance, and
-  handoff all use the same power-filtered campus navigation coordinate. Food mode
-  applies the equivalent rule to each power-filtered fine park.
+- For no-food mode, exact corridor, straight-line lower bound, and MapKit distance
+  all use the same power-filtered campus navigation coordinate. Food mode applies
+  the equivalent rule to each power-filtered fine park. Opening a matched native
+  Apple place is a separate presentation action and does not overwrite that
+  coordinate or the result's displayed driving distance.
 - Candidate pagination continues until safe lower-bound stopping is proven.
 - Candidate enrichment re-evaluates safe stopping after every bounded batch and
   shares a rolling MapKit directions budget across retries and subsequent rides.
@@ -166,9 +169,39 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
 - App Intent resolution, cancellation, and destination-not-found.
 - Presenter tests for loading, results, unknown/partial availability, no results,
   relaxation actions, and errors.
+- Selecting a saved profile or destination shows immediate search and filter-edit
+  actions plus all four current criteria. Direct search uses exactly those values;
+  each fixed-choice edit changes only the ride draft and updates its summary.
+  Search remains available in the filter editor's navigation bar.
+- CarPlay POI summaries use the iPhone result title, actual driving distance,
+  qualifying EVSE total, and compact operator names. Details retain exact-name
+  operator counts, applied minimum power, known/partial availability, coverage,
+  and OSM attribution. Unknown availability remains informational and does not
+  alter result order or counts.
+- “Ladeanbieter wählen” opens one native list row per exact operator name with
+  its aggregated qualifying EVSE count, including all members of a restaurant
+  group and campus-wide totals without food. The selected operator resolves only
+  inside that result's lookup/evidence scope and opens its native Apple Place ID
+  through the same place-opening interface as iPhone.
+- “Zum Restaurant” appears only for a matched restaurant and resolves that exact
+  restaurant through the iPhone matcher/cache before opening its native Apple
+  Place ID. Neither CarPlay action automatically starts directions or inserts
+  an original-destination/restaurant waypoint. Failed or ambiguous resolution
+  retains the result and shows a localized error without a guessed coordinate or
+  substitute destination.
+- A repeated operator or restaurant selection reuses the appropriate ride-local
+  native-place cache. New rides/searches, another place action, and scene
+  disconnect cancel pending resolution. Completions verify the original source
+  screen and selected POI; they cannot open Maps or display errors while another
+  POI or screen is current.
 - Runtime `CPListTemplate` limits and exactly zero-to-five POIs.
 - Locked phone, touch and knob input, light/dark, common aspect ratios, reconnect,
   Apple Maps unavailable/handoff failure.
+- Manually verify the visible search/edit actions and compact criteria summary,
+  long operator names and count text, back navigation from the operator list,
+  food/no-food action availability, and native Apple place opening for both
+  actions. The system template layout, rather than the illustrative mockup's
+  exact pixels, determines the vehicle UI.
 - On iPhone, verify that every operator and restaurant Maps button has at least a
   48-point touch target, resolves only after it is tapped, opens the native Apple
   place by Place ID, caches the result for a second tap, and reports an unmatched
