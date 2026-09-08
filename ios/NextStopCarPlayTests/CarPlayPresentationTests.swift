@@ -264,7 +264,7 @@ final class CarPlayPresentationTests: XCTestCase {
       presentation.points[1].detailSubtitle,
       "90 km Fahrstrecke"
     )
-    XCTAssertEqual(presentation.points[0].operatorsActionTitle, "Ladeanbieter wählen")
+    XCTAssertEqual(presentation.points[0].operatorsActionTitle, "Ladeanbieter")
     XCTAssertNil(presentation.points[0].restaurantActionTitle)
     XCTAssertEqual(presentation.coverageMessage, "Live-Daten teilweise verfügbar")
     XCTAssertEqual(presentation.attributionMessage, "© OpenStreetMap contributors")
@@ -496,7 +496,7 @@ final class CarPlayPresentationTests: XCTestCase {
       "carplay.result.operator.format": "%@ · %@",
       "carplay.result.more_operators.one": "+ %lld weiterer",
       "carplay.result.more_operators.format": "+ %lld weitere",
-      "carplay.result.operators.action": "Ladeanbieter wählen",
+      "carplay.result.operators.action": "Ladeanbieter",
       "carplay.result.restaurant.action": "Zum Restaurant",
       "carplay.operator.detail.format": "%@ · %@",
       "ride.result.matching_charging_points.format": "%lld passende Ladepunkte",

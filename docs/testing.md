@@ -178,7 +178,7 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
   operator counts, applied minimum power, known/partial availability, coverage,
   and OSM attribution. Unknown availability remains informational and does not
   alter result order or counts.
-- “Ladeanbieter wählen” opens one native list row per exact operator name with
+- “Ladeanbieter” opens one native list row per exact operator name with
   its aggregated qualifying EVSE count, including all members of a restaurant
   group and campus-wide totals without food. The selected operator resolves only
   inside that result's lookup/evidence scope and opens its native Apple Place ID
@@ -194,6 +194,11 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
   disconnect cancel pending resolution. Completions verify the original source
   screen and selected POI; they cannot open Maps or display errors while another
   POI or screen is current.
+- Both POI buttons work when the native template still reports `NSNotFound` as
+  its selected index. A button from a replaced template must not act on new
+  results, even when result IDs match. Selection callbacks invalidate a pending
+  lookup on a new POI, but a delayed older callback cannot overwrite a newer
+  button action. Check the short “Ladeanbieter” label on a narrow CarPlay display.
 - Runtime `CPListTemplate` limits and exactly zero-to-five POIs.
 - Locked phone, touch and knob input, light/dark, common aspect ratios, reconnect,
   Apple Maps unavailable/handoff failure.

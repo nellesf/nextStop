@@ -24,7 +24,7 @@
 "carplay.result.operator.format" = "%@ · %@";
 "carplay.result.more_operators.one" = "+ %lld more";
 "carplay.result.more_operators.format" = "+ %lld more";
-"carplay.result.operators.action" = "Choose charging provider";
+"carplay.result.operators.action" = "Providers";
 "carplay.result.restaurant.action" = "To the restaurant";
 "carplay.operators.title" = "Charging providers";
 "carplay.operators.context.format" = "At %@";

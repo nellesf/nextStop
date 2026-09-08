@@ -24,7 +24,7 @@
 "carplay.result.operator.format" = "%@ · %@";
 "carplay.result.more_operators.one" = "+ %lld weiterer";
 "carplay.result.more_operators.format" = "+ %lld weitere";
-"carplay.result.operators.action" = "Ladeanbieter wählen";
+"carplay.result.operators.action" = "Ladeanbieter";
 "carplay.result.restaurant.action" = "Zum Restaurant";
 "carplay.operators.title" = "Ladeanbieter";
 "carplay.operators.context.format" = "Bei %@";

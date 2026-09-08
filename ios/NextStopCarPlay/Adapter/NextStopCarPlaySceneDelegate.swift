@@ -21,6 +21,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var searchTask: Task<Void, Never>?
   private var placeTask: Task<Void, Never>?
   private var placeRequestID: UUID?
+  private let placeSelectionContext = CarPlayPlaceSelectionContext()
   private var placeResolver: any CarPlayResultPlaceResolving = CarPlayResultPlaceResolver()
   private var resultsByID: [UUID: RouteSearchResult] = [:]
   private var dependencies: NextStopSceneDependencies?
@@ -58,6 +59,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     searchTask?.cancel()
     searchTask = nil
     cancelPlaceSelection()
+    placeSelectionContext.clear()
     placeResolver = CarPlayResultPlaceResolver()
     resultsByID = [:]
     rideSummaryTemplate = nil
@@ -80,6 +82,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     searchTask?.cancel()
     searchTask = nil
     cancelPlaceSelection()
+    placeSelectionContext.clear()
     placeResolver = CarPlayResultPlaceResolver()
     rideSummaryTemplate = nil
     criteriaTemplate = nil
@@ -232,6 +235,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     recordRecent(profile.destination)
     cancelPlaceSelection()
+    placeSelectionContext.clear()
     placeResolver = CarPlayResultPlaceResolver()
     draftController.select(profile: profile)
     showRideSummary(handlerCompletion: handlerCompletion)
@@ -247,6 +251,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     recordRecent(destination)
     cancelPlaceSelection()
+    placeSelectionContext.clear()
     placeResolver = CarPlayResultPlaceResolver()
     draftController.select(destination: destination)
     showRideSummary(handlerCompletion: handlerCompletion)
@@ -488,6 +493,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     searchTask?.cancel()
     cancelPlaceSelection()
+    placeSelectionContext.clear()
     noResultsTemplate = nil
     noResultsAttributions = []
 
@@ -817,8 +823,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     point.primaryButton = CPTextButton(
       title: presentation.operatorsActionTitle,
       textStyle: .confirm
-    ) { [weak self] _ in
-      self?.showOperators(for: presentation.id)
+    ) { [weak self] button in
+      self?.showOperators(from: button)
     }
     if let restaurantActionTitle = presentation.restaurantActionTitle {
       point.secondaryButton = CPTextButton(
@@ -827,12 +833,15 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       ) { [weak self] button in
         guard let self,
           let template = interfaceController?.templates.last as? CPPointOfInterestTemplate,
-          button.title == restaurantActionTitle
+          button.title == restaurantActionTitle,
+          let resultID = placeSelectionContext.selectAction(
+            button, in: template, visible: interfaceController?.templates.last
+          )
         else {
           return
         }
         button.title = localizer.text("carplay.place.opening")
-        openPlace(for: presentation.id, from: template) { [weak button] in
+        openPlace(for: resultID, from: template) { [weak button] in
           button?.title = restaurantActionTitle
         }
       }
@@ -840,11 +849,12 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     return point
   }
 
-  private func showOperators(for resultID: UUID) {
+  private func showOperators(from button: CPTextButton) {
     guard let interfaceController,
       let resultsTemplate = interfaceController.templates.last as? CPPointOfInterestTemplate,
-      CarPlayPlaceSelectionContext.isCurrent(
-        resultID: resultID, source: resultsTemplate, visible: resultsTemplate
+      !templateTransitionGate.isActive,
+      let resultID = placeSelectionContext.selectAction(
+        button, in: resultsTemplate, visible: interfaceController.templates.last
       ),
       let result = resultsByID[resultID],
       let transitionID = templateTransitionGate.begin()
@@ -948,7 +958,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     handlerCompletion: (() -> Void)? = nil
   ) {
     guard let interfaceController,
-      CarPlayPlaceSelectionContext.isCurrent(
+      placeSelectionContext.isCurrent(
         resultID: resultID, source: template, visible: interfaceController.templates.last
       ),
       !templateTransitionGate.isActive,
@@ -982,7 +992,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         guard let self, let template, let interfaceController,
           self.interfaceController === interfaceController,
           placeRequestID == requestID,
-          CarPlayPlaceSelectionContext.isCurrent(
+          placeSelectionContext.isCurrent(
             resultID: resultID, source: template, visible: interfaceController.templates.last
           )
         else {
@@ -998,7 +1008,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
           let self, let template, let interfaceController,
           self.interfaceController === interfaceController,
           placeRequestID == requestID,
-          CarPlayPlaceSelectionContext.isCurrent(
+          placeSelectionContext.isCurrent(
             resultID: resultID, source: template, visible: interfaceController.templates.last
           )
         else {
@@ -1057,18 +1067,75 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
 }
 
 @MainActor
-enum CarPlayPlaceSelectionContext {
-  static func isCurrent(resultID: UUID, source: CPTemplate, visible: CPTemplate?) -> Bool {
+final class CarPlayPlaceSelectionContext {
+  private weak var resultsTemplate: CPPointOfInterestTemplate?
+  private weak var selectedPoint: CPPointOfInterest?
+  private var lastSelectionEvent: ContinuousClock.Instant?
+
+  func selectAction(
+    _ button: CPTextButton,
+    in source: CPPointOfInterestTemplate,
+    visible: CPTemplate?,
+    observedAt: ContinuousClock.Instant = .now
+  ) -> UUID? {
+    guard isLatest(observedAt), source === visible,
+      let point = source.pointsOfInterest.first(where: {
+        $0.primaryButton === button || $0.secondaryButton === button
+      }),
+      let resultID = point.userInfo as? UUID
+    else {
+      return nil
+    }
+    // The concrete button establishes the action's source even when selectedIndex
+    // still contains the initial NSNotFound. Never accept an old template's button.
+    _ = select(point, in: source, visible: visible, observedAt: observedAt)
+    return resultID
+  }
+
+  /// Returns true only when a valid selection changes and pending work must stop.
+  func select(
+    _ point: CPPointOfInterest,
+    in source: CPPointOfInterestTemplate,
+    visible: CPTemplate?,
+    observedAt: ContinuousClock.Instant = .now
+  ) -> Bool {
+    guard isLatest(observedAt), source === visible,
+      source.pointsOfInterest.contains(where: { $0 === point }),
+      point.userInfo is UUID
+    else {
+      return false
+    }
+    let changed = resultsTemplate !== source || selectedPoint !== point
+    resultsTemplate = source
+    selectedPoint = point
+    lastSelectionEvent = observedAt
+    return changed
+  }
+
+  func isCurrent(resultID: UUID, source: CPTemplate, visible: CPTemplate?) -> Bool {
     guard source === visible else {
       return false
     }
     guard let results = source as? CPPointOfInterestTemplate else {
       return true
     }
-    guard results.pointsOfInterest.indices.contains(results.selectedIndex) else {
+    guard results === resultsTemplate,
+      let selectedPoint,
+      results.pointsOfInterest.contains(where: { $0 === selectedPoint })
+    else {
       return false
     }
-    return (results.pointsOfInterest[results.selectedIndex].userInfo as? UUID) == resultID
+    return (selectedPoint.userInfo as? UUID) == resultID
+  }
+
+  func clear() {
+    resultsTemplate = nil
+    selectedPoint = nil
+    lastSelectionEvent = nil
+  }
+
+  private func isLatest(_ observedAt: ContinuousClock.Instant) -> Bool {
+    lastSelectionEvent.map { observedAt >= $0 } ?? true
   }
 }
 
@@ -1136,6 +1203,31 @@ struct CarPlayTemplateTransitionGate {
 }
 
 extension NextStopCarPlaySceneDelegate: CPPointOfInterestTemplateDelegate {
+  nonisolated func pointOfInterestTemplate(
+    _ pointOfInterestTemplate: CPPointOfInterestTemplate,
+    didSelectPointOfInterest pointOfInterest: CPPointOfInterest
+  ) {
+    // Transfer identities only; inspect CarPlay objects and update state on the main actor.
+    let templateID = ObjectIdentifier(pointOfInterestTemplate)
+    let pointID = ObjectIdentifier(pointOfInterest)
+    let observedAt = ContinuousClock.now
+    Task { @MainActor [weak self] in
+      guard let self,
+        let template = interfaceController?.templates.last as? CPPointOfInterestTemplate,
+        ObjectIdentifier(template) == templateID,
+        let point = template.pointsOfInterest.first(where: { ObjectIdentifier($0) == pointID })
+      else {
+        return
+      }
+      if placeSelectionContext.select(
+        point, in: template, visible: interfaceController?.templates.last,
+        observedAt: observedAt
+      ) {
+        cancelPlaceSelection()
+      }
+    }
+  }
+
   nonisolated func pointOfInterestTemplate(
     _ pointOfInterestTemplate: CPPointOfInterestTemplate,
     didChangeMapRegion region: MKCoordinateRegion

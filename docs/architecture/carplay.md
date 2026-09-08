@@ -108,7 +108,7 @@ added only from reliable explicit data.
 
 ## Apple Maps actions
 
-The primary POI detail action, “Ladeanbieter wählen”, opens a `CPListTemplate` with
+The primary POI detail action, “Ladeanbieter”, opens a `CPListTemplate` with
 one row per exact operator name and its qualifying EVSE total. Selecting a row
 resolves only that operator inside the selected restaurant group or no-food
 campus. It uses the same bounded Apple-place matcher, evidence, and ride-local
@@ -119,6 +119,12 @@ restaurant. It resolves and opens the selected native Apple restaurant just like
 the iPhone restaurant button. Both paths open Apple Maps at the native place;
 the user starts navigation there. They do not automatically start directions or
 insert the restaurant as a waypoint before the original destination.
+
+Detail actions validate that the tapped button belongs to the visible POI
+template; they do not depend on `selectedIndex` being updated before the action.
+The POI selection delegate tracks subsequent selection changes and cancels
+pending place resolution. Callbacks hop to the main actor using object identities
+only, and older selection events cannot overwrite a newer button action.
 
 If no unambiguous native place is found, show a localized error and keep the
 current result. Never substitute a guessed coordinate, another operator, the
