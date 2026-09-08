@@ -21,6 +21,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var searchTask: Task<Void, Never>?
   private var placeTask: Task<Void, Never>?
   private var placeRequestID: UUID?
+  private var mapsLauncher: (any CarPlayAppleMapsLaunching)?
   private let placeSelectionContext = CarPlayPlaceSelectionContext()
   private var placeResolver: any CarPlayResultPlaceResolving = CarPlayResultPlaceResolver()
   private var resultsByID: [UUID: RouteSearchResult] = [:]
@@ -30,13 +31,13 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private let localizer = CarPlayLocalizer()
   private let presenter = CarPlayPresenter()
   private let draftController = CarPlayRideDraftController()
-  private let navigationLauncher: any AppleMapsLaunching = AppleMapsLauncher()
 
   func templateApplicationScene(
     _ templateApplicationScene: CPTemplateApplicationScene,
     didConnect interfaceController: CPInterfaceController
   ) {
     self.interfaceController = interfaceController
+    mapsLauncher = CarPlayAppleMapsLauncher(scene: templateApplicationScene)
     templateTransitionGate.reset()
     if searchService == nil, let dependencies {
       searchService = makeSearchService(using: dependencies)
@@ -56,9 +57,13 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     _ templateApplicationScene: CPTemplateApplicationScene,
     didDisconnectInterfaceController interfaceController: CPInterfaceController
   ) {
+    guard self.interfaceController === interfaceController else {
+      return
+    }
     searchTask?.cancel()
     searchTask = nil
     cancelPlaceSelection()
+    mapsLauncher = nil
     placeSelectionContext.clear()
     placeResolver = CarPlayResultPlaceResolver()
     resultsByID = [:]
@@ -957,7 +962,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     from template: CPTemplate,
     handlerCompletion: (() -> Void)? = nil
   ) {
-    guard let interfaceController,
+    guard let interfaceController, let mapsLauncher,
       placeSelectionContext.isCurrent(
         resultID: resultID, source: template, visible: interfaceController.templates.last
       ),
@@ -991,6 +996,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         try Task.checkCancellation()
         guard let self, let template, let interfaceController,
           self.interfaceController === interfaceController,
+          self.mapsLauncher === mapsLauncher,
           placeRequestID == requestID,
           placeSelectionContext.isCurrent(
             resultID: resultID, source: template, visible: interfaceController.templates.last
@@ -998,7 +1004,18 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         else {
           return
         }
-        if !navigationLauncher.openPlace(mapItem) {
+        let didOpen = await mapsLauncher.openPlace(mapItem)
+        guard !Task.isCancelled,
+          self.interfaceController === interfaceController,
+          self.mapsLauncher === mapsLauncher,
+          placeRequestID == requestID,
+          placeSelectionContext.isCurrent(
+            resultID: resultID, source: template, visible: interfaceController.templates.last
+          )
+        else {
+          return
+        }
+        if !didOpen {
           showNavigationFailure()
         }
       } catch is CancellationError {
@@ -1007,6 +1024,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         guard !Task.isCancelled,
           let self, let template, let interfaceController,
           self.interfaceController === interfaceController,
+          self.mapsLauncher === mapsLauncher,
           placeRequestID == requestID,
           placeSelectionContext.isCurrent(
             resultID: resultID, source: template, visible: interfaceController.templates.last

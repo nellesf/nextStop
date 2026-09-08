@@ -120,6 +120,14 @@ the iPhone restaurant button. Both paths open Apple Maps at the native place;
 the user starts navigation there. They do not automatically start directions or
 insert the restaurant as a waypoint before the original destination.
 
+Both actions open Maps through the connected `CPTemplateApplicationScene`, never
+through the app-global iPhone opener. On iOS 18.4 and later, the scene opens the
+stable Place ID URL as a universal link. On earlier supported versions, or when
+that URL is unavailable, the resolved native `MKMapItem` opens from the same scene
+with no directions options. Opening failure is reported only while the original
+scene, source screen, and action are still current; there is no phone/browser
+fallback. The iPhone launcher is unchanged.
+
 Detail actions validate that the tapped button belongs to the visible POI
 template; they do not depend on `selectedIndex` being updated before the action.
 The POI selection delegate tracks subsequent selection changes and cancels

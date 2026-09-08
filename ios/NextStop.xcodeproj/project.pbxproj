@@ -57,6 +57,7 @@
 		C512AE42B954FBFE8AE052A4 /* StoredDestinationRecord.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3412315DA3F115378E73486A /* StoredDestinationRecord.swift */; };
 		C93BE275281E7FBA534CD7D1 /* DestinationSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */; };
 		CAB24ECC13A38EC7FD84189C /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 7C708DEF31532E56B1BEEBC7 /* Assets.xcassets */; };
+		CAB32375AF85DA9D1CC7A4D3 /* CarPlayAppleMapsLauncherTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 953F50DE32341CF3E8B06EFA /* CarPlayAppleMapsLauncherTests.swift */; };
 		CE31254C4FB5B8379BD1EEA9 /* CarPlayRideSearchServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */; };
 		CE485031E939B6094BBA693B /* NextStopCore in Frameworks */ = {isa = PBXBuildFile; productRef = 49D48C6030DDF6CE9D69DB5A /* NextStopCore */; };
 		D33A00266C7B4DA6A85DF623 /* CarPlayPresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5F4998D881644FBB33F53061 /* CarPlayPresentationTests.swift */; };
@@ -67,6 +68,7 @@
 		D7A2AD63F70603ECFDB96D55 /* AppAttestAuthenticationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6780E7415AC2367F4CF57432 /* AppAttestAuthenticationTests.swift */; };
 		D863454E28B7C32671049EAB /* AppAttestKeyStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4E225D4FE068D4B55304E423 /* AppAttestKeyStore.swift */; };
 		DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */; };
+		DBCF24C52F1F8595231851AC /* CarPlayAppleMapsLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7171EB62A86F9C6AE1BD96 /* CarPlayAppleMapsLauncher.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
 		F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */; };
 		FDB1BC30410969AF967D7425 /* SwiftDataDestinationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4156FF115B754AA94F263515 /* SwiftDataDestinationRepository.swift */; };
@@ -136,6 +138,7 @@
 		8F676250C62DF04A9C781207 /* DestinationSearching.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearching.swift; sourceTree = "<group>"; };
 		93FD9DB740858C65ADE3EEA1 /* RidePreparationViewModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationViewModel.swift; sourceTree = "<group>"; };
 		9438DF8BF63B2018172F6282 /* AuthenticationTransportTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AuthenticationTransportTests.swift; sourceTree = "<group>"; };
+		953F50DE32341CF3E8B06EFA /* CarPlayAppleMapsLauncherTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayAppleMapsLauncherTests.swift; sourceTree = "<group>"; };
 		9A67286539089D33E4CBEC3F /* ProfileListView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileListView.swift; sourceTree = "<group>"; };
 		9D838AE0B14389236528ED17 /* SearchAccessTokenProviding.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SearchAccessTokenProviding.swift; sourceTree = "<group>"; };
 		A19B25042473CCB4F38697B2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -153,6 +156,7 @@
 		CABC5A44BF19A93E65714CD5 /* CarPlayResultPlaceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayResultPlaceResolver.swift; sourceTree = "<group>"; };
 		D31D997BAB34D028B4F9E6FE /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
 		D9F3EBBC45E89E886E6C69EE /* NextStopApp.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = NextStopApp.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DC7171EB62A86F9C6AE1BD96 /* CarPlayAppleMapsLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayAppleMapsLauncher.swift; sourceTree = "<group>"; };
 		E164E3F69D1931A4E9E3C566 /* DestinationSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationSearchView.swift; sourceTree = "<group>"; };
 		E3ED684D1EFC59A1DECD8407 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
 		E45715BD4F1FED50FC352F93 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -354,6 +358,7 @@
 		6F6AFB72FF2DA3BA3727D46D /* NextStopCarPlayTests */ = {
 			isa = PBXGroup;
 			children = (
+				953F50DE32341CF3E8B06EFA /* CarPlayAppleMapsLauncherTests.swift */,
 				652A93844451F0E139B9C52F /* CarPlayPlaceSelectionContextTests.swift */,
 				5F4998D881644FBB33F53061 /* CarPlayPresentationTests.swift */,
 				4628D2C4053A9086E662A4E0 /* CarPlayResultPlaceResolverTests.swift */,
@@ -401,6 +406,7 @@
 		8FB8C5D4E6574818ADD0DB20 /* Adapter */ = {
 			isa = PBXGroup;
 			children = (
+				DC7171EB62A86F9C6AE1BD96 /* CarPlayAppleMapsLauncher.swift */,
 				C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */,
 			);
 			path = Adapter;
@@ -593,6 +599,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				CAB32375AF85DA9D1CC7A4D3 /* CarPlayAppleMapsLauncherTests.swift in Sources */,
 				9EA65C2AF5EF29CA8874BD0C /* CarPlayPlaceSelectionContextTests.swift in Sources */,
 				D33A00266C7B4DA6A85DF623 /* CarPlayPresentationTests.swift in Sources */,
 				0C4BA6666207EE6353AAEFBC /* CarPlayResultPlaceResolverTests.swift in Sources */,
@@ -611,6 +618,7 @@
 				6BD17C60665476B21A1D4A5A /* ApplePlaceResolver.swift in Sources */,
 				436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */,
 				8B0639F296A99367B2022597 /* CandidateSearchService.swift in Sources */,
+				DBCF24C52F1F8595231851AC /* CarPlayAppleMapsLauncher.swift in Sources */,
 				7389907E5C7023E358518CDE /* CarPlayPresentation.swift in Sources */,
 				607BAC3847F580C18F2AA8C6 /* CarPlayResultPlaceResolver.swift in Sources */,
 				4E3D4BFA79D8588942540740 /* CarPlayRideSearchService.swift in Sources */,

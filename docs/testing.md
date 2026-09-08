@@ -199,6 +199,13 @@ Use an isolated real PostGIS instance, not an in-memory substitute:
   results, even when result IDs match. Selection callbacks invalidate a pending
   lookup on a new POI, but a delayed older callback cannot overwrite a newer
   button action. Check the short “Ladeanbieter” label on a narrow CarPlay display.
+- Operator and restaurant handoffs target the connected CarPlay scene, not the
+  iPhone. Verify native Place ID URLs on iOS 18.4+ and native map-item handoff on
+  earlier supported versions; neither path requests directions. A rejected open
+  reports failure without an app-global or browser fallback. Disconnect/reconnect
+  and a newer action suppress an old launch failure. Confirm the destination in
+  Apple Maps on the CarPlay display, including with a locked iPhone; iPhone-only
+  opening is not a successful CarPlay test.
 - Runtime `CPListTemplate` limits and exactly zero-to-five POIs.
 - Locked phone, touch and knob input, light/dark, common aspect ratios, reconnect,
   Apple Maps unavailable/handoff failure.
