@@ -167,6 +167,7 @@ struct ProfileListView: View {
       ) {
         showsDataSources = true
       }
+      .accessibilityIdentifier("app-info")
 
       headerButton(
         systemImage: "plus",

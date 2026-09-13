@@ -1,7 +1,8 @@
 # CarPlay architecture and screen flow
 
 Status: Accepted on 2026-08-13; ride flow and native-place handoff amended with
-owner approval on 2026-09-07; concise result content approved on 2026-09-13.
+owner approval on 2026-09-07; concise result content and direct operator selection
+without a restaurant filter approved on 2026-09-13.
 
 ## Entitlement boundary
 
@@ -57,22 +58,27 @@ Ride summary (ride-scoped copy)
                                | no results              +-- select result
                                v                              |
                          Explicit relaxation list             v
-                         (one user-selected change)       POI detail card
-                                                              |
-                                    +-------------------------+----------------+
-                                    v                                          v
-                           [Choose operator]                        [To restaurant]
-                                    |                               (food match only)
-                                    v                                          |
-                           Native operator list                                |
-                           Name + qualifying EVSE count                        |
-                                    | select operator                          |
-                                    +-------------------+----------------------+
-                                                        v
-                                            Resolve selected native place
-                                                        |
-                                                        v
-                                            Apple Maps native place card
+                         (one user-selected change)   Restaurant available?
+                                                    /                      \
+                                                  yes                      no
+                                                   |                        |
+                                             POI detail card                |
+                                                   |                        |
+                               +-------------------+--------------+         |
+                               v                                  v         |
+                       [To restaurant]                    [Choose operator] |
+                               |                                  |         |
+                               |                                  v         |
+                               |                       Native operator list <+
+                               |                       Name + qualifying EVSEs
+                               |                                  |
+                               |                           select operator
+                               +------------------+---------------+
+                                                  v
+                                      Resolve selected native place
+                                                  |
+                                                  v
+                                      Apple Maps native place card
 ```
 
 Selecting a profile creates a `RideSearchDraft`; all subsequent CarPlay changes
@@ -94,9 +100,9 @@ restaurant group or campus, not one charger coordinate. Operator names, site
 names, route-corridor distance, and minimum power do not compete for space in the
 picker.
 
-The detail card restores the restaurant or campus name as its title and asks
-“Wohin fahren?” in its subtitle. Its summary keeps the actual driving-distance
-label, qualifying EVSE total, each exact operator name with its aggregated count,
+The restaurant detail card restores the restaurant name as its title and asks
+“Wohin möchtest du fahren?” in its subtitle. Its summary keeps the actual
+driving-distance label, qualifying EVSE total, each exact operator name with its aggregated count,
 and applied minimum power. The map item's name also retains the site identity.
 Known availability, incomplete/stale coverage, food information, and source
 attribution remain in the appropriate detail text. CarPlay owns fonts, spacing,
@@ -110,7 +116,14 @@ added only from reliable explicit data.
 
 ## Apple Maps actions
 
-The primary POI detail action, “Ladeanbieter”, opens a `CPListTemplate` with
+Without a restaurant filter, selecting a result immediately opens its operator
+list. There is no additional one-button detail step. A successful push resets the
+underlying POI selection, so Back returns to the result overview. If CarPlay cannot
+push the list, the selected detail card retains its “Ladeanbieter” button for an
+explicit retry.
+
+For restaurant results, the primary POI detail action, “Ladeanbieter”, opens the
+same `CPListTemplate` with
 one row per exact operator name and its qualifying EVSE total. Selecting a row
 resolves only that operator inside the selected restaurant group or no-food
 campus. It uses the same bounded Apple-place matcher, evidence, and ride-local
@@ -134,9 +147,13 @@ fallback. The iPhone launcher is unchanged.
 
 Detail actions validate that the tapped button belongs to the visible POI
 template; they do not depend on `selectedIndex` being updated before the action.
-The POI selection delegate tracks subsequent selection changes and cancels
-pending place resolution. Callbacks hop to the main actor using object identities
-only, and older selection events cannot overwrite a newer button action.
+The POI selection delegate validates the visible template, concrete point, and
+current result before choosing the direct operator path or the restaurant detail
+choice. Selection changes cancel pending place resolution. A transition gate
+prevents duplicate list pushes. Callbacks hop to the main actor using object
+identities only, and older selection events cannot overwrite a newer button
+action. Clearing the POI selection after a direct push retains the event-time
+watermark, so delayed pre-push callbacks cannot reopen the list after Back.
 
 If no unambiguous native place is found, show a localized error and keep the
 current result. Never substitute a guessed coordinate, another operator, the
@@ -176,6 +193,9 @@ not required for the destination-phrase MVP path.
   requests.
 - Operator/restaurant resolution tests verify exact group scope, native-place
   cache reuse, errors without guessed fallback, and stale-completion rejection.
+- Selection-context tests cover direct no-food operator selection, restaurant
+  choices, stale point/template callbacks, failed-push fallback, and deselection
+  that returns Back to the overview without replaying an older selection.
 - The actual CarPlay adapter is covered by small mapping tests and manual CarPlay
   Simulator runs once entitlement/provisioning and full Xcode are available.
 
@@ -194,9 +214,9 @@ Results use `CPPointOfInterestTemplate`; its picker and map receive the same sta
 zero-to-five result snapshot. Partial or unavailable live coverage remains visible
 in detail text, a manual refresh creates a new snapshot, and panning never changes
 or re-ranks the result. No-results keeps all four criteria available for an
-explicit user change. The primary POI action opens the operator list, and the
-optional restaurant action resolves that restaurant. Both use the native Apple
-place handoff described above.
+explicit user change. Selecting a no-food result opens the operator list directly;
+restaurant results offer the operator list and restaurant action in their detail
+card. Both use the native Apple place handoff described above.
 
 Each result labels the applied minimum-power criterion as “N kW or higher”; it does
 not present the park's highest observed EVSE power as though every EVSE provided

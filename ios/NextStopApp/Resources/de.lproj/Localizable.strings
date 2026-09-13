@@ -21,7 +21,7 @@
 "carplay.criteria.no_restaurant" = "Ohne Restaurantfilter";
 "carplay.result.metrics.format" = "%lld km Fahrstrecke · %@";
 "carplay.result.driving_distance.format" = "%lld km Fahrstrecke";
-"carplay.result.destination_prompt" = "Wohin fahren?";
+"carplay.result.destination_prompt" = "Wohin möchtest du fahren?";
 "carplay.result.operator.format" = "%@ · %@";
 "carplay.result.more_operators.one" = "+ %lld weiterer";
 "carplay.result.more_operators.format" = "+ %lld weitere";
@@ -190,7 +190,12 @@
 "report.message.prompt" = "Beschreibe den Fehler und was du erwartet hast …";
 "report.message.hint" = "Bitte keine Namen, Kontaktdaten, genauen Standorte, Routen, Zugangsdaten oder Daten anderer Personen eintragen.";
 "report.logs.include" = "Technische Logs für diesen Bericht mitschicken";
-"report.logs.empty" = "Es sind keine technischen Logs gespeichert. Du kannst den Bericht auch ohne Logs senden. Für einen weiteren Test kannst du die lokale Aufzeichnung unten aktivieren; vergangene Fehler lassen sich damit nicht nachträglich erfassen.";
+"report.logs.empty.title" = "Keine Logs zum Anhängen";
+"report.logs.empty" = "Du kannst deinen Fehlerbericht auch ohne Logs senden.";
+"report.logs.recording_off" = "Die lokale Aufzeichnung ist ausgeschaltet. Aktiviere sie vor dem nächsten Versuch, um technische Fehlerdaten zu speichern.";
+"report.logs.awaiting_events" = "Die Aufzeichnung ist aktiv, aber es sind noch keine Fehlerdaten gespeichert. Wiederhole den Vorgang und öffne danach diesen Bericht erneut.";
+"report.logs.settings" = "Aufzeichnung und Logs";
+"report.logs.not_retroactive" = "Vergangene Fehler können nicht nachträglich erfasst werden.";
 "report.logs.description" = "Die Auswahl gilt nur für diesen Bericht. Die Logs enthalten technische Fehlerdaten, keine automatisch hinzugefügten Standorte, Routen, Suchziele oder Zugangsdaten. Die Auswahl aktiviert keine weitere Aufzeichnung.";
 "report.logs.preview" = "Enthaltene Logs ansehen";
 "report.logs.preview_description" = "Genau diese technischen Ereignisse werden mitgeschickt, wenn du die Checkbox aktivierst. Deine Beschreibung wird separat übermittelt.";

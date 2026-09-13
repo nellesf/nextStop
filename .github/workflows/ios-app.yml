@@ -3,6 +3,15 @@ name: iOS App
 on:
   push:
   pull_request:
+  workflow_dispatch:
+    inputs:
+      test_scope:
+        description: Tests to run
+        type: choice
+        options:
+          - all
+          - ui
+        default: all
 
 permissions:
   contents: read
@@ -15,7 +24,7 @@ jobs:
   test:
     name: Build and test NextStopApp
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
 
     steps:
       - name: Check out repository
@@ -25,13 +34,21 @@ jobs:
         run: xcodebuild -version
 
       - name: Build and test iOS app
+        env:
+          TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
         run: |
           set -o pipefail
+          test_selection=()
+          if [ "$TEST_SCOPE" = "ui" ]; then
+            test_selection=(-only-testing:NextStopAppUITests)
+          fi
           xcodebuild \
             -project ios/NextStop.xcodeproj \
             -scheme NextStopApp \
+            -configuration Debug \
             -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
             -resultBundlePath TestResults.xcresult \
+            "${test_selection[@]}" \
             CODE_SIGNING_ALLOWED=NO \
             test | tee xcodebuild.log
 
@@ -51,4 +68,42 @@ jobs:
 
       - name: Show failed test summary
         if: failure()
-        run: xcrun xcresulttool get test-results summary --path TestResults.xcresult
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path TestResults.xcresult
+          fi
+
+      - name: Archive Xcode test results
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            tar -czf TestResults.xcresult.tar.gz TestResults.xcresult
+          fi
+
+      - name: Export UI screenshots and attachments
+        if: always()
+        run: |
+          if [ -d TestResults.xcresult ]; then
+            xcrun xcresulttool export attachments \
+              --path TestResults.xcresult \
+              --output-path UI-Attachments
+          fi
+
+      - name: Upload Xcode test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-test-results
+          path: TestResults.xcresult.tar.gz
+          if-no-files-found: ignore
+          retention-days: 7
+          compression-level: 0
+
+      - name: Upload UI screenshots and attachments
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: ios-ui-attachments
+          path: UI-Attachments/
+          if-no-files-found: ignore
+          retention-days: 7

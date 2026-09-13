@@ -29,7 +29,8 @@ profile and saved-destination selection, a ride summary with immediate search or
 filter-edit actions and all four current criteria, ride-scoped fixed filter
 choices, and stable maximum-five POI results. Each picker result shows its qualifying
 EVSE total and actual driving distance on two lines. The selected result keeps its
-place name and asks where to go; operator selection, power, known availability,
+place name and asks where to go when a restaurant is available; without a
+restaurant it opens the operator list directly. Operator selection, power, known availability,
 coverage, and attribution remain in the details. Explicit refresh, no-result
 relaxation, and Apple Maps handoff remain available. Local favorites and the capped
 recent-destination list are shared by the iPhone and CarPlay surfaces. A localized
@@ -48,7 +49,9 @@ separate daily OSM projection imports supported chains from cached Geofabrik PBF
 extracts and enforces the exact 500 m restaurant predicate.
 
 The iPhone includes voluntary error reporting with a free-text description and an
-initially unchecked option to attach sanitized technical logs. Reports are sent
+initially unchecked option to attach existing sanitized technical logs. With no
+saved logs it explains the empty state and links directly to local recording
+settings; recording stays optional and cannot recover past errors. Reports are sent
 only after explicit submission, can be withdrawn in the app, and expire after
 30 days with scheduled server cleanup. Search recovery remains silent. The report
 flow includes localized privacy information and requires genuine controller/contact
@@ -134,6 +137,7 @@ ios/
   NextStopApp/              # SwiftUI app, MapKit, persistence, App Intents
   NextStopCarPlay/          # Presenter, shared ride use case, and thin CarPlay adapter
   NextStopAppTests/
+  NextStopAppUITests/       # Synthetic iPhone UI flows and screenshot checkpoints
   NextStopCarPlayTests/     # Entitlement-independent CarPlay tests
 backend/
   src/

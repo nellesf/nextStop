@@ -7,6 +7,161 @@ import XCTest
 
 @MainActor
 final class CarPlayPlaceSelectionContextTests: XCTestCase {
+  func testResultWithoutRestaurantOpensItsOperatorsWithoutAReportedSelectedIndex() throws {
+    let id = UUID()
+    let point = makePoint(id: id, includesRestaurant: false)
+    let results = makeTemplate(points: [point])
+    let context = CarPlayPlaceSelectionContext()
+
+    let selection = try XCTUnwrap(
+      context.selectResult(point, in: results, visible: results)
+    )
+
+    XCTAssertEqual(results.selectedIndex, NSNotFound)
+    XCTAssertEqual(selection.action, .showOperators(id))
+    XCTAssertTrue(selection.cancelsPendingPlace)
+    XCTAssertTrue(context.isCurrent(resultID: id, source: results, visible: results))
+  }
+
+  func testRestaurantResultKeepsDestinationChoiceAndCancelsOnlyChangedSelection() throws {
+    let firstID = UUID()
+    let first = makePoint(id: firstID)
+    let second = makePoint(id: UUID())
+    let results = makeTemplate(points: [first, second])
+    let context = CarPlayPlaceSelectionContext()
+    XCTAssertTrue(context.select(first, in: results, visible: results))
+
+    let repeated = try XCTUnwrap(
+      context.selectResult(first, in: results, visible: results)
+    )
+    XCTAssertEqual(repeated.action, .showDestinationChoice)
+    XCTAssertFalse(repeated.cancelsPendingPlace)
+
+    let changed = try XCTUnwrap(
+      context.selectResult(second, in: results, visible: results)
+    )
+    XCTAssertEqual(changed.action, .showDestinationChoice)
+    XCTAssertTrue(changed.cancelsPendingPlace)
+    XCTAssertFalse(context.isCurrent(resultID: firstID, source: results, visible: results))
+  }
+
+  func testDelayedNoRestaurantSelectionCannotReplaceNewerRestaurantAction() throws {
+    let first = makePoint(id: UUID(), includesRestaurant: false)
+    let secondID = UUID()
+    let second = makePoint(id: secondID)
+    let results = makeTemplate(points: [first, second])
+    let context = CarPlayPlaceSelectionContext()
+    let callbackTime = ContinuousClock.now
+    let actionTime = callbackTime.advanced(by: .seconds(1))
+    XCTAssertEqual(
+      context.selectAction(
+        try XCTUnwrap(second.secondaryButton), in: results, visible: results,
+        observedAt: actionTime),
+      secondID
+    )
+
+    XCTAssertNil(
+      context.selectResult(first, in: results, visible: results, observedAt: callbackTime)
+    )
+    XCTAssertTrue(context.isCurrent(resultID: secondID, source: results, visible: results))
+  }
+
+  func testDirectSelectionRejectsReplacedTemplateAndPointEvenWithSameResultID() {
+    let id = UUID()
+    let originalPoint = makePoint(id: id, includesRestaurant: false)
+    let original = makeTemplate(points: [originalPoint])
+    let replacementPoint = makePoint(id: id, includesRestaurant: false)
+    let replacement = makeTemplate(points: [replacementPoint])
+    let context = CarPlayPlaceSelectionContext()
+
+    XCTAssertNil(
+      context.selectResult(originalPoint, in: original, visible: replacement)
+    )
+    XCTAssertNil(
+      context.selectResult(originalPoint, in: replacement, visible: replacement)
+    )
+    XCTAssertEqual(
+      context.selectResult(replacementPoint, in: replacement, visible: replacement)?.action,
+      .showOperators(id)
+    )
+  }
+
+  func testSuccessfulDirectPushReturnsToOverviewAndRejectsQueuedSelectionAfterBack() {
+    let id = UUID()
+    let point = makePoint(id: id, includesRestaurant: false)
+    let results = makeTemplate(points: [point])
+    results.selectedIndex = 0
+    let operators = CPListTemplate(title: "Ladeanbieter", sections: [])
+    let context = CarPlayPlaceSelectionContext()
+    let selectionTime = ContinuousClock.now
+    let completionTime = selectionTime.advanced(by: .seconds(1))
+    XCTAssertEqual(
+      context.selectResult(point, in: results, visible: results, observedAt: selectionTime)?.action,
+      .showOperators(id)
+    )
+
+    XCTAssertTrue(
+      context.completeDirectOperatorPush(
+        resultID: id, from: results, to: operators, visible: operators,
+        observedAt: completionTime)
+    )
+    XCTAssertEqual(results.selectedIndex, NSNotFound)
+    XCTAssertFalse(context.isCurrent(resultID: id, source: results, visible: results))
+    XCTAssertTrue(context.isCurrent(resultID: id, source: operators, visible: operators))
+    XCTAssertNil(
+      context.selectResult(point, in: results, visible: results, observedAt: selectionTime)
+    )
+    XCTAssertEqual(
+      context.selectResult(
+        point, in: results, visible: results,
+        observedAt: completionTime.advanced(by: .seconds(1)))?.action,
+      .showOperators(id)
+    )
+  }
+
+  func testFailedDirectPushKeepsSelectionAndFallbackOperatorActionAvailable() throws {
+    let id = UUID()
+    let point = makePoint(id: id, includesRestaurant: false)
+    let results = makeTemplate(points: [point])
+    results.selectedIndex = 0
+    let operators = CPListTemplate(title: "Ladeanbieter", sections: [])
+    let context = CarPlayPlaceSelectionContext()
+    XCTAssertNotNil(context.selectResult(point, in: results, visible: results))
+
+    XCTAssertFalse(
+      context.completeDirectOperatorPush(
+        resultID: id, from: results, to: operators, visible: results)
+    )
+    XCTAssertEqual(results.selectedIndex, 0)
+    XCTAssertTrue(context.isCurrent(resultID: id, source: results, visible: results))
+    XCTAssertEqual(
+      context.selectAction(try XCTUnwrap(point.primaryButton), in: results, visible: results),
+      id
+    )
+  }
+
+  func testStalePushCompletionCannotClearTheReplacementSelection() {
+    let id = UUID()
+    let originalPoint = makePoint(id: id, includesRestaurant: false)
+    let original = makeTemplate(points: [originalPoint])
+    original.selectedIndex = 0
+    let replacementPoint = makePoint(id: id, includesRestaurant: false)
+    let replacement = makeTemplate(points: [replacementPoint])
+    replacement.selectedIndex = 0
+    let operators = CPListTemplate(title: "Ladeanbieter", sections: [])
+    let context = CarPlayPlaceSelectionContext()
+    XCTAssertNotNil(context.selectResult(originalPoint, in: original, visible: original))
+    XCTAssertNotNil(context.selectResult(replacementPoint, in: replacement, visible: replacement))
+
+    XCTAssertFalse(
+      context.completeDirectOperatorPush(
+        resultID: id, from: original, to: operators, visible: operators)
+    )
+    XCTAssertEqual(original.selectedIndex, 0)
+    XCTAssertEqual(replacement.selectedIndex, 0)
+    XCTAssertTrue(context.isCurrent(resultID: id, source: replacement, visible: replacement))
+  }
+
   func testBothPOIActionsAcceptTheirOwnButtonWithNoReportedSelection() throws {
     let id = UUID()
     let point = makePoint(id: id)
@@ -174,7 +329,7 @@ final class CarPlayPlaceSelectionContextTests: XCTestCase {
     )
   }
 
-  private func makePoint(id: UUID) -> CPPointOfInterest {
+  private func makePoint(id: UUID, includesRestaurant: Bool = true) -> CPPointOfInterest {
     let point = CPPointOfInterest(
       location: MKMapItem(),
       title: "Restaurant",
@@ -187,7 +342,9 @@ final class CarPlayPlaceSelectionContextTests: XCTestCase {
     )
     point.userInfo = id as NSUUID
     point.primaryButton = CPTextButton(title: "Ladeanbieter", textStyle: .confirm) { _ in }
-    point.secondaryButton = CPTextButton(title: "Zum Restaurant", textStyle: .normal) { _ in }
+    if includesRestaurant {
+      point.secondaryButton = CPTextButton(title: "Zum Restaurant", textStyle: .normal) { _ in }
+    }
     return point
   }
 }

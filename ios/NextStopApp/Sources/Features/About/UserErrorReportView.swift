@@ -49,14 +49,28 @@ struct UserErrorReportView: View {
       .disabled(composer.isSending)
 
       Section {
-        Toggle("report.logs.include", isOn: $composer.includeDiagnostics)
-          .toggleStyle(ReportCheckboxToggleStyle())
-          .disabled(composer.diagnostics.isEmpty || composer.isSending)
-          .accessibilityIdentifier("error-report-include-logs")
         if composer.diagnostics.isEmpty {
+          Label("report.logs.empty.title", systemImage: "doc.text.magnifyingglass")
+            .accessibilityIdentifier("error-report-no-logs")
           Text("report.logs.empty")
             .foregroundStyle(.secondary)
+          Text(
+            diagnosticsStore.recordingEnabled
+              ? "report.logs.awaiting_events" : "report.logs.recording_off"
+          )
+          .foregroundStyle(.secondary)
+          NavigationLink {
+            DiagnosticsView(store: diagnosticsStore)
+          } label: {
+            Label("report.logs.settings", systemImage: "stethoscope")
+          }
+          .disabled(composer.isSending)
+          .accessibilityIdentifier("error-report-recording-settings")
         } else {
+          Toggle("report.logs.include", isOn: $composer.includeDiagnostics)
+            .toggleStyle(ReportCheckboxToggleStyle())
+            .disabled(composer.isSending)
+            .accessibilityIdentifier("error-report-include-logs")
           NavigationLink {
             ReportLogPreview(events: composer.diagnostics)
           } label: {
@@ -65,9 +79,10 @@ struct UserErrorReportView: View {
             }
           }
           .disabled(composer.isSending)
+          .accessibilityIdentifier("report-log-preview")
         }
       } footer: {
-        Text("report.logs.description")
+        Text(composer.diagnostics.isEmpty ? "report.logs.not_retroactive" : "report.logs.description")
       }
 
       Section {
@@ -86,6 +101,7 @@ struct UserErrorReportView: View {
           Label("report.privacy.title", systemImage: "hand.raised")
         }
         .disabled(composer.isSending)
+        .accessibilityIdentifier("report-privacy")
 
         if privacy?.usesInternalTestPlaceholders == true && !composer.privacyConfigured {
           Text(distributionChecked ? "report.internal.unavailable" : "report.internal.verifying")
@@ -109,10 +125,12 @@ struct UserErrorReportView: View {
         if let error = composer.error {
           Text(LocalizedStringKey(error.localizationKey))
             .foregroundStyle(.red)
+            .accessibilityIdentifier("report-send-error")
         }
         if composer.sentReportID != nil {
           Label("report.sent", systemImage: "checkmark.circle")
             .foregroundStyle(.green)
+            .accessibilityIdentifier("report-send-success")
         }
       }
 
@@ -122,17 +140,21 @@ struct UserErrorReportView: View {
         } label: {
           Label("report.receipts.title", systemImage: "tray")
         }
+        .accessibilityIdentifier("report-receipts")
         NavigationLink {
           DiagnosticsView(store: diagnosticsStore)
         } label: {
           Label("report.local_diagnostics", systemImage: "stethoscope")
         }
+        .accessibilityIdentifier("report-local-diagnostics")
       }
       .disabled(composer.isSending)
     }
     .navigationTitle("report.title")
     .navigationBarTitleDisplayMode(.inline)
+    .scrollDismissesKeyboard(.interactively)
     .onAppear { composer.refreshDiagnostics(from: diagnosticsStore) }
+    .onChange(of: diagnosticsStore.events) { composer.refreshDiagnostics(from: diagnosticsStore) }
     .task {
       guard privacy?.usesInternalTestPlaceholders == true else { return }
       let distribution = await SupportReportDistribution.current()
@@ -180,6 +202,7 @@ private struct ReportLogPreview: View {
         Text(verbatim: encodedEvents)
           .font(.caption.monospaced())
           .textSelection(.enabled)
+          .accessibilityIdentifier("log-preview-content")
       }
       .frame(maxWidth: .infinity, alignment: .leading)
       .padding()
@@ -220,6 +243,7 @@ struct SentErrorReportsView: View {
       if store.receipts.isEmpty {
         Text("report.receipts.empty")
           .foregroundStyle(.secondary)
+          .accessibilityIdentifier("receipts-empty")
       }
       ForEach(store.receipts) { receipt in
         Section {
@@ -261,6 +285,7 @@ struct SentErrorReportsView: View {
             }
           }
           .disabled(deletingID != nil)
+          .accessibilityIdentifier("error-report-delete")
         }
       }
     }

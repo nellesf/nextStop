@@ -115,12 +115,26 @@ targets:
         GENERATE_INFOPLIST_FILE: YES
         PRODUCT_BUNDLE_IDENTIFIER: de.nextstop.app.carplay.tests
 
+  NextStopAppUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: NextStopAppUITests
+    dependencies:
+      - target: NextStopApp
+    settings:
+      base:
+        GENERATE_INFOPLIST_FILE: YES
+        PRODUCT_BUNDLE_IDENTIFIER: de.nextstop.app.ui-tests
+        TEST_TARGET_NAME: NextStopApp
+
 schemes:
   NextStopApp:
     build:
       targets:
         NextStopApp: all
         NextStopAppTests: [test]
+        NextStopAppUITests: [test]
     run:
       config: Debug
     test:
@@ -131,6 +145,9 @@ schemes:
           parallelizable: false
           randomExecutionOrder: false
         - name: NextStopCarPlayTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopAppUITests
           parallelizable: false
           randomExecutionOrder: false
     profile:

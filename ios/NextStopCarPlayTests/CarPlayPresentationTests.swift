@@ -263,7 +263,7 @@ final class CarPlayPresentationTests: XCTestCase {
     )
     XCTAssertEqual(
       presentation.points.map(\.detailSubtitle),
-      ["Wohin fahren?", "Wohin fahren?"]
+      ["Wohin möchtest du fahren?", "Wohin möchtest du fahren?"]
     )
     XCTAssertEqual(presentation.points[0].operatorsActionTitle, "Ladeanbieter")
     XCTAssertNil(presentation.points[0].restaurantActionTitle)
@@ -331,7 +331,7 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertNil(presentation.points[0].summary)
     XCTAssertEqual(
       presentation.points[0].detailSubtitle,
-      "Wohin fahren?"
+      "Wohin möchtest du fahren?"
     )
     XCTAssertEqual(
       presentation.points[0].detailSummary,
@@ -388,7 +388,7 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertEqual(point.subtitle, "109 km Fahrstrecke")
     XCTAssertNil(point.summary)
     XCTAssertEqual(point.detailTitle, "Ladepark")
-    XCTAssertEqual(point.detailSubtitle, "Wohin fahren?")
+    XCTAssertEqual(point.detailSubtitle, "Wohin möchtest du fahren?")
     XCTAssertEqual(
       point.detailSummary,
       "109 km Fahrstrecke\n4 passende Ladepunkte\nAral pulse · 1 Ladepunkt\nEnBW mobility+ · 1 Ladepunkt\nIONITY · 1 Ladepunkt\nTesla · 1 Ladepunkt\n150 kW oder höher\n4 Ladepunkte frei"
@@ -497,7 +497,7 @@ final class CarPlayPresentationTests: XCTestCase {
       "unit.charging_points.other": "%lld Ladepunkte",
       "search.food_chain.mcdonalds": "McDonald's",
       "carplay.result.driving_distance.format": "%lld km Fahrstrecke",
-      "carplay.result.destination_prompt": "Wohin fahren?",
+      "carplay.result.destination_prompt": "Wohin möchtest du fahren?",
       "carplay.result.operator.format": "%@ · %@",
       "carplay.result.operators.action": "Ladeanbieter",
       "carplay.result.restaurant.action": "Zum Restaurant",

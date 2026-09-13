@@ -12,6 +12,7 @@ struct SupportPrivacyView: View {
       Section("report.privacy.controller") {
         if let configuration {
           Text(verbatim: configuration.displayControllerName)
+            .accessibilityIdentifier("report-privacy-content")
           Text(verbatim: configuration.displayPostalAddress)
           Text(verbatim: configuration.email)
             .textSelection(.enabled)

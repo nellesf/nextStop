@@ -35,6 +35,20 @@
                ReferencedContainer = "container:NextStop.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "NO"
+            buildForProfiling = "NO"
+            buildForArchiving = "NO"
+            buildForAnalyzing = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "CCDDC4FDCF983A8BE72B1FD8"
+               BuildableName = "NextStopAppUITests.xctest"
+               BlueprintName = "NextStopAppUITests"
+               ReferencedContainer = "container:NextStop.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
       </BuildActionEntries>
    </BuildAction>
    <TestAction
@@ -73,6 +87,17 @@
                BlueprintIdentifier = "3A99D4069C91037F685FFDBB"
                BuildableName = "NextStopCarPlayTests.xctest"
                BlueprintName = "NextStopCarPlayTests"
+               ReferencedContainer = "container:NextStop.xcodeproj">
+            </BuildableReference>
+         </TestableReference>
+         <TestableReference
+            skipped = "NO"
+            parallelizable = "NO">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "CCDDC4FDCF983A8BE72B1FD8"
+               BuildableName = "NextStopAppUITests.xctest"
+               BlueprintName = "NextStopAppUITests"
                ReferencedContainer = "container:NextStop.xcodeproj">
             </BuildableReference>
          </TestableReference>

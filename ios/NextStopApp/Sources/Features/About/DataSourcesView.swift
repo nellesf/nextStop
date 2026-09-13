@@ -96,6 +96,7 @@ struct DataSourcesView: View {
             .background(Color(.secondarySystemGroupedBackground))
             .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
         }
+        .accessibilityIdentifier("info-error-report")
 
         NavigationLink {
           SupportPrivacyView(configuration: SupportPrivacyConfiguration.configured())

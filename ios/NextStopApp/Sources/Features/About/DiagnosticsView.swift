@@ -17,6 +17,7 @@ struct DiagnosticsView: View {
         Text("diagnostics.description")
         LabeledContent("diagnostics.saved_count") {
           Text(store.events.count, format: .number)
+            .accessibilityIdentifier("diagnostics-saved-count")
         }
         if store.deletionFailed {
           Text("diagnostics.deletion_failed")
@@ -31,6 +32,7 @@ struct DiagnosticsView: View {
 
       Section {
         Toggle("diagnostics.recording", isOn: $store.recordingEnabled)
+          .accessibilityIdentifier("diagnostics-recording")
       } footer: {
         Text("diagnostics.recording.description")
       }

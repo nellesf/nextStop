@@ -26,12 +26,34 @@ final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
   let diagnosticsStore: AppDiagnosticsStore
   let errorReportSender: any UserErrorReportSending
   let errorReportReceipts: UserErrorReportReceiptStore
+  #if DEBUG && targetEnvironment(simulator)
+    private(set) var uiTestSupport: UITestSupport?
+  #endif
 
   var candidatePageSearcher: any CandidatePageSearching {
     dependencies.candidatePageSearcher
   }
 
   override init() {
+    #if DEBUG && targetEnvironment(simulator)
+      do {
+        if let testSupport = try UITestSupport.requested() {
+          uiTestSupport = testSupport
+          diagnosticsStore = testSupport.diagnostics
+          errorReportReceipts = testSupport.receipts
+          errorReportSender = testSupport.reportSender
+          dependencies = NextStopSceneDependencies(
+            candidatePageSearcher: testSupport.candidateSearcher,
+            diagnostics: testSupport.diagnostics
+          )
+          super.init()
+          return
+        }
+      } catch {
+        // A misspelled test scenario must never open real stores or clients.
+        fatalError("Unable to initialize isolated UI test dependencies")
+      }
+    #endif
     let diagnostics = AppDiagnosticsStore()
     diagnosticsStore = diagnostics
     let session = URLSession.shared

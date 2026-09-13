@@ -869,6 +869,21 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       !templateTransitionGate.isActive,
       let resultID = placeSelectionContext.selectAction(
         button, in: resultsTemplate, visible: interfaceController.templates.last
+      )
+    else {
+      return
+    }
+    showOperators(for: resultID, from: resultsTemplate)
+  }
+
+  private func showOperators(
+    for resultID: UUID,
+    from resultsTemplate: CPPointOfInterestTemplate
+  ) {
+    guard let interfaceController,
+      placeSelectionContext.isCurrent(
+        resultID: resultID, source: resultsTemplate,
+        visible: interfaceController.templates.last
       ),
       let result = resultsByID[resultID],
       let transitionID = templateTransitionGate.begin()
@@ -889,7 +904,19 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
       else {
         return
       }
-      if !success {
+      if success, interfaceController.templates.last === template {
+        if result.matchingFoodPOI == nil,
+          interfaceController.templates.contains(where: { $0 === resultsTemplate })
+        {
+          _ = placeSelectionContext.completeDirectOperatorPush(
+            resultID: resultID, from: resultsTemplate, to: template,
+            visible: interfaceController.templates.last
+          )
+        }
+      } else if placeSelectionContext.isCurrent(
+        resultID: resultID, source: resultsTemplate,
+        visible: interfaceController.templates.last
+      ) {
         showPlaceFailure(message: localizer.text("carplay.search.error.presentation"))
       }
     }
@@ -1095,9 +1122,62 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
 
 @MainActor
 final class CarPlayPlaceSelectionContext {
+  struct ResultSelection: Equatable {
+    enum Action: Equatable {
+      case showOperators(UUID)
+      case showDestinationChoice
+    }
+
+    let action: Action
+    let cancelsPendingPlace: Bool
+  }
+
   private weak var resultsTemplate: CPPointOfInterestTemplate?
   private weak var selectedPoint: CPPointOfInterest?
   private var lastSelectionEvent: ContinuousClock.Instant?
+
+  func selectResult(
+    _ point: CPPointOfInterest,
+    in source: CPPointOfInterestTemplate,
+    visible: CPTemplate?,
+    observedAt: ContinuousClock.Instant = .now
+  ) -> ResultSelection? {
+    guard isLatest(observedAt), source === visible,
+      source.pointsOfInterest.contains(where: { $0 === point }),
+      let resultID = point.userInfo as? UUID
+    else {
+      return nil
+    }
+    let changed = select(point, in: source, visible: visible, observedAt: observedAt)
+    // The rendered secondary action exists only for a matched restaurant. With
+    // one destination type, selecting the result can open its operators directly.
+    return ResultSelection(
+      action: point.secondaryButton == nil ? .showOperators(resultID) : .showDestinationChoice,
+      cancelsPendingPlace: changed
+    )
+  }
+
+  @discardableResult
+  func completeDirectOperatorPush(
+    resultID: UUID,
+    from source: CPPointOfInterestTemplate,
+    to operators: CPListTemplate,
+    visible: CPTemplate?,
+    observedAt: ContinuousClock.Instant = .now
+  ) -> Bool {
+    guard operators === visible, isLatest(observedAt),
+      isCurrent(resultID: resultID, source: source, visible: source)
+    else {
+      return false
+    }
+    source.selectedIndex = NSNotFound
+    resultsTemplate = nil
+    selectedPoint = nil
+    // Do not clear the event watermark: a queued callback from before the push
+    // must not reopen the list when Back makes the results visible again.
+    lastSelectionEvent = observedAt
+    return true
+  }
 
   func selectAction(
     _ button: CPTextButton,
@@ -1240,17 +1320,24 @@ extension NextStopCarPlaySceneDelegate: CPPointOfInterestTemplateDelegate {
     let observedAt = ContinuousClock.now
     Task { @MainActor [weak self] in
       guard let self,
+        !templateTransitionGate.isActive,
         let template = interfaceController?.templates.last as? CPPointOfInterestTemplate,
         ObjectIdentifier(template) == templateID,
-        let point = template.pointsOfInterest.first(where: { ObjectIdentifier($0) == pointID })
+        let point = template.pointsOfInterest.first(where: { ObjectIdentifier($0) == pointID }),
+        let resultID = point.userInfo as? UUID,
+        resultsByID[resultID] != nil,
+        let selection = placeSelectionContext.selectResult(
+          point, in: template, visible: interfaceController?.templates.last,
+          observedAt: observedAt
+        )
       else {
         return
       }
-      if placeSelectionContext.select(
-        point, in: template, visible: interfaceController?.templates.last,
-        observedAt: observedAt
-      ) {
+      if selection.cancelsPendingPlace {
         cancelPlaceSelection()
+      }
+      if case .showOperators(let selectedResultID) = selection.action {
+        showOperators(for: selectedResultID, from: template)
       }
     }
   }

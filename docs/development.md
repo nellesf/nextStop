@@ -43,7 +43,8 @@ open ios/NextStop.xcodeproj
 ```
 
 The checked-in project references `NextStopCore` as a local package and contains
-the `NextStopApp` and `NextStopAppTests` targets. Select a personal development
+the `NextStopApp`, `NextStopAppTests`, `NextStopCarPlayTests`, and
+`NextStopAppUITests` targets. Select a personal development
 team only when installing on a device. Unit tests for the CarPlay presenter and
 ride flow do not require the managed entitlement; launching the CarPlay scene does.
 The package can still be opened directly at `ios/NextStopCore/Package.swift` for
@@ -65,9 +66,30 @@ on the next regeneration.
 ### GitHub verification
 
 `.github/workflows/swift-core.yml` runs `swift format lint` and `swift test` for
-the portable package. `.github/workflows/ios-app.yml` builds and tests the app on
-the GA `macos-26` runner with Xcode 26. Both run for every push and pull request,
-use read-only repository permissions, and pin GitHub's checkout action to v7.
+the portable package. `.github/workflows/ios-app.yml` builds the Debug app and
+runs its unit, CarPlay presenter, and iPhone UI tests on the GA `macos-26` runner
+with Xcode 26 and an iPhone 17 Pro Simulator. Both workflows run for every push
+and pull request, use read-only repository permissions, and pin GitHub's checkout
+action to v7. The iOS job has a 30-minute timeout and can also be started manually
+from **Actions → iOS App → Run workflow**, selecting `all` or `ui` tests and the
+desired branch. A queued GitHub runner does not block local Simulator testing.
+
+Every iOS run uploads the result bundle as `ios-test-results` and exported test
+attachments as `ios-ui-attachments`, when those files exist, even after a test
+failure. Both artifacts expire after seven days. Open a workflow run's
+**Artifacts** section to download them; the attachments include screenshots from
+successful UI checkpoints as well as failure evidence. Their `manifest.json`
+maps exported files to test and attachment names. Extract
+`TestResults.xcresult.tar.gz` and open the resulting bundle in Xcode for the full
+test report. The archive preserves the complete bundle without uploading the
+workspace, credentials, or a Simulator device directory. CI uses synthetic data;
+never supply real report text, logs, or access tokens to these tests.
+
+Screenshots support manual checks for clipping, spacing, and contrast. They are
+not pixel-baseline comparisons, and a passing UI test does not establish that
+every layout is visually correct. The iPhone UI suite does not launch or capture
+the external CarPlay display. Actual CarPlay layout still needs the CarPlay
+Simulator or a vehicle; the existing CarPlay unit tests verify presenter behavior.
 
 ### iOS app
 
@@ -75,7 +97,8 @@ use read-only repository permissions, and pin GitHub's checkout action to v7.
 xcodebuild \
   -project ios/NextStop.xcodeproj \
   -scheme NextStopApp \
-  -destination 'platform=iOS Simulator,name=iPhone 17 Pro' \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
   test
 ```
 
@@ -87,6 +110,47 @@ MapKit deprecated `MKMapItem.placemark` in iOS 26 when it introduced the modern
 `location` and `address` properties. The adapter uses the modern API on iOS 26+
 and keeps the old call isolated behind an availability branch solely for devices
 running the still-supported iOS 18–25 versions.
+
+### iPhone UI tests and screenshots
+
+Run only the UI bundle from the repository root:
+
+```bash
+xcodebuild \
+  -project ios/NextStop.xcodeproj \
+  -scheme NextStopApp \
+  -configuration Debug \
+  -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+  -only-testing:NextStopAppUITests \
+  -resultBundlePath UITestResults.xcresult \
+  CODE_SIGNING_ALLOWED=NO \
+  test
+
+xcrun xcresulttool export attachments \
+  --path UITestResults.xcresult \
+  --output-path UITestAttachments
+```
+
+Choose a new result bundle path on later runs; Xcode will not overwrite an
+existing bundle. The tests launch the app with isolated synthetic fixtures that
+are compiled only for Debug Simulator builds. They use injected report services
+and local state instead of staging, App Attest, location access, or the Simulator
+authentication broker. Normal launches keep using the real application services.
+The test controls are absent from physical-device and Release/TestFlight builds.
+The exact opt-in is `--ui-testing` plus `NEXTSTOP_UI_TEST_SCENARIO` set to `empty`,
+`logs-success`, or `logs-retry`; unknown scenarios fail before opening normal
+stores or creating production clients. Each launch has its own temporary report
+stores and in-memory profiles. The retry fixture checks the selected payload and
+requires the unchanged request, including its deletion proof, on the second send.
+
+The UI tests cover the empty-log explanation and recording settings, optional
+attachments and their exact preview, privacy information, failed send and retry,
+success reset, withdrawal, and clearing a previously selected attachment when
+local logs are deleted. A second visual configuration uses dark appearance and
+the largest accessibility text size. Review the exported screenshots to confirm
+the rendered appearance and layout; no real backend upload occurs in these tests.
+Full Xcode and an installed iOS Simulator runtime are required to execute this
+suite; parsing or typechecking its Swift sources does not execute UI tests.
 
 ### Backend
 

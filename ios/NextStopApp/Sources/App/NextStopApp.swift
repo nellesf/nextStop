@@ -14,6 +14,11 @@ struct NextStopApp: App {
     let router = RideIntentRouter()
     _rideIntentRouter = StateObject(wrappedValue: router)
     directionsRequestGate = DirectionsRequestGate()
+    #if DEBUG && targetEnvironment(simulator)
+      // UI tests navigate through the normal root but never register a live
+      // MapKit-backed intent dependency.
+      if UITestSupport.isRequested() { return }
+    #endif
     let rideIntentHandler = RideIntentHandler(
       destinationSearcher: MapKitDestinationSearchService(),
       router: router
@@ -23,16 +28,31 @@ struct NextStopApp: App {
 
   var body: some Scene {
     WindowGroup {
-      ProfileListView(
-        rideIntentRouter: rideIntentRouter,
-        directionsRequestGate: directionsRequestGate,
-        candidatePageSearcher: appDelegate.candidatePageSearcher,
-        diagnosticsStore: appDelegate.diagnosticsStore,
-        errorReportSender: appDelegate.errorReportSender,
-        errorReportReceipts: appDelegate.errorReportReceipts
-      )
+      #if DEBUG && targetEnvironment(simulator)
+        if let testSupport = appDelegate.uiTestSupport {
+          profileListView.modelContainer(testSupport.modelContainer)
+        } else {
+          persistentProfileListView
+        }
+      #else
+        persistentProfileListView
+      #endif
     }
-    .modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])
+  }
+
+  private var profileListView: some View {
+    ProfileListView(
+      rideIntentRouter: rideIntentRouter,
+      directionsRequestGate: directionsRequestGate,
+      candidatePageSearcher: appDelegate.candidatePageSearcher,
+      diagnosticsStore: appDelegate.diagnosticsStore,
+      errorReportSender: appDelegate.errorReportSender,
+      errorReportReceipts: appDelegate.errorReportReceipts
+    )
+  }
+
+  private var persistentProfileListView: some View {
+    profileListView.modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])
   }
 }
 
