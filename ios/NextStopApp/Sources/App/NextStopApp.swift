@@ -30,7 +30,9 @@ struct NextStopApp: App {
     WindowGroup {
       #if DEBUG && targetEnvironment(simulator)
         if let testSupport = appDelegate.uiTestSupport {
-          profileListView.modelContainer(testSupport.modelContainer)
+          profileListView
+            .modelContainer(testSupport.modelContainer)
+            .preferredColorScheme(testSupport.preferredColorScheme)
         } else {
           persistentProfileListView
         }

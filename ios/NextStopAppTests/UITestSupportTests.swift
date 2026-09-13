@@ -45,6 +45,30 @@
       XCTAssertTrue(logs.receipts.receipts.isEmpty)
     }
 
+    func testAppearanceOverrideIsExplicitAndRejectsUnknownValues() throws {
+      let baseEnvironment = ["NEXTSTOP_UI_TEST_SCENARIO": "empty"]
+      let inherited = try XCTUnwrap(
+        UITestSupport.requested(arguments: ["--ui-testing"], environment: baseEnvironment)
+      )
+      XCTAssertNil(inherited.preferredColorScheme)
+      for appearance in [UITestSupport.Appearance.light, .dark] {
+        var environment = baseEnvironment
+        environment["NEXTSTOP_UI_TEST_APPEARANCE"] = appearance.rawValue
+        let support = try XCTUnwrap(
+          UITestSupport.requested(arguments: ["--ui-testing"], environment: environment)
+        )
+        XCTAssertEqual(support.preferredColorScheme, appearance.colorScheme)
+      }
+      var invalidEnvironment = baseEnvironment
+      invalidEnvironment["NEXTSTOP_UI_TEST_APPEARANCE"] = "unexpected"
+      XCTAssertThrowsError(
+        try UITestSupport.requested(arguments: ["--ui-testing"], environment: invalidEnvironment)
+      )
+      XCTAssertNil(
+        try UITestSupport.requested(arguments: [], environment: invalidEnvironment)
+      )
+    }
+
     func testRetryScenarioLeavesDeletionReceiptAndConfirmsSameDraft() async throws {
       let support = try UITestSupport(scenario: .logsRetry)
       let composer = UserErrorReportComposer(sender: support.reportSender, privacyConfigured: true)

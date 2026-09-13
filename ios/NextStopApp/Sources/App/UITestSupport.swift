@@ -2,6 +2,7 @@
   import Foundation
   import NextStopCore
   import SwiftData
+  import SwiftUI
 
   /// Opt-in test composition for the real app screens. Compiled out of device
   /// and Release builds; no user data, networking, or authentication is reused.
@@ -13,7 +14,19 @@
       case logsRetry = "logs-retry"
     }
 
+    enum Appearance: String {
+      case light, dark
+
+      var colorScheme: ColorScheme {
+        switch self {
+        case .light: .light
+        case .dark: .dark
+        }
+      }
+    }
+
     let modelContainer: ModelContainer
+    let preferredColorScheme: ColorScheme?
     let diagnostics: AppDiagnosticsStore
     let receipts: UserErrorReportReceiptStore
     let reportSender: any UserErrorReportSending
@@ -31,10 +44,20 @@
       guard let name = environment["NEXTSTOP_UI_TEST_SCENARIO"],
         let scenario = Scenario(rawValue: name)
       else { throw ConfigurationError.unknownScenario }
-      return try UITestSupport(scenario: scenario)
+      let appearance: Appearance?
+      if let value = environment["NEXTSTOP_UI_TEST_APPEARANCE"] {
+        guard let parsed = Appearance(rawValue: value) else {
+          throw ConfigurationError.unknownAppearance
+        }
+        appearance = parsed
+      } else {
+        appearance = nil
+      }
+      return try UITestSupport(scenario: scenario, appearance: appearance)
     }
 
-    init(scenario: Scenario) throws {
+    init(scenario: Scenario, appearance: Appearance? = nil) throws {
+      preferredColorScheme = appearance?.colorScheme
       let schema = Schema([StoredProfile.self, StoredDestinationRecord.self])
       modelContainer = try ModelContainer(
         for: schema,
@@ -75,6 +98,7 @@
 
     enum ConfigurationError: Error {
       case unknownScenario
+      case unknownAppearance
     }
   }
 

@@ -147,7 +147,9 @@ The UI tests cover the empty-log explanation and recording settings, optional
 attachments and their exact preview, privacy information, failed send and retry,
 success reset, withdrawal, and clearing a previously selected attachment when
 local logs are deleted. A second visual configuration uses dark appearance and
-the largest accessibility text size. Review the exported screenshots to confirm
+the largest accessibility text size. `NEXTSTOP_UI_TEST_APPEARANCE=light|dark`
+sets the test root's preferred color scheme explicitly; an omitted value inherits
+the system setting, and an unknown value is rejected. Review the exported screenshots to confirm
 the rendered appearance and layout; no real backend upload occurs in these tests.
 Full Xcode and an installed iOS Simulator runtime are required to execute this
 suite; parsing or typechecking its Swift sources does not execute UI tests.

@@ -26,8 +26,7 @@ final class UserErrorReportUITests: XCTestCase {
     let recording = app.switches["diagnostics-recording"]
     reveal("diagnostics-recording", in: app)
     XCTAssertEqual(recording.value as? String, "0", "Opening settings must not enable recording.")
-    recording.tap()
-    XCTAssertEqual(recording.value as? String, "1")
+    setLocalRecording(true, in: app)
     let savedCount = element("diagnostics-saved-count", in: app)
     reveal("diagnostics-saved-count", in: app, direction: .down)
     XCTAssertEqual(savedCount.label, "0", "Enabling recording must not invent past error events.")
@@ -42,7 +41,7 @@ final class UserErrorReportUITests: XCTestCase {
     // Reviewing privacy also ends text editing, just as it does in the real report flow.
     openPrivacyAndReturn(in: app, screenshotName: "light-report-privacy")
     tap("error-report-send", in: app)
-    XCTAssertTrue(element("report-send-success", in: app).waitForExistence(timeout: 10))
+    reveal("report-send-success", in: app)
     screenshot(app, named: "light-report-without-logs-sent")
   }
 
@@ -79,7 +78,7 @@ final class UserErrorReportUITests: XCTestCase {
     openPrivacyAndReturn(in: app, screenshotName: "light-consent-before-sending")
     tap("error-report-send", in: app)
     let sendError = element("report-send-error", in: app)
-    XCTAssertTrue(sendError.waitForExistence(timeout: 10))
+    reveal("report-send-error", in: app)
     screenshot(app, named: "light-failed-send-can-be-retried")
     reveal("error-report-include-logs", in: app, direction: .down)
     XCTAssertEqual(includeLogs.value as? String, "1")
@@ -88,7 +87,7 @@ final class UserErrorReportUITests: XCTestCase {
     XCTAssertEqual(input.value as? String, message)
 
     tap("error-report-send", in: app)
-    XCTAssertTrue(element("report-send-success", in: app).waitForExistence(timeout: 10))
+    reveal("report-send-success", in: app)
     XCTAssertFalse(sendError.exists)
     XCTAssertFalse(element("error-report-send", in: app).isEnabled)
     screenshot(app, named: "light-retry-succeeded")
@@ -143,7 +142,7 @@ final class UserErrorReportUITests: XCTestCase {
     XCTAssertFalse(send.isEnabled, "A blank report must remain unsendable at every text size.")
     screenshot(app, named: "dark-accessibility-consent-and-send")
     tap("report-receipts", in: app)
-    XCTAssertTrue(element("receipts-empty", in: app).waitForExistence(timeout: 5))
+    reveal("receipts-empty", in: app)
     screenshot(app, named: "dark-accessibility-empty-receipts")
     goBack(in: app)
 
@@ -151,8 +150,7 @@ final class UserErrorReportUITests: XCTestCase {
     let recording = app.switches["diagnostics-recording"]
     reveal("diagnostics-recording", in: app)
     XCTAssertEqual(recording.value as? String, "1")
-    recording.tap()
-    XCTAssertEqual(recording.value as? String, "0")
+    setLocalRecording(false, in: app)
     goBack(in: app)
     reveal("error-report-no-logs", in: app, direction: .down)
     XCTAssertFalse(includeLogs.exists, "Deleting local logs must remove the previous attachment choice.")
@@ -174,6 +172,7 @@ final class UserErrorReportUITests: XCTestCase {
         ? "UICTContentSizeCategoryAccessibilityXXXL" : "UICTContentSizeCategoryL",
     ]
     app.launchEnvironment["NEXTSTOP_UI_TEST_SCENARIO"] = scenario
+    app.launchEnvironment["NEXTSTOP_UI_TEST_APPEARANCE"] = largeTextAndDarkMode ? "dark" : "light"
     app.launch()
     XCTAssertTrue(element("app-info", in: app).waitForExistence(timeout: 10))
     return app
@@ -192,6 +191,7 @@ final class UserErrorReportUITests: XCTestCase {
     let input = element("error-report-message", in: app)
     reveal("error-report-message", in: app, direction: .down)
     input.tap()
+    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "The message field must receive keyboard focus.")
     input.typeText(text)
     XCTAssertEqual(input.value as? String, text)
   }
@@ -233,6 +233,20 @@ final class UserErrorReportUITests: XCTestCase {
     target.tap()
   }
 
+  @MainActor
+  private func setLocalRecording(_ enabled: Bool, in app: XCUIApplication) {
+    reveal("diagnostics-recording", in: app)
+    let recording = app.switches["diagnostics-recording"]
+    XCTAssertTrue(recording.isEnabled)
+    // SwiftUI exposes the whole labeled row as a Switch. Its center can be text;
+    // the native switch itself is at the trailing edge of that accessible frame.
+    recording.coordinate(withNormalizedOffset: CGVector(dx: 0.92, dy: 0.5)).tap()
+    let changed = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == %@", enabled ? "1" : "0"), object: recording
+    )
+    XCTAssertEqual(XCTWaiter.wait(for: [changed], timeout: 5), .completed)
+  }
+
   private enum ScrollDirection { case up, down }
 
   @MainActor
@@ -243,25 +257,48 @@ final class UserErrorReportUITests: XCTestCase {
     let target = element(identifier, in: app)
     let deadline = Date().addingTimeInterval(60)
     for _ in 0..<12 {
-      let exists = target.exists
-      if exists && target.isHittable { return }
-      if Date() >= deadline { break }
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
-      let bottom = keyboard.exists ? min(frame.maxY, keyboard.frame.minY) : frame.maxY
-      // Keep gestures in the presented sheet's content, outside the message editor.
-      let high = frame.minY + 180
-      let low = max(high + 50, bottom - 90)
+      let navigationBar = app.navigationBars.firstMatch
+      let contentTop = navigationBar.exists
+        ? max(frame.minY + 80, navigationBar.frame.maxY + 12) : frame.minY + 120
+      let contentBottom = keyboard.exists
+        ? min(frame.maxY - 50, keyboard.frame.minY - 12) : frame.maxY - 50
+      let viewport = CGRect(
+        x: frame.minX, y: contentTop, width: frame.width,
+        height: max(100, contentBottom - contentTop)
+      )
+      let exists = target.exists
       var scrollDirection = direction
+      var distance = viewport.height * 0.7
       if exists {
         let targetFrame = target.frame
-        if targetFrame.maxY < high { scrollDirection = .down }
-        if targetFrame.minY > low { scrollDirection = .up }
+        // XCTest may report an element under the sheet navigation bar as hittable.
+        // Interactive rows must fit in the actual content viewport before tapping.
+        let visible = targetFrame.intersection(viewport)
+        let isVisible = targetFrame.height <= viewport.height
+          ? targetFrame.minY >= viewport.minY && targetFrame.maxY <= viewport.maxY
+          : visible.height >= min(100, viewport.height * 0.5)
+        if isVisible && target.isHittable { return }
+        if targetFrame.minY < viewport.minY {
+          scrollDirection = .down
+          distance = viewport.minY - targetFrame.minY + 24
+        } else if targetFrame.maxY > viewport.maxY {
+          scrollDirection = .up
+          distance = targetFrame.maxY - viewport.maxY + 24
+        }
       }
+      if Date() >= deadline { break }
+      distance = min(max(distance, 80), viewport.height * 0.7)
+      let high = viewport.minY + 30
+      let low = viewport.maxY - 30
+      let startY = scrollDirection == .up ? low : high
+      let endY = scrollDirection == .up ? startY - distance : startY + distance
+      // Keep gestures inside the sheet and outside the text field, above the keyboard.
       let start = app.coordinate(withNormalizedOffset: .zero).withOffset(
-        CGVector(dx: frame.width - 24, dy: scrollDirection == .up ? low : high))
+        CGVector(dx: frame.width - 24, dy: startY))
       let end = app.coordinate(withNormalizedOffset: .zero).withOffset(
-        CGVector(dx: frame.width - 24, dy: scrollDirection == .up ? high : low))
+        CGVector(dx: frame.width - 24, dy: endY))
       start.press(forDuration: 0.05, thenDragTo: end)
     }
     // Never query a missing element's identifier while recording the original failure.
