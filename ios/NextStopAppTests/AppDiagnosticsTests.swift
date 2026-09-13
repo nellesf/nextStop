@@ -269,9 +269,11 @@ final class AppDiagnosticsTests: XCTestCase {
         true
       )
       let attributes = try FileManager.default.attributesOfItem(atPath: fixture.fileURL.path)
+      // FileManager exposes this attribute as NSString, not the Swift typed wrapper.
+      let protection = try XCTUnwrap(attributes[.protectionKey] as? String)
       XCTAssertEqual(
-        attributes[.protectionKey] as? FileProtectionType,
-        .completeUntilFirstUserAuthentication
+        protection,
+        FileProtectionType.completeUntilFirstUserAuthentication.rawValue
       )
     #endif
   }
