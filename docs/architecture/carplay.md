@@ -1,7 +1,7 @@
 # CarPlay architecture and screen flow
 
 Status: Accepted on 2026-08-13; ride flow and native-place handoff amended with
-owner approval on 2026-09-07.
+owner approval on 2026-09-07; concise result content approved on 2026-09-13.
 
 ## Entitlement boundary
 
@@ -86,16 +86,18 @@ the editor and summary; the editor's search action avoids scrolling past criteri
 
 Keep picker text scan-friendly and let the detail card carry secondary facts.
 
-Use the same “Passende Ladestopps” title and result identities as iPhone. The POI
-picker shows the restaurant or campus name, actual driving distance and total
-qualifying EVSEs, then a short operator-name overview. If names exceed the compact
-overview, summarize the remaining operators and retain every operator in the
-selection list. Counts describe the restaurant group or campus, not one charger
-coordinate. Route-corridor distance and minimum power do not compete for space in
-the picker.
+Use the same “Passende Ladestopps” title and result identities as iPhone. Each POI
+picker entry uses only two lines: the qualifying EVSE count as its title and
+rounded actual driving distance as its subtitle, for example “50 Ladepunkte” and
+“119 km Fahrstrecke”. The third summary line is omitted. Counts describe the
+restaurant group or campus, not one charger coordinate. Operator names, site
+names, route-corridor distance, and minimum power do not compete for space in the
+picker.
 
-The detail card keeps the actual driving-distance label, qualifying EVSE total,
-each exact operator name with its aggregated count, and applied minimum power.
+The detail card restores the restaurant or campus name as its title and asks
+“Wohin fahren?” in its subtitle. Its summary keeps the actual driving-distance
+label, qualifying EVSE total, each exact operator name with its aggregated count,
+and applied minimum power. The map item's name also retains the site identity.
 Known availability, incomplete/stale coverage, food information, and source
 attribution remain in the appropriate detail text. CarPlay owns fonts, spacing,
 truncation, and touch/knob layout; visual mockups illustrate content and flow, not
@@ -113,6 +115,8 @@ one row per exact operator name and its qualifying EVSE total. Selecting a row
 resolves only that operator inside the selected restaurant group or no-food
 campus. It uses the same bounded Apple-place matcher, evidence, and ride-local
 cache as iPhone, then calls the existing native-place opening interface.
+Keep this action label short for narrow CarPlay cards; the prompt supplies the
+destination-choice context without expanding the button text.
 
 “Zum Restaurant” is the second POI action only when that result has a matched
 restaurant. It resolves and opens the selected native Apple restaurant just like

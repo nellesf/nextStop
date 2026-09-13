@@ -67,7 +67,7 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
       routePlanner: routePlanner,
       candidateSearcher: RideCandidateSearchCoordinator(
         pageSearcher: candidatePageSearcher,
-        enricher: MapKitCandidateEnricher(routePlanner: routePlanner)
+        enricher: MapKitCandidateEnricher(distanceProvider: routePlanner)
       )
     )
   }

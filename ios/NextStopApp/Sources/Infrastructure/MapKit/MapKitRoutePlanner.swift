@@ -3,23 +3,24 @@ import MapKit
 import NextStopCore
 
 @MainActor
-final class MapKitRoutePlanner: RoutePlanning {
+final class MapKitRoutePlanner: RoutePlanning, DrivingDistanceProviding {
+  typealias CalculateRoute = @MainActor (MKDirections.Request) async throws -> MKRoute?
+
+  private let calculateRoute: CalculateRoute
+
+  init(
+    calculateRoute: @escaping CalculateRoute = { request in
+      try await MKDirections(request: request).calculate().routes.first
+    }
+  ) {
+    self.calculateRoute = calculateRoute
+  }
+
   func automobileRoute(from origin: Coordinate, to destination: Coordinate) async throws
     -> PlannedRoute
   {
-    let request = MKDirections.Request()
-    request.source = Self.makeMapItem(for: origin)
-    request.destination = Self.makeMapItem(for: destination)
-    request.transportType = .automobile
-    request.requestsAlternateRoutes = false
-
-    let response = try await MKDirections(request: request).calculate()
-    guard let route = response.routes.first else {
-      throw RoutePlanningError.noRoute
-    }
-    guard route.distance.isFinite, route.distance >= 0 else {
-      throw RoutePlanningError.invalidDistance
-    }
+    let route = try await route(from: origin, to: destination)
+    let actualDrivingDistance = try drivingDistance(of: route)
     guard route.expectedTravelTime.isFinite, route.expectedTravelTime >= 0 else {
       throw RoutePlanningError.invalidTravelTime
     }
@@ -41,9 +42,40 @@ final class MapKitRoutePlanner: RoutePlanning {
 
     return PlannedRoute(
       polyline: polyline,
-      actualDrivingDistance: Meters(Int(route.distance.rounded())),
+      actualDrivingDistance: actualDrivingDistance,
       expectedTravelTimeSeconds: max(0, Int(route.expectedTravelTime.rounded()))
     )
+  }
+
+  func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
+    -> Meters
+  {
+    let route = try await route(from: origin, to: destination)
+    // A valid zero-distance response can contain only one distinct route point.
+    // Candidate filtering needs Apple's distance, not a corridor polyline.
+    return try drivingDistance(of: route)
+  }
+
+  private func route(from origin: Coordinate, to destination: Coordinate) async throws -> MKRoute {
+    let request = MKDirections.Request()
+    request.source = Self.makeMapItem(for: origin)
+    request.destination = Self.makeMapItem(for: destination)
+    request.transportType = .automobile
+    request.requestsAlternateRoutes = false
+
+    guard let route = try await calculateRoute(request) else {
+      throw RoutePlanningError.noRoute
+    }
+    return route
+  }
+
+  private func drivingDistance(of route: MKRoute) throws -> Meters {
+    guard route.distance.isFinite, route.distance >= 0,
+      route.distance.rounded() < Double(Int.max)
+    else {
+      throw RoutePlanningError.invalidDistance
+    }
+    return Meters(Int(route.distance.rounded()))
   }
 
   private static func makeMapItem(for coordinate: Coordinate) -> MKMapItem {

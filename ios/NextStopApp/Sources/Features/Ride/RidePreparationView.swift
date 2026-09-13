@@ -49,7 +49,7 @@ struct RidePreparationView: View {
     )
     let candidateSearcher = RideCandidateSearchCoordinator(
       pageSearcher: candidatePageSearcher,
-      enricher: MapKitCandidateEnricher(routePlanner: routePlanner)
+      enricher: MapKitCandidateEnricher(distanceProvider: routePlanner)
     )
     _viewModel = StateObject(
       wrappedValue: RidePreparationViewModel(

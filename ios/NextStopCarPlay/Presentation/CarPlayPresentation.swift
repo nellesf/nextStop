@@ -79,7 +79,7 @@ struct CarPlayResultPresentation: Equatable, Sendable {
   let coordinate: Coordinate
   let title: String
   let subtitle: String
-  let summary: String
+  let summary: String?
   let detailTitle: String
   let detailSubtitle: String
   let detailSummary: String?
@@ -270,6 +270,7 @@ struct CarPlayPresenter {
     }
     .joined(separator: "\n")
     let detailSummary = [
+      drivingDistance,
       matchingChargingPoints,
       operatorSummary.isEmpty ? nil : operatorSummary,
       minimumKilowatts(criteria.minimumPower.rawValue),
@@ -282,36 +283,16 @@ struct CarPlayPresenter {
     return CarPlayResultPresentation(
       id: routeResult.id,
       coordinate: coordinate,
-      title: title,
-      subtitle: localizer.format(
-        "carplay.result.metrics.format",
-        Int64(roundedKilometers(candidate.actualDrivingDistance.value)),
-        chargingPoints(routeResult.chargingPointCount)
-      ),
-      summary: compactOperatorSummary(chargingOperators),
+      title: chargingPoints(routeResult.chargingPointCount),
+      subtitle: drivingDistance,
+      summary: nil,
       detailTitle: title,
-      detailSubtitle: drivingDistance,
+      detailSubtitle: localizer.text("carplay.result.destination_prompt"),
       detailSummary: detailSummary,
       operatorsActionTitle: localizer.text("carplay.result.operators.action"),
       restaurantActionTitle: foodPOI == nil
         ? nil : localizer.text("carplay.result.restaurant.action")
     )
-  }
-
-  private func compactOperatorSummary(_ chargingOperators: [RouteSearchOperatorSummary]) -> String {
-    let visibleNames = chargingOperators.prefix(2).map(\.name)
-    let remainingCount = chargingOperators.count - visibleNames.count
-    guard remainingCount > 0 else {
-      return visibleNames.joined(separator: " · ")
-    }
-    return
-      (visibleNames + [
-        localizer.format(
-          remainingCount == 1
-            ? "carplay.result.more_operators.one" : "carplay.result.more_operators.format",
-          Int64(remainingCount)
-        )
-      ]).joined(separator: " · ")
   }
 
   private func coverageMessage(_ coverage: CandidateSearchCoverage) -> String? {

@@ -27,9 +27,10 @@ navigation from Apple Maps.
 The same application flow is connected to a template-native CarPlay scene with
 profile and saved-destination selection, a ride summary with immediate search or
 filter-edit actions and all four current criteria, ride-scoped fixed filter
-choices, and stable maximum-five POI results. Compact result summaries show actual
-driving distance, qualifying EVSE totals, and operator names; details retain power,
-known availability, coverage, and attribution. Explicit refresh, no-result
+choices, and stable maximum-five POI results. Each picker result shows its qualifying
+EVSE total and actual driving distance on two lines. The selected result keeps its
+place name and asks where to go; operator selection, power, known availability,
+coverage, and attribution remain in the details. Explicit refresh, no-result
 relaxation, and Apple Maps handoff remain available. Local favorites and the capped
 recent-destination list are shared by the iPhone and CarPlay surfaces. A localized
 App Intent lets Siri resolve a spoken destination through MapKit and open the same
@@ -73,6 +74,10 @@ extracts and enforces the exact 500 m restaurant predicate.
 - Results are sorted only by actual MapKit driving distance from the current
   location and capped at five campuses without a food filter or five restaurants
   with one. Filters are never relaxed automatically.
+- Candidate distance extraction accepts valid MapKit zero-distance responses even
+  when their route line contains only one distinct point. Full route geometry is
+  required for the destination corridor; candidate distances pass through the
+  ordinary range filter before ranking.
 - Profiles, favorites, and recent destinations remain local. CarPlay edits are
   ride-scoped and never mutate a saved profile.
 

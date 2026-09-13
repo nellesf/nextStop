@@ -1222,7 +1222,7 @@ private final class LocationProviderStub: CurrentLocationProviding {
 }
 
 @MainActor
-private final class RoutePlannerStub: RoutePlanning {
+private final class RoutePlannerStub: RoutePlanning, DrivingDistanceProviding {
   var result: Result<PlannedRoute, any Error>
   private(set) var receivedOrigin: Coordinate?
   private(set) var receivedDestination: Coordinate?
@@ -1239,6 +1239,12 @@ private final class RoutePlannerStub: RoutePlanning {
     receivedOrigin = origin
     receivedDestination = destination
     return try result.get()
+  }
+
+  func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
+    -> Meters
+  {
+    try await automobileRoute(from: origin, to: destination).actualDrivingDistance
   }
 }
 
@@ -1258,7 +1264,7 @@ private final class CandidateSearcherStub: RideCandidateSearching {
 }
 
 @MainActor
-private final class SequencedRoutePlannerStub: RoutePlanning {
+private final class SequencedRoutePlannerStub: RoutePlanning, DrivingDistanceProviding {
   private var responses: [Result<PlannedRoute, any Error>]
   private(set) var requestCount = 0
 
@@ -1276,6 +1282,12 @@ private final class SequencedRoutePlannerStub: RoutePlanning {
       throw RoutePlanningError.noRoute
     }
     return try responses.removeFirst().get()
+  }
+
+  func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
+    -> Meters
+  {
+    try await automobileRoute(from: origin, to: destination).actualDrivingDistance
   }
 }
 

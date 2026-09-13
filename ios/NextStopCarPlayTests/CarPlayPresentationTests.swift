@@ -246,23 +246,24 @@ final class CarPlayPresentationTests: XCTestCase {
     )
 
     XCTAssertEqual(presentation.title, "Passende Ladestopps")
-    XCTAssertEqual(presentation.points.map(\.title), ["Ladepark Eins", "Ladepark Zwei"])
+    XCTAssertEqual(presentation.points.map(\.title), ["4 Ladepunkte", "4 Ladepunkte"])
+    XCTAssertEqual(presentation.points.map(\.detailTitle), ["Ladepark Eins", "Ladepark Zwei"])
     XCTAssertEqual(presentation.points.map(\.id), [first.id, second.id])
     XCTAssertEqual(presentation.points[0].coordinate, first.candidate.park.navigationCoordinate)
-    XCTAssertEqual(presentation.points[0].subtitle, "80 km Fahrstrecke · 4 Ladepunkte")
-    XCTAssertEqual(presentation.points[0].summary, "Operator")
-    XCTAssertEqual(presentation.points[1].summary, "Operator")
+    XCTAssertEqual(presentation.points.map(\.subtitle), ["80 km Fahrstrecke", "90 km Fahrstrecke"])
+    XCTAssertNil(presentation.points[0].summary)
+    XCTAssertNil(presentation.points[1].summary)
     XCTAssertEqual(
       presentation.points[0].detailSummary,
-      "4 passende Ladepunkte\nOperator · 4 Ladepunkte\n150 kW oder höher\n2 sicher frei, 2 unbekannt"
+      "80 km Fahrstrecke\n4 passende Ladepunkte\nOperator · 4 Ladepunkte\n150 kW oder höher\n2 sicher frei, 2 unbekannt"
     )
     XCTAssertEqual(
       presentation.points[1].detailSummary,
-      "4 passende Ladepunkte\nOperator · 4 Ladepunkte\n150 kW oder höher"
+      "90 km Fahrstrecke\n4 passende Ladepunkte\nOperator · 4 Ladepunkte\n150 kW oder höher"
     )
     XCTAssertEqual(
-      presentation.points[1].detailSubtitle,
-      "90 km Fahrstrecke"
+      presentation.points.map(\.detailSubtitle),
+      ["Wohin fahren?", "Wohin fahren?"]
     )
     XCTAssertEqual(presentation.points[0].operatorsActionTitle, "Ladeanbieter")
     XCTAssertNil(presentation.points[0].restaurantActionTitle)
@@ -323,17 +324,18 @@ final class CarPlayPresentationTests: XCTestCase {
     )
 
     XCTAssertEqual(presentation.points.count, 1)
-    XCTAssertEqual(presentation.points[0].title, "McDonald's")
+    XCTAssertEqual(presentation.points[0].title, "8 Ladepunkte")
+    XCTAssertEqual(presentation.points[0].detailTitle, "McDonald's")
     XCTAssertEqual(presentation.points[0].coordinate, foodPOI.coordinate)
-    XCTAssertEqual(presentation.points[0].subtitle, "80 km Fahrstrecke · 8 Ladepunkte")
-    XCTAssertEqual(presentation.points[0].summary, "Aral pulse · EnBW mobility+ · + 1 weiterer")
+    XCTAssertEqual(presentation.points[0].subtitle, "80 km Fahrstrecke")
+    XCTAssertNil(presentation.points[0].summary)
     XCTAssertEqual(
       presentation.points[0].detailSubtitle,
-      "80 km Fahrstrecke"
+      "Wohin fahren?"
     )
     XCTAssertEqual(
       presentation.points[0].detailSummary,
-      "8 passende Ladepunkte\nAral pulse · 3 Ladepunkte\nEnBW mobility+ · 3 Ladepunkte\nIONITY · 2 Ladepunkte\n150 kW oder höher"
+      "80 km Fahrstrecke\n8 passende Ladepunkte\nAral pulse · 3 Ladepunkte\nEnBW mobility+ · 3 Ladepunkte\nIONITY · 2 Ladepunkte\n150 kW oder höher"
     )
     XCTAssertEqual(presentation.points[0].restaurantActionTitle, "Zum Restaurant")
     XCTAssertEqual(
@@ -354,7 +356,7 @@ final class CarPlayPresentationTests: XCTestCase {
     XCTAssertNil(presentation.attributionMessage)
   }
 
-  func testOverviewCompactsProvidersWithoutRemovingAnyFromDetailsOrSelection() throws {
+  func testOverviewOmitsProvidersWithoutRemovingAnyFromDetailsOrSelection() throws {
     let result = try makeResult(
       id: "10000000-0000-4000-8000-000000000001",
       name: "Ladepark",
@@ -382,11 +384,14 @@ final class CarPlayPresentationTests: XCTestCase {
     let presentation = presenter.results(outcome, criteria: try makeProfile().criteria)
     let point = try XCTUnwrap(presentation.points.first)
 
-    XCTAssertEqual(point.subtitle, "109 km Fahrstrecke · 4 Ladepunkte")
-    XCTAssertEqual(point.summary, "Aral pulse · EnBW mobility+ · + 2 weitere")
+    XCTAssertEqual(point.title, "4 Ladepunkte")
+    XCTAssertEqual(point.subtitle, "109 km Fahrstrecke")
+    XCTAssertNil(point.summary)
+    XCTAssertEqual(point.detailTitle, "Ladepark")
+    XCTAssertEqual(point.detailSubtitle, "Wohin fahren?")
     XCTAssertEqual(
       point.detailSummary,
-      "4 passende Ladepunkte\nAral pulse · 1 Ladepunkt\nEnBW mobility+ · 1 Ladepunkt\nIONITY · 1 Ladepunkt\nTesla · 1 Ladepunkt\n150 kW oder höher\n4 Ladepunkte frei"
+      "109 km Fahrstrecke\n4 passende Ladepunkte\nAral pulse · 1 Ladepunkt\nEnBW mobility+ · 1 Ladepunkt\nIONITY · 1 Ladepunkt\nTesla · 1 Ladepunkt\n150 kW oder höher\n4 Ladepunkte frei"
     )
     XCTAssertEqual(
       presenter.operators(for: result).map(\.name),
@@ -491,11 +496,9 @@ final class CarPlayPresentationTests: XCTestCase {
       "unit.charging_points.one": "%lld Ladepunkt",
       "unit.charging_points.other": "%lld Ladepunkte",
       "search.food_chain.mcdonalds": "McDonald's",
-      "carplay.result.metrics.format": "%lld km Fahrstrecke · %@",
       "carplay.result.driving_distance.format": "%lld km Fahrstrecke",
+      "carplay.result.destination_prompt": "Wohin fahren?",
       "carplay.result.operator.format": "%@ · %@",
-      "carplay.result.more_operators.one": "+ %lld weiterer",
-      "carplay.result.more_operators.format": "+ %lld weitere",
       "carplay.result.operators.action": "Ladeanbieter",
       "carplay.result.restaurant.action": "Zum Restaurant",
       "carplay.operator.detail.format": "%@ · %@",

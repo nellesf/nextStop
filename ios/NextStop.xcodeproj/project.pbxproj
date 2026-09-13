@@ -70,6 +70,7 @@
 		DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */; };
 		DBCF24C52F1F8595231851AC /* CarPlayAppleMapsLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7171EB62A86F9C6AE1BD96 /* CarPlayAppleMapsLauncher.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
+		E8AA891AF309A2329582AFB4 /* MapKitDrivingDistanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C45E2E3E3C5EB028720FAB /* MapKitDrivingDistanceTests.swift */; };
 		F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */; };
 		FDB1BC30410969AF967D7425 /* SwiftDataDestinationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4156FF115B754AA94F263515 /* SwiftDataDestinationRepository.swift */; };
 		FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */; };
@@ -144,6 +145,7 @@
 		A19B25042473CCB4F38697B2 /* en */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = en; path = en.lproj/InfoPlist.strings; sourceTree = "<group>"; };
 		A3467548739E0E33D89EBB21 /* ProfileFormState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileFormState.swift; sourceTree = "<group>"; };
 		A44A6EDA417E5623EB985402 /* MapKitCandidateEnricher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitCandidateEnricher.swift; sourceTree = "<group>"; };
+		A5C45E2E3E3C5EB028720FAB /* MapKitDrivingDistanceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitDrivingDistanceTests.swift; sourceTree = "<group>"; };
 		A72AABEA15C9D38D4F8AD591 /* CarPlayRideSearchServiceTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayRideSearchServiceTests.swift; sourceTree = "<group>"; };
 		A7FB416E577738CAF4A0AFE1 /* NextStopCarPlayTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopCarPlayTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		AD868339BFFD12E7F0EB6EB1 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/Localizable.strings; sourceTree = "<group>"; };
@@ -394,6 +396,7 @@
 				B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */,
 				1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */,
 				51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */,
+				A5C45E2E3E3C5EB028720FAB /* MapKitDrivingDistanceTests.swift */,
 				8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */,
 				626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */,
 				6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */,
@@ -666,6 +669,7 @@
 				27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */,
 				81741127CA7CFE1D5C9DA0C2 /* CandidateSearchResponseDTOTests.swift in Sources */,
 				1EDC3BA1EEB9C7D21BF81C72 /* DestinationRepositoryTests.swift in Sources */,
+				E8AA891AF309A2329582AFB4 /* MapKitDrivingDistanceTests.swift in Sources */,
 				13C12D2BDABBDCFBB8B88711 /* ProfileFormStateTests.swift in Sources */,
 				1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */,
 				DAA45FFAC11B8E1867621378 /* RideCandidateSearchCoordinatorTests.swift in Sources */,

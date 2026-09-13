@@ -21,6 +21,12 @@ protocol RoutePlanning: AnyObject {
 }
 
 @MainActor
+protocol DrivingDistanceProviding: AnyObject {
+  func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
+    -> Meters
+}
+
+@MainActor
 final class DirectionsRequestGate {
   typealias Now = @MainActor () -> Date
   typealias Sleep = @MainActor (TimeInterval) async throws -> Void
@@ -72,11 +78,11 @@ final class DirectionsRequestGate {
 }
 
 @MainActor
-final class RateLimitedRoutePlanner: RoutePlanning {
-  private let base: any RoutePlanning
+final class RateLimitedRoutePlanner: RoutePlanning, DrivingDistanceProviding {
+  private let base: any RoutePlanning & DrivingDistanceProviding
   private let gate: DirectionsRequestGate
 
-  init(base: any RoutePlanning, gate: DirectionsRequestGate) {
+  init(base: any RoutePlanning & DrivingDistanceProviding, gate: DirectionsRequestGate) {
     self.base = base
     self.gate = gate
   }
@@ -87,16 +93,23 @@ final class RateLimitedRoutePlanner: RoutePlanning {
     try await gate.acquire()
     return try await base.automobileRoute(from: origin, to: destination)
   }
+
+  func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
+    -> Meters
+  {
+    try await gate.acquire()
+    return try await base.automobileDrivingDistance(from: origin, to: destination)
+  }
 }
 
 @MainActor
-final class RetryingRoutePlanner: RoutePlanning {
-  private let base: any RoutePlanning
+final class RetryingRoutePlanner: RoutePlanning, DrivingDistanceProviding {
+  private let base: any RoutePlanning & DrivingDistanceProviding
   private let maximumAttempts: Int
   private let retryDelay: Duration
 
   init(
-    base: any RoutePlanning,
+    base: any RoutePlanning & DrivingDistanceProviding,
     maximumAttempts: Int = 2,
     retryDelay: Duration = .milliseconds(300)
   ) {
@@ -109,9 +122,25 @@ final class RetryingRoutePlanner: RoutePlanning {
   func automobileRoute(from origin: Coordinate, to destination: Coordinate) async throws
     -> PlannedRoute
   {
+    try await withRetry {
+      try await base.automobileRoute(from: origin, to: destination)
+    }
+  }
+
+  func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
+    -> Meters
+  {
+    try await withRetry {
+      try await base.automobileDrivingDistance(from: origin, to: destination)
+    }
+  }
+
+  private func withRetry<Value>(
+    _ operation: @MainActor () async throws -> Value
+  ) async throws -> Value {
     for attempt in 1...maximumAttempts {
       do {
-        return try await base.automobileRoute(from: origin, to: destination)
+        return try await operation()
       } catch is CancellationError {
         throw CancellationError()
       } catch {

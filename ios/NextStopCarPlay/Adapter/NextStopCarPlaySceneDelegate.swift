@@ -808,7 +808,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   ) -> CPPointOfInterest {
     let mapItem = makeMapItem(
       coordinate: presentation.coordinate,
-      name: presentation.title
+      name: presentation.detailTitle
     )
     let detailSummary = [presentation.detailSummary, coverageMessage, attributionMessage]
       .compactMap { $0 }

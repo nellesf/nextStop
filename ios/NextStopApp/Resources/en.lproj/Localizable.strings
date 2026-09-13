@@ -21,6 +21,7 @@
 "carplay.criteria.no_restaurant" = "No restaurant filter";
 "carplay.result.metrics.format" = "%lld km driving distance · %@";
 "carplay.result.driving_distance.format" = "%lld km driving distance";
+"carplay.result.destination_prompt" = "Where to?";
 "carplay.result.operator.format" = "%@ · %@";
 "carplay.result.more_operators.one" = "+ %lld more";
 "carplay.result.more_operators.format" = "+ %lld more";

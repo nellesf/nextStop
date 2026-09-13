@@ -55,6 +55,11 @@ stable snapshot; retry and refresh remain explicit after an error or result.
    other restaurants need no MapKit request.
    `MKRoute.distance` becomes `actualDrivingDistanceMeters` and includes the
    departure from the main route.
+   Candidate enrichment uses a distance-only application interface: a finite,
+   non-negative MapKit distance (including zero) does not require a valid corridor
+   polyline or travel time. Full route geometry remains mandatory in step 3 for
+   the destination route. Both operations and their retries use the same request
+   gate within the route planner.
 10. Discard exact distances outside the selected range.
 11. If a food chain is selected, require the backend-provided OSM match. Opening
     information is optional and not a predicate.
@@ -69,6 +74,22 @@ stable snapshot; retry and refresh remain explicit after an error or result.
 14. Return the first five campuses or restaurant groups. If fewer exist, return
     fewer. If pagination is not exhausted and correctness cannot yet be proven,
     request the next batch.
+
+### Starting at a charging campus
+
+The Fastned Plech regression starts at the campus navigation coordinate
+`49.664160, 11.470720` with 100–150 km, 200 kW, at least eight EVSEs, and no food
+filter. MapKit successfully returns zero meters and two identical polyline points
+for the start campus. Requiring a full `RoutePolyline` for that candidate rejects
+the response before the minimum-distance filter can discard it and turns it into
+an unresolved routing failure that blocks later results.
+
+Extract candidate distances independently of corridor geometry and preserve a
+confirmed zero in the ride-local cache. The normal range filter then excludes the
+start campus. A missing MapKit route remains unresolved; proximity or equal
+coordinates never synthesize a zero distance. Regression tests also cover short
+positive distances, invalid distances, strict main-route geometry, and the shared
+retry/request-gate path.
 
 ## Correct pagination and stopping
 

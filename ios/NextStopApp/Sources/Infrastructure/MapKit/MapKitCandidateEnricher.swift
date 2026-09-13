@@ -3,11 +3,11 @@ import NextStopCore
 
 @MainActor
 final class MapKitCandidateEnricher: CandidateEnriching {
-  private let routePlanner: any RoutePlanning
+  private let distanceProvider: any DrivingDistanceProviding
   private var cache: [CacheKey: Meters] = [:]
 
-  init(routePlanner: any RoutePlanning) {
-    self.routePlanner = routePlanner
+  init(distanceProvider: any DrivingDistanceProviding) {
+    self.distanceProvider = distanceProvider
   }
 
   func enrich(
@@ -25,10 +25,10 @@ final class MapKitCandidateEnricher: CandidateEnriching {
       actualDrivingDistance = cached
     } else {
       do {
-        actualDrivingDistance = try await routePlanner.automobileRoute(
+        actualDrivingDistance = try await distanceProvider.automobileDrivingDistance(
           from: origin,
           to: candidate.park.navigationCoordinate
-        ).actualDrivingDistance
+        )
       } catch is CancellationError {
         throw CancellationError()
       } catch {
