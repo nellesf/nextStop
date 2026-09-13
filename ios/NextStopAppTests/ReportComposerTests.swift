@@ -5,6 +5,71 @@ import XCTest
 
 @MainActor
 final class ReportComposerTests: XCTestCase {
+  func testInternalPlaceholdersNeverSatisfyPublicPrivacyConfiguration() throws {
+    let configuration = internalPrivacyConfiguration()
+    XCTAssertFalse(configuration.isComplete)
+    XCTAssertTrue(configuration.allowsSubmission(in: .debug))
+    XCTAssertTrue(configuration.allowsSubmission(in: .verifiedSandbox))
+    XCTAssertFalse(configuration.allowsSubmission(in: .production))
+    XCTAssertFalse(configuration.allowsSubmission(in: .unknown))
+
+    let unflagged = SupportPrivacyConfiguration(
+      controllerName: configuration.controllerName, postalAddress: configuration.postalAddress,
+      email: configuration.email
+    )
+    XCTAssertFalse(unflagged.isComplete)
+    XCTAssertFalse(unflagged.allowsSubmission(in: .verifiedSandbox))
+
+    let incomplete = SupportPrivacyConfiguration(
+      controllerName: "", postalAddress: "", email: "", usesInternalTestPlaceholders: true)
+    XCTAssertFalse(incomplete.allowsSubmission(in: .debug))
+
+    let oldConfiguration = try PropertyListDecoder().decode(
+      SupportPrivacyConfiguration.self,
+      from: PropertyListSerialization.data(
+        fromPropertyList: ["controllerName": "", "postalAddress": "", "email": ""],
+        format: .xml, options: 0
+      ))
+    XCTAssertFalse(oldConfiguration.usesInternalTestPlaceholders)
+    XCTAssertFalse(oldConfiguration.isComplete)
+  }
+
+  func testVerifiedInternalEnvironmentOpensGateWithoutChangingDraftOrLogChoice() async {
+    let sender = ReportComposerSender()
+    let composer = UserErrorReportComposer(sender: sender, privacyConfigured: false)
+    let configuration = internalPrivacyConfiguration()
+    composer.message = "Synthetic test report."
+    for distribution in [SupportReportDistribution.unknown, .production] {
+      composer.configurePrivacy(configuration, in: distribution)
+      await composer.send()
+      XCTAssertFalse(composer.canSend)
+      XCTAssertTrue(sender.requests.isEmpty)
+    }
+    composer.configurePrivacy(configuration, in: .verifiedSandbox)
+    XCTAssertTrue(composer.canSend)
+    XCTAssertEqual(composer.message, "Synthetic test report.")
+    XCTAssertFalse(composer.includeDiagnostics)
+    await composer.send()
+    XCTAssertEqual(sender.requests.count, 1)
+    XCTAssertNil(sender.requests.first?.diagnostics)
+  }
+
+  func testCompleteContactDoesNotDependOnTestEnvironment() {
+    let configuration = SupportPrivacyConfiguration(
+      controllerName: "Test Controller", postalAddress: "Test Address", email: "test@nextstop.tech")
+    XCTAssertTrue(configuration.isComplete)
+    XCTAssertTrue(configuration.allowsSubmission(in: .production))
+    XCTAssertTrue(configuration.allowsSubmission(in: .unknown))
+  }
+
+  private func internalPrivacyConfiguration() -> SupportPrivacyConfiguration {
+    SupportPrivacyConfiguration(
+      controllerName: "[INTERNAL TEST PLACEHOLDER: CONTROLLER]",
+      postalAddress: "[INTERNAL TEST PLACEHOLDER: POSTAL ADDRESS]",
+      email: "privacy@example.invalid", usesInternalTestPlaceholders: true
+    )
+  }
+
   func testMissingPrivacyContactPreventsSubmission() async {
     let sender = ReportComposerSender()
     let composer = UserErrorReportComposer(sender: sender, privacyConfigured: false)

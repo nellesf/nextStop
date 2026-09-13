@@ -6,10 +6,13 @@ struct SupportPrivacyView: View {
 
   var body: some View {
     List {
+      if configuration?.usesInternalTestPlaceholders == true {
+        SupportPrivacyTestNotice()
+      }
       Section("report.privacy.controller") {
         if let configuration {
-          Text(verbatim: configuration.controllerName)
-          Text(verbatim: configuration.postalAddress)
+          Text(verbatim: configuration.displayControllerName)
+          Text(verbatim: configuration.displayPostalAddress)
           Text(verbatim: configuration.email)
             .textSelection(.enabled)
         } else {
@@ -44,5 +47,15 @@ struct SupportPrivacyView: View {
 
   private func notice(_ title: LocalizedStringKey, _ body: LocalizedStringKey) -> some View {
     Section(title) { Text(body) }
+  }
+}
+
+struct SupportPrivacyTestNotice: View {
+  var body: some View {
+    Section {
+      Label("report.internal.title", systemImage: "exclamationmark.triangle")
+        .font(.headline)
+      Text("report.internal.notice")
+    }
   }
 }

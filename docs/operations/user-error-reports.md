@@ -1,8 +1,30 @@
 # Voluntary user error reports
 
-Status: implemented; deploy the backend before enabling submission in an iPhone
-release. The controller/contact configuration and published privacy notice must
-contain the owner's real details. No live deployment is implied by this change.
+Status: deployed to the existing private staging backend at
+`https://api.nextstop.tech` on 2026-09-13. Public releases require the owner's real
+controller/contact details and matching published privacy information. The owner
+approved clearly marked placeholders solely for the internal TestFlight test;
+see [ADR 0017](../adr/0017-user-initiated-error-reports.md). Placeholder builds must
+use Apple's **TestFlight Internal Only** upload option and synthetic test data.
+
+## Deployment verification, 2026-09-13
+
+Backend commit `1307990339bb46591a639c044b98607d3e72384b` was installed as
+`/opt/nextstop/releases/20260913T092747Z` on the existing Frankfurt VM. Migration
+`0011_user_error_reports.sql` and the role initializer completed; search, auth and
+ingestion roles cannot read reports. API/auth/database health checks passed.
+PostgreSQL parameter-error logging is disabled and `log_statement` is `none`.
+
+A synthetic report with one synthetic diagnostic event was exercised through
+the public HTTPS endpoint: create returned 201, identical retry returned 200 with
+the same receipt, unauthenticated withdrawal returned 204, and retry after
+withdrawal returned 410. The receipt expiry was exactly 30 days after receipt.
+Access credentials and deletion proof remained in process memory and were not
+printed. The test content was withdrawn immediately after verification; a scoped
+database check confirmed that text, logs, payload hash and receipt time were
+erased, leaving only the minimal withdrawal tombstone. This
+verifies the live transport/storage path, not an installed TestFlight app; the
+new app build still needs its real-device TestFlight smoke check.
 
 ## Submission and privacy boundaries
 

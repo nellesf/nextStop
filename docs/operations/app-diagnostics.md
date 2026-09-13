@@ -167,6 +167,26 @@ Frankfurt storage region alone does not guarantee all Google processor access
 stays in the EEA. Record actual contractual safeguards in the public policy before
 release. No identity or hosting facts should be invented to enable the form.
 
+The owner authorized an internal TestFlight exception on 2026-09-13. The checked-in
+`SupportContact.plist` explicitly marks contact values as placeholders and uses
+`privacy@example.invalid`, which cannot receive mail. Both form and privacy notice
+warn that controller details are incomplete, require synthetic test data without
+personal information, identify the real backend transmission, and direct questions
+to the tester's known internal TestFlight contact. This does not make the notice
+legally complete. Use **TestFlight Internal Only** when distributing this build;
+Apple prevents such a build from reaching external groups or the App Store.
+
+The flag does not make `SupportPrivacyConfiguration.isComplete` true. Debug builds
+may test submission. Release builds require `AppTransaction.shared` to return a
+verified sandbox environment; a production or unverified/unknown environment keeps
+submission disabled. This check may need internet access. It requests no purchase,
+does not refresh a receipt interactively, and sends no StoreKit transaction or
+identifier to the nextStop backend. Internal and external TestFlight share the
+sandbox environment, so the internal-only upload restriction remains necessary.
+Before external testing or public release, replace every placeholder and set
+`usesInternalTestPlaceholders` to `false`. Check real controller/contact data and
+complete the remaining release privacy and contractual requirements above.
+
 The app privacy manifest includes the report data, and App Store Connect privacy
 answers must be changed manually before distribution. Do not assume occasional
 support submissions meet Apple's optional-disclosure exception. Free text may be

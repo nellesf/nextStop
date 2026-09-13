@@ -3,10 +3,12 @@
 <plist version="1.0">
 <dict>
   <key>controllerName</key>
-  <string></string>
+  <string>[INTERNAL TEST PLACEHOLDER: CONTROLLER]</string>
   <key>postalAddress</key>
-  <string></string>
+  <string>[INTERNAL TEST PLACEHOLDER: POSTAL ADDRESS]</string>
   <key>email</key>
-  <string></string>
+  <string>privacy@example.invalid</string>
+  <key>usesInternalTestPlaceholders</key>
+  <true/>
 </dict>
 </plist>

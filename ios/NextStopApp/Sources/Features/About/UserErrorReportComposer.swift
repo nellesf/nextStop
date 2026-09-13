@@ -13,9 +13,9 @@ final class UserErrorReportComposer: ObservableObject {
   @Published private(set) var isSending = false
   @Published private(set) var sentReportID: UUID?
   @Published private(set) var error: UserErrorReportError?
+  @Published private(set) var privacyConfigured: Bool
 
   private let sender: any UserErrorReportSending
-  private let privacyConfigured: Bool
   private var pendingRequest: UserErrorReportRequest?
 
   init(sender: any UserErrorReportSending, privacyConfigured: Bool) {
@@ -24,6 +24,12 @@ final class UserErrorReportComposer: ObservableObject {
   }
 
   var messageLength: Int { message.unicodeScalars.count }
+
+  func configurePrivacy(
+    _ configuration: SupportPrivacyConfiguration?, in distribution: SupportReportDistribution
+  ) {
+    privacyConfigured = configuration?.allowsSubmission(in: distribution) == true
+  }
 
   var canSend: Bool {
     privacyConfigured && !isSending

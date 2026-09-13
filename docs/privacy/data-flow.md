@@ -209,9 +209,22 @@ basis is disclosed before submission and must not be used to continue the
 consent-based report processing after withdrawal.
 
 Genuine controller identity/address/contact details are a release prerequisite.
-Report submission remains disabled until they are configured; placeholders and
-unverified email addresses cannot satisfy this notice. The public privacy policy
-must contain the same information. The owner must verify the Google Cloud
+Placeholders and unverified email addresses cannot satisfy this notice. The owner
+explicitly authorized a limited internal TestFlight test with marked placeholders
+on 2026-09-13. Both report and privacy screens explain the incomplete contact
+details, actual backend transmission, synthetic-data-only test scope, and the
+existing internal TestFlight contact path. The reserved `.invalid` address is
+clearly unreachable. This test exception is not a representation of GDPR-complete
+controller information.
+
+The test flag is independent of contact completeness: only Debug or a verified
+sandbox `AppTransaction` enables the placeholder form; production or unknown
+environments remain blocked. StoreKit transaction data is evaluated only on the
+device and is never attached, stored in diagnostics, or sent to nextStop. Internal
+and external TestFlight share the sandbox, so this build must be uploaded using
+Apple's **TestFlight Internal Only** option. Remove the exception and supply real
+contact information before external testing or public release. The public privacy
+policy must contain the same information. The owner must verify the Google Cloud
 processing agreement, subprocessors and transfer safeguards for the actual account.
 Choosing a Frankfurt VM establishes the intended storage region, not a blanket
 guarantee against third-country processor access. These deployment prerequisites

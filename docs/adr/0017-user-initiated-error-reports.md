@@ -28,9 +28,28 @@ recording; recording remains a separate, default-off choice.
 The form identifies the controller, purpose, data, retention, and withdrawal path
 before submission and links to a localized Article 13 privacy notice. Use consent
 under Article 6(1)(a) GDPR for the report and the separately selected attachment.
-Record the notice version, attachment choice, and server receipt time. Reporting
-must remain unavailable until genuine controller/contact information is configured;
-do not ship invented details or placeholder contact information as a valid notice.
+Record the notice version, attachment choice, and server receipt time. Public
+reporting must remain unavailable until genuine controller/contact information is
+configured; placeholder contact information is not a complete privacy notice.
+
+On 2026-09-13 the owner explicitly approved clearly marked placeholders for the
+internal TestFlight test and authorized backend deployment. This narrow test
+exception uses `usesInternalTestPlaceholders` in `SupportContact.plist`, a reserved
+unreachable `privacy@example.invalid` address, and a prominent German/English
+warning in both the report form and privacy notice. It instructs testers to send
+only synthetic data without personal information, states that submissions reach
+the real backend, and directs questions to their already known internal TestFlight
+contact. Placeholders never satisfy the public `isComplete` configuration check.
+
+Debug builds may exercise the form; Release builds additionally require a
+StoreKit-verified sandbox `AppTransaction`. Production, unverified, missing, and
+unknown environments fail closed. StoreKit does not distinguish internal and
+external TestFlight groups, so uploads using the exception must use Apple's
+**TestFlight Internal Only** distribution option, which prevents external testing
+and App Store submission of that build. Replace all placeholder contact values and
+disable the flag before external testing or public release. This is an explicitly
+bounded engineering test exception, not a claim that placeholder notices meet
+GDPR transparency requirements.
 
 This decision narrowly amends the prior backend destination-text prohibition for
 text a user freely writes into a support report. The app must not populate that
@@ -100,3 +119,6 @@ a separate Apple-operated channel and do not authorize this report transport.
 - [EDPB consent guidelines, especially paragraphs 64, 107–108 and 113–114](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf)
 - [Apple app privacy details](https://developer.apple.com/app-store/app-privacy-details/)
 - [Google Cloud Data Processing Addendum](https://cloud.google.com/terms/data-processing-addendum)
+- [Apple: verified app transaction](https://developer.apple.com/documentation/storekit/apptransaction/shared)
+- [Apple: StoreKit test environments](https://developer.apple.com/documentation/storekit/testing-at-all-stages-of-development-with-xcode-and-the-sandbox)
+- [Apple: internal-only TestFlight builds](https://developer.apple.com/help/app-store-connect/test-a-beta-version/add-internal-testers/)

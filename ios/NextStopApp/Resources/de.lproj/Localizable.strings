@@ -201,6 +201,12 @@
 "report.sent" = "Dein Fehlerbericht ist eingegangen. Vielen Dank.";
 "report.local_diagnostics" = "Lokale Logs verwalten";
 "report.configuration_missing" = "Der Versand ist noch nicht verfügbar, da die Kontaktangaben des Verantwortlichen fehlen. Es wird kein Fehlerbericht übertragen.";
+"report.internal.title" = "Interner Test · Datenschutzangaben mit Platzhaltern";
+"report.internal.notice" = "Name, Postanschrift und E-Mail des Verantwortlichen sind noch Platzhalter. Diese Hinweise sind deshalb noch nicht vollständig. Bitte sende ausschließlich synthetische Testdaten ohne personenbezogene Angaben. Berichte werden tatsächlich an den nextStop-Server gesendet. Die angezeigte E-Mail-Adresse ist nicht erreichbar; wende dich bei Fragen an deinen bekannten internen TestFlight-Kontakt. Gesendete Testberichte kannst du unten in der App löschen.";
+"report.internal.placeholder.controller" = "[PLATZHALTER: Verantwortliche Person / Firma]";
+"report.internal.placeholder.address" = "[PLATZHALTER: Postanschrift des Verantwortlichen]";
+"report.internal.verifying" = "Die Testumgebung wird geprüft. Der Versand bleibt bis zur Bestätigung gesperrt.";
+"report.internal.unavailable" = "Der Versand mit Platzhaltern ist in dieser Installation nicht freigegeben. Nutze den internen TestFlight-Build mit Internetverbindung und öffne dieses Formular erneut.";
 "report.error.invalid_request" = "Bitte gib eine Beschreibung mit höchstens 5.000 Zeichen ein und prüfe die ausgewählten Logs.";
 "report.error.configuration" = "Der Versand ist momentan nicht eingerichtet. Es wurde kein Bericht gesendet.";
 "report.error.authentication" = "Die App konnte den Versand nicht freigeben. Versuche es später erneut.";

@@ -4,6 +4,7 @@ struct UserErrorReportView: View {
   @ObservedObject private var diagnosticsStore: AppDiagnosticsStore
   @StateObject private var composer: UserErrorReportComposer
   @State private var sendTask: Task<Void, Never>?
+  @State private var distributionChecked = false
   private let sender: any UserErrorReportSending
   private let receiptStore: UserErrorReportReceiptStore
   private let privacy: SupportPrivacyConfiguration?
@@ -20,12 +21,16 @@ struct UserErrorReportView: View {
     self.privacy = privacy
     _composer = StateObject(
       wrappedValue: UserErrorReportComposer(
-        sender: sender, privacyConfigured: privacy?.isComplete == true
+        sender: sender,
+        privacyConfigured: privacy?.allowsSubmission(in: .initial) == true
       ))
   }
 
   var body: some View {
     Form {
+      if privacy?.usesInternalTestPlaceholders == true {
+        SupportPrivacyTestNotice()
+      }
       Section {
         TextField("report.message.prompt", text: $composer.message, axis: .vertical)
           .lineLimit(6...14)
@@ -69,7 +74,7 @@ struct UserErrorReportView: View {
         if let privacy {
           Text(
             verbatim: String(
-              format: String(localized: "report.consent"), privacy.controllerName
+              format: String(localized: "report.consent"), privacy.displayControllerName
             ))
         } else {
           Text("report.configuration_missing")
@@ -81,6 +86,11 @@ struct UserErrorReportView: View {
           Label("report.privacy.title", systemImage: "hand.raised")
         }
         .disabled(composer.isSending)
+
+        if privacy?.usesInternalTestPlaceholders == true && !composer.privacyConfigured {
+          Text(distributionChecked ? "report.internal.unavailable" : "report.internal.verifying")
+            .foregroundStyle(.secondary)
+        }
 
         Button {
           sendTask = Task { await composer.send() }
@@ -123,6 +133,13 @@ struct UserErrorReportView: View {
     .navigationTitle("report.title")
     .navigationBarTitleDisplayMode(.inline)
     .onAppear { composer.refreshDiagnostics(from: diagnosticsStore) }
+    .task {
+      guard privacy?.usesInternalTestPlaceholders == true else { return }
+      let distribution = await SupportReportDistribution.current()
+      guard !Task.isCancelled else { return }
+      composer.configurePrivacy(privacy, in: distribution)
+      distributionChecked = true
+    }
     .onDisappear { sendTask?.cancel() }
     .interactiveDismissDisabled(composer.isSending)
   }

@@ -225,6 +225,9 @@ The installer generates `SUPPORT_DATABASE_PASSWORD` and grants the dedicated
 `SUPPORT_DATABASE_URL` separately from its read-only search pool. HTTPS permits
 only POST and DELETE on the exact `/v1/error-reports` path with a 128 KiB body limit
 and an independent rate limit. Report retention runs on startup and every
-15 minutes, independently of submissions. Before enabling the iPhone release,
-complete the real controller/privacy configuration and follow the
+15 minutes, independently of submissions. Deployed and verified with a synthetic
+report, identical retry and withdrawal on 2026-09-13. Before a public iPhone
+release, complete the real controller/privacy configuration. The owner-approved
+placeholder exception is limited to synthetic tests distributed with Apple's
+**TestFlight Internal Only** option. Follow the
 [report deployment and administration runbook](../../docs/operations/user-error-reports.md).

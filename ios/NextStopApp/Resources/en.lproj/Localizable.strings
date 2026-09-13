@@ -201,6 +201,12 @@
 "report.sent" = "Your error report has been received. Thank you.";
 "report.local_diagnostics" = "Manage local logs";
 "report.configuration_missing" = "Sending is not available yet because the controller's contact details are missing. No error report will be transmitted.";
+"report.internal.title" = "Internal test · Privacy details contain placeholders";
+"report.internal.notice" = "The controller's name, postal address, and email are still placeholders, so this notice is not yet complete. Please submit only synthetic test data without personal information. Reports are actually sent to the nextStop server. The displayed email address cannot receive messages; direct any questions to your known internal TestFlight contact. You can delete sent test reports below in the app.";
+"report.internal.placeholder.controller" = "[PLACEHOLDER: Responsible person / company]";
+"report.internal.placeholder.address" = "[PLACEHOLDER: Controller's postal address]";
+"report.internal.verifying" = "Checking the test environment. Sending remains disabled until it is confirmed.";
+"report.internal.unavailable" = "Sending with placeholders is not enabled for this installation. Use the internal TestFlight build with an internet connection and reopen this form.";
 "report.error.invalid_request" = "Please enter a description of no more than 5,000 characters and check the selected logs.";
 "report.error.configuration" = "Report sending is not currently configured. No report was sent.";
 "report.error.authentication" = "The app could not authorize sending. Please try again later.";
