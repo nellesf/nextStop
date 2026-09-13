@@ -250,7 +250,7 @@ final class AppDiagnosticsTests: XCTestCase {
     XCTAssertNoThrow(try store.exportData())
   }
 
-  func testStoreIsExcludedFromBackupAndProtectedOnDevice() throws {
+  func testStoreIsExcludedFromBackup() throws {
     let fixture = try Fixture()
     defer { fixture.remove() }
     let store = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
@@ -268,6 +268,17 @@ final class AppDiagnosticsTests: XCTestCase {
           .isExcludedFromBackup,
         true
       )
+    #endif
+  }
+
+  func testStoreUsesFileProtectionOnPhysicalDevice() throws {
+    #if os(iOS) && !targetEnvironment(simulator)
+      let fixture = try Fixture()
+      defer { fixture.remove() }
+      let store = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
+      store.recordingEnabled = true
+      store.record(event())
+      XCTAssertTrue(store.persistenceAvailable)
       let attributes = try FileManager.default.attributesOfItem(atPath: fixture.fileURL.path)
       // FileManager exposes this attribute as NSString, not the Swift typed wrapper.
       let protection = try XCTUnwrap(attributes[.protectionKey] as? String)
@@ -275,6 +286,8 @@ final class AppDiagnosticsTests: XCTestCase {
         protection,
         FileProtectionType.completeUntilFirstUserAuthentication.rawValue
       )
+    #else
+      throw XCTSkip("File protection attributes require a physical iOS device.")
     #endif
   }
 

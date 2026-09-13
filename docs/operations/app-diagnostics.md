@@ -23,6 +23,14 @@ installation identifiers are absent from the schema. Unknown error domains have
 no raw domain name or code in the export. Malformed/oversized storage is discarded;
 unknown decoded fields are not re-exported.
 
+The simulator suite checks backup exclusion, storage bounds, opt-in, deletion,
+and sanitized exports. Run
+`AppDiagnosticsTests.testStoreUsesFileProtectionOnPhysicalDevice` on a provisioned
+physical iPhone to verify the file's protection class. The simulator does not
+provide a usable protection attribute in the CI environment; this one hardware
+check is explicitly skipped there. The device test still requires the exact
+`completeUntilFirstUserAuthentication` value and fails if it is absent or different.
+
 Captured paths are candidate HTTP requests, authentication failures surfaced by
 candidate search, main-route planning, candidate driving distances, and native
 charger/restaurant lookups. Ordinary successful app operations and cancellation
