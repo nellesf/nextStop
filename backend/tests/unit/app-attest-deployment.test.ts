@@ -97,7 +97,7 @@ void test("deployment isolates mutable authentication tables from the read-only 
   assert.match(repository, /AND \$3 > sign_count/u);
   assert.match(
     roles,
-    /OR granted\.rolname IN \('nextstop_api', 'nextstop_auth', 'nextstop_worker'\)/u,
+    /OR granted\.rolname IN \('nextstop_api', 'nextstop_auth', 'nextstop_worker', 'nextstop_support'\)/u,
   );
   assert.match(roles, /inherited or assumable membership/u);
 });

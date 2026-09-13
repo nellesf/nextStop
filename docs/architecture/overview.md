@@ -2,12 +2,14 @@
 
 Status: Accepted on 2026-08-13; clustering/search identity and Apple-place
 matching amended through 2026-08-21; CarPlay flow and native-place handoff amended on
-2026-09-07.
+2026-09-07; voluntary support reporting amended on 2026-09-13 by ADR 0017.
 
 ## Goals
 
 - Keep every driving interaction short and template-native.
-- Keep profiles, favorites, recent destinations, and destination text on-device.
+- Keep profiles, favorites, recent destinations, and destination text on-device
+  outside the required Apple-service flow. A user-written support report is a
+  separate explicit disclosure and never auto-populates from these values.
 - Make route membership geometrically correct and driving distance truthful.
 - Isolate changing national/operator data sources from UI and search policy.
 - Degrade partial provider/live/POI failures without fabricating data.
@@ -61,6 +63,11 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - A compile-time Debug-only loopback token provider when App Attest is unsupported.
   A Mac helper authenticates through Google Cloud IAP and keeps the short-lived
   token out of project files; distributed builds fail closed instead.
+- A voluntary error-report form with free text, a separately selectable technical-
+  log attachment, a localized privacy notice, and explicit submission/withdrawal.
+  Reporting uses injected transport and storage interfaces. A protected receipt
+  is saved before upload so an ambiguous response does not prevent later deletion;
+  no unattended reporting or CarPlay consent form is added.
 
 ### MapKit infrastructure
 
@@ -153,6 +160,10 @@ services:
 - `api`: App Attest challenge/verification, short-lived token authentication,
   rate limiting, OpenAPI DTO validation, and redaction.
 - `operations`: provider health, freshness, quarantine, and metrics.
+- Support reporting: a bounded, validated intake separate from candidate search,
+  content restricted to deliberately submitted descriptions and selected
+  diagnostic events, and deletion authorized by a per-report secret. Reports have
+  no account/device association and use a dedicated storage privilege boundary.
 
 The one backend artifact has separate execution roles. Candidate search reads the
 search projection through a read-only database login. The API uses a separate
@@ -192,6 +203,33 @@ contract.
 No Redis, message broker, or separate search cluster is required in the MVP.
 Ingestion uses durable database jobs/advisory locks and can be extracted only after
 measured need.
+
+### User-initiated support data
+
+[ADR 0017](../adr/0017-user-initiated-error-reports.md) permits voluntary support
+content without widening ordinary search inputs. The iPhone never adds a route,
+destination, profile, favorite, recent list, or search result to a report. User-
+written text may still contain personal information, so the notice does not claim
+anonymity. Optional logs use only the existing fixed `AppDiagnosticEvent` schema;
+raw errors and sensitive inputs are excluded.
+
+Reports expire after 30 days with a scheduled purge at least hourly. Early
+withdrawal deletes the payload immediately and leaves only the report reference,
+deletion-token hash, and expiry for replay protection. Existing records retain
+their original expiry; a deletion arriving before upload creates a content-free
+tombstone for 30 days from that deletion request. Creation and deletion are
+serialized and repeats never extend retention. The client retains
+at most 50 protected, backup-excluded unexpired receipts with deletion secrets and
+prunes them when it runs. Neither report content nor deletion secrets enter
+operational logging.
+
+This is a separate consent-based support feature with an in-app Article 13 notice
+and withdrawal path. Genuine controller/contact information must be configured
+before submission is enabled. Deployment requires verified hosting/processor
+terms, transfer disclosures, and the matching public policy; App Store privacy
+answers require a manual update. See
+[the privacy data flow](../privacy/data-flow.md) and
+[the support runbook](../operations/user-error-reports.md).
 
 ## Dependency direction
 

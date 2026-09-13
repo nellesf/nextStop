@@ -1,12 +1,58 @@
 # App diagnostics and silent recovery
 
-## Obtain a report
+## Send a report
 
-On iPhone, open the info button, **Fehlerberichte**, then enable **Fehlerberichte
-lokal speichern** before reproducing the issue. After the search, choose **Bericht
-exportieren** and share the JSON file with the developer through a channel chosen
-by the user. Include the app version/build separately when reporting a problem.
-There is no automatic upload, account, diagnostic SDK, or CarPlay prompt.
+On iPhone, open the info button and the error-report form. Describe the issue in
+free text, optionally select the initially unchecked technical-log attachment,
+review the privacy notice, and explicitly send the report. The description can be
+sent without logs. The attachment choice applies only to that submission and does
+not enable future recording or unattended uploads. No account, diagnostic SDK, or
+CarPlay report/consent prompt is introduced.
+
+To include technical events from a reproduced issue, first enable **Fehlerberichte
+lokal speichern** in the diagnostics screen, then reproduce it. Existing logs
+cannot reconstruct failures that happened while recording was disabled. The report
+form uses the retained allowlist described below; it does not collect raw system
+logs or automatically attach the current journey. App version/build is not part of
+the current diagnostic event schema.
+
+The privacy notice explains who receives the description and optional logs, why,
+how long they are retained, and how to withdraw. Warn users against including
+personal details, exact locations/routes, credentials, or other people's data in
+the description. Free text is not automatically anonymized.
+
+Each upload has a random report reference and separate deletion secret. The app
+saves a protected, backup-excluded receipt before starting the request, including
+when a response is subsequently lost. At most 50 unexpired receipts are retained;
+expired receipts are pruned when the app runs. Users can withdraw and delete from
+the iPhone report interface. Do not interpret an uncertain connection result as
+proof that the server received nothing; preserve the receipt and use the same
+identity for any explicit retry.
+
+Submitted payloads expire after 30 days and a scheduled server job purges them at
+least hourly. Successful early deletion removes content immediately, leaving only
+the random report reference, deletion-token hash, and expiry as replay protection.
+An existing report keeps its original expiry. If deletion reaches the server
+before the upload, a content-free tombstone for the unknown reference expires
+30 days after that deletion request. Creation/deletion must be serialized and
+repeated requests must not extend this window. It retains no description, content
+hash, logs, or plaintext secret.
+Local recording and local event deletion are independent of already submitted
+reports. See
+[the support runbook](user-error-reports.md) for authenticated operator retrieval,
+retention, access controls, and deployment requirements.
+
+**Deployment prerequisite:** the owner must supply genuine controller/contact
+details and verify hosting/processor and transfer disclosures. Submission remains
+unavailable until the required controller configuration exists. Source changes do
+not publish the public privacy policy, update App Store Connect answers, or deploy
+the receiving service.
+
+## Local diagnostics and optional export
+
+The JSON export remains an alternative for users who prefer their own sharing
+channel. Choose **Bericht exportieren** and share the file deliberately. A local
+export does not itself send anything to nextStop.
 
 Recording defaults to off. Turning it off clears the retained events. The local
 file is atomic, excluded from device backups, and uses iOS file protection after
@@ -97,10 +143,40 @@ data described as anonymous.
 Necessary server operation logs can have a non-consent legal basis, subject to
 documented necessity, proportionality, interests balancing, transparency, and
 retention. Review the deployed log lifecycle and the public privacy notice before
-release. A later automatic app-report upload requires its own explicit privacy
-decision and accurate App Store disclosures; do not infer permission from
-TestFlight crash sharing or location permission.
+release. [ADR 0017](../adr/0017-user-initiated-error-reports.md) authorizes the
+separate, user-initiated description and optional log upload. Its lawful basis is
+consent under Article 6(1)(a) GDPR, with the notice version, attachment choice, and
+server receipt time retained as evidence. The send action is preceded by the
+localized notice; the attachment choice is not preselected. Withdrawing must be
+as easy as submitting, using the in-app deletion control rather than requiring
+an email or file export.
+
+The minimal replay tombstone has a different security purpose: making withdrawal
+effective even if a late upload arrives. Its separately disclosed basis is Article
+6(1)(f) GDPR, subject to documented necessity and interests balancing. Include its
+bounded retention and the Article 21 right to object in the privacy notice,
+including the 30-day window for a reference not yet known when deletion arrives.
+This is not an alternative basis for retaining or continuing to analyze withdrawn
+report content.
+
+Keep the full Article 13 information accessible before submission and in the
+iPhone information/privacy screen. Use accurate controller identity/contact,
+purpose, recipients, transfer safeguards, retention, rights and complaint
+information; explain that both reporting and attaching logs are optional. A
+Frankfurt storage region alone does not guarantee all Google processor access
+stays in the EEA. Record actual contractual safeguards in the public policy before
+release. No identity or hosting facts should be invented to enable the form.
+
+The app privacy manifest includes the report data, and App Store Connect privacy
+answers must be changed manually before distribution. Do not assume occasional
+support submissions meet Apple's optional-disclosure exception. Free text may be
+identifying and logs can accompany it, so no anonymous-report promise is made.
+Do not infer report consent from TestFlight crash sharing, Apple's system analytics
+choice, location permission, or the local recording toggle.
 
 Sources reviewed 2026-09-13: [TDDDG section 25](https://www.gesetze-im-internet.de/ttdsg/__25.html),
 [GDPR articles 5, 6 and 13](https://eur-lex.europa.eu/eli/reg/2016/679/deu),
-[App Review guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#privacy).
+[App Review guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#privacy),
+[EDPB consent guidance](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf),
+[Apple app privacy details](https://developer.apple.com/app-store/app-privacy-details/),
+[Google Cloud processing terms](https://cloud.google.com/terms/data-processing-addendum).

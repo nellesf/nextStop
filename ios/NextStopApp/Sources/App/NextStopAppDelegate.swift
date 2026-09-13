@@ -24,6 +24,8 @@ protocol NextStopSceneDependencyReceiving: AnyObject {
 final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
   let dependencies: NextStopSceneDependencies
   let diagnosticsStore: AppDiagnosticsStore
+  let errorReportSender: any UserErrorReportSending
+  let errorReportReceipts: UserErrorReportReceiptStore
 
   var candidatePageSearcher: any CandidatePageSearching {
     dependencies.candidatePageSearcher
@@ -37,6 +39,13 @@ final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
     let accessTokenProvider = baseURL.map {
       SearchAccessTokenProviderFactory.make(baseURL: $0, session: session)
     }
+    let receipts = UserErrorReportReceiptStore()
+    errorReportReceipts = receipts
+    errorReportSender = HTTPUserErrorReportService(
+      baseURL: baseURL,
+      accessTokenProvider: accessTokenProvider,
+      receiptStore: receipts
+    )
     let candidatePageSearcher = HTTPCandidateSearchService(
       baseURL: baseURL,
       accessTokenProvider: accessTokenProvider,
@@ -52,6 +61,11 @@ final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
   init(candidatePageSearcher: any CandidatePageSearching) {
     let diagnostics = AppDiagnosticsStore()
     diagnosticsStore = diagnostics
+    let receipts = UserErrorReportReceiptStore()
+    errorReportReceipts = receipts
+    errorReportSender = HTTPUserErrorReportService(
+      baseURL: nil, accessTokenProvider: nil, receiptStore: receipts
+    )
     dependencies = NextStopSceneDependencies(
       candidatePageSearcher: candidatePageSearcher, diagnostics: diagnostics
     )

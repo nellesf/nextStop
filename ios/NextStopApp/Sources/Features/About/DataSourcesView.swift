@@ -3,6 +3,8 @@ import SwiftUI
 
 struct DataSourcesView: View {
   let diagnosticsStore: AppDiagnosticsStore
+  let errorReportSender: any UserErrorReportSending
+  let errorReportReceipts: UserErrorReportReceiptStore
 
   var body: some View {
     ScrollView {
@@ -81,9 +83,24 @@ struct DataSourcesView: View {
         }
 
         NavigationLink {
-          DiagnosticsView(store: diagnosticsStore)
+          UserErrorReportView(
+            diagnosticsStore: diagnosticsStore,
+            sender: errorReportSender,
+            receiptStore: errorReportReceipts,
+            privacy: SupportPrivacyConfiguration.configured()
+          )
         } label: {
-          Label("diagnostics.title", systemImage: "stethoscope")
+          Label("report.title", systemImage: "exclamationmark.bubble")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
+        }
+
+        NavigationLink {
+          SupportPrivacyView(configuration: SupportPrivacyConfiguration.configured())
+        } label: {
+          Label("report.privacy.title", systemImage: "hand.raised")
             .frame(maxWidth: .infinity, alignment: .leading)
             .padding(16)
             .background(Color(.secondarySystemGroupedBackground))

@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import type { UserErrorReports } from "../application/user-error-reports.js";
+import { registerUserErrorReports } from "./user-error-reports.js";
 
 import Fastify, { type FastifyInstance } from "fastify";
 
@@ -34,6 +36,9 @@ interface AppDependencies {
   readonly maximumConcurrentSearches?: number;
   readonly makeRequestId?: () => string;
   readonly diagnostics?: RequestDiagnosticOptions;
+  readonly userErrorReports?: UserErrorReports;
+  readonly reportAuthenticator?: SearchAuthenticating;
+  readonly reportNowMilliseconds?: () => number;
 }
 
 export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -125,6 +130,14 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
   });
 
   app.get("/health", () => ({ status: "ok" }));
+  void app.register(async (reportsApp) => {
+    await Promise.resolve(registerUserErrorReports(reportsApp, {
+      ...(dependencies.userErrorReports === undefined ? {} : { reports: dependencies.userErrorReports }),
+      ...(dependencies.reportAuthenticator === undefined ? {} : { authenticator: dependencies.reportAuthenticator }),
+      ...(dependencies.reportNowMilliseconds === undefined ? {} : { nowMilliseconds: dependencies.reportNowMilliseconds }),
+      recordError: diagnostics.recordError,
+    }));
+  });
 
   app.post<{ Body: SearchRequest }>(
     "/v1/charging-parks/search",

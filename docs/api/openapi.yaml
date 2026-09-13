@@ -16,7 +16,8 @@ info:
     broker; that local broker is not part of this public HTTPS API. Behind the
     public origin, Nginx routes only `/v1/auth/app-attest/*` to the isolated
     authentication service on VM loopback port 3001. Health and candidate search
-    remain on the read-only search API on VM loopback port 3000.
+    remain on the API on VM loopback port 3000. Its search pool remains read-only;
+    voluntary user error reports use a separately granted support pool.
     For iOS 27 proofs that carry Apple's validation extensions, validation
     category and bundle version must appear together and are checked on every
     attestation and assertion. Development keys accept category 3; production
@@ -28,6 +29,72 @@ info:
 servers:
   - url: https://api.nextstop.tech
 paths:
+  /v1/error-reports:
+    post:
+      operationId: submitUserErrorReport
+      summary: Submit a report after an explicit user action and privacy notice
+      description: |
+        A valid short-lived App Attest access token is required. The legacy staging
+        bearer is never accepted. No background collection or upload is implied.
+        Body limit 128 KiB, message 1–5000 Unicode scalar values after trimming,
+        optional 1–200 allowlisted diagnostic events, no metadata outside this schema.
+        Same reportId, secret and canonical payload return the original receipt (200);
+        changed secret or payload returns 409. A withdrawn report returns 410.
+        Retained for 30 days, purged every 15 minutes and on API startup; normal
+        deletion delay is at most one hour. Proxy admission is 6/minute/IP with burst2;
+        application admission is 10 POST/minute globally and four concurrent report
+        operations. Store cap is 1000 entries and 128 MiB, including tombstones.
+      security:
+        - appAttestReportBearer: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserErrorReportSubmission' }
+      responses:
+        '201':
+          description: Report accepted and durably stored.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserErrorReportReceipt' }
+        '200':
+          description: Identical report was already accepted; original receipt.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/UserErrorReportReceipt' }
+        '400': { description: Invalid or extra fields; no report stored. }
+        '401': { description: Valid short-lived access token required. }
+        '409': { description: Report ID is already bound to another secret or payload. }
+        '410': { description: Report was withdrawn or expired; do not resubmit. }
+        '413': { description: Request exceeds 128 KiB. }
+        '429': { description: Admission exhausted; Retry-After is supplied. }
+        '503': { description: Storage unavailable or capacity exhausted. }
+    delete:
+      operationId: withdrawUserErrorReport
+      summary: Withdraw a report using its per-report deletion secret
+      description: |
+        Requires only the unguessable deletion token in the JSON body, including
+        when App Attest is unavailable. Missing, expired and incorrect-token
+        requests all return 204, preventing an existence oracle. Removes text,
+        diagnostics, payload hash and receipt time immediately. Only report ID,
+        hashed deletion token and original expiry remain until scheduled purge to
+        prevent late retries from restoring withdrawn content. A deletion arriving
+        before its POST stores a tombstone for at most 30 days from withdrawal.
+        If capacity prevents remembering withdrawal, return 503 so the client
+        retains its proof and retries. No public GET exists.
+        Limit is 30 DELETE/minute globally, sharing proxy rate and concurrency caps.
+      security: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/UserErrorReportDeletion' }
+      responses:
+        '204': { description: Withdrawal processed without revealing existence. }
+        '400': { description: Invalid deletion proof shape. }
+        '413': { description: Request exceeds 128 KiB. }
+        '429': { description: Admission exhausted; Retry-After is supplied. }
+        '503': { description: Withdrawal could not be processed; retry explicitly. }
   /health:
     get:
       operationId: getHealth
@@ -214,6 +281,11 @@ paths:
                 $ref: '#/components/schemas/Problem'
 components:
   securitySchemes:
+    appAttestReportBearer:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: Short-lived App Attest access token only; no legacy shared bearer.
     bearerAuth:
       type: http
       scheme: bearer
@@ -309,6 +381,75 @@ components:
           schema:
             $ref: '#/components/schemas/SearchAccessToken'
   schemas:
+    UserErrorReportDeletion:
+      type: object
+      additionalProperties: false
+      required: [reportId, deletionToken]
+      properties:
+        reportId: { type: string, format: uuid }
+        deletionToken:
+          type: string
+          format: uuid
+          description: Client-generated random secret; never log it or store it unhashed.
+    UserErrorReportReceipt:
+      type: object
+      additionalProperties: false
+      required: [reportId, receivedAt, expiresAt]
+      properties:
+        reportId: { type: string, format: uuid }
+        receivedAt: { type: string, format: date-time }
+        expiresAt: { type: string, format: date-time }
+    UserErrorReportSubmission:
+      type: object
+      additionalProperties: false
+      required: [schemaVersion, reportId, deletionToken, consentVersion, message, includeDiagnostics]
+      properties:
+        schemaVersion: { const: 1 }
+        reportId: { type: string, format: uuid }
+        deletionToken: { type: string, format: uuid }
+        consentVersion: { const: '2026-09-13' }
+        message:
+          type: string
+          minLength: 1
+          maxLength: 5000
+          description: Trimmed Unicode scalar values; unpaired surrogates and NUL rejected.
+        includeDiagnostics: { type: boolean }
+        diagnostics:
+          type: array
+          minItems: 1
+          maxItems: 200
+          items: { $ref: '#/components/schemas/AppDiagnosticEvent' }
+      allOf:
+        - if:
+            properties:
+              includeDiagnostics: { const: true }
+          then:
+            required: [diagnostics]
+          else:
+            not:
+              required: [diagnostics]
+    AppDiagnosticEvent:
+      type: object
+      additionalProperties: false
+      required: [id, timestamp, operation, outcome, category, durationMilliseconds, attempt]
+      properties:
+        id: { type: string, format: uuid }
+        timestamp:
+          type: string
+          format: date-time
+          description: UTC Z timestamp from 1970 through 2100, at most three fractional digits.
+        operation:
+          enum: [candidateSearch, route, candidateDistance, authentication, placeLookup, mapsLaunch]
+        outcome: { enum: [failure, retryScheduled, recovered] }
+        category:
+          enum: [networkTimeout, networkLost, offline, connection, http, invalidResponse, authentication, noRoute, invalidRoute, throttled, unknown]
+        durationMilliseconds: { type: integer, minimum: 0, maximum: 300000 }
+        attempt: { type: integer, minimum: 1, maximum: 3 }
+        httpStatus: { type: integer, minimum: 100, maximum: 599 }
+        errorDomain: { enum: [url, mapKit, routePlanning, unknown] }
+        errorCode: { type: integer, minimum: -10000, maximum: 10000 }
+        serverRequestID: { type: string, format: uuid }
+        edgeRequestID: { type: string, format: uuid }
     AppAttestKeyID:
       type: string
       minLength: 40

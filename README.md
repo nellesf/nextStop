@@ -47,6 +47,14 @@ staging secret. A
 separate daily OSM projection imports supported chains from cached Geofabrik PBF
 extracts and enforces the exact 500 m restaurant predicate.
 
+The iPhone includes voluntary error reporting with a free-text description and an
+initially unchecked option to attach sanitized technical logs. Reports are sent
+only after explicit submission, can be withdrawn in the app, and expire after
+30 days with scheduled server cleanup. Search recovery remains silent. The report
+flow includes localized privacy information and requires genuine controller/contact
+configuration plus the matching backend deployment and public disclosures before
+it can receive reports.
+
 ## Non-negotiable product rules
 
 - The selected power-specific candidate navigation coordinate must be at most 5 km
@@ -91,7 +99,8 @@ iPhone + CarPlay
   MapKit route + exact per-candidate driving distance
   App Attest + memory-only short-lived search token
               |
-              | TLS; route geometry + search criteria only
+              | TLS; search route geometry + criteria
+              | separate, explicitly submitted support reports
               v
 Modular backend
   versioned HTTP API
@@ -101,6 +110,7 @@ Modular backend
   deterministic 200 m-edge / 500 m-diameter no-food campus projection
   versioned OSM restaurant ingestion + attribution
   cached search projection
+  isolated support intake + bounded retention/deletion
               |
               v
 PostgreSQL + PostGIS
@@ -164,6 +174,8 @@ requires Apple's managed capability and matching provisioning.
 - [POI source research](docs/research/poi-sources.md)
 - [Privacy data flow](docs/privacy/data-flow.md)
 - [App error reports and silent retries](docs/operations/app-diagnostics.md)
+- [User-submitted report operations and retention](docs/operations/user-error-reports.md)
+- [User-initiated reporting decision](docs/adr/0017-user-initiated-error-reports.md)
 - [Backend and proxy request diagnostics](docs/operations/request-diagnostics.md)
 - [Testing strategy](docs/testing.md)
 - [Deployment architecture](docs/deployment.md)

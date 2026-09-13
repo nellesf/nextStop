@@ -1,6 +1,7 @@
 services:
   database:
     image: postgis/postgis:17-3.5
+    command: ["postgres", "-c", "log_parameter_max_length_on_error=0", "-c", "log_statement=none"]
     restart: unless-stopped
     environment:
       POSTGRES_DB: nextstop
@@ -52,6 +53,7 @@ services:
       PGPASSWORD: ${POSTGRES_PASSWORD:?POSTGRES_PASSWORD is required}
       API_DATABASE_PASSWORD: ${API_DATABASE_PASSWORD:?API_DATABASE_PASSWORD is required}
       AUTH_DATABASE_PASSWORD: ${AUTH_DATABASE_PASSWORD:?AUTH_DATABASE_PASSWORD is required}
+      SUPPORT_DATABASE_PASSWORD: ${SUPPORT_DATABASE_PASSWORD:?SUPPORT_DATABASE_PASSWORD is required}
       WORKER_DATABASE_PASSWORD: ${WORKER_DATABASE_PASSWORD:?WORKER_DATABASE_PASSWORD is required}
     entrypoint: ["/bin/bash", "-euc"]
     command:
@@ -59,6 +61,7 @@ services:
         psql --host=database --username=nextstop_app --dbname=nextstop
         --variable=api_password="$${API_DATABASE_PASSWORD}"
         --variable=auth_password="$${AUTH_DATABASE_PASSWORD}"
+        --variable=support_password="$${SUPPORT_DATABASE_PASSWORD}"
         --variable=worker_password="$${WORKER_DATABASE_PASSWORD}"
         --file=/opt/nextstop/database-roles.sql
     volumes:
@@ -81,6 +84,7 @@ services:
         condition: service_completed_successfully
     environment:
       DATABASE_URL: postgresql://nextstop_api:${API_DATABASE_PASSWORD}@database:5432/nextstop
+      SUPPORT_DATABASE_URL: postgresql://nextstop_support:${SUPPORT_DATABASE_PASSWORD}@database:5432/nextstop
       SNAPSHOT_SIGNING_KEY: ${SNAPSHOT_SIGNING_KEY:?SNAPSHOT_SIGNING_KEY is required}
       SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:?SEARCH_ACCESS_TOKEN_SIGNING_KEY is required}
       ALLOW_LEGACY_STAGING_BEARER: ${ALLOW_LEGACY_STAGING_BEARER:-true}

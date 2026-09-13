@@ -10,6 +10,8 @@ import { PostGISCandidateSearch } from "./application/postgis-candidate-search.j
 import { SignedPaginationCodec } from "./application/signed-pagination.js";
 import { createDatabasePool } from "./persistence/database.js";
 import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
+import { UserErrorReports, userErrorReportLimits } from "./application/user-error-reports.js";
+import { PostgresUserErrorReportRepository } from "./persistence/postgres-user-error-reports.js";
 
 function parsePort(value: string | undefined): number {
   if (value === undefined) {
@@ -65,10 +67,35 @@ const searchAuthenticator =
     ? new RejectingSearchAuthenticator()
     : new CompositeSearchAuthenticator(searchAuthenticators);
 
+const supportDatabaseURL = process.env.SUPPORT_DATABASE_URL;
+const supportPool = supportDatabaseURL === undefined ? undefined : createDatabasePool(supportDatabaseURL, {
+  applicationName: "nextstop-support", maxConnections: 4,
+  queryTimeoutMilliseconds: 5_000, statementTimeoutMilliseconds: 5_000,
+});
+const reportRepository = supportPool === undefined ? undefined : new PostgresUserErrorReportRepository(supportPool);
+if (reportRepository !== undefined) await reportRepository.purge(new Date());
+// Purge independent of submissions; startup purges overdue data before serving requests.
+let purgeActive = false;
+const purgeTimer = reportRepository === undefined ? undefined : setInterval(() => {
+  if (purgeActive) return;
+  purgeActive = true;
+  void reportRepository.purge(new Date()).catch(() => {
+    process.stderr.write('{"event":"user_error_report_purge_failed"}\n');
+  }).finally(() => { purgeActive = false; });
+}, userErrorReportLimits.purgeIntervalMilliseconds);
+purgeTimer?.unref();
+
 const app = createApp({
   ...(candidateSearch === undefined ? {} : { candidateSearch }),
   searchAuthenticator,
   diagnostics: { sink: writeRequestDiagnostic },
+  ...(reportRepository === undefined ? {} : { userErrorReports: new UserErrorReports(reportRepository) }),
+  ...(accessTokenCodec === undefined ? {} : { reportAuthenticator: new AccessTokenAuthenticator(accessTokenCodec) }),
+});
+
+app.addHook("onClose", async () => {
+  if (purgeTimer !== undefined) clearInterval(purgeTimer);
+  await supportPool?.end();
 });
 
 if (pool !== undefined) {

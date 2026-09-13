@@ -217,3 +217,14 @@ sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
   -f deploy/gcp-vm/compose.yaml exec -T worker node -e \
   "import('pg').then(async({Client})=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();console.log((await c.query('select current_user')).rows);await c.end()})"
 ```
+
+## Voluntary support reports
+
+The installer generates `SUPPORT_DATABASE_PASSWORD` and grants the dedicated
+`nextstop_support` role access only to `nextstop.user_error_reports`. The API uses
+`SUPPORT_DATABASE_URL` separately from its read-only search pool. HTTPS permits
+only POST and DELETE on the exact `/v1/error-reports` path with a 128 KiB body limit
+and an independent rate limit. Report retention runs on startup and every
+15 minutes, independently of submissions. Before enabling the iPhone release,
+complete the real controller/privacy configuration and follow the
+[report deployment and administration runbook](../../docs/operations/user-error-reports.md).

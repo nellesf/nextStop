@@ -5,6 +5,12 @@ candidate API.
 
 ## Current behavior
 
+- Voluntary `POST /v1/error-reports` accepts user text and explicitly selected,
+  allowlisted diagnostics through a dedicated support database pool. Proof-based
+  DELETE permits withdrawal even when App Attest is unavailable. See the
+  [support runbook](../docs/operations/user-error-reports.md) for retention,
+  deployment and authenticated local administration.
+
 - `POST /v1/charging-parks/search` validates the accepted request contract.
 - Candidate search requires either a short-lived server-signed access token or
   the explicitly enabled private-staging compatibility bearer; `/health` remains

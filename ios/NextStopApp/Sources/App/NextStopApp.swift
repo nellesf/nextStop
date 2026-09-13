@@ -27,7 +27,9 @@ struct NextStopApp: App {
         rideIntentRouter: rideIntentRouter,
         directionsRequestGate: directionsRequestGate,
         candidatePageSearcher: appDelegate.candidatePageSearcher,
-        diagnosticsStore: appDelegate.diagnosticsStore
+        diagnosticsStore: appDelegate.diagnosticsStore,
+        errorReportSender: appDelegate.errorReportSender,
+        errorReportReceipts: appDelegate.errorReportReceipts
       )
     }
     .modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])

@@ -33,17 +33,23 @@ struct ProfileListView: View {
   private let directionsRequestGate: DirectionsRequestGate
   private let candidatePageSearcher: any CandidatePageSearching
   private let diagnosticsStore: AppDiagnosticsStore
+  private let errorReportSender: any UserErrorReportSending
+  private let errorReportReceipts: UserErrorReportReceiptStore
 
   init(
     rideIntentRouter: RideIntentRouter,
     directionsRequestGate: DirectionsRequestGate,
     candidatePageSearcher: any CandidatePageSearching,
-    diagnosticsStore: AppDiagnosticsStore
+    diagnosticsStore: AppDiagnosticsStore,
+    errorReportSender: any UserErrorReportSending,
+    errorReportReceipts: UserErrorReportReceiptStore
   ) {
     self.rideIntentRouter = rideIntentRouter
     self.directionsRequestGate = directionsRequestGate
     self.candidatePageSearcher = candidatePageSearcher
     self.diagnosticsStore = diagnosticsStore
+    self.errorReportSender = errorReportSender
+    self.errorReportReceipts = errorReportReceipts
   }
 
   var body: some View {
@@ -94,7 +100,11 @@ struct ProfileListView: View {
       }
       .sheet(isPresented: $showsDataSources) {
         NavigationStack {
-          DataSourcesView(diagnosticsStore: diagnosticsStore)
+          DataSourcesView(
+            diagnosticsStore: diagnosticsStore,
+            errorReportSender: errorReportSender,
+            errorReportReceipts: errorReportReceipts
+          )
             .toolbar {
               ToolbarItem(placement: .confirmationAction) {
                 Button("action.done") {

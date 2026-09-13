@@ -25,6 +25,7 @@ ensure_secret() {
 ensure_secret POSTGRES_PASSWORD
 ensure_secret API_DATABASE_PASSWORD
 ensure_secret AUTH_DATABASE_PASSWORD
+ensure_secret SUPPORT_DATABASE_PASSWORD
 ensure_secret WORKER_DATABASE_PASSWORD
 ensure_secret SNAPSHOT_SIGNING_KEY
 ensure_secret SEARCH_ACCESS_TOKEN_SIGNING_KEY

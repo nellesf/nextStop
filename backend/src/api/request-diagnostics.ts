@@ -1,4 +1,5 @@
 import { performance } from "node:perf_hooks";
+import { InvalidUserErrorReportError, UserErrorReportCapacityError, UserErrorReportConflictError, UserErrorReportWithdrawnError } from "../application/user-error-reports.js";
 
 import type { FastifyInstance, FastifyRequest } from "fastify";
 
@@ -19,6 +20,7 @@ export type DiagnosticService = "candidate_api" | "auth_api";
 export type DiagnosticRoute =
   | "health"
   | "charging_park_search"
+  | "user_error_report"
   | "app_attest_challenge"
   | "app_attest_attestation"
   | "app_attest_assertion"
@@ -124,6 +126,8 @@ function diagnosticRoute(route: string | undefined): DiagnosticRoute {
       return "health";
     case "/v1/charging-parks/search":
       return "charging_park_search";
+    case "/v1/error-reports":
+      return "user_error_report";
     case "/v1/auth/app-attest/challenge":
       return "app_attest_challenge";
     case "/v1/auth/app-attest/attest":
@@ -162,6 +166,9 @@ function categoryForStatus(status: number): DiagnosticErrorCategory {
 }
 
 function categoryForError(error: unknown): DiagnosticErrorCategory {
+  if (error instanceof InvalidUserErrorReportError) return "invalid_request";
+  if (error instanceof UserErrorReportConflictError || error instanceof UserErrorReportWithdrawnError) return "conflict";
+  if (error instanceof UserErrorReportCapacityError) return "capacity_limited";
   if (error instanceof NoProjectionAvailableError) {
     return "projection_unavailable";
   }
