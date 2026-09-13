@@ -21,6 +21,10 @@ import {
 } from "./search-request-validation.js";
 import { problemSchema, searchRequestSchema, searchResponseSchema } from "./schemas.js";
 import { searchRequestLimits } from "./search-request-limits.js";
+import {
+  installRequestDiagnostics,
+  type RequestDiagnosticOptions,
+} from "./request-diagnostics.js";
 
 interface AppDependencies {
   readonly candidateSearch?: CandidateSearching;
@@ -28,6 +32,8 @@ interface AppDependencies {
   readonly searchAuthenticator?: SearchAuthenticating;
   readonly searchBearerToken?: string;
   readonly maximumConcurrentSearches?: number;
+  readonly makeRequestId?: () => string;
+  readonly diagnostics?: RequestDiagnosticOptions;
 }
 
 export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
@@ -43,6 +49,8 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
   );
   const app = Fastify({
     logger: false,
+    requestIdHeader: false,
+    genReqId: () => (dependencies.makeRequestId ?? randomUUID)(),
     bodyLimit: searchRequestLimits.maximumBodyBytes,
     ajv: {
       customOptions: {
@@ -52,8 +60,10 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
       },
     },
   });
+  const diagnostics = installRequestDiagnostics(app, "candidate_api", dependencies.diagnostics);
 
   app.setErrorHandler((error, request, reply) => {
+    diagnostics.recordError(request, error);
     const errorId = makeErrorId();
 
     if (isFastifyValidationError(error) || error instanceof InvalidSearchRequestError) {
@@ -106,7 +116,6 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
       });
     }
 
-    request.log.error({ errorId, err: error }, "Request failed");
     return reply.status(500).type("application/problem+json").send({
       type: "urn:nextstop:error:internal",
       title: "Internal server error",

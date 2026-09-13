@@ -54,10 +54,13 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
   private let candidateSearcher: any RideCandidateSearching
   private let makeRequestID: () -> UUID
 
-  convenience init(candidatePageSearcher: any CandidatePageSearching) {
+  convenience init(
+    candidatePageSearcher: any CandidatePageSearching,
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()
+  ) {
     let routePlanner = RetryingRoutePlanner(
       base: RateLimitedRoutePlanner(
-        base: MapKitRoutePlanner(),
+        base: MapKitRoutePlanner(diagnostics: diagnostics),
         gate: DirectionsRequestGate()
       )
     )

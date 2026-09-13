@@ -2,6 +2,8 @@ import Foundation
 import SwiftUI
 
 struct DataSourcesView: View {
+  let diagnosticsStore: AppDiagnosticsStore
+
   var body: some View {
     ScrollView {
       VStack(spacing: 12) {
@@ -70,6 +72,22 @@ struct DataSourcesView: View {
           Text("licenses.maps.description")
             .font(.subheadline)
             .foregroundStyle(.secondary)
+        }
+
+        sourceCard("privacy.diagnostics.title", systemImage: "hand.raised") {
+          Text("privacy.diagnostics.backend")
+            .font(.subheadline)
+            .foregroundStyle(.secondary)
+        }
+
+        NavigationLink {
+          DiagnosticsView(store: diagnosticsStore)
+        } label: {
+          Label("diagnostics.title", systemImage: "stethoscope")
+            .frame(maxWidth: .infinity, alignment: .leading)
+            .padding(16)
+            .background(Color(.secondarySystemGroupedBackground))
+            .clipShape(RoundedRectangle(cornerRadius: 17, style: .continuous))
         }
       }
       .padding(16)

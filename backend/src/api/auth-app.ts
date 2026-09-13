@@ -18,6 +18,10 @@ import {
   appAttestChallengeResponseSchema,
   problemSchema,
 } from "./schemas.js";
+import {
+  installRequestDiagnostics,
+  type RequestDiagnosticOptions,
+} from "./request-diagnostics.js";
 
 interface AuthAppDependencies {
   readonly appAttestAuthentication?: AppAttestAuthenticating;
@@ -26,6 +30,8 @@ interface AuthAppDependencies {
   readonly maximumGlobalChallengesPerMinute?: number;
   readonly maximumGlobalProofsPerMinute?: number;
   readonly nowMilliseconds?: () => number;
+  readonly makeRequestId?: () => string;
+  readonly diagnostics?: RequestDiagnosticOptions;
 }
 
 export function createAuthApp(dependencies: AuthAppDependencies = {}): FastifyInstance {
@@ -46,6 +52,8 @@ export function createAuthApp(dependencies: AuthAppDependencies = {}): FastifyIn
   );
   const app = Fastify({
     logger: false,
+    requestIdHeader: false,
+    genReqId: () => (dependencies.makeRequestId ?? randomUUID)(),
     bodyLimit: 192 * 1_024,
     ajv: {
       customOptions: {
@@ -55,8 +63,10 @@ export function createAuthApp(dependencies: AuthAppDependencies = {}): FastifyIn
       },
     },
   });
+  const diagnostics = installRequestDiagnostics(app, "auth_api", dependencies.diagnostics);
 
   app.setErrorHandler((error, request, reply) => {
+    diagnostics.recordError(request, error);
     const errorId = makeErrorId();
     if (error instanceof InvalidAppAttestRequestError || isFastifyValidationError(error)) {
       return reply.status(400).type("application/problem+json").send({
@@ -107,7 +117,6 @@ export function createAuthApp(dependencies: AuthAppDependencies = {}): FastifyIn
         errorId,
       });
     }
-    request.log.error({ errorId, err: error }, "Authentication request failed");
     return reply.status(500).type("application/problem+json").send({
       type: "urn:nextstop:error:internal",
       title: "Internal server error",

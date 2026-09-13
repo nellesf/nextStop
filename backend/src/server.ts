@@ -9,6 +9,7 @@ import {
 import { PostGISCandidateSearch } from "./application/postgis-candidate-search.js";
 import { SignedPaginationCodec } from "./application/signed-pagination.js";
 import { createDatabasePool } from "./persistence/database.js";
+import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
 
 function parsePort(value: string | undefined): number {
   if (value === undefined) {
@@ -67,6 +68,7 @@ const searchAuthenticator =
 const app = createApp({
   ...(candidateSearch === undefined ? {} : { candidateSearch }),
   searchAuthenticator,
+  diagnostics: { sink: writeRequestDiagnostic },
 });
 
 if (pool !== undefined) {

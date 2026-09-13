@@ -318,6 +318,11 @@ protocol ApplePlaceResolving {
 final class MapKitApplePlaceResolver: ApplePlaceResolving {
   private let maximumRestaurantMatchDistance: CLLocationDistance = 125
   private var chargingPlaceCache: [String: MKMapItem] = [:]
+  private let measurement: AppDiagnosticMeasurement
+
+  init(diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()) {
+    measurement = AppDiagnosticMeasurement(recorder: diagnostics)
+  }
 
   func resolveChargingPlace(
     park: ChargingPark,
@@ -488,7 +493,7 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       radius: AppleChargingPlaceMatchPolicy.maximumExactAddressDistanceMeters
     )
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
-    return try await MKLocalSearch(request: request).start().mapItems
+    return try await searchItems(using: MKLocalSearch(request: request))
   }
 
   private func searchChargingItems(
@@ -504,7 +509,13 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     )
     request.resultTypes = .pointOfInterest
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.evCharger])
-    return try await MKLocalSearch(request: request).start().mapItems
+    return try await searchItems(using: MKLocalSearch(request: request))
+  }
+
+  private func searchItems(using search: MKLocalSearch) async throws -> [MKMapItem] {
+    try await measurement.perform(.placeLookup) {
+      try await search.start().mapItems
+    }
   }
 
   private func chargingSearchCenters(
@@ -586,7 +597,7 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     request.resultTypes = .pointOfInterest
     request.pointOfInterestFilter = MKPointOfInterestFilter(including: [.restaurant])
     let expectedName = normalized(foodPOI.name)
-    return try await MKLocalSearch(request: request).start().mapItems
+    return try await searchItems(using: MKLocalSearch(request: request))
       .compactMap { item -> (item: MKMapItem, distance: CLLocationDistance)? in
         guard let itemLocation = mapItemLocation(item) else {
           return nil

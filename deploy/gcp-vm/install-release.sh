@@ -42,6 +42,15 @@ chmod 600 "$environment_file"
 
 ln -sfn "$release_directory" /opt/nextstop/current
 
+install -m 644 "$release_directory/deploy/gcp-vm/nginx-request-diagnostics.conf" \
+  /etc/nginx/nextstop-request-diagnostics.conf
+install -m 644 "$release_directory/deploy/gcp-vm/nginx-diagnostics.logrotate" \
+  /etc/logrotate.d/nextstop-diagnostics
+install -d -m 750 -o www-data -g adm /var/log/nextstop
+touch /var/log/nextstop/nginx-errors.jsonl
+chown www-data:adm /var/log/nextstop/nginx-errors.jsonl
+chmod 640 /var/log/nextstop/nginx-errors.jsonl
+
 if [[ -f /etc/letsencrypt/live/api.nextstop.tech/fullchain.pem ]]; then
   install -m 644 "$release_directory/deploy/gcp-vm/nginx-https.conf" \
     /etc/nginx/sites-available/nextstop

@@ -32,15 +32,18 @@ struct ProfileListView: View {
   @State private var showsError = false
   private let directionsRequestGate: DirectionsRequestGate
   private let candidatePageSearcher: any CandidatePageSearching
+  private let diagnosticsStore: AppDiagnosticsStore
 
   init(
     rideIntentRouter: RideIntentRouter,
     directionsRequestGate: DirectionsRequestGate,
-    candidatePageSearcher: any CandidatePageSearching
+    candidatePageSearcher: any CandidatePageSearching,
+    diagnosticsStore: AppDiagnosticsStore
   ) {
     self.rideIntentRouter = rideIntentRouter
     self.directionsRequestGate = directionsRequestGate
     self.candidatePageSearcher = candidatePageSearcher
+    self.diagnosticsStore = diagnosticsStore
   }
 
   var body: some View {
@@ -91,7 +94,7 @@ struct ProfileListView: View {
       }
       .sheet(isPresented: $showsDataSources) {
         NavigationStack {
-          DataSourcesView()
+          DataSourcesView(diagnosticsStore: diagnosticsStore)
             .toolbar {
               ToolbarItem(placement: .confirmationAction) {
                 Button("action.done") {
@@ -107,14 +110,16 @@ struct ProfileListView: View {
           RidePreparationView(
             profile: profile,
             directionsRequestGate: directionsRequestGate,
-            candidatePageSearcher: candidatePageSearcher
+            candidatePageSearcher: candidatePageSearcher,
+            diagnostics: diagnosticsStore
           )
           .toolbar(.visible, for: .navigationBar)
         case .destination(let destination):
           RidePreparationView(
             destination: destination,
             directionsRequestGate: directionsRequestGate,
-            candidatePageSearcher: candidatePageSearcher
+            candidatePageSearcher: candidatePageSearcher,
+            diagnostics: diagnosticsStore
           )
           .toolbar(.visible, for: .navigationBar)
         }

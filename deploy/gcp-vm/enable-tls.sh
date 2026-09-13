@@ -20,6 +20,14 @@ certbot certonly \
 
 install -m 644 "$release_directory/deploy/gcp-vm/nginx-https.conf" \
   /etc/nginx/sites-available/nextstop
+install -m 644 "$release_directory/deploy/gcp-vm/nginx-request-diagnostics.conf" \
+  /etc/nginx/nextstop-request-diagnostics.conf
+install -m 644 "$release_directory/deploy/gcp-vm/nginx-diagnostics.logrotate" \
+  /etc/logrotate.d/nextstop-diagnostics
+install -d -m 750 -o www-data -g adm /var/log/nextstop
+touch /var/log/nextstop/nginx-errors.jsonl
+chown www-data:adm /var/log/nextstop/nginx-errors.jsonl
+chmod 640 /var/log/nextstop/nginx-errors.jsonl
 install -d -m 755 /etc/letsencrypt/renewal-hooks/deploy
 install -m 755 "$release_directory/deploy/gcp-vm/reload-nginx.sh" \
   /etc/letsencrypt/renewal-hooks/deploy/reload-nginx

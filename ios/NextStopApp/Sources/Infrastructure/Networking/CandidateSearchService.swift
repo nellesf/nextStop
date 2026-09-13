@@ -85,73 +85,255 @@ protocol CandidatePageSearching: AnyObject {
 
 @MainActor
 final class HTTPCandidateSearchService: CandidatePageSearching {
+  typealias Load = @MainActor (URLRequest) async throws -> (Data, URLResponse)
+  typealias Now = @MainActor () -> Date
+  typealias Sleep = @MainActor (TimeInterval) async throws -> Void
+
   private static let maximumResponseBytes = 2 * 1_024 * 1_024
+  private static let transientRetryDelay: TimeInterval = 0.4
+  private static let maximumRetryAfter: TimeInterval = 2
   private let baseURL: URL?
   private let accessTokenProvider: (any SearchAccessTokenProviding)?
-  private let session: URLSession
+  private let load: Load
+  private let now: Now
+  private let sleep: Sleep
+  private let diagnostics: any AppDiagnosticRecording
   private let encoder: JSONEncoder
   private let decoder: JSONDecoder
 
   init(
     baseURL: URL?,
     accessTokenProvider: (any SearchAccessTokenProviding)?,
-    session: URLSession = .shared
+    session: URLSession = .shared,
+    load: Load? = nil,
+    now: @escaping Now = Date.init,
+    sleep: @escaping Sleep = { seconds in
+      try await Task.sleep(for: .milliseconds(Int64((seconds * 1_000).rounded(.up))))
+    },
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()
   ) {
     self.baseURL = baseURL
     self.accessTokenProvider = accessTokenProvider
-    self.session = session
+    self.load = load ?? { request in try await session.data(for: request) }
+    self.now = now
+    self.sleep = sleep
+    self.diagnostics = diagnostics
     encoder = JSONEncoder()
     decoder = JSONDecoder()
   }
 
   func search(request: RouteSearchRequest) async throws -> CandidateSearchPage {
+    try Task.checkCancellation()
     let token = try await accessToken(forceRefresh: false)
-    return try await search(request: request, accessToken: token, mayRefreshToken: true)
+    // Reuse the exact signed page request throughout recovery, changing only the
+    // authorization header if the one permitted token refresh is needed.
+    var urlRequest = try makeURLRequest(request: request, accessToken: token)
+    var mayRefreshToken = true
+    var mayRetryTransientFailure = true
+    var attempt = 0
+
+    while true {
+      try Task.checkCancellation()
+      attempt += 1
+      let startedAt = now()
+      let data: Data
+      let response: URLResponse
+      do {
+        (data, response) = try await load(urlRequest)
+        try Task.checkCancellation()
+      } catch {
+        if Self.isCancellation(error) { throw CancellationError() }
+        let retry = mayRetryTransientFailure && Self.isTransient(error)
+        let nsError = error as NSError
+        let isURLError = nsError.domain == NSURLErrorDomain
+        record(
+          outcome: retry ? .retryScheduled : .failure,
+          category: Self.category(for: error),
+          startedAt: startedAt,
+          attempt: attempt,
+          errorDomain: isURLError ? .url : .unknown,
+          errorCode: isURLError ? nsError.code : nil
+        )
+        guard retry else { throw CandidateSearchServiceError.unavailable }
+        mayRetryTransientFailure = false
+        try await waitBeforeRetry(seconds: Self.transientRetryDelay)
+        continue
+      }
+      guard let httpResponse = response as? HTTPURLResponse else {
+        record(
+          outcome: .failure, category: .invalidResponse, startedAt: startedAt, attempt: attempt)
+        throw CandidateSearchServiceError.invalidResponse
+      }
+      guard data.count <= Self.maximumResponseBytes else {
+        record(
+          outcome: .failure, category: .invalidResponse, startedAt: startedAt,
+          attempt: attempt, response: httpResponse
+        )
+        throw CandidateSearchServiceError.invalidResponse
+      }
+      if httpResponse.statusCode == 401 {
+        record(
+          outcome: mayRefreshToken ? .retryScheduled : .failure,
+          category: .authentication, startedAt: startedAt,
+          attempt: attempt, response: httpResponse
+        )
+        guard mayRefreshToken else { throw CandidateSearchServiceError.authenticationUnavailable }
+        mayRefreshToken = false
+        let refreshedToken = try await accessToken(forceRefresh: true)
+        urlRequest.setValue("Bearer \(refreshedToken)", forHTTPHeaderField: "Authorization")
+        continue
+      }
+      guard httpResponse.statusCode == 200 else {
+        let error = Self.error(for: httpResponse.statusCode, data: data, decoder: decoder)
+        let delay =
+          mayRetryTransientFailure && Self.isTransient(httpResponse, error: error)
+          ? retryDelay(for: httpResponse) : nil
+        record(
+          outcome: delay == nil ? .failure : .retryScheduled,
+          category: httpResponse.statusCode == 429 ? .throttled : .http,
+          startedAt: startedAt, attempt: attempt, response: httpResponse
+        )
+        guard let delay else { throw error }
+        mayRetryTransientFailure = false
+        try await waitBeforeRetry(seconds: delay)
+        continue
+      }
+      let page: CandidateSearchPage
+      do {
+        page = try decoder.decode(CandidateSearchResponseDTO.self, from: data).domainPage()
+      } catch {
+        record(
+          outcome: .failure, category: .invalidResponse, startedAt: startedAt,
+          attempt: attempt, response: httpResponse
+        )
+        throw CandidateSearchServiceError.invalidResponse
+      }
+      if attempt > 1 {
+        record(
+          outcome: .recovered, category: .http, startedAt: startedAt,
+          attempt: attempt, response: httpResponse
+        )
+      }
+      return page
+    }
   }
 
-  private func search(
-    request: RouteSearchRequest,
-    accessToken: String,
-    mayRefreshToken: Bool
-  ) async throws -> CandidateSearchPage {
-    let urlRequest = try makeURLRequest(request: request, accessToken: accessToken)
+  private func waitBeforeRetry(seconds: TimeInterval) async throws {
+    try Task.checkCancellation()
+    try await sleep(seconds)
+    try Task.checkCancellation()
+  }
 
-    let data: Data
-    let response: URLResponse
-    do {
-      (data, response) = try await session.data(for: urlRequest)
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch {
-      throw CandidateSearchServiceError.unavailable
+  private func retryDelay(for response: HTTPURLResponse) -> TimeInterval? {
+    guard let header = response.value(forHTTPHeaderField: "Retry-After") else {
+      return Self.transientRetryDelay
     }
-    guard let httpResponse = response as? HTTPURLResponse else {
-      throw CandidateSearchServiceError.invalidResponse
-    }
-    guard data.count <= Self.maximumResponseBytes else {
-      throw CandidateSearchServiceError.invalidResponse
-    }
-    if httpResponse.statusCode == 401 {
-      guard mayRefreshToken else {
-        throw CandidateSearchServiceError.authenticationUnavailable
+    let value = header.trimmingCharacters(in: .whitespacesAndNewlines)
+    guard value.utf8.count <= 64 else { return nil }
+    let requestedDelay: TimeInterval
+    if !value.isEmpty, value.utf8.allSatisfy({ (48...57).contains($0) }),
+      let seconds = TimeInterval(value), seconds.isFinite
+    {
+      requestedDelay = seconds
+    } else {
+      let formatter = DateFormatter()
+      formatter.locale = Locale(identifier: "en_US_POSIX")
+      formatter.timeZone = TimeZone(secondsFromGMT: 0)
+      formatter.dateFormat = "EEE, dd MMM yyyy HH:mm:ss 'GMT'"
+      formatter.isLenient = false
+      guard let retryAt = formatter.date(from: value), formatter.string(from: retryAt) == value
+      else {
+        return nil
       }
-      let refreshedToken = try await self.accessToken(forceRefresh: true)
-      return try await search(
-        request: request,
-        accessToken: refreshedToken,
-        mayRefreshToken: false
+      requestedDelay = max(0, retryAt.timeIntervalSince(now()))
+    }
+    // Never shorten a server-requested backoff just to fit the interactive cap.
+    guard requestedDelay.isFinite, requestedDelay <= Self.maximumRetryAfter else { return nil }
+    return max(Self.transientRetryDelay, requestedDelay)
+  }
+
+  private static func isTransient(_ response: HTTPURLResponse, error: CandidateSearchServiceError)
+    -> Bool
+  {
+    switch response.statusCode {
+    case 408, 500, 502, 504:
+      true
+    case 429, 503:
+      error == .unavailable
+    default:
+      false
+    }
+  }
+
+  private static func isCancellation(_ error: Error) -> Bool {
+    if error is CancellationError { return true }
+    let nsError = error as NSError
+    return nsError.domain == NSURLErrorDomain && nsError.code == URLError.cancelled.rawValue
+  }
+
+  private static func isTransient(_ error: Error) -> Bool {
+    let nsError = error as NSError
+    guard nsError.domain == NSURLErrorDomain else { return false }
+    return switch URLError.Code(rawValue: nsError.code) {
+    case .timedOut, .networkConnectionLost, .cannotConnectToHost, .dnsLookupFailed,
+      .notConnectedToInternet:
+      true
+    default:
+      false
+    }
+  }
+
+  private static func category(for error: Error) -> AppDiagnosticCategory {
+    let nsError = error as NSError
+    guard nsError.domain == NSURLErrorDomain else { return .unknown }
+    return switch URLError.Code(rawValue: nsError.code) {
+    case .timedOut: .networkTimeout
+    case .networkConnectionLost: .networkLost
+    case .notConnectedToInternet: .offline
+    case .cannotConnectToHost, .dnsLookupFailed: .connection
+    default: .unknown
+    }
+  }
+
+  private func record(
+    outcome: AppDiagnosticOutcome,
+    category: AppDiagnosticCategory,
+    startedAt: Date,
+    attempt: Int,
+    response: HTTPURLResponse? = nil,
+    errorDomain: AppDiagnosticErrorDomain? = nil,
+    errorCode: Int? = nil
+  ) {
+    let timestamp = now()
+    diagnostics.record(
+      AppDiagnosticEvent(
+        timestamp: timestamp,
+        operation: .candidateSearch,
+        outcome: outcome,
+        category: category,
+        durationMilliseconds: Self.durationMilliseconds(from: startedAt, to: timestamp),
+        attempt: attempt,
+        httpStatus: response?.statusCode,
+        errorDomain: errorDomain,
+        errorCode: errorCode,
+        serverRequestID: response?.value(forHTTPHeaderField: "X-Request-ID").flatMap(
+          UUID.init(uuidString:)),
+        edgeRequestID: Self.edgeRequestID(response?.value(forHTTPHeaderField: "X-Edge-Request-ID"))
       )
-    }
-    guard httpResponse.statusCode == 200 else {
-      throw Self.error(for: httpResponse.statusCode, data: data, decoder: decoder)
-    }
-    do {
-      return try decoder.decode(CandidateSearchResponseDTO.self, from: data).domainPage()
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch {
-      throw CandidateSearchServiceError.invalidResponse
-    }
+    )
+  }
+
+  private static func edgeRequestID(_ value: String?) -> UUID? {
+    guard let value else { return nil }
+    let bytes = Array(value.utf8)
+    guard bytes.count == 32,
+      bytes.allSatisfy({
+        (48...57).contains($0) || (65...70).contains($0) || (97...102).contains($0)
+      })
+    else { return nil }
+    let groups = [0..<8, 8..<12, 12..<16, 16..<20, 20..<32]
+    let uuid = groups.map { String(decoding: bytes[$0], as: UTF8.self) }.joined(separator: "-")
+    return UUID(uuidString: uuid)
   }
 
   func makeURLRequest(
@@ -179,22 +361,34 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
   }
 
   private func accessToken(forceRefresh: Bool) async throws -> String {
-    guard let accessTokenProvider else {
-      throw CandidateSearchServiceError.invalidConfiguration
-    }
+    let startedAt = now()
     do {
+      guard let accessTokenProvider else {
+        throw CandidateSearchServiceError.invalidConfiguration
+      }
       let value = try await accessTokenProvider.accessToken(forceRefresh: forceRefresh)
+      try Task.checkCancellation()
       guard let token = Self.validatedAccessToken(value) else {
         throw CandidateSearchServiceError.authenticationUnavailable
       }
       return token
-    } catch is CancellationError {
-      throw CancellationError()
-    } catch let error as CandidateSearchServiceError {
-      throw error
     } catch {
-      throw CandidateSearchServiceError.authenticationUnavailable
+      if Self.isCancellation(error) { throw CancellationError() }
+      let timestamp = now()
+      diagnostics.record(
+        AppDiagnosticEvent(
+          timestamp: timestamp, operation: .authentication, outcome: .failure,
+          category: .authentication,
+          durationMilliseconds: Self.durationMilliseconds(from: startedAt, to: timestamp)
+        )
+      )
+      throw error as? CandidateSearchServiceError ?? .authenticationUnavailable
     }
+  }
+
+  private static func durationMilliseconds(from startedAt: Date, to timestamp: Date) -> Int {
+    let elapsed = (timestamp.timeIntervalSince(startedAt) * 1_000).rounded()
+    return elapsed.isFinite && elapsed >= 0 && elapsed < Double(Int.max) ? Int(elapsed) : 0
   }
 
   static func configuredBaseURL(bundle: Bundle = .main) -> URL? {

@@ -26,7 +26,8 @@ struct NextStopApp: App {
       ProfileListView(
         rideIntentRouter: rideIntentRouter,
         directionsRequestGate: directionsRequestGate,
-        candidatePageSearcher: appDelegate.candidatePageSearcher
+        candidatePageSearcher: appDelegate.candidatePageSearcher,
+        diagnosticsStore: appDelegate.diagnosticsStore
       )
     }
     .modelContainer(for: [StoredProfile.self, StoredDestinationRecord.self])

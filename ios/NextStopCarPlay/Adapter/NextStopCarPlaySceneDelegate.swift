@@ -41,6 +41,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     templateTransitionGate.reset()
     if searchService == nil, let dependencies {
       searchService = makeSearchService(using: dependencies)
+      configurePlaceResolver(using: dependencies)
     }
     showProfiles(animated: false)
   }
@@ -50,6 +51,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     self.dependencies = dependencies
     if dependenciesChanged || searchService == nil {
       searchService = makeSearchService(using: dependencies)
+      configurePlaceResolver(using: dependencies)
     }
   }
 
@@ -601,11 +603,18 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
   }
 
+  private func configurePlaceResolver(using dependencies: NextStopSceneDependencies) {
+    placeResolver = CarPlayResultPlaceResolver(
+      placeResolver: MapKitApplePlaceResolver(diagnostics: dependencies.diagnostics)
+    )
+  }
+
   private func makeSearchService(
     using dependencies: NextStopSceneDependencies
   ) -> any CarPlayRideSearchExecuting {
     return CarPlayRideSearchService(
-      candidatePageSearcher: dependencies.candidatePageSearcher
+      candidatePageSearcher: dependencies.candidatePageSearcher,
+      diagnostics: dependencies.diagnostics
     )
   }
 

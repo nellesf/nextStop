@@ -163,6 +163,8 @@ requires Apple's managed capability and matching provisioning.
 - [Charging data source research](docs/research/charging-data-sources.md)
 - [POI source research](docs/research/poi-sources.md)
 - [Privacy data flow](docs/privacy/data-flow.md)
+- [App error reports and silent retries](docs/operations/app-diagnostics.md)
+- [Backend and proxy request diagnostics](docs/operations/request-diagnostics.md)
 - [Testing strategy](docs/testing.md)
 - [Deployment architecture](docs/deployment.md)
 - [Google Cloud single-VM staging](deploy/gcp-vm/README.md)

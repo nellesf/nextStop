@@ -13,12 +13,14 @@ struct RidePreparationView: View {
   init(
     profile: UserProfile,
     directionsRequestGate: DirectionsRequestGate,
-    candidatePageSearcher: any CandidatePageSearching
+    candidatePageSearcher: any CandidatePageSearching,
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()
   ) {
     self.init(
       draft: RideSearchDraft(profile: profile),
       directionsRequestGate: directionsRequestGate,
-      candidatePageSearcher: candidatePageSearcher
+      candidatePageSearcher: candidatePageSearcher,
+      diagnostics: diagnostics
     )
   }
 
@@ -26,12 +28,14 @@ struct RidePreparationView: View {
   init(
     destination: SavedDestination,
     directionsRequestGate: DirectionsRequestGate,
-    candidatePageSearcher: any CandidatePageSearching
+    candidatePageSearcher: any CandidatePageSearching,
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()
   ) {
     self.init(
       draft: RideSearchDraft(destination: destination),
       directionsRequestGate: directionsRequestGate,
-      candidatePageSearcher: candidatePageSearcher
+      candidatePageSearcher: candidatePageSearcher,
+      diagnostics: diagnostics
     )
   }
 
@@ -39,11 +43,12 @@ struct RidePreparationView: View {
   private init(
     draft: RideSearchDraft,
     directionsRequestGate: DirectionsRequestGate,
-    candidatePageSearcher: any CandidatePageSearching
+    candidatePageSearcher: any CandidatePageSearching,
+    diagnostics: any AppDiagnosticRecording
   ) {
     let routePlanner = RetryingRoutePlanner(
       base: RateLimitedRoutePlanner(
-        base: MapKitRoutePlanner(),
+        base: MapKitRoutePlanner(diagnostics: diagnostics),
         gate: directionsRequestGate
       )
     )
@@ -60,7 +65,7 @@ struct RidePreparationView: View {
       )
     )
     navigationLauncher = AppleMapsLauncher()
-    placeResolver = MapKitApplePlaceResolver()
+    placeResolver = MapKitApplePlaceResolver(diagnostics: diagnostics)
   }
 
   @MainActor

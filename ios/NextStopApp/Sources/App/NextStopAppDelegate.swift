@@ -4,9 +4,14 @@ import UIKit
 @MainActor
 final class NextStopSceneDependencies {
   let candidatePageSearcher: any CandidatePageSearching
+  let diagnostics: any AppDiagnosticRecording
 
-  init(candidatePageSearcher: any CandidatePageSearching) {
+  init(
+    candidatePageSearcher: any CandidatePageSearching,
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()
+  ) {
     self.candidatePageSearcher = candidatePageSearcher
+    self.diagnostics = diagnostics
   }
 }
 
@@ -18,12 +23,15 @@ protocol NextStopSceneDependencyReceiving: AnyObject {
 @MainActor
 final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
   let dependencies: NextStopSceneDependencies
+  let diagnosticsStore: AppDiagnosticsStore
 
   var candidatePageSearcher: any CandidatePageSearching {
     dependencies.candidatePageSearcher
   }
 
   override init() {
+    let diagnostics = AppDiagnosticsStore()
+    diagnosticsStore = diagnostics
     let session = URLSession.shared
     let baseURL = HTTPCandidateSearchService.configuredBaseURL()
     let accessTokenProvider = baseURL.map {
@@ -32,14 +40,21 @@ final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
     let candidatePageSearcher = HTTPCandidateSearchService(
       baseURL: baseURL,
       accessTokenProvider: accessTokenProvider,
-      session: session
+      session: session,
+      diagnostics: diagnostics
     )
-    dependencies = NextStopSceneDependencies(candidatePageSearcher: candidatePageSearcher)
+    dependencies = NextStopSceneDependencies(
+      candidatePageSearcher: candidatePageSearcher, diagnostics: diagnostics
+    )
     super.init()
   }
 
   init(candidatePageSearcher: any CandidatePageSearching) {
-    dependencies = NextStopSceneDependencies(candidatePageSearcher: candidatePageSearcher)
+    let diagnostics = AppDiagnosticsStore()
+    diagnosticsStore = diagnostics
+    dependencies = NextStopSceneDependencies(
+      candidatePageSearcher: candidatePageSearcher, diagnostics: diagnostics
+    )
     super.init()
   }
 

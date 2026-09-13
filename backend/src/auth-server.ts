@@ -4,6 +4,7 @@ import { HardenedAppAttestVerifier } from "./api/app-attest-verifier.js";
 import { AppAttestAuthenticationService } from "./application/app-attest-authentication.js";
 import { createDatabasePool } from "./persistence/database.js";
 import { PostgresAppAttestAuthenticationRepository } from "./persistence/postgres-app-attest-authentication.js";
+import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
 
 const appAttestAppId = nonemptyEnvironmentValue("APP_ATTEST_APP_ID");
 const authDatabaseURL = nonemptyEnvironmentValue("AUTH_DATABASE_URL");
@@ -48,9 +49,10 @@ if (authPool !== undefined) {
   await authPool.query("SELECT key_id_hash FROM nextstop.app_attest_keys LIMIT 0");
 }
 
-const app = createAuthApp(
-  appAttestAuthentication === undefined ? {} : { appAttestAuthentication },
-);
+const app = createAuthApp({
+  ...(appAttestAuthentication === undefined ? {} : { appAttestAuthentication }),
+  diagnostics: { sink: writeRequestDiagnostic },
+});
 if (authPool !== undefined) {
   app.addHook("onClose", async () => {
     await authPool.end();

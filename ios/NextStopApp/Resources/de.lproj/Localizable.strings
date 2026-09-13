@@ -148,7 +148,7 @@
 "ride.search.error.food" = "Die gewählte Restaurantkette konnte gerade nicht zuverlässig geprüft werden. Es wird nicht fälschlich „kein Treffer“ angezeigt.";
 "ride.search.error.preparing" = "Der Server lädt und prüft gerade die offiziellen Ladedaten. Versuche die Suche in Kürze erneut.";
 "ride.search.error.response" = "Der Server hat ungültige Ladedaten geliefert. Die Ergebnisse werden aus Sicherheitsgründen nicht angezeigt.";
-"ride.search.error.service" = "Die Ladeparksuche ist gerade nicht erreichbar. Prüfe den lokalen Server oder die Internetverbindung.";
+"ride.search.error.service" = "Die Ladeparksuche ist vorübergehend nicht erreichbar. Versuche es gleich erneut.";
 "ride.search.error.snapshot" = "Die Datenbasis wurde während der Suche erneuert. Starte die Suche erneut, damit alle Ergebnisse aus demselben Stand stammen.";
 "ride.search.error.title" = "Ladeparks konnten nicht gesucht werden";
 "ride.search.progress.combined" = "Route und Ladeparks werden gesucht …";
@@ -168,3 +168,19 @@
 "unit.kilometers.format" = "%lld km";
 "unit.meters_to_place.format" = "%lld m bis %@";
 "unit.minimum_count.format" = "mindestens %lld";
+
+"diagnostics.title" = "Fehlerberichte";
+"diagnostics.description" = "Wenn aktiviert, speichert die App technische Fehlercodes, Zeitpunkte und Anfragedauern lokal. Standort, Route, Suchziele und Zugangsdaten werden nicht erfasst.";
+"diagnostics.saved_count" = "Gespeicherte Ereignisse";
+"diagnostics.storage_unavailable" = "Der Bericht ist momentan nur bis zum Schließen der App verfügbar.";
+"diagnostics.retention" = "Maximal 200 Ereignisse aus den letzten 7 Tagen. Die Berichte sind von Gerätebackups ausgeschlossen.";
+"diagnostics.recording" = "Fehlerberichte lokal speichern";
+"diagnostics.recording.description" = "Freiwillig und nur auf diesem iPhone. Keine automatische Übertragung. Beim Ausschalten werden gespeicherte Berichte gelöscht.";
+"diagnostics.export" = "Bericht exportieren";
+"diagnostics.clear" = "Berichte löschen";
+"diagnostics.export.description" = "Exportiere den Bericht und teile ihn bei Bedarf mit dem Entwickler.";
+"diagnostics.export_failed" = "Der Bericht konnte nicht exportiert werden.";
+"diagnostics.dismiss" = "OK";
+"diagnostics.deletion_failed" = "Gespeicherte Berichte konnten nicht gelöscht werden. Die Aufzeichnung ist für diese Sitzung ausgeschaltet. Versuche das Löschen erneut.";
+"privacy.diagnostics.title" = "Technische Fehlerdiagnose";
+"privacy.diagnostics.backend" = "Für Betrieb und Fehlerbehebung protokolliert der nextStop-Server Zeitpunkt, Antwortstatus, Dauer und zufällige Anfrage-IDs. Diese Protokolle enthalten keine Standorte, Routen, Suchfilter oder Zugangsdaten. Lokale Fehlerberichte bleiben auf deinem iPhone, bis du sie selbst exportierst.";

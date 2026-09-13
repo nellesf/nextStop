@@ -25,7 +25,7 @@ fi
 
 if [[ ! -f /var/lib/nextstop-bootstrap-complete ]]; then
   apt-get update
-  apt-get install -y ca-certificates certbot curl docker.io docker-compose-v2 nginx openssl
+  apt-get install -y ca-certificates certbot curl docker.io docker-compose-v2 logrotate nginx openssl
   apt-get clean
 
   mkdir -p /etc/docker /opt/nextstop/releases /etc/nextstop /var/www/letsencrypt

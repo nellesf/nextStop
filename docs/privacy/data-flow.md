@@ -20,6 +20,8 @@ analytics SDKs are permitted in MVP.
 | App Attest challenge | iPhone Keychain while an attestation is pending + backend auth table | Bind one attestation/assertion exchange and prevent replay | At most 3 minutes; removed locally after Apple succeeds and consumed atomically by the backend |
 | Search access token | iPhone memory | Authorize candidate search after App Attest verification | At most 15 minutes; never persisted |
 | Aggregate telemetry | Backend metrics | Reliability/performance | Short operational window; no route or persistent user ID |
+| Optional app diagnostics | iPhone local protected file, only after explicit activation | Reproduce technical failures; user-initiated export | At most 200 events from seven days, pruned when the app runs; cleared when disabled; no backup or automatic upload |
+| Request diagnostics | Backend/proxy operational logs | Diagnose HTTP status, timing, and coarse failure causes | Bounded rotation per deployment; see operational runbook; no request body, IP, criteria, or installation identity |
 
 ## Network flows
 
@@ -80,7 +82,8 @@ criteria, or other request data is sent to OpenStreetMap or Geofabrik.
 
 ## Retention and logging
 
-- HTTP access logs exclude bodies/query coordinates and redact authorization.
+- HTTP diagnostics use an explicit field allowlist, excluding bodies, raw URLs,
+  query strings, IPs, user agents, and all authorization/attestation material.
 - Application errors use generated request IDs and coarse failure categories.
 - Tracing attributes must not contain coordinates, routes, destination names, or
   provider secrets.
@@ -93,6 +96,12 @@ criteria, or other request data is sent to OpenStreetMap or Geofabrik.
   truncate/hash as appropriate, use a short retention period, and keep it outside
   product analytics.
 - Backups contain charging/provider data, never local user profiles or route tables.
+- Local app diagnostics default to off and are excluded from device backups.
+  Enabling them is voluntary on iPhone; there is no CarPlay prompt. Export is
+  user-initiated and no diagnostic upload endpoint is added. Unknown error payloads
+  are never serialized. See [app diagnostics](../operations/app-diagnostics.md)
+  and [request diagnostics](../operations/request-diagnostics.md) for the schema,
+  retry policy, correlation limitations, retention, and report retrieval.
 
 ## Location permission
 

@@ -7,16 +7,33 @@ final class MapKitRoutePlanner: RoutePlanning, DrivingDistanceProviding {
   typealias CalculateRoute = @MainActor (MKDirections.Request) async throws -> MKRoute?
 
   private let calculateRoute: CalculateRoute
+  private let measurement: AppDiagnosticMeasurement
+
+  // Keep the existing single trailing-closure test/injection API unambiguous.
+  convenience init(calculateRoute: @escaping CalculateRoute) {
+    self.init(diagnostics: NoopAppDiagnostics(), now: Date.init, calculateRoute: calculateRoute)
+  }
 
   init(
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics(),
+    now: @escaping AppDiagnosticMeasurement.Now = Date.init,
     calculateRoute: @escaping CalculateRoute = { request in
       try await MKDirections(request: request).calculate().routes.first
     }
   ) {
     self.calculateRoute = calculateRoute
+    measurement = AppDiagnosticMeasurement(recorder: diagnostics, now: now)
   }
 
   func automobileRoute(from origin: Coordinate, to destination: Coordinate) async throws
+    -> PlannedRoute
+  {
+    try await measurement.perform(.route) {
+      try await plannedRoute(from: origin, to: destination)
+    }
+  }
+
+  private func plannedRoute(from origin: Coordinate, to destination: Coordinate) async throws
     -> PlannedRoute
   {
     let route = try await route(from: origin, to: destination)
@@ -50,10 +67,12 @@ final class MapKitRoutePlanner: RoutePlanning, DrivingDistanceProviding {
   func automobileDrivingDistance(from origin: Coordinate, to destination: Coordinate) async throws
     -> Meters
   {
-    let route = try await route(from: origin, to: destination)
-    // A valid zero-distance response can contain only one distinct route point.
-    // Candidate filtering needs Apple's distance, not a corridor polyline.
-    return try drivingDistance(of: route)
+    try await measurement.perform(.candidateDistance) {
+      let route = try await route(from: origin, to: destination)
+      // A valid zero-distance response can contain only one distinct route point.
+      // Candidate filtering needs Apple's distance, not a corridor polyline.
+      return try drivingDistance(of: route)
+    }
   }
 
   private func route(from origin: Coordinate, to destination: Coordinate) async throws -> MKRoute {

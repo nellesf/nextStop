@@ -148,7 +148,7 @@
 "ride.search.error.food" = "The selected restaurant chain could not be checked reliably. The app will not incorrectly claim there are no matches.";
 "ride.search.error.preparing" = "The server is downloading and validating the official charging data. Try the search again shortly.";
 "ride.search.error.response" = "The server returned invalid charging data. Results are hidden for safety.";
-"ride.search.error.service" = "Charging-park search is currently unavailable. Check the local server or your internet connection.";
+"ride.search.error.service" = "Charging-park search is temporarily unavailable. Please try again shortly.";
 "ride.search.error.snapshot" = "The dataset changed during the search. Start the search again so every result uses the same snapshot.";
 "ride.search.error.title" = "Charging parks could not be searched";
 "ride.search.progress.combined" = "Searching the route and charging parks…";
@@ -168,3 +168,19 @@
 "unit.kilometers.format" = "%lld km";
 "unit.meters_to_place.format" = "%lld m to %@";
 "unit.minimum_count.format" = "at least %lld";
+
+"diagnostics.title" = "Error reports";
+"diagnostics.description" = "When enabled, the app stores technical error codes, timestamps, and request durations locally. Location, routes, destinations, and credentials are excluded.";
+"diagnostics.saved_count" = "Saved events";
+"diagnostics.storage_unavailable" = "The report is currently available only until the app closes.";
+"diagnostics.retention" = "Up to 200 events from the last 7 days. Reports are excluded from device backups.";
+"diagnostics.recording" = "Save error reports locally";
+"diagnostics.recording.description" = "Optional and only on this iPhone. No automatic transfer. Turning this off deletes saved reports.";
+"diagnostics.export" = "Export report";
+"diagnostics.clear" = "Delete reports";
+"diagnostics.export.description" = "Export the report and share it with the developer if needed.";
+"diagnostics.export_failed" = "The report could not be exported.";
+"diagnostics.dismiss" = "OK";
+"diagnostics.deletion_failed" = "Saved reports could not be deleted. Recording is off for this session. Try deleting them again.";
+"privacy.diagnostics.title" = "Technical diagnostics";
+"privacy.diagnostics.backend" = "For operation and troubleshooting, the nextStop server logs timestamps, response status, durations, and random request IDs. These logs exclude locations, routes, search filters, and credentials. Local error reports stay on your iPhone until you export them yourself.";
