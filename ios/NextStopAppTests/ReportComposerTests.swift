@@ -110,7 +110,7 @@ private final class ReportComposerSender: UserErrorReportSending {
   func send(_ request: UserErrorReportRequest) async throws -> UserErrorReportReceipt {
     requests.append(request)
     if let failure { throw failure }
-    let now = Date()
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
     return UserErrorReportReceipt(
       reportID: request.reportID, deletionToken: request.deletionToken,
       createdAt: now, receivedAt: now,
@@ -129,7 +129,8 @@ private struct DiagnosticFixture {
   init() throws {
     directory = FileManager.default.temporaryDirectory
       .appendingPathComponent("ReportComposerTests-\(UUID().uuidString)", isDirectory: true)
-    let now = Date()
+    // Use an exactly representable instant: the event normalizes through Unix time.
+    let now = Date(timeIntervalSince1970: 1_800_000_000)
     store = AppDiagnosticsStore(
       fileURL: directory.appendingPathComponent("events.json"), clock: { now }
     )

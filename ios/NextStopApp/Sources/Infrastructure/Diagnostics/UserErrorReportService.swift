@@ -170,6 +170,9 @@ final class HTTPUserErrorReportService: UserErrorReportSending {
     request.setValue("application/json", forHTTPHeaderField: "Accept")
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
+    // An explicit later retry re-encodes the same approved request. Stable key
+    // ordering keeps its bytes identical across separate encoder instances.
+    encoder.outputFormatting = [.sortedKeys]
     do {
       request.httpBody = try encoder.encode(body)
     } catch {
