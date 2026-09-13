@@ -9,29 +9,32 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   func testEmptyLogsExplainNextStepWithoutOfferingAnUnavailableCheckbox() {
+    let previousAppearance = XCUIDevice.shared.appearance
     let app = launch(scenario: "empty")
-    defer { app.terminate() }
+    defer {
+      app.terminate()
+      XCUIDevice.shared.appearance = previousAppearance
+    }
     openReport(in: app)
 
-    let noLogs = element("error-report-no-logs", in: app)
-    reveal(noLogs, in: app)
+    reveal("error-report-no-logs", in: app)
     XCTAssertFalse(element("error-report-include-logs", in: app).exists)
     XCTAssertFalse(element("report-log-preview", in: app).exists)
     screenshot(app, named: "light-empty-logs")
 
     tap("error-report-recording-settings", in: app)
     let recording = app.switches["diagnostics-recording"]
-    reveal(recording, in: app)
+    reveal("diagnostics-recording", in: app)
     XCTAssertEqual(recording.value as? String, "0", "Opening settings must not enable recording.")
     recording.tap()
     XCTAssertEqual(recording.value as? String, "1")
     let savedCount = element("diagnostics-saved-count", in: app)
-    reveal(savedCount, in: app, direction: .down)
+    reveal("diagnostics-saved-count", in: app, direction: .down)
     XCTAssertEqual(savedCount.label, "0", "Enabling recording must not invent past error events.")
     screenshot(app, named: "light-local-recording-enabled-without-past-logs")
 
     goBack(in: app)
-    reveal(noLogs, in: app)
+    reveal("error-report-no-logs", in: app)
     XCTAssertFalse(element("error-report-include-logs", in: app).exists)
     screenshot(app, named: "light-recording-awaiting-a-new-error")
 
@@ -45,16 +48,20 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   func testOptionalLogsPreviewFailedSendRetryAndWithdrawal() {
+    let previousAppearance = XCUIDevice.shared.appearance
     let app = launch(scenario: "logs-retry")
-    defer { app.terminate() }
+    defer {
+      app.terminate()
+      XCUIDevice.shared.appearance = previousAppearance
+    }
     openReport(in: app)
 
     let includeLogs = element("error-report-include-logs", in: app)
-    reveal(includeLogs, in: app)
+    reveal("error-report-include-logs", in: app)
     XCTAssertTrue(includeLogs.isEnabled)
-    XCTAssertEqual(includeLogs.value as? String, "Nicht ausgewählt")
+    XCTAssertEqual(includeLogs.value as? String, "0")
     includeLogs.tap()
-    XCTAssertEqual(includeLogs.value as? String, "Ausgewählt")
+    XCTAssertEqual(includeLogs.value as? String, "1")
     screenshot(app, named: "light-optional-logs-selected")
 
     tap("report-log-preview", in: app)
@@ -74,10 +81,10 @@ final class UserErrorReportUITests: XCTestCase {
     let sendError = element("report-send-error", in: app)
     XCTAssertTrue(sendError.waitForExistence(timeout: 10))
     screenshot(app, named: "light-failed-send-can-be-retried")
-    reveal(includeLogs, in: app, direction: .down)
-    XCTAssertEqual(includeLogs.value as? String, "Ausgewählt")
+    reveal("error-report-include-logs", in: app, direction: .down)
+    XCTAssertEqual(includeLogs.value as? String, "1")
     let input = element("error-report-message", in: app)
-    reveal(input, in: app, direction: .down)
+    reveal("error-report-message", in: app, direction: .down)
     XCTAssertEqual(input.value as? String, message)
 
     tap("error-report-send", in: app)
@@ -85,14 +92,14 @@ final class UserErrorReportUITests: XCTestCase {
     XCTAssertFalse(sendError.exists)
     XCTAssertFalse(element("error-report-send", in: app).isEnabled)
     screenshot(app, named: "light-retry-succeeded")
-    reveal(includeLogs, in: app, direction: .down)
-    XCTAssertEqual(includeLogs.value as? String, "Nicht ausgewählt")
-    reveal(input, in: app, direction: .down)
+    reveal("error-report-include-logs", in: app, direction: .down)
+    XCTAssertEqual(includeLogs.value as? String, "0")
+    reveal("error-report-message", in: app, direction: .down)
     XCTAssertNotEqual(input.value as? String, message)
 
     tap("report-receipts", in: app)
     let delete = element("error-report-delete", in: app)
-    reveal(delete, in: app)
+    reveal("error-report-delete", in: app)
     XCTAssertEqual(app.buttons.matching(identifier: "error-report-delete").count, 1)
     screenshot(app, named: "light-delivered-report-withdrawal")
     delete.tap()
@@ -103,18 +110,22 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   func testDarkModeWithLargestAccessibilityTextKeepsReportControlsReachable() {
+    let previousAppearance = XCUIDevice.shared.appearance
     let app = launch(scenario: "logs-success", largeTextAndDarkMode: true)
-    defer { app.terminate() }
+    defer {
+      app.terminate()
+      XCUIDevice.shared.appearance = previousAppearance
+    }
     screenshot(app, named: "dark-accessibility-profile-list")
     openReport(in: app)
     screenshot(app, named: "dark-accessibility-report-introduction")
 
     let includeLogs = element("error-report-include-logs", in: app)
-    reveal(includeLogs, in: app)
+    reveal("error-report-include-logs", in: app)
     XCTAssertTrue(includeLogs.isEnabled)
-    XCTAssertEqual(includeLogs.value as? String, "Nicht ausgewählt")
+    XCTAssertEqual(includeLogs.value as? String, "0")
     includeLogs.tap()
-    XCTAssertEqual(includeLogs.value as? String, "Ausgewählt")
+    XCTAssertEqual(includeLogs.value as? String, "1")
     screenshot(app, named: "dark-accessibility-log-checkbox")
 
     tap("report-log-preview", in: app)
@@ -123,12 +134,12 @@ final class UserErrorReportUITests: XCTestCase {
     goBack(in: app)
 
     tap("report-privacy", in: app)
-    reveal(element("report-privacy-content", in: app), in: app)
+    reveal("report-privacy-content", in: app)
     screenshot(app, named: "dark-accessibility-privacy")
     goBack(in: app)
 
     let send = element("error-report-send", in: app)
-    reveal(send, in: app)
+    reveal("error-report-send", in: app)
     XCTAssertFalse(send.isEnabled, "A blank report must remain unsendable at every text size.")
     screenshot(app, named: "dark-accessibility-consent-and-send")
     tap("report-receipts", in: app)
@@ -138,12 +149,12 @@ final class UserErrorReportUITests: XCTestCase {
 
     tap("report-local-diagnostics", in: app)
     let recording = app.switches["diagnostics-recording"]
-    reveal(recording, in: app)
+    reveal("diagnostics-recording", in: app)
     XCTAssertEqual(recording.value as? String, "1")
     recording.tap()
     XCTAssertEqual(recording.value as? String, "0")
     goBack(in: app)
-    reveal(element("error-report-no-logs", in: app), in: app, direction: .down)
+    reveal("error-report-no-logs", in: app, direction: .down)
     XCTAssertFalse(includeLogs.exists, "Deleting local logs must remove the previous attachment choice.")
     XCTAssertFalse(element("report-log-preview", in: app).exists)
     screenshot(app, named: "dark-accessibility-recording-disabled-clears-attachment")
@@ -151,12 +162,13 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   private func launch(scenario: String, largeTextAndDarkMode: Bool = false) -> XCUIApplication {
+    XCUIDevice.shared.appearance = largeTextAndDarkMode ? .dark : .light
+    XCTAssertEqual(XCUIDevice.shared.appearance, largeTextAndDarkMode ? .dark : .light)
     let app = XCUIApplication()
     app.launchArguments = [
       "--ui-testing",
       "-AppleLanguages", "(de)",
       "-AppleLocale", "de_DE",
-      "-AppleInterfaceStyle", largeTextAndDarkMode ? "Dark" : "Light",
       "-UIPreferredContentSizeCategoryName",
       largeTextAndDarkMode
         ? "UICTContentSizeCategoryAccessibilityXXXL" : "UICTContentSizeCategoryL",
@@ -172,13 +184,13 @@ final class UserErrorReportUITests: XCTestCase {
     tap("app-info", in: app)
     tap("info-error-report", in: app)
     XCTAssertTrue(app.navigationBars["Fehler melden"].waitForExistence(timeout: 5))
-    reveal(element("error-report-message", in: app), in: app)
+    reveal("error-report-message", in: app)
   }
 
   @MainActor
   private func enterMessage(_ text: String, in app: XCUIApplication) {
     let input = element("error-report-message", in: app)
-    reveal(input, in: app, direction: .down)
+    reveal("error-report-message", in: app, direction: .down)
     input.tap()
     input.typeText(text)
     XCTAssertEqual(input.value as? String, text)
@@ -187,20 +199,36 @@ final class UserErrorReportUITests: XCTestCase {
   @MainActor
   private func openPrivacyAndReturn(in app: XCUIApplication, screenshotName: String) {
     tap("report-privacy", in: app)
-    reveal(element("report-privacy-content", in: app), in: app)
+    reveal("report-privacy-content", in: app)
     screenshot(app, named: screenshotName)
     goBack(in: app)
   }
 
   @MainActor
   private func element(_ identifier: String, in app: XCUIApplication) -> XCUIElement {
-    app.descendants(matching: .any).matching(identifier: identifier).firstMatch
+    switch identifier {
+    case "error-report-include-logs", "diagnostics-recording":
+      app.switches.matching(identifier: identifier).firstMatch
+    case "error-report-no-logs", "diagnostics-saved-count", "log-preview-content",
+      "report-privacy-content", "report-send-error", "report-send-success", "receipts-empty":
+      app.staticTexts.matching(identifier: identifier).firstMatch
+    case "error-report-message":
+      // SwiftUI's vertical TextField may expose a TextField or TextView across iOS versions.
+      app.descendants(matching: .any).matching(identifier: identifier).matching(
+        NSPredicate(
+          format: "elementType == %lu OR elementType == %lu",
+          XCUIElement.ElementType.textField.rawValue, XCUIElement.ElementType.textView.rawValue
+        )
+      ).firstMatch
+    default:
+      app.buttons.matching(identifier: identifier).firstMatch
+    }
   }
 
   @MainActor
   private func tap(_ identifier: String, in app: XCUIApplication) {
     let target = element(identifier, in: app)
-    reveal(target, in: app)
+    reveal(identifier, in: app)
     XCTAssertTrue(target.isEnabled, "Control is disabled: \(identifier)")
     target.tap()
   }
@@ -209,25 +237,40 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   private func reveal(
-    _ target: XCUIElement, in app: XCUIApplication, direction: ScrollDirection = .up,
+    _ identifier: String, in app: XCUIApplication, direction: ScrollDirection = .up,
     file: StaticString = #filePath, line: UInt = #line
   ) {
-    for _ in 0..<16 {
-      if target.exists && target.isHittable { return }
+    let target = element(identifier, in: app)
+    let deadline = Date().addingTimeInterval(60)
+    for _ in 0..<12 {
+      let exists = target.exists
+      if exists && target.isHittable { return }
+      if Date() >= deadline { break }
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
       let bottom = keyboard.exists ? min(frame.maxY, keyboard.frame.minY) : frame.maxY
-      // Swipe along the trailing edge, outside the message editor and above the keyboard.
-      let high = frame.minY + 150
+      // Keep gestures in the presented sheet's content, outside the message editor.
+      let high = frame.minY + 180
       let low = max(high + 50, bottom - 90)
+      var scrollDirection = direction
+      if exists {
+        let targetFrame = target.frame
+        if targetFrame.maxY < high { scrollDirection = .down }
+        if targetFrame.minY > low { scrollDirection = .up }
+      }
       let start = app.coordinate(withNormalizedOffset: .zero).withOffset(
-        CGVector(dx: frame.width - 24, dy: direction == .up ? low : high))
+        CGVector(dx: frame.width - 24, dy: scrollDirection == .up ? low : high))
       let end = app.coordinate(withNormalizedOffset: .zero).withOffset(
-        CGVector(dx: frame.width - 24, dy: direction == .up ? high : low))
+        CGVector(dx: frame.width - 24, dy: scrollDirection == .up ? high : low))
       start.press(forDuration: 0.05, thenDragTo: end)
     }
-    screenshot(app, named: "unreachable-\(target.identifier)")
-    XCTFail("Control was not reachable after scrolling: \(target.identifier)", file: file, line: line)
+    // Never query a missing element's identifier while recording the original failure.
+    screenshot(app, named: "unreachable-\(identifier)")
+    let hierarchy = XCTAttachment(string: app.debugDescription)
+    hierarchy.name = "unreachable-\(identifier)-hierarchy"
+    hierarchy.lifetime = .keepAlways
+    add(hierarchy)
+    XCTFail("Control was not reachable after scrolling: \(identifier)", file: file, line: line)
   }
 
   @MainActor

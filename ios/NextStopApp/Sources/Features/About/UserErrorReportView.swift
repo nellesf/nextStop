@@ -50,8 +50,13 @@ struct UserErrorReportView: View {
 
       Section {
         if composer.diagnostics.isEmpty {
-          Label("report.logs.empty.title", systemImage: "doc.text.magnifyingglass")
-            .accessibilityIdentifier("error-report-no-logs")
+          Label {
+            Text("report.logs.empty.title")
+              .accessibilityIdentifier("error-report-no-logs")
+          } icon: {
+            Image(systemName: "doc.text.magnifyingglass")
+              .accessibilityHidden(true)
+          }
           Text("report.logs.empty")
             .foregroundStyle(.secondary)
           Text(
@@ -128,9 +133,14 @@ struct UserErrorReportView: View {
             .accessibilityIdentifier("report-send-error")
         }
         if composer.sentReportID != nil {
-          Label("report.sent", systemImage: "checkmark.circle")
-            .foregroundStyle(.green)
-            .accessibilityIdentifier("report-send-success")
+          Label {
+            Text("report.sent")
+              .accessibilityIdentifier("report-send-success")
+          } icon: {
+            Image(systemName: "checkmark.circle")
+              .accessibilityHidden(true)
+          }
+          .foregroundStyle(.green)
         }
       }
 
