@@ -255,6 +255,10 @@ final class UserErrorReportUITests: XCTestCase {
     file: StaticString = #filePath, line: UInt = #line
   ) {
     let target = element(identifier, in: app)
+    // The profile header has a fixed custom toolbar outside its scrollable list.
+    if identifier == "app-info" && target.exists && target.isHittable {
+      return
+    }
     let deadline = Date().addingTimeInterval(60)
     for _ in 0..<12 {
       let frame = app.frame
