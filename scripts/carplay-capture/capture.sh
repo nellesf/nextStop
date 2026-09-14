@@ -11,16 +11,37 @@ git -C screenshot-app diff --exit-code -- \
   ios/NextStopApp ios/NextStopCore ios/NextStopCarPlay ios/NextStop.xcodeproj ios/Config
 
 mkdir -p CarPlay-Captures
-xcodebuild \
-  -project screenshot-app/ios/NextStop.xcodeproj \
-  -scheme NextStopApp -configuration Debug \
-  -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \
-  -derivedDataPath CarPlayDerivedData \
-  CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
-  build-for-testing | tee CarPlay-Captures/build.log
+if [ -n "${CARPLAY_REUSE_DIR:-}" ]; then
+  python3 - <<'PY'
+import hashlib, json, os, pathlib, shutil, subprocess
+reuse = pathlib.Path(os.environ['CARPLAY_REUSE_DIR'])
+source = json.loads((reuse / 'capture-source-base.json').read_text())
+expected_commit = subprocess.check_output(['git', '-C', 'screenshot-app', 'rev-parse', 'HEAD'], text=True).strip()
+expected_tree = subprocess.check_output(['git', '-C', 'screenshot-app', 'rev-parse', 'HEAD:ios/NextStopApp'], text=True).strip()
+assert source['appCommit'] == expected_commit, 'Reused build must match the pinned main commit.'
+assert source['appTree'] == expected_tree, 'Reused app tree must match the pinned main source.'
+archive = reuse / 'CarPlayBuild.tar.gz'
+archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
+assert archive_sha == os.environ['CARPLAY_REUSE_SHA256'], 'Reused build archive digest does not match the verified artifact.'
+source['archiveSHA256'] = archive_sha
+pathlib.Path('CarPlay-Captures/reused-build-source.json').write_text(json.dumps(source, indent=2) + '\n')
+shutil.copy2(archive, 'CarPlay-Captures/CarPlayBuild.tar.gz')
+print(f'Reusing verified main build from {source["runURL"]}; archive SHA-256 {archive_sha}.')
+PY
+  mkdir -p CarPlayDerivedData/Build
+  tar -xzf CarPlay-Captures/CarPlayBuild.tar.gz -C CarPlayDerivedData/Build
+else
+  xcodebuild \
+    -project screenshot-app/ios/NextStop.xcodeproj \
+    -scheme NextStopApp -configuration Debug \
+    -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \
+    -derivedDataPath CarPlayDerivedData \
+    CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
+    build-for-testing | tee CarPlay-Captures/build.log
 
-# Preserve a successful build even if entitlement verification or UI setup fails.
-tar -czf CarPlay-Captures/CarPlayBuild.tar.gz -C CarPlayDerivedData/Build Products
+  # Preserve a successful build even if entitlement verification or UI setup fails.
+  tar -czf CarPlay-Captures/CarPlayBuild.tar.gz -C CarPlayDerivedData/Build Products
+fi
 app=CarPlayDerivedData/Build/Products/Debug-iphonesimulator/NextStopApp.app
 codesign -d --entitlements :- "$app" \
   > CarPlay-Captures/signature-entitlements.plist \
@@ -45,6 +66,15 @@ source = {
     'entitlementsStorage': 'Verified directly in the built executable __TEXT,__entitlements Mach-O section; the simulator ad-hoc code-signature entitlement dictionary is recorded separately and may be empty',
     'appliedEntitlements': entitlements,
 }
+reused = root / 'reused-build-source.json'
+if reused.exists():
+    build_source = json.loads(reused.read_text())
+    source['buildHarnessCommit'] = build_source.get('buildHarnessCommit', build_source['harnessCommit'])
+    source['buildRunURL'] = build_source.get('buildRunURL', build_source['runURL'])
+    source['reusedBuildArchiveSHA256'] = build_source['archiveSHA256']
+else:
+    source['buildHarnessCommit'] = source['harnessCommit']
+    source['buildRunURL'] = source['runURL']
 (root / 'capture-source-base.json').write_text(json.dumps(source, indent=2) + '\n')
 # Explicitly opt in the generated test runner, without changing the application
 # or its Xcode project. Tests outside this workflow skip profile preparation.

@@ -1,7 +1,7 @@
 """Capture the genuine external CarPlay framebuffer after real UI interactions.
 
 Apple's Simulator menu creates the CarPlay display. Apple Vision reads visible
-text to locate controls; System Events clicks those controls. Final files come
+text to locate controls; CoreGraphics mouse events click them. Final files come
 directly from simctl, without cropping, overlays, resizing, or synthetic pixels.
 """
 
@@ -88,8 +88,19 @@ end tell
     if len(candidates) != 1:
         raise RuntimeError(f"Expected one visible {label!r} inside the CarPlay window; found {candidates}")
     x, y = candidates[0]
-    script = 'tell application "System Events" to click at {%d, %d}' % (round(x), round(y))
-    execute(["osascript", "-e", script])
+    # Simulator's rendered controls do not implement AX coordinate hit testing.
+    # Send a normal mouse press through osascript, using the observed location.
+    script = '''
+ObjC.import("CoreGraphics");
+ObjC.import("Foundation");
+var point = $.CGPointMake(%d, %d);
+var down = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, point, $.kCGMouseButtonLeft);
+var up = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, point, $.kCGMouseButtonLeft);
+$.CGEventPost($.kCGHIDEventTap, down);
+$.NSThread.sleepForTimeInterval(0.08);
+$.CGEventPost($.kCGHIDEventTap, up);
+''' % (round(x), round(y))
+    execute(["osascript", "-l", "JavaScript", "-e", script])
     time.sleep(2)
 
 
