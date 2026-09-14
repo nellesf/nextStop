@@ -139,7 +139,7 @@ final class UserErrorReportUITests: XCTestCase {
     screenshot(app, named: "dark-accessibility-log-selection-after-preview")
 
     tap("report-privacy", in: app)
-    reveal("report-privacy-content", in: app)
+    reveal("report-privacy-content", in: app, timeout: 120)
     screenshot(app, named: "dark-accessibility-privacy")
     goBack(in: app)
 
@@ -205,7 +205,7 @@ final class UserErrorReportUITests: XCTestCase {
   @MainActor
   private func openPrivacyAndReturn(in app: XCUIApplication, screenshotName: String) {
     tap("report-privacy", in: app)
-    reveal("report-privacy-content", in: app)
+    reveal("report-privacy-content", in: app, timeout: 120)
     screenshot(app, named: screenshotName)
     goBack(in: app)
   }
@@ -258,6 +258,7 @@ final class UserErrorReportUITests: XCTestCase {
   @MainActor
   private func reveal(
     _ identifier: String, in app: XCUIApplication, direction: ScrollDirection = .up,
+    timeout: TimeInterval = 60,
     file: StaticString = #filePath, line: UInt = #line
   ) {
     let target = element(identifier, in: app)
@@ -265,7 +266,9 @@ final class UserErrorReportUITests: XCTestCase {
     if identifier == "app-info" && target.exists && target.isHittable {
       return
     }
-    let deadline = Date().addingTimeInterval(60)
+    // The full privacy notice spans several screens at the largest text size;
+    // callers allow its accessibility snapshots extra time on hosted runners.
+    let deadline = Date().addingTimeInterval(timeout)
     for _ in 0..<12 {
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
