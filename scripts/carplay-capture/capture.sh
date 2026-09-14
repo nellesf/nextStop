@@ -19,10 +19,14 @@ xcodebuild \
   CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
   build-for-testing | tee CarPlay-Captures/build.log
 
+# Preserve a successful build even if entitlement verification or UI setup fails.
+tar -czf CarPlay-Captures/CarPlayBuild.tar.gz -C CarPlayDerivedData/Build Products
 app=CarPlayDerivedData/Build/Products/Debug-iphonesimulator/NextStopApp.app
 codesign -d --entitlements :- "$app" \
-  > CarPlay-Captures/applied-entitlements.plist \
+  > CarPlay-Captures/signature-entitlements.plist \
   2> CarPlay-Captures/codesign.log
+python3 scripts/carplay-capture/read-simulator-entitlements.py \
+  "$app/NextStopApp" CarPlay-Captures/applied-entitlements.plist
 
 python3 - <<'PY'
 import json, os, pathlib, plistlib, subprocess
@@ -38,6 +42,7 @@ source = {
     'locale': 'de_DE',
     'data': 'Example Leipzig profile created through the normal app UI in a fresh simulator store',
     'signing': 'Xcode simulator ad-hoc signing with the app source entitlement file unchanged',
+    'entitlementsStorage': 'Verified directly in the built executable __TEXT,__entitlements Mach-O section; the simulator ad-hoc code-signature entitlement dictionary is recorded separately and may be empty',
     'appliedEntitlements': entitlements,
 }
 (root / 'capture-source-base.json').write_text(json.dumps(source, indent=2) + '\n')
@@ -64,9 +69,6 @@ with open(os.environ['GITHUB_ENV'], 'a') as env:
 PY
 
 test_run="$(cat CarPlay-Captures/xctestrun-path.txt)"
-# Retain products before UI setup so a first-use keyboard or MapKit failure
-# does not require repeating the compilation on the next attempt.
-tar -czf CarPlay-Captures/CarPlayBuild.tar.gz -C CarPlayDerivedData/Build Products
 TEST_RUNNER_NEXTSTOP_CARPLAY_CAPTURE=1 xcodebuild \
   -xctestrun "$test_run" \
   -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \

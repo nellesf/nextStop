@@ -24,6 +24,12 @@ jobs:
       - uses: actions/checkout@v7
       - name: Probe the native CarPlay display
         run: python3 scripts/carplay-capture/preflight.py
+      - name: Save verified display before app capture
+        uses: actions/upload-artifact@v7
+        with:
+          name: carplay-display-preflight
+          path: CarPlay-Captures/
+          retention-days: 7
       - name: Check out unchanged main app
         uses: actions/checkout@v7
         with:
@@ -31,6 +37,15 @@ jobs:
           path: screenshot-app
       - name: Prepare a real profile and capture CarPlay
         run: bash scripts/carplay-capture/capture.sh
+      - name: Preserve profile setup results
+        if: always()
+        run: |
+          if [ -d CarPlaySetup.xcresult ]; then
+            xcrun xcresulttool export attachments --path CarPlaySetup.xcresult \
+              --output-path CarPlay-Captures/Profile-Setup-Attachments
+            xcrun xcresulttool get test-results summary --path CarPlaySetup.xcresult \
+              > CarPlay-Captures/profile-test-summary.json
+          fi
       - name: Preserve display diagnostics
         if: always()
         uses: actions/upload-artifact@v7
