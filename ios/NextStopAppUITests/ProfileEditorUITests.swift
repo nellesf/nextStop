@@ -54,12 +54,24 @@ final class ProfileEditorUITests: XCTestCase {
         "One tap on \(tap.name) must focus the name field."
       )
       app.typeText(tap.input)
+      // The first keyboard session on a fresh Simulator can finish injecting
+      // its initial key after typeText returns, while presenting QuickPath help.
+      let typedValue = XCTNSPredicateExpectation(
+        predicate: NSPredicate(format: "value != %@", savedName), object: field
+      )
+      XCTAssertEqual(
+        XCTWaiter.wait(for: [typedValue], timeout: 10), .completed,
+        "The single edge tap must allow the typed character to reach the name field."
+      )
       guard let editedName = field.value as? String else {
         return XCTFail("The native text field must expose its edited value.")
       }
       XCTAssertEqual(editedName.count, savedName.count + 1)
       XCTAssertTrue(editedName.contains(tap.input))
       savedName = editedName
+      if tap.input == "7" {
+        dismissFirstUseKeyboardHelp(in: app)
+      }
       let attachment = XCTAttachment(screenshot: app.screenshot())
       attachment.name = "profile-name-focused-from-\(tap.name)"
       attachment.lifetime = .keepAlways
@@ -81,5 +93,19 @@ final class ProfileEditorUITests: XCTestCase {
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     XCTAssertEqual(
       field.value as? String, savedName, "The final edit must survive saving and reopening.")
+  }
+
+  @MainActor
+  private func dismissFirstUseKeyboardHelp(in app: XCUIApplication) {
+    // This belongs to the runner's English system keyboard, not the localized
+    // app. Only dismiss the observed tutorial, never a generic Continue button.
+    let keyboardHelp = app.staticTexts[
+      "Speed up your typing by sliding your finger across the letters to compose a word."
+    ]
+    if keyboardHelp.waitForExistence(timeout: 3) {
+      let continueButton = app.buttons["Continue"]
+      XCTAssertTrue(continueButton.waitForExistence(timeout: 5))
+      continueButton.tap()
+    }
   }
 }

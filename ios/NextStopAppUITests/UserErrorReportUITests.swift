@@ -4,6 +4,8 @@ import XCTest
 /// Exercises the real SwiftUI screens against a simulator-only, synthetic report service.
 /// No test sends a report, route, or location to the live backend.
 final class UserErrorReportUITests: XCTestCase {
+  private var controlTimeout: TimeInterval = 60
+
   override func setUpWithError() throws {
     continueAfterFailure = false
   }
@@ -194,6 +196,9 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   private func launch(scenario: String, largeTextAndDarkMode: Bool = false) -> XCUIApplication {
+    // Accessibility XXXL snapshots can take over a minute on hosted simulators,
+    // even before the first scroll gesture. Keep that cost inside a bounded wait.
+    controlTimeout = largeTextAndDarkMode ? 120 : 60
     XCUIDevice.shared.appearance = largeTextAndDarkMode ? .dark : .light
     XCTAssertEqual(XCUIDevice.shared.appearance, largeTextAndDarkMode ? .dark : .light)
     let app = XCUIApplication()
@@ -266,7 +271,7 @@ final class UserErrorReportUITests: XCTestCase {
 
   @MainActor
   private func tap(
-    _ identifier: String, in app: XCUIApplication, timeout: TimeInterval = 60
+    _ identifier: String, in app: XCUIApplication, timeout: TimeInterval? = nil
   ) {
     let target = element(identifier, in: app)
     reveal(identifier, in: app, timeout: timeout)
@@ -293,7 +298,7 @@ final class UserErrorReportUITests: XCTestCase {
   @MainActor
   private func reveal(
     _ identifier: String, in app: XCUIApplication, direction: ScrollDirection = .up,
-    timeout: TimeInterval = 60,
+    timeout: TimeInterval? = nil,
     file: StaticString = #filePath, line: UInt = #line
   ) {
     let target = element(identifier, in: app)
@@ -303,7 +308,7 @@ final class UserErrorReportUITests: XCTestCase {
     }
     // The full privacy notice spans several screens at the largest text size;
     // callers allow its accessibility snapshots extra time on hosted runners.
-    let deadline = Date().addingTimeInterval(timeout)
+    let deadline = Date().addingTimeInterval(timeout ?? controlTimeout)
     for _ in 0..<24 {
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch

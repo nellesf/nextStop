@@ -44,6 +44,23 @@ immediately withdrawn with 204. Receipt retention was exactly 30 days. Credentia
 and deletion proofs remained in process memory; output contained only status and
 assertion results. Both synthetic payloads were verified erased after cleanup.
 
+### Admission and withdrawal hardening, 2026-09-14
+
+Backend commit `1a7bbd901e54aa3a07ad07e817440fea2a99c9ff` was installed as
+`/opt/nextstop/releases/20260914T123112Z` after 109 unit tests and 18 PostGIS
+integration tests passed. API and authentication health checks passed. This
+release needs no additional migration or secret.
+
+Eight spaced requests through public HTTPS verified that anonymous unknown
+withdrawals and invalid POST credentials return 401 without allocating rows;
+valid POST returns 201; an incorrect deletion secret returns the same 401 category
+without changing content; and a correct existing secret deletes with 204 without
+a bearer. Authenticated withdrawal before upload created a content-free tombstone,
+the delayed POST returned 410, and a repeated capability-only DELETE returned 204
+without extending expiry. Queries were limited to the two synthetic report IDs.
+Both payloads were verified erased in cleanup. Only fixed assertion labels and
+HTTP statuses were printed; high-volume admission tests ran in isolated tests.
+
 ## Submission and privacy boundaries
 
 The user writes a report on iPhone and explicitly presses Send. Attaching the
