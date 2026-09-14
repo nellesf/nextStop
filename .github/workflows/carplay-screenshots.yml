@@ -47,7 +47,7 @@ jobs:
           path: CarPlay-Reuse
           run-id: ${{ inputs.reuse_run_id }}
           github-token: ${{ secrets.GITHUB_TOKEN }}
-      - name: Prepare a real profile and capture CarPlay
+      - name: Seed an example profile and capture CarPlay
         env:
           CARPLAY_REUSE_DIR: ${{ inputs.reuse_run_id != '' && 'CarPlay-Reuse' || '' }}
           CARPLAY_REUSE_SHA256: ${{ inputs.reuse_sha256 }}

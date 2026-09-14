@@ -5,8 +5,8 @@ set -euo pipefail
 # successfully connects the real external CarPlay display before reaching here.
 app_commit=5fe2fa2332d66d2499fc679617855d41cb0111be
 test "$(git -C screenshot-app rev-parse HEAD)" = "$app_commit"
-cp ios/NextStopAppUITests/ProfileEditorUITests.swift \
-  screenshot-app/ios/NextStopAppUITests/ProfileEditorUITests.swift
+cp ios/NextStopAppTests/ProfileRepositoryTests.swift \
+  screenshot-app/ios/NextStopAppTests/ProfileRepositoryTests.swift
 git -C screenshot-app diff --exit-code -- \
   ios/NextStopApp ios/NextStopCore ios/NextStopCarPlay ios/NextStop.xcodeproj ios/Config
 
@@ -20,6 +20,8 @@ expected_commit = subprocess.check_output(['git', '-C', 'screenshot-app', 'rev-p
 expected_tree = subprocess.check_output(['git', '-C', 'screenshot-app', 'rev-parse', 'HEAD:ios/NextStopApp'], text=True).strip()
 assert source['appCommit'] == expected_commit, 'Reused build must match the pinned main commit.'
 assert source['appTree'] == expected_tree, 'Reused app tree must match the pinned main source.'
+fixture_sha = hashlib.sha256(pathlib.Path('ios/NextStopAppTests/ProfileRepositoryTests.swift').read_bytes()).hexdigest()
+assert source.get('profileFixtureSHA256') == fixture_sha, 'Reused test bundle must contain the current persistent-profile fixture.'
 archive = reuse / 'CarPlayBuild.tar.gz'
 archive_sha = hashlib.sha256(archive.read_bytes()).hexdigest()
 assert archive_sha == os.environ['CARPLAY_REUSE_SHA256'], 'Reused build archive digest does not match the verified artifact.'
@@ -36,6 +38,7 @@ else
     -scheme NextStopApp -configuration Debug \
     -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \
     -derivedDataPath CarPlayDerivedData \
+    -only-testing:NextStopAppTests/ProfileRepositoryTests/testPrepareCarPlayScreenshotProfile \
     CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
     build-for-testing | tee CarPlay-Captures/build.log
 
@@ -50,7 +53,7 @@ python3 scripts/carplay-capture/read-simulator-entitlements.py \
   "$app/NextStopApp" CarPlay-Captures/applied-entitlements.plist
 
 python3 - <<'PY'
-import json, os, pathlib, plistlib, subprocess
+import hashlib, json, os, pathlib, plistlib, subprocess
 root = pathlib.Path('CarPlay-Captures')
 entitlements = plistlib.loads((root / 'applied-entitlements.plist').read_bytes())
 assert entitlements.get('com.apple.developer.carplay-charging') is True
@@ -61,7 +64,8 @@ source = {
     'runURL': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
     'device': 'iPhone 17 Pro with native external CarPlay display',
     'locale': 'de_DE',
-    'data': 'Example Leipzig profile created through the normal app UI in a fresh simulator store',
+    'data': 'Example Leipzig profile seeded through the unchanged app persistence model by an opt-in hosted test in a fresh simulator store',
+    'profileFixtureSHA256': hashlib.sha256(pathlib.Path('ios/NextStopAppTests/ProfileRepositoryTests.swift').read_bytes()).hexdigest(),
     'signing': 'Xcode simulator ad-hoc signing with the app source entitlement file unchanged',
     'entitlementsStorage': 'Verified directly in the built executable __TEXT,__entitlements Mach-O section; the simulator ad-hoc code-signature entitlement dictionary is recorded separately and may be empty',
     'appliedEntitlements': entitlements,
@@ -88,10 +92,10 @@ if not targets:
     targets = [value for key, value in run.items() if not key.startswith('__') and isinstance(value, dict)]
 found = False
 for target in targets:
-    if target.get('BlueprintName') == 'NextStopAppUITests' or 'NextStopAppUITests' in target.get('TestBundlePath', ''):
+    if target.get('BlueprintName') == 'NextStopAppTests' or 'NextStopAppTests' in target.get('TestBundlePath', ''):
         target.setdefault('EnvironmentVariables', {})['NEXTSTOP_CARPLAY_CAPTURE'] = '1'
         found = True
-assert found, 'Generated xctestrun must contain the iPhone UI-test target.'
+assert found, 'Generated xctestrun must contain the hosted app test target.'
 runs[0].write_bytes(plistlib.dumps(run))
 with open(os.environ['GITHUB_ENV'], 'a') as env:
     env.write(f'CARPLAY_XCTESTRUN={runs[0]}\n')
@@ -103,10 +107,18 @@ TEST_RUNNER_NEXTSTOP_CARPLAY_CAPTURE=1 xcodebuild \
   -xctestrun "$test_run" \
   -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \
   -resultBundlePath CarPlaySetup.xcresult \
-  -only-testing:NextStopAppUITests/ProfileEditorUITests/testPrepareCarPlayProfile \
+  -only-testing:NextStopAppTests/ProfileRepositoryTests/testPrepareCarPlayScreenshotProfile \
   -parallel-testing-enabled NO \
   test-without-building | tee CarPlay-Captures/profile-setup.log
 
+xcrun xcresulttool get test-results summary --path CarPlaySetup.xcresult \
+  > CarPlay-Captures/profile-test-summary.json
+python3 - <<'PY'
+import json, pathlib
+summary = json.loads(pathlib.Path('CarPlay-Captures/profile-test-summary.json').read_text())
+assert summary['totalTestCount'] == 1 and summary['passedTests'] == 1 and summary['failedTests'] == 0
+assert summary['skippedTests'] == 0, 'The persistent profile fixture must actually execute.'
+PY
 xcrun xcresulttool export attachments --path CarPlaySetup.xcresult \
   --output-path CarPlay-Captures/Profile-Setup-Attachments
 test -x "$RUNNER_TEMP/nextstop-screen-text"

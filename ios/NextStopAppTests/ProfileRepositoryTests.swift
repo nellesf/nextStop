@@ -7,6 +7,69 @@ import XCTest
 
 @MainActor
 final class ProfileRepositoryTests: XCTestCase {
+  func testPrepareCarPlayScreenshotProfile() throws {
+    #if targetEnvironment(simulator)
+      guard ProcessInfo.processInfo.environment["NEXTSTOP_CARPLAY_CAPTURE"] == "1" else {
+        throw XCTSkip("The persistent screenshot fixture requires explicit opt-in.")
+      }
+
+      // Use the production schema and default persistent URL in the hosted app's
+      // sandbox, exactly as the SwiftUI root and CarPlay scene do.
+      let container = try ModelContainer(for: StoredProfile.self, StoredDestinationRecord.self)
+      let repository = SwiftDataProfileRepository(modelContext: container.mainContext)
+      guard
+        try repository.fetchProfiles().isEmpty,
+        try container.mainContext.fetchCount(FetchDescriptor<StoredDestinationRecord>()) == 0
+      else {
+        XCTFail("Screenshot preparation requires a fresh store; existing data is never deleted.")
+        return
+      }
+
+      let timestamp = Date(timeIntervalSince1970: 1_700_000_000)
+      let profile = try UserProfile(
+        id: UUID(uuidString: "B7303CD0-6EC3-4D25-8FD2-61F8CEDDCA00")!,
+        name: "Leipzig",
+        destination: SavedDestination(
+          displayName: "Leipzig",
+          coordinate: Coordinate(latitude: 51.3397, longitude: 12.3731),
+          applePlaceIdentifier: nil,
+          displayAddress: "Leipzig, Deutschland"
+        ),
+        criteria: RideCriteria(
+          distanceRange: SearchConfiguration.defaultCriteria.distanceRange,
+          minimumChargingPoints: .four,
+          minimumPower: .oneHundredFifty,
+          foodChain: .mcdonalds
+        ),
+        createdAt: timestamp,
+        updatedAt: timestamp
+      )
+      try repository.save(profile)
+
+      // Fetch through a separate context so validation does not reuse inserted
+      // model instances from the writing context.
+      let readback = SwiftDataProfileRepository(modelContext: ModelContext(container))
+      XCTAssertEqual(try readback.fetchProfiles(), [profile])
+
+      let attachment = XCTAttachment(
+        string: """
+          Fixture: public Leipzig example, prepared by an opt-in hosted unit test.
+          Repository: unchanged SwiftDataProfileRepository.
+          Store: production default persistent container in the simulator app sandbox.
+          Profile ID: \(profile.id.uuidString)
+          Destination: Leipzig, Deutschland (51.3397, 12.3731).
+          Criteria: default distance range, 150 kW, 4 EVSEs, McDonald's.
+          Existing data: required empty; nothing deleted.
+          """
+      )
+      attachment.name = "carplay-screenshot-profile-fixture"
+      attachment.lifetime = .keepAlways
+      add(attachment)
+    #else
+      throw XCTSkip("Persistent screenshot fixtures are supported only in the iOS simulator.")
+    #endif
+  }
+
   func testSwiftDataRepositoryCreatesUpdatesAndDeletesProfile() throws {
     let (container, repository) = try makeRepository()
     defer { withExtendedLifetime(container) {} }

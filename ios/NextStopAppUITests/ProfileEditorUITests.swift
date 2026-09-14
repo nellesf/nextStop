@@ -1,7 +1,6 @@
 import XCTest
 
-/// Never starts navigation or a charging search. Normal UI tests use in-memory
-/// profiles; the opt-in CarPlay runner prepares a fresh disposable local store.
+/// Uses in-memory profiles and never starts navigation or a charging search.
 final class ProfileEditorUITests: XCTestCase {
   override func setUpWithError() throws {
     continueAfterFailure = false
@@ -195,83 +194,6 @@ final class ProfileEditorUITests: XCTestCase {
     XCTAssertEqual(chain.value as? String, "McDonald's")
     XCTAssertTrue(save.isHittable)
     captureWebsiteScreenshot("website-iphone-profile-filters", in: app)
-  }
-
-  /// A normal persistent profile is necessary because the CarPlay scene opens
-  /// the app's default store. Only the dedicated fresh-simulator job opts in.
-  @MainActor
-  func testPrepareCarPlayProfile() throws {
-    guard ProcessInfo.processInfo.environment["NEXTSTOP_CARPLAY_CAPTURE"] == "1" else {
-      throw XCTSkip("Only run on the disposable CarPlay capture simulator.")
-    }
-    let previousAppearance = XCUIDevice.shared.appearance
-    XCUIDevice.shared.appearance = .light
-    let app = XCUIApplication()
-    app.launchArguments = [
-      "-AppleLanguages", "(de)",
-      "-AppleLocale", "de_DE",
-      "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
-    ]
-    app.launch()
-    defer {
-      app.terminate()
-      XCUIDevice.shared.appearance = previousAppearance
-    }
-    let create = app.buttons["Erstes Profil anlegen"]
-    XCTAssertTrue(create.waitForExistence(timeout: 15), "Capture requires a fresh profile store.")
-    create.tap()
-    let name = app.textFields["profile-name"]
-    XCTAssertTrue(name.waitForExistence(timeout: 5))
-    app.buttons["Fahrziel"].tap()
-    let search = app.searchFields.firstMatch
-    XCTAssertTrue(search.waitForExistence(timeout: 5))
-    search.tap()
-    search.typeText("L")
-    dismissFirstUseKeyboardHelp(in: app)
-    search.typeText("eipzig Deutschland\n")
-    let city = app.buttons.matching(
-      NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Leipzig,", "Deutschland")
-    ).firstMatch
-    XCTAssertTrue(city.waitForExistence(timeout: 45))
-    XCTAssertTrue(city.isHittable)
-    city.tap()
-    waitForWebsiteElement(search, toExist: false)
-    waitForWebsiteElement(app.keyboards.firstMatch, toExist: false)
-    XCTAssertEqual(app.buttons["Fahrziel"].value as? String, "Leipzig")
-    name.tap()
-    name.typeText("Leipzig")
-    XCTAssertEqual(name.value as? String, "Leipzig")
-
-    // Saving accepts the name while its keyboard is visible; reopening the
-    // editor produces an unfocused form for the remaining menu selections.
-    app.buttons["profile-save"].tap()
-    waitForWebsiteElement(name, toExist: false)
-    let edit = app.buttons["profile-edit"]
-    XCTAssertTrue(edit.waitForExistence(timeout: 5))
-    edit.tap()
-    XCTAssertTrue(name.waitForExistence(timeout: 5))
-    let power = app.buttons["Mindestleistung"]
-    power.tap()
-    let selectedPower = app.buttons["150 kW"]
-    XCTAssertTrue(selectedPower.waitForExistence(timeout: 5))
-    selectedPower.tap()
-    XCTAssertEqual(power.value as? String, "150 kW")
-    let restaurant = app.switches["Restaurant in der Nähe erforderlich"]
-    revealWebsiteElement(restaurant, in: app)
-    restaurant.switches.firstMatch.tap()
-    let restaurantEnabled = XCTNSPredicateExpectation(
-      predicate: NSPredicate(format: "value == '1'"), object: restaurant
-    )
-    XCTAssertEqual(XCTWaiter.wait(for: [restaurantEnabled], timeout: 5), .completed)
-    let chain = app.buttons["Restaurantkette"]
-    revealWebsiteElement(chain, in: app)
-    chain.tap()
-    app.buttons["McDonald's"].tap()
-    XCTAssertEqual(chain.value as? String, "McDonald's")
-    app.buttons["profile-save"].tap()
-    waitForWebsiteElement(name, toExist: false)
-    XCTAssertTrue(edit.waitForExistence(timeout: 5))
-    captureWebsiteScreenshot("carplay-persistent-profile-prepared", in: app)
   }
 
   @MainActor
