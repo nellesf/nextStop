@@ -1,3 +1,4 @@
+import Vision
 import XCTest
 
 /// Exercises the real SwiftUI screens against a simulator-only, synthetic report service.
@@ -140,6 +141,7 @@ final class UserErrorReportUITests: XCTestCase {
 
     tap("report-privacy", in: app)
     reveal("report-privacy-content", in: app, timeout: 120)
+    assertPrivacyControllerIsFullyRendered(in: app)
     screenshot(app, named: "dark-accessibility-privacy")
     goBack(in: app)
 
@@ -326,6 +328,41 @@ final class UserErrorReportUITests: XCTestCase {
     hierarchy.lifetime = .keepAlways
     add(hierarchy)
     XCTFail("Control was not reachable after scrolling: \(identifier)", file: file, line: line)
+  }
+
+  @MainActor
+  private func assertPrivacyControllerIsFullyRendered(in app: XCUIApplication) {
+    // Accessibility labels retain the full source even when SwiftUI clips its last
+    // rendered line. Read this label's actual pixels, excluding nearby paragraphs.
+    let capture = element("report-privacy-content", in: app).screenshot()
+    var recognizedText = ""
+    do {
+      let request = VNRecognizeTextRequest()
+      request.recognitionLevel = .accurate
+      request.recognitionLanguages = ["de-DE"]
+      request.usesLanguageCorrection = false
+      try VNImageRequestHandler(data: capture.pngRepresentation, options: [:]).perform([request])
+      recognizedText = (request.results ?? []).compactMap {
+        $0.topCandidates(1).first?.string
+      }.joined(separator: "\n")
+      let words = recognizedText.lowercased()
+        .components(separatedBy: CharacterSet.letters.inverted)
+        .filter { !$0.isEmpty }
+      // Vision can read the fixture's closing ] as lowercase l. Both accepted
+      // endings require every letter of Firma; a clipped final word still fails.
+      if words.last == "firma" || words.last == "firmal" { return }
+    } catch {
+      recognizedText = "Text recognition failed: \(error)"
+    }
+    let pixels = XCTAttachment(screenshot: capture)
+    pixels.name = "privacy-controller-rendered-pixels"
+    pixels.lifetime = .keepAlways
+    add(pixels)
+    let recognition = XCTAttachment(string: recognizedText)
+    recognition.name = "privacy-controller-recognized-text"
+    recognition.lifetime = .keepAlways
+    add(recognition)
+    XCTFail("The rendered controller must include its final word ‘Firma’; its accessibility label alone is insufficient.")
   }
 
   @MainActor
