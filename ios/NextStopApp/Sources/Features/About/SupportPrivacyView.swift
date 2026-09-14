@@ -12,9 +12,12 @@ struct SupportPrivacyView: View {
       Section("report.privacy.controller") {
         if let configuration {
           Text(verbatim: configuration.displayControllerName)
+            .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("report-privacy-content")
           Text(verbatim: configuration.displayPostalAddress)
+            .fixedSize(horizontal: false, vertical: true)
           Text(verbatim: configuration.email)
+            .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
         } else {
           Text("report.configuration_missing")
@@ -47,7 +50,10 @@ struct SupportPrivacyView: View {
   }
 
   private func notice(_ title: LocalizedStringKey, _ body: LocalizedStringKey) -> some View {
-    Section(title) { Text(body) }
+    Section(title) {
+      Text(body)
+        .fixedSize(horizontal: false, vertical: true)
+    }
   }
 }
 

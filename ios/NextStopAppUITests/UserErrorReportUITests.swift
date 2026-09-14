@@ -134,6 +134,9 @@ final class UserErrorReportUITests: XCTestCase {
     XCTAssertTrue(element("log-preview-content", in: app).waitForExistence(timeout: 5))
     screenshot(app, named: "dark-accessibility-log-preview")
     goBack(in: app)
+    reveal("error-report-include-logs", in: app, direction: .down)
+    XCTAssertEqual(includeLogs.value as? String, "1", "The attachment choice must survive reviewing its preview.")
+    screenshot(app, named: "dark-accessibility-log-selection-after-preview")
 
     tap("report-privacy", in: app)
     reveal("report-privacy-content", in: app)
