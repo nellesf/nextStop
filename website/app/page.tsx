@@ -83,38 +83,37 @@ function AppScreenshot({
   );
 }
 
-function CarPlayMockup() {
+function CarPlayScreenshots() {
+  const screens = [
+    {
+      file: "carplay-profiles.png",
+      alt: "Die echte nextStop CarPlay-Ansicht Fahrt wählen mit dem gespeicherten Beispielprofil Leipzig",
+      caption: "App-Aufnahme · CarPlay · Fahrt wählen",
+    },
+    {
+      file: "carplay-ride-summary.png",
+      alt: "Die echte nextStop CarPlay-Fahrtübersicht für Leipzig mit Suche starten und Filter ändern",
+      caption: "App-Aufnahme · CarPlay · Fahrt vorbereiten",
+    },
+  ];
   return (
-    <div className="carplay-wrap">
-      <div className="carplay" role="img" aria-label="Designvorschau der nextStop CarPlay-Ergebnisse">
-        <div className="carplay-rail">
-          <span>17:46</span>
-          <span className="rail-orb">◉</span>
-          <span className="rail-orb">▦</span>
-        </div>
-        <div className="carplay-main">
-          <header><span className="back-pill">‹ Profile</span><strong>Passende Stopps</strong><span className="refresh-pill">↻</span></header>
-          <div className="carplay-content">
-            <div className="map-panel">
-              <div className="route-line route-one" />
-              <div className="route-line route-two" />
-              <span className="map-dot origin-dot" />
-              <span className="map-dot stop-dot">⚡</span>
-              <span className="road-label road-a">A 7</span>
-              <span className="road-label road-b">B 209</span>
-            </div>
-            <div className="poi-panel">
-              <span className="match-pill">1 von 3</span>
-              <h3>McDonald’s<br />Ladepark Elbtal</h3>
-              <p><strong>68 km</strong> Fahrstrecke</p>
-              <div className="poi-capacity"><strong>26</strong><span>Ladepunkte<br />ab 150 kW</span></div>
-              <div className="poi-providers">IONITY · EnBW · Tesla</div>
-              <button type="button" tabIndex={-1}>In Apple Maps</button>
-            </div>
+    <div className="carplay-gallery">
+      {screens.map((screen) => (
+        <figure className="carplay-wrap" key={screen.file}>
+          <div className="carplay">
+            <Image
+              className="carplay-screenshot"
+              src={`/screenshots/${screen.file}`}
+              alt={screen.alt}
+              width={800}
+              height={480}
+              sizes="(max-width: 620px) calc(100vw - 80px), (max-width: 1180px) 760px, 640px"
+              unoptimized
+            />
           </div>
-        </div>
-      </div>
-      <span className="mockup-label">Designvorschau · CarPlay</span>
+          <figcaption className="mockup-label">{screen.caption}</figcaption>
+        </figure>
+      ))}
     </div>
   );
 }
@@ -253,9 +252,9 @@ export default function Home() {
           <div className="stage-copy">
             <span className="stage-tag dark-tag">CARPLAY · WÄHREND DER FAHRT</span>
             <h3>Wenig tippen.<br />Klar entscheiden.</h3>
-            <p>Wähle ein Profil, vergleiche maximal fünf Stopps und übergib deinen Favoriten an Apple Maps. nextStop bleibt Suche – Apple Maps bleibt Navigation.</p>
+            <p>Wähle dein gespeichertes Profil und prüfe die Kriterien für diese Fahrt. Änderungen gelten nur unterwegs – dein Originalprofil bleibt erhalten. Die Navigation zu einem ausgewählten Stopp übernimmt Apple Maps.</p>
           </div>
-          <CarPlayMockup />
+          <CarPlayScreenshots />
         </div>
 
         <div className="device-stage results-stage">
@@ -269,7 +268,7 @@ export default function Home() {
             <p>Profile und dauerhafte Vorlieben richtest du vor der Fahrt ausschließlich auf dem iPhone ein. Wähle die passende Mindestleistung, die Anzahl der Ladepunkte und bei Bedarf deine Restaurantkette. Unterwegs reicht in CarPlay die Auswahl des vorbereiteten Profils.</p>
           </div>
         </div>
-        <p className="mockup-disclaimer">Die iPhone-Bilder zeigen echte Aufnahmen der unveröffentlichten App mit Beispielprofilen. Die CarPlay-Abbildung ist eine Designvorschau; ihre Darstellung kann von der App abweichen.</p>
+        <p className="mockup-disclaimer">Die iPhone- und CarPlay-Bilder zeigen echte Simulator-Aufnahmen der unveröffentlichten App mit Beispielprofilen. Die übrigen Grafiken erläutern das Konzept anhand fiktiver Ladeparks und Zahlen.</p>
       </section>
 
       <section className="capacity-section" id="ladepark" aria-labelledby="capacity-title">

@@ -35,8 +35,6 @@ and set `placeholdersActive` to `false`. Do not add a personal tax number or tax
 identification number. The page deliberately shows a yellow placeholder warning
 until this switch is changed.
 
-- Final decision whether the clearly labelled CarPlay design preview is
-  accepted or should also be replaced with a verified capture.
 - If the activity later uses a registered business/company: decide whether
   additional register, VAT-ID or consumer-dispute information applies.
 - Privacy owner/contact and confirmation of the Firebase contracting entity,
@@ -68,11 +66,48 @@ explained as text. A passing UI test does not replace visual review.
 `app/page.tsx` displays each image at its native aspect ratio without a recreated
 status bar or UI overlay. `app/globals.css` supplies only the surrounding device
 frame. Keep the original files when refreshing the captures and record the exact
-source revision and runner details alongside them. `npm test` checks that all
-two selected images appear in the exported page and exist in the static output.
+source revision and runner details alongside them. `npm test` checks that the
+selected images appear in the exported page and exist in the static output.
 
-The CarPlay illustration is still a code-based design preview and remains
-explicitly labelled as such. It must not be described as a Simulator screenshot.
+The CarPlay section uses two original external-display captures of the same
+`main` app: `carplay-profiles.png` and `carplay-ride-summary.png`. These replace
+the former code-based results illustration. The page shows profile selection
+and ride preparation; it does not present invented charging results as app UI.
+The remaining explanatory graphics are labelled as fictional examples.
+
+The website branch's on-demand **CarPlay Screenshots** workflow boots a fresh iPhone
+Simulator, opens the native CarPlay display, and builds the pinned `main` source.
+An opt-in hosted test seeds an example Leipzig profile through the app's
+unchanged SwiftData repository, then the job selects it through the actual CarPlay
+interface. This avoids making the capture depend on iPhone UI-test accessibility
+or a live place search. The sample coordinates describe central Leipzig; no live
+charging results are seeded. The capture never
+starts a charging search or navigation. Simulator entitlements are verified in
+the compiled executable; app code and the entitlement source file are unchanged.
+
+```bash
+gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website
+```
+
+Download the successful run's `carplay-captures` artifact, visually inspect both
+PNGs, and import them from the repository root:
+
+```bash
+gh run download <run-id> -n carplay-captures -D /tmp/nextstop-carplay-captures
+node website/scripts/import-carplay-screenshots.mjs /tmp/nextstop-carplay-captures <full-main-commit-sha>
+```
+
+`carplay-provenance.json` records source revisions, run URL, embedded entitlements,
+capture times, dimensions and SHA-256 hashes. The importer verifies the full set
+before copying any assets. Tests verify the original bytes and ensure both
+iPhone and CarPlay captures use the same app source revision.
+
+For capture-only retries, manually dispatch the workflow with `reuse_run_id` and
+the verified SHA-256 of that run's `CarPlayBuild.tar.gz` as `reuse_sha256`. The
+script verifies the pinned source commit, app tree, fixture source hash, and archive digest before
+reuse, then prepares the profile again in a fresh simulator. Build provenance
+remains separate from the current capture run. Leave both inputs empty to build
+from source; the normal workflow does not depend on retained artifacts.
 
 ## First Firebase Hosting deployment
 
@@ -91,9 +126,8 @@ Then, in **Firebase Console → Hosting → Add custom domain**, add both
    `nextstop.tech` and `www.nextstop.tech`. Make `nextstop.tech` canonical and
    redirect `www` to it.
 
-Do not publish the site until the legal operator/contact information has been
-added and the design-preview app images have either been accepted or replaced
-with final captures.
+Before a public launch, add the legal operator/contact information. The existing
+Cloud Run preview remains restricted to the owner's Google account.
 
 ## Private Google Cloud preview
 
@@ -230,7 +264,7 @@ Official references:
 
 - Product copy is based on the accepted nextStop architecture and domain rules.
 - `public/app-icon.png` is copied from the iOS asset catalog.
-- `public/screenshots/` contains original iPhone captures from the pinned `main`
-  app, with the source commit, Actions run and PNG hashes in `provenance.json`.
-  The CarPlay illustration remains explicitly labelled as a design preview.
+- `public/screenshots/` contains original iPhone and CarPlay captures from the
+  pinned `main` app. Source commits, Actions runs and PNG hashes are recorded in
+  `provenance.json` and `carplay-provenance.json` respectively.
 - `public/og.png` is the generated social preview card.

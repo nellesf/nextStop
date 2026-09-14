@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 
@@ -45,12 +46,17 @@ test("server-renders the complete German nextStop landing page", async () => {
   assert.match(html, /Vorbereiten\.<br\/>Nur auf dem iPhone\./);
   assert.match(html, /vor der Fahrt ausschließlich auf dem iPhone ein/);
   assert.doesNotMatch(html, /Vorbereiten geht/);
-  assert.match(html, /Designvorschau · CarPlay/);
+  assert.match(html, /App-Aufnahme · CarPlay · Fahrt wählen/);
+  assert.match(html, /App-Aufnahme · CarPlay · Fahrt vorbereiten/);
+  assert.doesNotMatch(html, /Designvorschau · CarPlay|carplay-rail|poi-panel/);
   assert.match(html, /App-Aufnahme · Meine Profile/);
   assert.match(html, /App-Aufnahme · Profil bearbeiten/);
-  assert.match(html, /echte Aufnahmen der unveröffentlichten App mit Beispielprofilen/);
+  assert.match(html, /echte Simulator-Aufnahmen der unveröffentlichten App mit Beispielprofilen/);
   assert.doesNotMatch(html, /Designvorschau · (?:iPhone|Profil bearbeiten|Ergebnis auf dem iPhone)/);
-  for (const filename of ["iphone-profiles.png", "iphone-profile-editor.png"]) {
+  for (const filename of [
+    "iphone-profiles.png", "iphone-profile-editor.png",
+    "carplay-profiles.png", "carplay-ride-summary.png",
+  ]) {
     assert.ok(html.includes(`src="/screenshots/${filename}"`));
   }
   assert.ok(!html.includes('src="/screenshots/iphone-profile-filters.png"'));
@@ -59,6 +65,25 @@ test("server-renders the complete German nextStop landing page", async () => {
   assert.match(html, /Anonyme Platzhalter/);
   assert.match(html, /name@example\.invalid/);
   assert.doesNotMatch(html, /codex-preview|Your site is taking shape|react-loading-skeleton/i);
+});
+
+test("uses unchanged original CarPlay captures of the same main app as the iPhone images", async () => {
+  const directory = new URL("../public/screenshots/", import.meta.url);
+  const iphone = JSON.parse(await readFile(new URL("provenance.json", directory), "utf8"));
+  const carplay = JSON.parse(await readFile(new URL("carplay-provenance.json", directory), "utf8"));
+  assert.equal(carplay.appCommit, iphone.appCommit);
+  assert.equal(carplay.appTree, iphone.appTree);
+  assert.equal(carplay.appliedEntitlements["com.apple.developer.carplay-charging"], true);
+  assert.match(carplay.runURL, /^https:\/\/github\.com\/nellesf\/nextStop\/actions\/runs\/\d+$/);
+  assert.deepEqual(carplay.screenshots.map((capture) => capture.file), [
+    "carplay-profiles.png", "carplay-ride-summary.png",
+  ]);
+  for (const capture of carplay.screenshots) {
+    const bytes = await readFile(new URL(capture.file, directory));
+    assert.equal(createHash("sha256").update(bytes).digest("hex"), capture.sha256);
+    assert.equal(bytes.readUInt32BE(16), capture.width);
+    assert.equal(bytes.readUInt32BE(20), capture.height);
+  }
 });
 
 test("keeps metadata, navigation, legal data, and source assets production-ready", async () => {

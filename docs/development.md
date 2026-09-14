@@ -6,9 +6,10 @@
 - Swift 6 toolchain (provided by Xcode for app builds).
 - Node.js active LTS and npm for the accepted TypeScript backend.
 - PostgreSQL with PostGIS, preferably through a pinned container setup.
-- An Apple Developer team. The app core and iPhone UI must work without the final
-  EV-charging entitlement; running the CarPlay surface requires Apple's managed
-  `com.apple.developer.carplay-charging` capability and matching provisioning.
+- An Apple Developer team for device signing. The repository already declares
+  `com.apple.developer.carplay-charging`. Simulator capture uses Xcode's embedded
+  simulator entitlements; device builds require Apple's managed capability and
+  matching provisioning.
 
 Observed on 2026-08-17: this machine has Swift 6.3 command-line tools, but the
 active developer directory is Command Line Tools rather than full Xcode. The local
@@ -88,8 +89,9 @@ never supply real report text, logs, or access tokens to these tests.
 Screenshots support manual checks for clipping, spacing, and contrast. They are
 not pixel-baseline comparisons, and a passing UI test does not establish that
 every layout is visually correct. The iPhone UI suite does not launch or capture
-the external CarPlay display. Actual CarPlay layout still needs the CarPlay
-Simulator or a vehicle; the existing CarPlay unit tests verify presenter behavior.
+the external CarPlay display. The separate website-branch **CarPlay Screenshots**
+workflow exercises that display; the existing CarPlay unit tests verify presenter
+behavior. Simulator captures do not replace testing in a vehicle.
 
 The website branch also supports a dedicated `screenshots` scope. It checks out
 the requested `app_ref` separately, overlays only the UI test harness, and verifies
@@ -414,14 +416,20 @@ native place card; the iPhone result card has no duplicate navigation button.
 
 ### CarPlay acceptance gate
 
-Do not add or sign an unapproved CarPlay capability. The app-binary scene,
-system-template flow, saved destination entry points, and search use case compile
-and pass entitlement-independent Xcode tests, but the CarPlay app cannot appear in
-the Simulator or a vehicle until Apple grants the managed EV-charging entitlement
-for `de.nextstop.app` and the development provisioning profile contains it.
+The app already declares the EV-charging capability and CarPlay scene. The
+website-branch capture job builds unchanged `main` with simulator ad-hoc signing
+and verifies `com.apple.developer.carplay-charging` in the executable's
+`__TEXT,__entitlements` section. An empty `codesign` entitlement dictionary alone
+does not show that simulator entitlements are missing. An opt-in hosted app test
+seeds a persistent example profile through the unchanged SwiftData repository,
+because CarPlay does not read the iPhone UI tests' in-memory store. This fixture
+does not start a charging search or navigation and rejects a nonempty store.
 
-After approval, enable the granted capability for the App ID and `NextStopApp`
-target, refresh signing assets, and run one integrated acceptance pass:
+Before testing on a device or distributing a build, verify Apple's approval and
+matching provisioning for `de.nextstop.app`; simulator success does not establish
+either. Do not add or sign an unapproved device capability. Enable the granted
+capability for the App ID, refresh signing assets, and run one integrated
+acceptance pass:
 
 1. Start PostgreSQL and the backend with ingestion enabled; wait for the initial
    authority projection instead of entering charging rows manually.

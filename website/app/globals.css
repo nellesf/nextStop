@@ -684,15 +684,13 @@ footer a:hover {
   opacity: 0.65;
 }
 
-.poi-panel button {
+.carplay-gallery {
+  display: grid;
+  gap: 30px;
+  min-width: 0;
   width: 100%;
-  border: 0;
-  background: var(--lime);
-  color: #0d1d18;
-  border-radius: 10px;
-  font-weight: 760;
-  padding: 10px;
-  font-size: 11px;
+  max-width: 780px;
+  justify-self: center;
 }
 
 .carplay-wrap {
@@ -700,87 +698,25 @@ footer a:hover {
   flex-direction: column;
   gap: 14px;
   align-items: center;
+  margin: 0;
+  min-width: 0;
 }
 
 .carplay {
-  width: 760px;
-  max-width: 100%;
-  aspect-ratio: 1.72;
+  width: 100%;
   border: 10px solid #020504;
-  border-radius: 34px;
-  background: #131916;
-  box-shadow: 0 36px 60px rgba(0, 0, 0, 0.42), inset 0 0 0 1px #5a625f;
-  display: grid;
-  grid-template-columns: 56px 1fr;
+  border-radius: 22px;
+  background: #020504;
+  box-shadow: 0 24px 50px rgba(0, 0, 0, 0.35);
   overflow: hidden;
-  font-family: -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
-.carplay-rail {
-  background: #0a0c0b;
-  display: flex;
-  flex-direction: column;
-  align-items: center;
-  padding: 17px 0;
-  gap: 19px;
-  font-size: 8px;
+.carplay-screenshot {
+  display: block;
+  width: 100%;
+  height: auto;
 }
-.rail-orb { width: 28px; height: 28px; border-radius: 8px; background: #252b28; display: grid; place-items: center; }
-.carplay-main header {
-  height: 54px;
-  display: grid;
-  grid-template-columns: 1fr auto 1fr;
-  align-items: center;
-  padding: 0 17px;
-  font-size: 12px;
-}
-.carplay-main header strong { font-size: 15px; }
-.back-pill,
-.refresh-pill { color: var(--aqua); font-weight: 700; }
-.refresh-pill { justify-self: end; font-size: 18px; }
-.carplay-content { height: calc(100% - 54px); display: grid; grid-template-columns: 1.2fr 0.8fr; }
-.map-panel { position: relative; overflow: hidden; background: #d8d9cd; }
-.map-panel::before,
-.map-panel::after {
-  content: "";
-  position: absolute;
-  width: 340px;
-  border-top: 5px solid #ecece5;
-  border-bottom: 2px solid #bbbdb3;
-  transform: rotate(-24deg);
-  left: -80px;
-  top: 110px;
-}
-.map-panel::after { transform: rotate(39deg); left: 80px; top: 220px; }
-.route-line { position: absolute; height: 14px; border-radius: 20px; background: #19966d; box-shadow: inset 0 0 0 3px #77e0bc; }
-.route-one { width: 310px; transform: rotate(-44deg); left: -34px; top: 168px; }
-.route-two { width: 240px; transform: rotate(13deg); left: 180px; top: 73px; }
-.map-dot { position: absolute; z-index: 2; border-radius: 50%; display: grid; place-items: center; box-shadow: 0 3px 9px rgba(0,0,0,.25); }
-.origin-dot { width: 16px; height: 16px; background: #1591ff; border: 3px solid white; left: 47px; bottom: 60px; }
-.stop-dot { width: 35px; height: 35px; background: var(--lime); color: var(--ink); right: 50px; top: 43px; font-weight: 900; font-size: 18px; }
-.road-label { position: absolute; background: white; color: #6d746f; padding: 2px 4px; border-radius: 3px; font-size: 7px; }
-.road-a { left: 165px; top: 120px; }.road-b { right: 24px; bottom: 35px; }
-.poi-panel { background: #1d2421; padding: 20px; display: flex; flex-direction: column; }
-.match-pill {
-  align-self: flex-start;
-  display: inline-block;
-  border-radius: 999px;
-  background: #e3f9ec;
-  color: #177451;
-  font-size: 7px;
-  font-weight: 800;
-  letter-spacing: .05em;
-  text-transform: uppercase;
-  padding: 5px 7px;
-}
-.poi-panel h3 { margin: 13px 0 8px; font-size: 21px; line-height: 1.08; letter-spacing: -0.035em; }
-.poi-panel > p { margin: 0 0 15px; font-size: 10px; color: #b7c0bc; }
-.poi-panel > p strong { color: white; font-size: 14px; }
-.poi-capacity { display: flex; align-items: center; gap: 9px; border-top: 1px solid rgba(255,255,255,.12); padding-top: 12px; }
-.poi-capacity strong { font-size: 31px; color: var(--lime); }
-.poi-capacity span { font-size: 8px; color: #c4cbc8; line-height: 1.3; }
-.poi-providers { color: #aab4af; font-size: 8px; margin: 7px 0 14px; }
-.poi-panel button { margin-top: auto; }
+
 .carplay-wrap .mockup-label { color: white; }
 
 .results-stage .filter-distance { justify-self: center; flex-direction: column; align-items: flex-start; max-width: 340px; }
@@ -960,8 +896,9 @@ footer p { color: var(--muted); font-size: 14px; } footer > div { display: flex;
   .device-column { width: 100%; }
   .phone { width: 284px; }
   .editor-device { transform: none; }
-  .carplay-stage { min-height: 730px; }
-  .carplay-wrap { width: 670px; transform: scale(.48); transform-origin: center top; margin-bottom: -180px; }
+  .carplay-stage { min-height: 0; gap: 36px; }
+  .carplay { border-width: 6px; border-radius: 14px; }
+  .carplay-gallery { gap: 24px; }
   .capacity-intro { gap: 28px; }
   .capacity-demo { margin-top: 60px; }
   .snapshot-card,
