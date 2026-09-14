@@ -10,10 +10,13 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     let selectedPlace = MKMapItem()
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
     var urlBuilderItems: [MKMapItem] = []
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener) { mapItem in
-      urlBuilderItems.append(mapItem)
-      return AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
-    }
+    let launcher = CarPlayAppleMapsLauncher(
+      sceneOpener: sceneOpener,
+      placeURL: { mapItem in
+        urlBuilderItems.append(mapItem)
+        return AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
+      }
+    )
 
     let opened = await launcher.openPlace(selectedPlace)
 
@@ -36,7 +39,7 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
   func testMissingPlaceURLUsesTheExactNativeMapItemOnce() async {
     let selectedPlace = MKMapItem()
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener) { _ in nil }
+    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener, placeURL: { _ in nil })
 
     let opened = await launcher.openPlace(selectedPlace)
 
@@ -50,9 +53,10 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
     let recorder = CarPlayMapsLaunchRecorder()
     sceneOpener.result = false
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener, diagnostics: recorder) { _ in
-      AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
-    }
+    let launcher = CarPlayAppleMapsLauncher(
+      sceneOpener: sceneOpener, diagnostics: recorder,
+      placeURL: { _ in AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF") }
+    )
 
     let opened = await launcher.openPlace(MKMapItem())
 
@@ -67,7 +71,7 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     let selectedPlace = MKMapItem()
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
     sceneOpener.result = false
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener) { _ in nil }
+    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener, placeURL: { _ in nil })
 
     let opened = await launcher.openPlace(selectedPlace)
 
@@ -82,10 +86,13 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
     let recorder = CarPlayMapsLaunchRecorder()
     var urlBuilderCallCount = 0
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener, diagnostics: recorder) { _ in
-      urlBuilderCallCount += 1
-      return AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
-    }
+    let launcher = CarPlayAppleMapsLauncher(
+      sceneOpener: sceneOpener, diagnostics: recorder,
+      placeURL: { _ in
+        urlBuilderCallCount += 1
+        return AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
+      }
+    )
     let task = Task { @MainActor in
       await launcher.openPlace(selectedPlace)
     }
