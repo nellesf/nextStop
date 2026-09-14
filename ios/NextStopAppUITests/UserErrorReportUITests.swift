@@ -29,7 +29,10 @@ final class UserErrorReportUITests: XCTestCase {
     setLocalRecording(true, in: app)
     let savedCount = element("diagnostics-saved-count", in: app)
     reveal("diagnostics-saved-count", in: app, direction: .down)
-    XCTAssertEqual(savedCount.label, "0", "Enabling recording must not invent past error events.")
+    XCTAssertEqual(
+      savedCount.label, "Gespeicherte Ereignisse, 0",
+      "Enabling recording must not invent past error events."
+    )
     screenshot(app, named: "light-local-recording-enabled-without-past-logs")
 
     goBack(in: app)
@@ -263,11 +266,16 @@ final class UserErrorReportUITests: XCTestCase {
     for _ in 0..<12 {
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
+      let inputAssistant = app.otherElements.matching(identifier: "SystemInputAssistantView").firstMatch
       let navigationBar = app.navigationBars.firstMatch
       let contentTop = navigationBar.exists
         ? max(frame.minY + 80, navigationBar.frame.maxY + 12) : frame.minY + 120
-      let contentBottom = keyboard.exists
-        ? min(frame.maxY - 50, keyboard.frame.minY - 12) : frame.maxY - 50
+      // The prediction bar sits above Keyboard's accessibility frame and also
+      // consumes touches; gestures must start above that entire input surface.
+      let keyboardTop = keyboard.exists
+        ? min(keyboard.frame.minY, inputAssistant.exists ? inputAssistant.frame.minY : frame.maxY)
+        : frame.maxY
+      let contentBottom = min(frame.maxY - 50, keyboardTop - 12)
       let viewport = CGRect(
         x: frame.minX, y: contentTop, width: frame.width,
         height: max(100, contentBottom - contentTop)
