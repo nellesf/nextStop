@@ -27,6 +27,7 @@
     func testFixturesUseDefaultRecordingAndIsolateProfilesLogsAndReceipts() async throws {
       let empty = try UITestSupport(scenario: .empty)
       let logs = try UITestSupport(scenario: .logsSuccess)
+      let profileEditor = try UITestSupport(scenario: .profileEditor)
       XCTAssertTrue(empty.modelContainer.configurations.allSatisfy(\.isStoredInMemoryOnly))
       XCTAssertTrue(logs.modelContainer.configurations.allSatisfy(\.isStoredInMemoryOnly))
       XCTAssertEqual(
@@ -36,6 +37,12 @@
       XCTAssertTrue(logs.diagnostics.recordingEnabled)
       XCTAssertEqual(logs.diagnostics.events.count, 1)
       XCTAssertEqual(logs.diagnostics.events.first?.category, .offline)
+      let profiles = try SwiftDataProfileRepository(
+        modelContext: profileEditor.modelContainer.mainContext
+      ).fetchProfiles()
+      XCTAssertEqual(profiles.map(\.name), ["Leipzig"])
+      XCTAssertTrue(profileEditor.modelContainer.configurations.allSatisfy(\.isStoredInMemoryOnly))
+      XCTAssertTrue(profileEditor.diagnostics.events.isEmpty)
 
       let request = try UserErrorReportRequest(
         message: "Synthetic report.", includeDiagnostics: false)

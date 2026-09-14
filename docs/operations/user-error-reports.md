@@ -70,10 +70,21 @@ recipients, retention, withdrawal/deletion and data-subject rights. Report conte
 is used only to investigate/fix the reported fault. Do not forward it to external
 analytics, AI, issue-tracker or messaging services. No public GET endpoint exists.
 
-An iPhone receipt retains the per-report deletion proof. DELETE uses this proof,
-not App Attest, so users can withdraw even when device authentication is broken.
-The secret is transmitted only over TLS in the JSON body and stored server-side
-only as SHA-256. Never put it in a URL, logs, command history, or support tickets.
+An iPhone receipt retains the per-report deletion proof. For a report or tombstone
+already stored by the server, the matching proof is sufficient without App Attest.
+If an unconfirmed report has not reached the server, valid app authentication is
+required before creating protection against a delayed upload. Unknown references
+and incorrect proofs without a valid bearer both return 401, without allocating
+rows or spending the application's admitted-deletion allowance. An authenticated
+request with an incorrect proof for an existing report does not change it and
+returns 204. Storage checks the proof again atomically before making any change.
+
+The iPhone first sends DELETE without a bearer. Only a 401 response triggers token
+acquisition, and a further 401 permits one forced token refresh. Authentication,
+transport, admission, or storage failure leaves the receipt available for retry;
+the app removes it only after confirmed 204. The secret is transmitted only over
+TLS in the JSON body and stored server-side only as SHA-256. Never put it in a URL,
+logs, command history, or support tickets.
 
 ## Persistence and retention
 
@@ -100,11 +111,13 @@ Only the random report ID, deletion-token hash and expiry remain as a tombstone
 (other columns are null/zero). This minimal integrity record prevents late POST
 retries from restoring withdrawn data; its distinct Article 6(1)(f) purpose is
 disclosed in the privacy notice. Existing-report tombstones keep the original
-expiry. If withdrawal arrives before a delayed POST, a tombstone is retained for
-at most 30 days from withdrawal. Missing/expired/wrong-token deletion proofs return
-204 without report contents. If a new tombstone cannot be stored because capacity
-is full, return 503 and keep the client proof for an explicit retry; existing
-reports remain deletable. Report UUIDs and secrets are independently random.
+expiry. If authenticated withdrawal arrives before a delayed POST, a tombstone is
+retained for at most 30 days from withdrawal. A correct proof for a retained
+tombstone still works without app authentication; after purge, the reference is
+unknown and requires authentication before new replay protection can be created.
+If a new tombstone cannot be stored because capacity is full, return 503 and keep
+the client proof for an explicit retry; existing reports remain deletable. Report
+UUIDs and secrets are independently random.
 
 POST retries are idempotent only for the same UUID, token and canonical payload.
 The original receipt is returned with 200. Changed content/secret returns 409.
@@ -121,11 +134,15 @@ upload reports after app restart.
 2. Configure `SUPPORT_DATABASE_URL` on the API process and retain the existing
    `SEARCH_ACCESS_TOKEN_SIGNING_KEY`. The report endpoint accepts only the
    short-lived access-token authenticator, never the legacy shared staging bearer.
-   Missing support configuration returns 503; missing authentication fails closed.
+   Missing support configuration returns 503. POST and new withdrawal tombstones
+   require app authentication; a correct existing deletion proof remains sufficient.
 3. Deploy the exact HTTPS nginx `/v1/error-reports` location, permitting POST and
    DELETE only. It caps the body at 128 KiB and requests at 6/minute/IP with burst 2.
-   The API adds global 10 POST/minute, 30 DELETE/minute and four active operations.
-   IPs are used transiently by nginx rate limiting, not placed in report records.
+   The API adds global 10 authenticated POST/minute, 30 authorized DELETE/minute
+   and four active operations. Rejected credentials do not spend these admitted
+   operation allowances. Proxy ingress and concurrency limits remain shared;
+   this does not eliminate denial-of-service risk. IPs are used transiently by
+   nginx rate limiting, not placed in report records.
 4. Keep allowlisted request logging and nginx error-only logs. PostgreSQL
    `log_parameter_max_length_on_error=0` and `log_statement=none` prevent parameter
    values from appearing in database errors. Never enable payload/SQL-parameter
@@ -166,7 +183,9 @@ correlate the corresponding allowlisted operational records when still retained.
 
 Unit tests cover strict field/enum/number/timestamp validation, Unicode limits,
 explicit diagnostics selection, authentication, body/rate bounds, idempotent
-receipts, deletion without authentication and log redaction. The real PostGIS
-suite covers concurrent inserts, changed content/token conflicts, withdrawal
-before/during POST, tombstone minimization, exact expiry, quota enforcement and
-bounded CLI access. Use the repository's pinned Node 24 runtime.
+receipts, deletion of existing reports without app authentication, conditional
+authentication for unknown reports, non-admission of invalid proofs, and log
+redaction. The real PostGIS suite covers concurrent inserts, changed content/token
+conflicts, authenticated withdrawal before/during POST, atomic authorization
+rechecks, tombstone minimization, exact expiry, quota enforcement and bounded CLI
+access. Use the repository's pinned Node 24 runtime.

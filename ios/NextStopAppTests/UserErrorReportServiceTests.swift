@@ -365,6 +365,143 @@ final class UserErrorReportServiceTests: XCTestCase {
     )
   }
 
+  func testKnownStoredReportCanBeDeletedWithoutCallingUnavailableAuthentication() async throws {
+    let fixture = try ReportTransportFixture(replies: [.http(204)])
+    defer { fixture.remove() }
+    let pending = try fixture.store.reserve(fixture.request())
+    let confirmed = UserErrorReportReceipt(
+      reportID: pending.reportID, deletionToken: pending.deletionToken,
+      createdAt: pending.createdAt, receivedAt: fixture.now,
+      expiresAt: fixture.now.addingTimeInterval(UserErrorReportReceiptStore.retentionInterval)
+    )
+    try fixture.store.confirm(confirmed)
+    let reloaded = UserErrorReportReceiptStore(fileURL: fixture.fileURL, clock: { fixture.now })
+    let receipt = try XCTUnwrap(reloaded.receipts.first)
+    await fixture.tokens.fail(with: URLError(.notConnectedToInternet))
+
+    try await fixture.service(store: reloaded).delete(receipt)
+
+    XCTAssertEqual(fixture.requests.count, 1)
+    XCTAssertNil(fixture.requests[0].value(forHTTPHeaderField: "Authorization"))
+    let refreshes = await fixture.tokens.refreshes
+    XCTAssertEqual(refreshes, [])
+    XCTAssertTrue(reloaded.receipts.isEmpty)
+  }
+
+  func testUnknownReportDeletionUsesBearerOnlyAfter401AndKeepsTheSameCapability() async throws {
+    let fixture = try ReportTransportFixture(replies: [.http(401), .http(204)])
+    defer { fixture.remove() }
+    let pending = try fixture.store.reserve(fixture.request())
+
+    try await fixture.service().delete(pending)
+
+    XCTAssertEqual(fixture.requests.count, 2)
+    XCTAssertNil(fixture.requests[0].value(forHTTPHeaderField: "Authorization"))
+    XCTAssertEqual(
+      fixture.requests[1].value(forHTTPHeaderField: "Authorization"),
+      "Bearer " + String(repeating: "a", count: 32)
+    )
+    XCTAssertEqual(fixture.requests[0].httpBody, fixture.requests[1].httpBody)
+    XCTAssertEqual(
+      Set(try fixture.fields(fixture.requests[1]).keys), ["reportId", "deletionToken"])
+    let refreshes = await fixture.tokens.refreshes
+    XCTAssertEqual(refreshes, [false])
+    XCTAssertTrue(fixture.store.receipts.isEmpty)
+    XCTAssertTrue(
+      UserErrorReportReceiptStore(fileURL: fixture.fileURL, clock: { fixture.now }).receipts.isEmpty
+    )
+  }
+
+  func testDeletionRefreshesRejectedBearerOnlyOnceAndNeverLosesFailedWithdrawalProof() async throws
+  {
+    for finalStatus in [204, 401] {
+      let fixture = try ReportTransportFixture(
+        replies: [.http(401), .http(401), .http(finalStatus), .http(204)])
+      defer { fixture.remove() }
+      let pending = try fixture.store.reserve(fixture.request())
+      if finalStatus == 204 {
+        try await fixture.service().delete(pending)
+        XCTAssertTrue(fixture.store.receipts.isEmpty)
+      } else {
+        await assertError(.authenticationUnavailable) {
+          try await fixture.service().delete(pending)
+        }
+        XCTAssertEqual(fixture.store.receipts, [pending])
+        XCTAssertEqual(
+          UserErrorReportReceiptStore(fileURL: fixture.fileURL, clock: { fixture.now }).receipts,
+          [pending])
+      }
+      XCTAssertEqual(fixture.requests.count, 3)
+      XCTAssertTrue(fixture.requests.allSatisfy { $0.httpBody == fixture.requests[0].httpBody })
+      XCTAssertEqual(
+        fixture.requests[2].value(forHTTPHeaderField: "Authorization"),
+        "Bearer " + String(repeating: "b", count: 32)
+      )
+      let refreshes = await fixture.tokens.refreshes
+      XCTAssertEqual(refreshes, [false, true])
+    }
+  }
+
+  func testUnknownReportAuthenticationFailurePreservesDurablePendingReceipt() async throws {
+    let fixture = try ReportTransportFixture(replies: [.http(401), .http(204)])
+    defer { fixture.remove() }
+    let pending = try fixture.store.reserve(fixture.request())
+    await fixture.tokens.fail(with: URLError(.notConnectedToInternet))
+
+    await assertError(.authenticationUnavailable) { try await fixture.service().delete(pending) }
+
+    XCTAssertEqual(fixture.requests.count, 1)
+    let refreshes = await fixture.tokens.refreshes
+    XCTAssertEqual(refreshes, [false])
+    XCTAssertEqual(fixture.store.receipts, [pending])
+    XCTAssertEqual(
+      UserErrorReportReceiptStore(fileURL: fixture.fileURL, clock: { fixture.now }).receipts,
+      [pending])
+  }
+
+  func testFailedAuthenticatedDeletionNeverAutomaticallyRepeatsOrDiscardsTheReceipt() async throws {
+    let failures: [(ReportTransportReply, UserErrorReportError)] = [
+      (.failure(URLError(.timedOut)), .unavailable),
+      (.http(503), .unavailable), (.http(429), .rateLimited),
+      (.http(403), .authenticationUnavailable),
+    ]
+    for (reply, expected) in failures {
+      let fixture = try ReportTransportFixture(replies: [.http(401), reply, .http(204)])
+      defer { fixture.remove() }
+      let pending = try fixture.store.reserve(fixture.request())
+
+      await assertError(expected) { try await fixture.service().delete(pending) }
+
+      XCTAssertEqual(fixture.requests.count, 2)
+      let refreshes = await fixture.tokens.refreshes
+      XCTAssertEqual(refreshes, [false])
+      XCTAssertEqual(fixture.store.receipts, [pending])
+    }
+  }
+
+  func testCancelledDeletionAuthenticationOrTransportRetainsThePendingCapability() async throws {
+    for cancelAuthentication in [true, false] {
+      let fixture = try ReportTransportFixture(
+        replies: [.http(401), .failure(URLError(.cancelled)), .http(204)])
+      defer { fixture.remove() }
+      let pending = try fixture.store.reserve(fixture.request())
+      if cancelAuthentication { await fixture.tokens.fail(with: CancellationError()) }
+
+      do {
+        try await fixture.service().delete(pending)
+        XCTFail("Cancellation must propagate without further requests")
+      } catch is CancellationError {
+        XCTAssertEqual(fixture.requests.count, cancelAuthentication ? 1 : 2)
+      }
+      let refreshes = await fixture.tokens.refreshes
+      XCTAssertEqual(refreshes, [false])
+      XCTAssertEqual(fixture.store.receipts, [pending])
+      XCTAssertEqual(
+        UserErrorReportReceiptStore(fileURL: fixture.fileURL, clock: { fixture.now }).receipts,
+        [pending])
+    }
+  }
+
   func testFailedDeletionRetainsTheCapabilityForAnExplicitRetry() async throws {
     let fixture = try ReportTransportFixture(replies: [.failure(URLError(.timedOut)), .http(204)])
     defer { fixture.remove() }
@@ -489,8 +626,13 @@ private enum ReportTransportReply {
 
 private actor ReportAccessTokenProvider: SearchAccessTokenProviding {
   private(set) var refreshes: [Bool] = []
+  private var failure: (any Error)?
+
+  func fail(with error: any Error) { failure = error }
+
   func accessToken(forceRefresh: Bool) async throws -> String {
     refreshes.append(forceRefresh)
+    if let failure { throw failure }
     return String(repeating: forceRefresh ? "b" : "a", count: 32)
   }
 }

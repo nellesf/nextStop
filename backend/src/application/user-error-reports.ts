@@ -63,7 +63,8 @@ export interface StoredUserErrorReport {
 
 export interface UserErrorReportRepository {
   save(report: StoredUserErrorReport): Promise<{ readonly created: boolean; readonly receipt: UserErrorReportReceipt }>;
-  delete(reportId: string, deletionTokenHash: Buffer, now: Date): Promise<void>;
+  hasDeletionCapability(reportId: string, deletionTokenHash: Buffer): Promise<boolean>;
+  delete(reportId: string, deletionTokenHash: Buffer, now: Date, mayCreateTombstone?: boolean): Promise<void>;
   purge(now: Date): Promise<number>;
 }
 
@@ -71,6 +72,13 @@ export class InvalidUserErrorReportError extends Error {}
 export class UserErrorReportConflictError extends Error {}
 export class UserErrorReportWithdrawnError extends Error {}
 export class UserErrorReportCapacityError extends Error {}
+export class UserErrorReportAuthorizationError extends Error {}
+
+export interface UserErrorReportDeletionOptions {
+  readonly authenticated?: boolean;
+  /** Admission is charged only after a valid capability or app token is proven. */
+  readonly onAuthorized?: () => void;
+}
 
 export function hashReportSecret(value: string): Buffer {
   return createHash("sha256").update(value, "utf8").digest();
@@ -98,9 +106,20 @@ export class UserErrorReports {
     });
   }
 
-  async delete(value: unknown): Promise<void> {
+  async delete(value: unknown, options: UserErrorReportDeletionOptions = {}): Promise<void> {
     const body = object(value, ["reportId", "deletionToken"]);
-    await this.repository.delete(uuid(body.reportId), hashReportSecret(uuid(body.deletionToken)), this.now());
+    const reportId = uuid(body.reportId);
+    const deletionTokenHash = hashReportSecret(uuid(body.deletionToken));
+    const authenticated = options.authenticated === true;
+    if (!authenticated && !(await this.repository.hasDeletionCapability(reportId, deletionTokenHash))) {
+      // Unknown IDs and wrong secrets have the same response. An arbitrary UUID
+      // is not authority to allocate a persistent replay-protection record.
+      throw new UserErrorReportAuthorizationError();
+    }
+    options.onAuthorized?.();
+    // The repository checks again under its transaction lock; preflight never
+    // grants permission to create an unknown tombstone after a concurrent purge.
+    await this.repository.delete(reportId, deletionTokenHash, this.now(), authenticated);
   }
 }
 

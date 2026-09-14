@@ -303,6 +303,7 @@ struct ProfileListView: View {
       }
       .buttonStyle(.plain)
       .accessibilityHint("profiles.edit.accessibility_hint")
+      .accessibilityIdentifier("profile-edit")
       .accessibilityAction(named: Text("action.delete")) {
         delete(profile)
       }

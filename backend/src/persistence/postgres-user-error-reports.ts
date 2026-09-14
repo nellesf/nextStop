@@ -2,6 +2,7 @@ import { randomBytes, timingSafeEqual } from "node:crypto";
 import type { Pool } from "pg";
 import {
   UserErrorReportCapacityError,
+  UserErrorReportAuthorizationError,
   UserErrorReportConflictError,
   UserErrorReportWithdrawnError,
   userErrorReportLimits,
@@ -70,25 +71,35 @@ export class PostgresUserErrorReportRepository implements UserErrorReportReposit
     }
   }
 
-  async delete(reportId: string, deletionTokenHash: Buffer, now: Date): Promise<void> {
-    await this.withdraw(reportId, deletionTokenHash, now);
+  async hasDeletionCapability(reportId: string, deletionTokenHash: Buffer): Promise<boolean> {
+    const result = await this.pool.query<{ deletion_token_hash: Buffer }>(
+      "SELECT deletion_token_hash FROM nextstop.user_error_reports WHERE report_id = $1", [reportId],
+    );
+    const row = result.rows[0];
+    return row !== undefined && timingSafeEqual(row.deletion_token_hash, deletionTokenHash);
+  }
+
+  async delete(reportId: string, deletionTokenHash: Buffer, now: Date, mayCreateTombstone = false): Promise<void> {
+    await this.withdraw(reportId, deletionTokenHash, now, mayCreateTombstone);
   }
 
   async deleteAsAdministrator(reportId: string, now: Date): Promise<void> {
-    await this.withdraw(reportId, undefined, now);
+    await this.withdraw(reportId, undefined, now, true);
   }
 
   private async withdraw(
     reportId: string,
     deletionTokenHash: Buffer | undefined,
     now: Date,
+    mayCreateTombstone: boolean,
   ): Promise<void> {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
       await client.query("SELECT pg_advisory_xact_lock(74638912)");
-      const existing = await client.query("SELECT report_id FROM nextstop.user_error_reports WHERE report_id = $1", [reportId]);
+      const existing = await client.query<{ deletion_token_hash: Buffer }>("SELECT deletion_token_hash FROM nextstop.user_error_reports WHERE report_id = $1", [reportId]);
       if (existing.rowCount === 0) {
+        if (!mayCreateTombstone) throw new UserErrorReportAuthorizationError();
         // Withdrawal may beat an in-flight POST. Remember it before acknowledging 204.
         const totals = await client.query<{ count: string }>("SELECT count(*)::text AS count FROM nextstop.user_error_reports");
         if (Number(totals.rows[0]?.count ?? userErrorReportLimits.maximumReports) >= userErrorReportLimits.maximumReports) {
@@ -100,6 +111,10 @@ export class PostgresUserErrorReportRepository implements UserErrorReportReposit
           [reportId, deletionTokenHash ?? randomBytes(32), new Date(now.getTime() + userErrorReportLimits.retentionMilliseconds)],
         );
       } else {
+        const row = existing.rows[0];
+        if (deletionTokenHash !== undefined && (row === undefined || !timingSafeEqual(row.deletion_token_hash, deletionTokenHash)) && !mayCreateTombstone) {
+          throw new UserErrorReportAuthorizationError();
+        }
         await client.query(
           `UPDATE nextstop.user_error_reports SET payload = NULL, payload_bytes = 0, payload_hash = NULL, received_at = NULL
            WHERE report_id = $1 AND ($2::bytea IS NULL OR deletion_token_hash = $2) AND payload IS NOT NULL`,

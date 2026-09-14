@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { randomUUID } from "node:crypto";
-import { UserErrorReports, UserErrorReportConflictError, UserErrorReportWithdrawnError, UserErrorReportCapacityError, hashReportSecret } from "../../src/application/user-error-reports.js";
+import { UserErrorReports, UserErrorReportConflictError, UserErrorReportWithdrawnError, UserErrorReportCapacityError, UserErrorReportAuthorizationError, hashReportSecret } from "../../src/application/user-error-reports.js";
+import { createApp } from "../../src/api/app.js";
 import { PostgresUserErrorReportRepository } from "../../src/persistence/postgres-user-error-reports.js";
 import { manageUserErrorReports } from "../../src/jobs/manage-user-error-reports.js";
 import { readFile } from "node:fs/promises";
@@ -77,10 +78,14 @@ void test(
       const reports = new UserErrorReports(repository, () => now);
       const body = { schemaVersion: 1, reportId: randomUUID(), deletionToken: randomUUID(), consentVersion: "2026-09-13", message: "Private report text", includeDiagnostics: false };
       const pending = { ...body, reportId: randomUUID(), deletionToken: randomUUID() };
-      await reports.delete({ reportId: pending.reportId, deletionToken: pending.deletionToken });
+      await assert.rejects(reports.delete({ reportId: pending.reportId, deletionToken: pending.deletionToken }), UserErrorReportAuthorizationError);
+      await assert.rejects(repository.delete(pending.reportId, hashReportSecret(pending.deletionToken), now), UserErrorReportAuthorizationError);
+      assert.equal((await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM nextstop.user_error_reports")).rows[0]?.count, 0);
+      await reports.delete({ reportId: pending.reportId, deletionToken: pending.deletionToken }, { authenticated: true });
       await assert.rejects(reports.submit(pending), UserErrorReportWithdrawnError);
       const racing = { ...body, reportId: randomUUID(), deletionToken: randomUUID() };
-      await Promise.allSettled([reports.submit(racing), reports.delete({ reportId: racing.reportId, deletionToken: racing.deletionToken })]);
+      const raceResults = await Promise.allSettled([reports.submit(racing), reports.delete({ reportId: racing.reportId, deletionToken: racing.deletionToken }, { authenticated: true })]);
+      assert.equal(raceResults[1]?.status, "fulfilled");
       await assert.rejects(reports.submit(racing), UserErrorReportWithdrawnError);
       await pool.query("DELETE FROM nextstop.user_error_reports WHERE report_id IN ($1, $2)", [pending.reportId, racing.reportId]);
       const adminPending = { ...body, reportId: randomUUID(), deletionToken: randomUUID() };
@@ -103,7 +108,8 @@ void test(
       assert.equal(listing.includes(body.reportId), true);
       assert.equal(listing.includes("Private report text"), false);
       assert.equal(JSON.stringify(await manageUserErrorReports(pool, ["show", body.reportId], now)).includes("Private report text"), true);
-      await reports.delete({ reportId: body.reportId, deletionToken: randomUUID() });
+      await assert.rejects(reports.delete({ reportId: body.reportId, deletionToken: randomUUID() }), UserErrorReportAuthorizationError);
+      await reports.delete({ reportId: body.reportId, deletionToken: randomUUID() }, { authenticated: true });
       assert.equal((await reports.submit(body)).created, false);
       await reports.delete({ reportId: body.reportId, deletionToken: body.deletionToken });
       await reports.delete({ reportId: body.reportId, deletionToken: body.deletionToken });
@@ -121,10 +127,43 @@ void test(
         SELECT gen_random_uuid(), deletion_token_hash, payload_hash, payload, payload_bytes, received_at, expires_at
         FROM nextstop.user_error_reports, generate_series(1, 999) WHERE report_id = $1`, [fill.receipt.reportId]);
       await assert.rejects(reports.submit({ ...body, reportId: randomUUID() }), UserErrorReportCapacityError);
-      await assert.rejects(reports.delete({ reportId: randomUUID(), deletionToken: randomUUID() }), UserErrorReportCapacityError);
+      await assert.rejects(reports.delete({ reportId: randomUUID(), deletionToken: randomUUID() }, { authenticated: true }), UserErrorReportCapacityError);
       // Quota exhaustion cannot prevent withdrawing an existing report.
       await reports.delete({ reportId: fill.receipt.reportId, deletionToken: body.deletionToken });
       await pool.query("DELETE FROM nextstop.user_error_reports");
+    });
+
+    await context.test("anonymous report probes cannot allocate database rows or starve valid withdrawals", async () => {
+      const repository = new PostgresUserErrorReportRepository(pool);
+      const now = new Date("2026-09-14T12:00:00.000Z");
+      const reports = new UserErrorReports(repository, () => now);
+      const app = createApp({ userErrorReports: reports, reportAuthenticator: { isAuthorized: (header) => header === "Bearer accepted" } });
+      try {
+        for (let index = 0; index < 35; index += 1) {
+          assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: randomUUID(), deletionToken: randomUUID() } })).statusCode, 401);
+        }
+        assert.equal((await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM nextstop.user_error_reports")).rows[0]?.count, 0);
+        const body = { schemaVersion: 1, reportId: randomUUID(), deletionToken: randomUUID(), consentVersion: "2026-09-14", message: "Synthetic report", includeDiagnostics: false };
+        await reports.submit(body);
+        const proof = { reportId: body.reportId, deletionToken: body.deletionToken };
+        await assert.rejects(reports.delete(proof, {
+          onAuthorized: () => { throw new Error("Synthetic admission rejection"); },
+        }), /Synthetic admission rejection/u);
+        assert.equal((await pool.query<{ payload: { message: string } }>("SELECT payload FROM nextstop.user_error_reports WHERE report_id = $1", [body.reportId])).rows[0]?.payload.message, body.message);
+        assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: proof })).statusCode, 204);
+        const row = (await pool.query<{ payload: unknown; payload_hash: Buffer | null; received_at: Date | null }>("SELECT payload, payload_hash, received_at FROM nextstop.user_error_reports WHERE report_id = $1", [body.reportId])).rows[0];
+        assert.deepEqual(row, { payload: null, payload_hash: null, received_at: null });
+        // A capability seen at preflight cannot allocate an anonymous tombstone
+        // after that row is removed before the locked write.
+        const admits = await repository.hasDeletionCapability(body.reportId, hashReportSecret(body.deletionToken));
+        assert.equal(admits, true);
+        await pool.query("DELETE FROM nextstop.user_error_reports WHERE report_id = $1", [body.reportId]);
+        await assert.rejects(repository.delete(body.reportId, hashReportSecret(body.deletionToken), now), UserErrorReportAuthorizationError);
+        assert.equal((await pool.query<{ count: number }>("SELECT count(*)::int AS count FROM nextstop.user_error_reports")).rows[0]?.count, 0);
+      } finally {
+        await app.close();
+        await pool.query("DELETE FROM nextstop.user_error_reports");
+      }
     });
 
     await context.test(

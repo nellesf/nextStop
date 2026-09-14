@@ -79,6 +79,20 @@ the upload so an ambiguous network outcome does not remove the user's ability to
 withdraw a report that reached the server. Keep at most 50 unexpired receipts,
 exclude this store from backups, and prune expired receipts when the app runs.
 
+On 2026-09-14 the owner approved closing the report admission and withdrawal
+authorization gaps. Verify the POST bearer before charging the application's
+global submission allowance. A correct deletion secret for an existing report or
+tombstone continues to authorize withdrawal without App Attest. For an unknown
+reference, require valid app authentication before allocating replay protection;
+unknown references and incorrect secrets without it both return 401 and consume
+neither report rows nor the application's admitted-deletion allowance. With valid
+app authentication, an incorrect secret for an existing report remains a no-op.
+The repository must recheck these conditions atomically when mutating storage.
+The client first sends its deletion proof alone and attempts app authentication
+only after 401, with one token refresh at most. Failures preserve the local receipt
+for another attempt. These controls keep the existing data categories, purpose,
+notice version and storage schema; proxy ingress limits remain shared per IP.
+
 Support retries must use the same submission identity. After early deletion,
 retain only the random report reference, deletion-token hash, and expiry
 needed to reject a replay; never retain the description, its hash, attachment, or
@@ -89,7 +103,8 @@ server cleanup at least hourly, including during periods without report traffic.
 The physical cleanup lag is therefore at most one hour under normal operation.
 For an existing report, replay protection expires at its original expiry. If
 withdrawal arrives before a delayed upload and the reference is still unknown,
-create a content-free tombstone expiring 30 days after the deletion request.
+valid app authentication permits a content-free tombstone expiring 30 days after
+the deletion request.
 Serialize creation and deletion so this reversed arrival order cannot restore a
 withdrawn report. Neither a repeat deletion nor an upload extends the tombstone.
 

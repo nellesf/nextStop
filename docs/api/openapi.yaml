@@ -43,8 +43,10 @@ paths:
         changed secret or payload returns 409. A withdrawn report returns 410.
         Retained for 30 days, purged every 15 minutes and on API startup; normal
         deletion delay is at most one hour. Proxy admission is 6/minute/IP with burst2;
-        application admission is 10 POST/minute globally and four concurrent report
-        operations. Store cap is 1000 entries and 128 MiB, including tombstones.
+        application admission is 10 authenticated POST/minute globally and four
+        concurrent report operations. Invalid credentials are rejected before
+        spending the application POST allowance. Proxy ingress limits remain
+        shared per IP. Store cap is 1000 entries and 128 MiB, including tombstones.
       security:
         - appAttestReportBearer: []
       requestBody:
@@ -74,17 +76,26 @@ paths:
       operationId: withdrawUserErrorReport
       summary: Withdraw a report using its per-report deletion secret
       description: |
-        Requires only the unguessable deletion token in the JSON body, including
-        when App Attest is unavailable. Missing, expired and incorrect-token
-        requests all return 204, preventing an existence oracle. Removes text,
-        diagnostics, payload hash and receipt time immediately. Only report ID,
-        hashed deletion token and original expiry remain until scheduled purge to
-        prevent late retries from restoring withdrawn content. A deletion arriving
-        before its POST stores a tombstone for at most 30 days from withdrawal.
+        The correct deletion token for an existing report or tombstone works
+        without App Attest. Without a valid bearer, unknown IDs and incorrect
+        tokens both return 401, allocate no rows and do not spend the application
+        DELETE allowance. A valid App Attest bearer permits replay protection for
+        a still-unknown report; a wrong token for an existing report remains a
+        no-op returning 204. The repository rechecks authorization atomically.
+        Authorized withdrawal removes text, diagnostics, payload hash and receipt
+        time immediately. Only report ID, hashed deletion token and original
+        expiry remain until scheduled purge to prevent late retries from restoring
+        withdrawn content. An authenticated deletion arriving before its POST
+        stores a tombstone for at most 30 days from withdrawal.
         If capacity prevents remembering withdrawal, return 503 so the client
         retains its proof and retries. No public GET exists.
-        Limit is 30 DELETE/minute globally, sharing proxy rate and concurrency caps.
-      security: []
+        The client first tries without a bearer; only 401 triggers App Attest
+        authentication, with at most one token refresh after another 401. Any
+        failure preserves its local receipt. The limit is 30 authorized
+        DELETE/minute globally, sharing proxy ingress and concurrency caps.
+      security:
+        - {}
+        - appAttestReportBearer: []
       requestBody:
         required: true
         content:
@@ -93,6 +104,7 @@ paths:
       responses:
         '204': { description: Withdrawal processed without revealing existence. }
         '400': { description: Invalid deletion proof shape. }
+        '401': { description: No matching stored deletion proof; valid App Attest bearer required to proceed. }
         '413': { description: Request exceeds 128 KiB. }
         '429': { description: Admission exhausted; Retry-After is supplied. }
         '503': { description: Withdrawal could not be processed; retry explicitly. }

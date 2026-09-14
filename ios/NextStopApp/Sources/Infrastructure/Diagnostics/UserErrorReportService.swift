@@ -184,16 +184,23 @@ final class HTTPUserErrorReportService: UserErrorReportSending {
 
   func delete(_ receipt: UserErrorReportReceipt) async throws {
     try Task.checkCancellation()
-    // The random deletion token proves possession; no device identity or renewed
-    // App Attest access is needed to withdraw an already submitted report.
-    let request = try makeRequest(
+    // Existing reports remain withdrawable using only their deletion capability.
+    // A still-unknown report needs authentication before the server may allocate
+    // replay protection for a withdrawal that arrives ahead of its upload.
+    var request = try makeRequest(
       method: "DELETE",
       body: DeleteRequest(
         reportId: receipt.reportID.uuidString.lowercased(),
         deletionToken: receipt.deletionToken.uuidString.lowercased()
       )
     )
-    let (_, response) = try await perform(request)
+    var (_, response) = try await perform(request)
+    for forceRefresh in [false, true] {
+      guard response.statusCode == 401 else { break }
+      let token = try await accessToken(forceRefresh: forceRefresh)
+      request.setValue("Bearer \(token)", forHTTPHeaderField: "Authorization")
+      (_, response) = try await perform(request)
+    }
     guard response.statusCode == 204 else {
       throw Self.responseError(status: response.statusCode)
     }

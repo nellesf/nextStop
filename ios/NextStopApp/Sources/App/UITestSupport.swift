@@ -12,6 +12,7 @@
       case empty
       case logsSuccess = "logs-success"
       case logsRetry = "logs-retry"
+      case profileEditor = "profile-editor"
     }
 
     enum Appearance: String {
@@ -72,7 +73,7 @@
       let diagnostics = AppDiagnosticsStore(
         fileURL: directory.appendingPathComponent("events.json"), clock: { now }
       )
-      if scenario != .empty {
+      if scenario == .logsSuccess || scenario == .logsRetry {
         // Seed through the real store's default recording behavior. A default-off
         // regression must not be hidden by overriding the setting in test fixtures.
         diagnostics.record(
@@ -82,6 +83,18 @@
             errorDomain: .url, errorCode: -1009
           )
         )
+      }
+      if scenario == .profileEditor {
+        let profile = try UserProfile(
+          name: "Leipzig",
+          destination: SavedDestination(
+            displayName: "Synthetic UI test destination",
+            coordinate: Coordinate(latitude: 0, longitude: 0)
+          ),
+          criteria: SearchConfiguration.defaultCriteria,
+          createdAt: now, updatedAt: now
+        )
+        try SwiftDataProfileRepository(modelContext: modelContainer.mainContext).save(profile)
       }
       self.diagnostics = diagnostics
       let receipts = UserErrorReportReceiptStore(

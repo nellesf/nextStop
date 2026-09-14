@@ -20,6 +20,7 @@
 		20EB8233A7F199507DEC2554 /* NextStopApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 42F809C8F4E0D9C0F98B7659 /* NextStopApp.swift */; };
 		216B8E13FBBD4D5844705540 /* RoutePlanning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */; };
 		27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */; };
+		287D13062EE53E7C0D4D9E3E /* ProfileEditorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 2487BD63C27FACD36E65FFB4 /* ProfileEditorUITests.swift */; };
 		2A62EA6B4F3536547001832D /* DiagnosticsView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7806F515198D394DE02D9C5C /* DiagnosticsView.swift */; };
 		2BBE04D896171D8590316FE2 /* RideIntentHandlerTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FA01405A06BD37CE85DC6B9 /* RideIntentHandlerTests.swift */; };
 		3044D161FCAC30BE2275F286 /* DestinationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = B572FEA58A55B29CC334EB61 /* DestinationRepository.swift */; };
@@ -133,6 +134,7 @@
 		14E89E912D8A86378A7247C8 /* AppAttestAuthenticationClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestAuthenticationClient.swift; sourceTree = "<group>"; };
 		185823676414B8CBF89BDE35 /* NextStopAppTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = NextStopAppTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		1D5185B8B7E3281A14924180 /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/AppShortcuts.strings; sourceTree = "<group>"; };
+		2487BD63C27FACD36E65FFB4 /* ProfileEditorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProfileEditorUITests.swift; sourceTree = "<group>"; };
 		28466C7E230FF0FF383D49C9 /* CoreLocationProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocationProvider.swift; sourceTree = "<group>"; };
 		2D920C32AA2FE67A408C2086 /* UserErrorReportReceiptStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UserErrorReportReceiptStore.swift; sourceTree = "<group>"; };
 		3412315DA3F115378E73486A /* StoredDestinationRecord.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StoredDestinationRecord.swift; sourceTree = "<group>"; };
@@ -451,6 +453,7 @@
 		72D3A25BD9402995FF40CB47 /* NextStopAppUITests */ = {
 			isa = PBXGroup;
 			children = (
+				2487BD63C27FACD36E65FFB4 /* ProfileEditorUITests.swift */,
 				3905AA6A289A6A79FD07CD5C /* UserErrorReportUITests.swift */,
 			);
 			path = NextStopAppUITests;
@@ -817,6 +820,7 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
+				287D13062EE53E7C0D4D9E3E /* ProfileEditorUITests.swift in Sources */,
 				3677204F510BF28ACBF93E3E /* UserErrorReportUITests.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;

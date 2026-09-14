@@ -138,9 +138,9 @@ and local state instead of staging, App Attest, location access, or the Simulato
 authentication broker. Normal launches keep using the real application services.
 The test controls are absent from physical-device and Release/TestFlight builds.
 The exact opt-in is `--ui-testing` plus `NEXTSTOP_UI_TEST_SCENARIO` set to `empty`,
-`logs-success`, or `logs-retry`; unknown scenarios fail before opening normal
-stores or creating production clients. Each launch has its own temporary report
-stores and in-memory profiles. The retry fixture checks the selected payload and
+`logs-success`, `logs-retry`, or `profile-editor`; unknown scenarios fail before
+opening normal stores or creating production clients. Each launch has its own
+temporary report stores and in-memory profiles. The retry fixture checks the selected payload and
 requires the unchanged request, including its deletion proof, on the second send.
 
 The UI tests cover the empty-log explanation and recording settings, optional
@@ -153,6 +153,13 @@ the system setting, and an unknown value is rejected. Review the exported screen
 the rendered appearance and layout; no real backend upload occurs in these tests.
 Full Xcode and an installed iOS Simulator runtime are required to execute this
 suite; parsing or typechecking its Swift sources does not execute UI tests.
+
+The `profile-editor` fixture seeds one synthetic in-memory profile. Its UI
+regression opens the real editor without pre-focusing the name field, taps once
+in the right, top, and bottom padding of the full input area, and verifies that
+typing works. Each edit is saved and reopened to check persistence within the
+test session. Screenshots preserve the focused states. The test performs no
+destination lookup, location request, or navigation.
 
 ### Backend
 

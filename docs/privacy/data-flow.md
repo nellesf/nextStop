@@ -113,7 +113,12 @@ authenticate the request. The report record must not retain IPs, an App Attest k
 an installation hash, an access token, or another user/device association. A
 separate deletion secret authorizes withdrawal; the server stores only its hash.
 The client persists the reference and secret before sending so it can delete a
-report whose response was lost. Reports are not forwarded to a third-party
+report whose response was lost. Existing reports and tombstones remain withdrawable
+with the matching secret alone. If the report has not reached the server, creating
+replay protection additionally requires a valid App Attest access token. The app
+requests that token only when its first deletion attempt requires authentication;
+no installation identity is added to the report or tombstone. A failed attempt
+preserves the local receipt. Reports are not forwarded to a third-party
 diagnostic service. Google Cloud is still a hosting processor and must be disclosed.
 
 ### Backend to data providers
@@ -158,10 +163,11 @@ criteria, or other request data is sent to OpenStreetMap or Geofabrik.
   hourly without requiring new requests, giving a normal physical cleanup lag of
   at most one hour. Successful early deletion removes the content and attachment
   immediately. Only minimal replay protection remains until the original expiry.
-  If deletion arrives before the upload and the reference is not yet known,
-  protection instead expires 30 days after that deletion request. Creation and
-  deletion are serialized; repeats never extend protection. An in-flight retry
-  therefore cannot recreate withdrawn content during that bounded window. See the
+  If authenticated deletion arrives before the upload and the reference is not
+  yet known, protection instead expires 30 days after that deletion request.
+  Creation and deletion are serialized; repeats never extend protection. An
+  in-flight retry therefore cannot recreate withdrawn content during that bounded
+  window. See the
   [support runbook](../operations/user-error-reports.md).
 - Descriptions, attachments, receipt secrets, and request bodies never enter
   operational logs. Operator access is restricted and report copies must follow
@@ -188,9 +194,12 @@ permission later on iPhone rather than trying to force a driving-time prompt.
   route flow.
 - The iPhone report form offers withdrawal and server deletion from the same
   interface used to submit. Protected local receipts preserve that capability
-  after an uncertain network result. Other access, rectification, restriction, or
-  portability requests use the published controller contact and report reference;
-  collect no additional identity merely to maintain an accountless report store.
+  after an uncertain network result. A still-unknown report needs working app
+  authentication to reserve protection against a delayed upload; a matching proof
+  for an existing report needs no app authentication. Other access, rectification,
+  restriction, or portability requests use the published controller contact and
+  report reference; collect no additional identity merely to maintain an
+  accountless report store.
 - Withdrawal of report consent does not change the lawfulness of processing before
   withdrawal. The local diagnostic recording control is separate from
   deletion of already submitted reports, which must be requested explicitly.

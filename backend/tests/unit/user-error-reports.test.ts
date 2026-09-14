@@ -7,6 +7,7 @@ import type { RequestDiagnostic } from "../../src/api/request-diagnostics.js";
 import {
   hashReportSecret, InvalidUserErrorReportError, UserErrorReportConflictError, UserErrorReportWithdrawnError,
   UserErrorReports, validateUserErrorReport, type StoredUserErrorReport, type UserErrorReportRepository,
+  UserErrorReportAuthorizationError,
 } from "../../src/application/user-error-reports.js";
 
 const instant = new Date("2026-09-13T12:00:00.000Z");
@@ -24,19 +25,34 @@ function submission() {
 class MemoryReports implements UserErrorReportRepository {
   readonly records = new Map<string, StoredUserErrorReport>();
   readonly withdrawn = new Set<string>();
+  readonly deletionProofs = new Map<string, Buffer>();
   async save(report: StoredUserErrorReport) {
     await Promise.resolve();
     const existing = this.records.get(report.reportId);
+    const proof = this.deletionProofs.get(report.reportId);
+    if (proof !== undefined && !timingSafeEqual(proof, report.deletionTokenHash)) throw new UserErrorReportConflictError();
     if (existing !== undefined && (!timingSafeEqual(existing.deletionTokenHash, report.deletionTokenHash) || !timingSafeEqual(existing.payloadHash, report.payloadHash))) throw new UserErrorReportConflictError();
     if (this.withdrawn.has(report.reportId)) throw new UserErrorReportWithdrawnError();
     if (existing === undefined) this.records.set(report.reportId, report);
+    this.deletionProofs.set(report.reportId, report.deletionTokenHash);
     const value = existing ?? report;
     return { created: existing === undefined, receipt: { reportId: value.reportId, receivedAt: value.receivedAt.toISOString(), expiresAt: value.expiresAt.toISOString() } };
   }
-  async delete(id: string, hash: Buffer) {
+  hasDeletionCapability(id: string, hash: Buffer) {
+    const proof = this.deletionProofs.get(id);
+    return Promise.resolve(proof !== undefined && timingSafeEqual(proof, hash));
+  }
+  async delete(id: string, hash: Buffer, _now: Date, mayCreateTombstone = false) {
     await Promise.resolve();
-    const existing = this.records.get(id);
-    if (existing !== undefined && timingSafeEqual(existing.deletionTokenHash, hash)) this.withdrawn.add(id);
+    const proof = this.deletionProofs.get(id);
+    if (proof === undefined) {
+      if (!mayCreateTombstone) throw new UserErrorReportAuthorizationError();
+      this.deletionProofs.set(id, hash);
+    } else if (!timingSafeEqual(proof, hash)) {
+      if (!mayCreateTombstone) throw new UserErrorReportAuthorizationError();
+      return;
+    }
+    this.withdrawn.add(id);
   }
   purge() { return Promise.resolve(0); }
 }
@@ -145,12 +161,12 @@ void test("report API requires explicit authenticated POST, supports deletion wi
   assert.deepEqual(Object.keys(created.json()).sort(), ["expiresAt", "receivedAt", "reportId"]);
   assert.equal((await request()).statusCode, 200);
   assert.equal((await app.inject({ method: "GET", url: "/v1/error-reports" })).statusCode, 404);
-  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: body.reportId, deletionToken: randomUUID() } })).statusCode, 204);
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: body.reportId, deletionToken: randomUUID() } })).statusCode, 401);
   assert.equal(repository.withdrawn.size, 0);
   assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: body.reportId, deletionToken: body.deletionToken } })).statusCode, 204);
   assert.equal((await request()).statusCode, 410);
   assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: body.reportId, deletionToken: body.deletionToken } })).statusCode, 204);
-  for (let index = 0; index < 6; index += 1) await request();
+  for (let index = 0; index < 7; index += 1) await request();
   assert.equal((await request()).statusCode, 429);
   now = 60_000;
   assert.equal((await request()).statusCode, 410);
@@ -173,6 +189,55 @@ void test("report endpoints reject malformed, oversized, or enriched requests wi
   assert.equal((await app.inject({ method: "POST", url: "/v1/error-reports", payload: { ...submission(), message: "x".repeat(131_072) } })).statusCode, 413);
   assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: randomUUID(), deletionToken: randomUUID(), extra: "PRIVATE" } })).statusCode, 400);
   assert.doesNotMatch(JSON.stringify(records), /PRIVATE/u);
+});
+
+void test("unauthenticated submissions and deletion probes cannot spend authorized admission or storage", async (context) => {
+  const repository = new MemoryReports();
+  const records: RequestDiagnostic[] = [];
+  const app = createApp({ userErrorReports: new UserErrorReports(repository, () => instant), reportAuthenticator: { isAuthorized: (header) => header === "Bearer accepted" }, diagnostics: { sink: (record) => records.push(record) } });
+  context.after(() => app.close());
+  const body = submission();
+  for (let index = 0; index < 40; index += 1) {
+    const response = await app.inject({ method: "POST", url: "/v1/error-reports", headers: { authorization: "Bearer PRIVATE_REJECTED" }, payload: body });
+    assert.equal(response.statusCode, 401);
+  }
+  assert.equal((await app.inject({ method: "POST", url: "/v1/error-reports", headers: { authorization: "Bearer accepted" }, payload: body })).statusCode, 201);
+  for (let index = 0; index < 40; index += 1) {
+    const unknown = await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: randomUUID(), deletionToken: randomUUID() } });
+    const incorrect = await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: { reportId: body.reportId, deletionToken: randomUUID() } });
+    assert.equal(unknown.statusCode, 401);
+    assert.equal(incorrect.statusCode, 401);
+    const withoutRandomID = (response: typeof unknown) => ({ ...response.json<Record<string, unknown>>(), errorId: undefined });
+    assert.deepEqual(withoutRandomID(unknown), withoutRandomID(incorrect));
+    assert.equal(unknown.headers["www-authenticate"], incorrect.headers["www-authenticate"]);
+  }
+  assert.equal(repository.deletionProofs.size, 1);
+  assert.equal(repository.withdrawn.size, 0);
+  const proof = { reportId: body.reportId, deletionToken: body.deletionToken };
+  // A stored deletion capability remains sufficient even with an expired bearer.
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", headers: { authorization: "Bearer expired" }, payload: proof })).statusCode, 204);
+  for (let index = 0; index < 29; index += 1) {
+    assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: proof })).statusCode, 204);
+  }
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: proof })).statusCode, 429);
+  assert.ok(records.filter((record) => record.status === 401).every((record) => record.errorCategory === "unauthorized"));
+  assert.ok(records.some((record) => record.status === 429 && record.errorCategory === "capacity_limited"));
+  assert.doesNotMatch(JSON.stringify(records), /PRIVATE_REJECTED|accepted/u);
+  assert.equal(JSON.stringify(records).includes(body.deletionToken), false);
+});
+
+void test("only authenticated withdrawal can allocate unknown replay protection", async (context) => {
+  const repository = new MemoryReports();
+  const app = createApp({ userErrorReports: new UserErrorReports(repository, () => instant), reportAuthenticator: { isAuthorized: (header) => header === "Bearer accepted" } });
+  context.after(() => app.close());
+  const body = submission();
+  const proof = { reportId: body.reportId, deletionToken: body.deletionToken };
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: proof })).statusCode, 401);
+  assert.equal(repository.deletionProofs.size, 0);
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", headers: { authorization: "Bearer accepted" }, payload: proof })).statusCode, 204);
+  assert.equal(repository.deletionProofs.size, 1);
+  assert.equal((await app.inject({ method: "DELETE", url: "/v1/error-reports", payload: proof })).statusCode, 204);
+  assert.equal((await app.inject({ method: "POST", url: "/v1/error-reports", headers: { authorization: "Bearer accepted" }, payload: body })).statusCode, 410);
 });
 
 void test("error report deployment retains the candidate read-only boundary and private operational access", async () => {

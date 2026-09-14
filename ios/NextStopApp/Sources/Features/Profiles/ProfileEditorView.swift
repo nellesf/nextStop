@@ -15,6 +15,7 @@ struct ProfileEditorView: View {
   @State private var form: ProfileFormState
   @State private var isDestinationSearchPresented = false
   @State private var alert: ProfileEditorAlert?
+  @FocusState private var isNameFocused: Bool
 
   init(
     profile: UserProfile?,
@@ -77,16 +78,29 @@ struct ProfileEditorView: View {
       Text("profile.name")
         .font(.subheadline.weight(.semibold))
 
-      TextField("profile.name", text: $form.name)
-        .textInputAutocapitalization(.words)
-        .padding(.horizontal, 14)
-        .frame(minHeight: 48)
-        .background(Color(.secondarySystemGroupedBackground))
-        .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
-        .overlay {
-          RoundedRectangle(cornerRadius: 12, style: .continuous)
-            .stroke(Color.primary.opacity(0.08), lineWidth: 1)
-        }
+      VStack(spacing: 0) {
+        TextField("profile.name", text: $form.name)
+          .textInputAutocapitalization(.words)
+          .focused($isNameFocused)
+          .accessibilityIdentifier("profile-name")
+      }
+      .padding(.horizontal, 14)
+      .frame(minHeight: 48)
+      .background(Color(.secondarySystemGroupedBackground))
+      .clipShape(RoundedRectangle(cornerRadius: 12, style: .continuous))
+      .contentShape(Rectangle())
+      // Padding and the minimum row height are part of the visible field.
+      // Focus those taps without replacing the text field's selection gestures.
+      .simultaneousGesture(
+        TapGesture().onEnded { isNameFocused = true }
+      )
+      .overlay {
+        RoundedRectangle(cornerRadius: 12, style: .continuous)
+          .stroke(Color.primary.opacity(0.08), lineWidth: 1)
+          .allowsHitTesting(false)
+      }
+      .accessibilityElement(children: .contain)
+      .accessibilityIdentifier("profile-name-area")
     }
     .frame(maxWidth: .infinity, alignment: .leading)
   }
@@ -460,6 +474,7 @@ struct ProfileEditorView: View {
       )
     }
     .buttonStyle(.plain)
+    .accessibilityIdentifier("profile-save")
     .padding(.horizontal, 16)
     .padding(.vertical, 10)
     .background(.bar)
