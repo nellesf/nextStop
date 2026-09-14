@@ -59,7 +59,7 @@ def click_visible_text(label):
     window = execute(["osascript", "-e", '''
 tell application "System Events" to tell process "Simulator"
     set frontmost to true
-    set captureWindow to first window whose name contains "CarPlay"
+    set captureWindow to first window whose name ends with " – CarPlay"
     perform action "AXRaise" of captureWindow
     set windowPosition to position of captureWindow
     set windowSize to size of captureWindow
