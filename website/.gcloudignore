@@ -1,0 +1,17 @@
+.gcloudignore
+.git
+.gitignore
+node_modules/
+dist/
+firebase-public/
+.next/
+.vinext/
+.wrangler/
+outputs/
+work/
+coverage/
+*.log
+.env*
+*.pem
+.npmrc
+.DS_Store

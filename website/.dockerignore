@@ -1,0 +1,15 @@
+.git
+.next
+.vinext
+.wrangler
+dist
+firebase-public
+node_modules
+outputs
+work
+*.log
+.env*
+*.pem
+.npmrc
+.DS_Store
+coverage

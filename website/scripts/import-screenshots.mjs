@@ -46,6 +46,14 @@ for (const capture of captures) {
 await writeFile(new URL("provenance.json", output), `${JSON.stringify({
   ...source,
   processing: "Original XCTest PNG files, copied without pixel modifications",
-  screenshots: captures.map(({ bytes, ...metadata }) => metadata),
+  screenshots: captures.map((capture) => ({
+    file: capture.file,
+    width: capture.width,
+    height: capture.height,
+    sha256: capture.sha256,
+    capturedAt: capture.capturedAt,
+    attachment: capture.attachment,
+    device: capture.device,
+  })),
 }, null, 2)}\n`);
 console.log(`Imported ${captures.length} original screenshots from main ${expectedCommit}.`);

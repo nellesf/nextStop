@@ -1,0 +1,39 @@
+{
+  "appCommit": "5fe2fa2332d66d2499fc679617855d41cb0111be",
+  "appTree": "52989dd0997d8f97e982b76b7d6580a63b649847",
+  "harnessCommit": "dd8a3c8b295122299714e16593cfe53d307c997c",
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34861105886",
+  "data": "Isolated in-memory profile with a city chosen through the app UI",
+  "device": "iPhone 17 Pro",
+  "locale": "de_DE",
+  "processing": "Original XCTest PNG files, copied without pixel modifications",
+  "screenshots": [
+    {
+      "file": "iphone-profiles.png",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "95e167b52270dfe9aa5461039eede773a1f1810a6405502fd130369258b638d2",
+      "capturedAt": "2026-09-14T15:26:57.124Z",
+      "attachment": "CA6344DF-5670-4F63-A041-F70C86AD05D3.png",
+      "device": "iPhone 17 Pro"
+    },
+    {
+      "file": "iphone-profile-editor.png",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "09674f622705ebcfbf16887a8777c3831133faf1c9639ed26d686f530e420c98",
+      "capturedAt": "2026-09-14T15:27:01.932Z",
+      "attachment": "4731878F-15B6-4251-AD30-1A70FF59FACB.png",
+      "device": "iPhone 17 Pro"
+    },
+    {
+      "file": "iphone-profile-filters.png",
+      "width": 1206,
+      "height": 2622,
+      "sha256": "989f02d308dfd3693dbbe9525146964bdd22ad3f5581d378b35d0abda6b43a3c",
+      "capturedAt": "2026-09-14T15:27:06.548Z",
+      "attachment": "9298A62F-7674-445C-B4F1-85B377867A13.png",
+      "device": "iPhone 17 Pro"
+    }
+  ]
+}
