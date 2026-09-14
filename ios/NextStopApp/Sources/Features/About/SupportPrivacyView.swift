@@ -12,11 +12,17 @@ struct SupportPrivacyView: View {
       Section("report.privacy.controller") {
         if let configuration {
           Text(verbatim: configuration.displayControllerName)
+            .lineLimit(nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .accessibilityIdentifier("report-privacy-content")
           Text(verbatim: configuration.displayPostalAddress)
+            .lineLimit(nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
           Text(verbatim: configuration.email)
+            .lineLimit(nil)
+            .frame(maxWidth: .infinity, alignment: .leading)
             .fixedSize(horizontal: false, vertical: true)
             .textSelection(.enabled)
         } else {
@@ -52,6 +58,8 @@ struct SupportPrivacyView: View {
   private func notice(_ title: LocalizedStringKey, _ body: LocalizedStringKey) -> some View {
     Section(title) {
       Text(body)
+        .lineLimit(nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
     }
   }
@@ -63,6 +71,9 @@ struct SupportPrivacyTestNotice: View {
       Label("report.internal.title", systemImage: "exclamationmark.triangle")
         .font(.headline)
       Text("report.internal.notice")
+        .lineLimit(nil)
+        .frame(maxWidth: .infinity, alignment: .leading)
+        .fixedSize(horizontal: false, vertical: true)
     }
   }
 }
