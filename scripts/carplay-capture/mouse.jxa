@@ -1,0 +1,34 @@
+ObjC.import("ApplicationServices");
+ObjC.import("Foundation");
+// This public C function is newer than JXA's bundled bridge metadata.
+ObjC.bindFunction("CGPreflightPostEventAccess", ["bool", []]);
+
+function run(args) {
+    const permissions = {
+        accessibility: $.AXIsProcessTrusted(),
+        postEvents: $.CGPreflightPostEventAccess(),
+    };
+    if (args.length === 0) return JSON.stringify(permissions);
+    if (!permissions.postEvents) throw new Error("macOS has not granted mouse-event posting to this process.");
+    if (args.length !== 2) throw new Error("Expected observed x and y coordinates.");
+    const x = Number(args[0]);
+    const y = Number(args[1]);
+    if (!Number.isFinite(x) || !Number.isFinite(y)) throw new Error("Coordinates must be finite.");
+    const before = $.CGEventGetLocation($.CGEventCreate(null));
+    const point = $.CGPointMake(x, y);
+    const move = $.CGEventCreateMouseEvent(null, $.kCGEventMouseMoved, point, $.kCGMouseButtonLeft);
+    $.CGEventPost($.kCGHIDEventTap, move);
+    $.NSThread.sleepForTimeInterval(0.15);
+    const afterMove = $.CGEventGetLocation($.CGEventCreate(null));
+    if (Math.abs(afterMove.x - x) > 2 || Math.abs(afterMove.y - y) > 2) {
+        throw new Error("Mouse move was not delivered: " + JSON.stringify({permissions, before, afterMove, target: {x, y}}));
+    }
+    const down = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, point, $.kCGMouseButtonLeft);
+    const up = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, point, $.kCGMouseButtonLeft);
+    $.CGEventSetIntegerValueField(down, $.kCGMouseEventClickState, 1);
+    $.CGEventSetIntegerValueField(up, $.kCGMouseEventClickState, 1);
+    $.CGEventPost($.kCGHIDEventTap, down);
+    $.NSThread.sleepForTimeInterval(0.15);
+    $.CGEventPost($.kCGHIDEventTap, up);
+    return JSON.stringify({permissions, before, afterMove, target: {x, y}});
+}

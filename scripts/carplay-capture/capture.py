@@ -78,6 +78,10 @@ end tell
         x = display["x"] + (word["x"] + word["width"] / 2) * scale_x
         y = display["y"] + (word["y"] + word["height"] / 2) * scale_y
         if word["text"].strip().casefold() == label.casefold() and left < x < left + width and top < y < top + height:
+            if label == "nextStop":
+                # The observed home screen puts the icon center about 3.5 label
+                # heights above its text. Tap the icon itself, not its caption.
+                y -= 3.5 * word["height"] * scale_y
             candidates.append((x, y))
     # Profile name and destination are both Leipzig in the same native row.
     # Accept those vertically adjacent labels, but reject unrelated matches.
@@ -88,19 +92,8 @@ end tell
     if len(candidates) != 1:
         raise RuntimeError(f"Expected one visible {label!r} inside the CarPlay window; found {candidates}")
     x, y = candidates[0]
-    # Simulator's rendered controls do not implement AX coordinate hit testing.
-    # Send a normal mouse press through osascript, using the observed location.
-    script = '''
-ObjC.import("CoreGraphics");
-ObjC.import("Foundation");
-var point = $.CGPointMake(%d, %d);
-var down = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseDown, point, $.kCGMouseButtonLeft);
-var up = $.CGEventCreateMouseEvent(null, $.kCGEventLeftMouseUp, point, $.kCGMouseButtonLeft);
-$.CGEventPost($.kCGHIDEventTap, down);
-$.NSThread.sleepForTimeInterval(0.08);
-$.CGEventPost($.kCGHIDEventTap, up);
-''' % (round(x), round(y))
-    execute(["osascript", "-l", "JavaScript", "-e", script])
+    execute(["osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(round(x)), str(round(y))])
+    execute(["screencapture", "-x", "-C", str(OUTPUT / f"diagnostic-host-after-click-{len(captures)}.png")])
     time.sleep(2)
 
 

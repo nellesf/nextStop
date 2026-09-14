@@ -67,6 +67,10 @@ end tell
 
 atexit.register(diagnostics)
 run("xcode-version", ["xcodebuild", "-version"])
+input_permissions = json.loads(run("input-permissions", [
+    "osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa",
+]))
+assert input_permissions["postEvents"], "macOS mouse-event posting must be granted before starting the capture."
 # Compile before booting iOS so the fresh SDK module cache does not compete
 # with the simulator's first-boot migration and rendering work.
 ocr = str(Path(os.environ["RUNNER_TEMP"]) / "nextstop-screen-text")
