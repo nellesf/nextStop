@@ -109,7 +109,6 @@ TEST_RUNNER_NEXTSTOP_CARPLAY_CAPTURE=1 xcodebuild \
 
 xcrun xcresulttool export attachments --path CarPlaySetup.xcresult \
   --output-path CarPlay-Captures/Profile-Setup-Attachments
-xcrun swiftc scripts/carplay-capture/screen-text.swift \
-  -o "$RUNNER_TEMP/nextstop-screen-text"
+test -x "$RUNNER_TEMP/nextstop-screen-text"
 CARPLAY_SCREEN_TEXT="$RUNNER_TEMP/nextstop-screen-text" \
   python3 scripts/carplay-capture/capture.py

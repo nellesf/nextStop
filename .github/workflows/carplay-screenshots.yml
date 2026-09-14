@@ -1,12 +1,6 @@
 name: CarPlay Screenshots
 
 on:
-  push:
-    branches: [codex/app-explainer-website]
-    paths:
-      - .github/workflows/carplay-screenshots.yml
-      - scripts/carplay-capture/**
-      - ios/NextStopAppUITests/ProfileEditorUITests.swift
   workflow_dispatch:
     inputs:
       reuse_run_id:

@@ -67,6 +67,12 @@ end tell
 
 atexit.register(diagnostics)
 run("xcode-version", ["xcodebuild", "-version"])
+# Compile before booting iOS so the fresh SDK module cache does not compete
+# with the simulator's first-boot migration and rendering work.
+ocr = str(Path(os.environ["RUNNER_TEMP"]) / "nextstop-screen-text")
+run("compile-screen-reader", [
+    "xcrun", "swiftc", "scripts/carplay-capture/screen-text.swift", "-o", ocr,
+], timeout=240)
 run("simctl-io-help", ["xcrun", "simctl", "io", "help"], required=False)
 run("automation-mode", ["automationmodetool"], required=False)
 runtimes = json.loads(run("runtimes", ["xcrun", "simctl", "list", "runtimes", "--json"]))
@@ -161,10 +167,6 @@ run("external-screenshot", [
     "xcrun", "simctl", "io", device_id, "screenshot", "--display=external",
     str(OUTPUT / "diagnostic-carplay-home.png"),
 ])
-ocr = str(Path(os.environ["RUNNER_TEMP"]) / "nextstop-screen-text")
-run("compile-screen-reader", [
-    "xcrun", "swiftc", "scripts/carplay-capture/screen-text.swift", "-o", ocr,
-], timeout=90)
 text = json.loads(run("external-screen-text", [ocr, str(OUTPUT / "diagnostic-carplay-home.png")]))
 assert len(text["text"]) >= 2, "External framebuffer is blank or has no readable CarPlay UI."
 (OUTPUT / "preflight.json").write_text(json.dumps({
