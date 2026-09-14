@@ -1,7 +1,8 @@
 # Voluntary user error reports
 
 Status: deployed to the existing private staging backend at
-`https://api.nextstop.tech` on 2026-09-13. Public releases require the owner's real
+`https://api.nextstop.tech` on 2026-09-13; the additive diagnostic context and
+notice-version update was deployed on 2026-09-14. Public releases require the owner's real
 controller/contact details and matching published privacy information. The owner
 approved clearly marked placeholders solely for the internal TestFlight test;
 see [ADR 0017](../adr/0017-user-initiated-error-reports.md). Placeholder builds must
@@ -25,6 +26,23 @@ database check confirmed that text, logs, payload hash and receipt time were
 erased, leaving only the minimal withdrawal tombstone. This
 verifies the live transport/storage path, not an installed TestFlight app; the
 new app build still needs its real-device TestFlight smoke check.
+
+## Deployment verification, 2026-09-14
+
+Backend commit `eec1753d2a6e86e5b87928c2d8729e8738988ed4` was installed as
+`/opt/nextstop/releases/20260914T110432Z`. API, authentication and database health
+checks passed. No new database migration was required for the optional JSON
+context. Backend unit and PostGIS integration tests passed before deployment.
+
+A synthetic notice-version `2026-09-14` report with numeric app/build/iOS versions
+and a `location`/`coreLocation` diagnostic returned 201. A query restricted to its
+newly generated report ID verified the stored context. Identical retry returned
+200 with the same receipt; withdrawal returned 204 and removed payload, payload
+hash and receipt time. A later POST returned 410 without restoring content.
+A legacy `2026-09-13` report without an attachment also returned 201 and was
+immediately withdrawn with 204. Receipt retention was exactly 30 days. Credentials
+and deletion proofs remained in process memory; output contained only status and
+assertion results. Both synthetic payloads were verified erased after cleanup.
 
 ## Submission and privacy boundaries
 

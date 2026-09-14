@@ -215,7 +215,9 @@ final class UserErrorReportUITests: XCTestCase {
   @MainActor
   private func openReport(in app: XCUIApplication) {
     tap("app-info", in: app)
-    tap("info-error-report", in: app)
+    // The complete source/privacy notice before this link spans more than twelve
+    // gestures at Accessibility XXXL. Keep the real entry path and full text.
+    tap("info-error-report", in: app, timeout: 120)
     XCTAssertTrue(app.navigationBars["Fehler melden"].waitForExistence(timeout: 5))
     reveal("error-report-message", in: app)
   }
@@ -263,9 +265,11 @@ final class UserErrorReportUITests: XCTestCase {
   }
 
   @MainActor
-  private func tap(_ identifier: String, in app: XCUIApplication) {
+  private func tap(
+    _ identifier: String, in app: XCUIApplication, timeout: TimeInterval = 60
+  ) {
     let target = element(identifier, in: app)
-    reveal(identifier, in: app)
+    reveal(identifier, in: app, timeout: timeout)
     XCTAssertTrue(target.isEnabled, "Control is disabled: \(identifier)")
     target.tap()
   }
@@ -300,7 +304,7 @@ final class UserErrorReportUITests: XCTestCase {
     // The full privacy notice spans several screens at the largest text size;
     // callers allow its accessibility snapshots extra time on hosted runners.
     let deadline = Date().addingTimeInterval(timeout)
-    for _ in 0..<12 {
+    for _ in 0..<24 {
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
       let inputAssistant = app.otherElements.matching(identifier: "SystemInputAssistantView")
