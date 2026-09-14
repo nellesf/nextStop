@@ -131,7 +131,7 @@ end tell
 
 # Apple's documented path: I/O > External Displays > CarPlay. The host language
 # stays English; app localization is configured independently during capture.
-run("enable-carplay", ["osascript", "-e", '''
+carplay_menu_script = '''
 with timeout of 40 seconds
     tell application "System Events"
         tell process "Simulator"
@@ -146,8 +146,8 @@ with timeout of 40 seconds
         end tell
     end tell
 end timeout
-'''], timeout=50)
-time.sleep(8)
+'''
+run("enable-carplay", ["osascript", "-e", carplay_menu_script], timeout=50)
 run("displays-after", ["xcrun", "simctl", "io", device_id, "enumerate"])
 run("simulator-windows-after", ["osascript", "-e", '''
 tell application "System Events"
@@ -163,17 +163,83 @@ tell application "System Events"
     end tell
 end tell
 '''], required=False)
-run("external-screenshot", [
-    "xcrun", "simctl", "io", device_id, "screenshot", "--display=external",
-    str(OUTPUT / "diagnostic-carplay-home.png"),
-])
-text = json.loads(run("external-screen-text", [ocr, str(OUTPUT / "diagnostic-carplay-home.png")]))
-assert len(text["text"]) >= 2, "External framebuffer is blank or has no readable CarPlay UI."
+# A booted fresh simulator may still be loading SpringBoard and CarPlay. Poll
+# actual native frames, with one shared deadline for capture, OCR and delays.
+def wait_for_readable_carplay(phase):
+    started = time.monotonic()
+    deadline = started + 90
+    attempts = 0
+    ready = False
+    while time.monotonic() < deadline:
+        attempts += 1
+        suffix = f"{phase}-{attempts:02d}"
+        frame = OUTPUT / f"diagnostic-carplay-readiness-{suffix}.png"
+        try:
+            run(f"external-screenshot-{suffix}", [
+                "xcrun", "simctl", "io", device_id, "screenshot", "--display=external", str(frame),
+            ], timeout=max(0.1, min(45, deadline - time.monotonic())))
+            shutil.copy2(frame, OUTPUT / "diagnostic-carplay-home.png")
+            if time.monotonic() >= deadline:
+                break
+            text = json.loads(run(
+                f"external-screen-text-{suffix}", [ocr, str(frame)],
+                timeout=max(0.1, min(20, deadline - time.monotonic())),
+            ))
+            if time.monotonic() < deadline and len(text.get("text", [])) >= 2:
+                ready = True
+                break
+        except (subprocess.TimeoutExpired, RuntimeError, json.JSONDecodeError) as error:
+            print(f"CarPlay readiness {suffix}: {error}", flush=True)
+        remaining = deadline - time.monotonic()
+        if remaining > 0:
+            time.sleep(min(3, remaining))
+    result = {
+        "phase": phase, "ready": ready, "attempts": attempts,
+        "waitSeconds": round(time.monotonic() - started, 1),
+    }
+    (OUTPUT / f"readiness-{phase}.json").write_text(json.dumps(result, indent=2) + "\n")
+    return result
+
+
+readiness = [wait_for_readable_carplay("initial")]
+if not readiness[-1]["ready"]:
+    run("host-screen-before-reconnect", [
+        "screencapture", "-x", str(OUTPUT / "diagnostic-host-before-reconnect.png"),
+    ], required=False)
+    # Discover the standard close button within the observed external window.
+    # Never guess a menu label for disconnecting displays.
+    run("close-carplay-window", ["osascript", "-e", '''
+with timeout of 30 seconds
+    tell application "System Events" to tell process "Simulator"
+        set frontmost to true
+        if not (exists (first window whose name ends with " – CarPlay")) then
+            error "Expected the observed external CarPlay window before reconnecting"
+        end if
+        set carplayWindow to first window whose name ends with " – CarPlay"
+        set closeButton to first button of carplayWindow whose subrole is "AXCloseButton"
+        if not (exists closeButton) then error "CarPlay window has no standard close button"
+        click closeButton
+        delay 1
+    end tell
+end timeout
+'''], timeout=40)
+    run("reconnect-carplay-menu", ["osascript", "-e", carplay_menu_script], timeout=50)
+    run("host-screen-after-reconnect", [
+        "screencapture", "-x", str(OUTPUT / "diagnostic-host-after-reconnect.png"),
+    ], required=False)
+    readiness.append(wait_for_readable_carplay("reconnected"))
+if not readiness[-1]["ready"]:
+    run("host-screen-unreadable-carplay", [
+        "screencapture", "-x", str(OUTPUT / "diagnostic-host-unreadable-carplay.png"),
+    ], required=False)
+    raise RuntimeError("CarPlay remained unreadable after two 90-second waits and one native display reconnect.")
+
 (OUTPUT / "preflight.json").write_text(json.dumps({
     "deviceID": device_id,
     "device": "iPhone 17 Pro",
     "runtime": runtime,
     "menu": "Simulator > I/O > External Displays > CarPlay",
     "capture": "simctl io screenshot --display=external",
+    "readiness": readiness,
     "result": "Native CarPlay display connected and captured before app build",
 }, indent=2) + "\n")
