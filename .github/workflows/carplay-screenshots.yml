@@ -1,0 +1,34 @@
+name: CarPlay Screenshots
+
+on:
+  push:
+    branches: [codex/app-explainer-website]
+    paths:
+      - .github/workflows/carplay-screenshots.yml
+      - scripts/carplay-capture/**
+      - ios/NextStopAppUITests/ProfileEditorUITests.swift
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carplay-screenshots-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  capture:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v7
+      - name: Probe the native CarPlay display
+        run: bash scripts/carplay-capture/probe.sh
+      - name: Preserve display diagnostics
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: carplay-captures
+          path: CarPlay-Captures/
+          retention-days: 7
+          if-no-files-found: error
