@@ -1,6 +1,6 @@
 import XCTest
 
-/// Uses an in-memory profile and never starts navigation or a destination lookup.
+/// Uses in-memory profiles and never starts navigation or a charging search.
 final class ProfileEditorUITests: XCTestCase {
   override func setUpWithError() throws {
     continueAfterFailure = false
@@ -93,6 +93,119 @@ final class ProfileEditorUITests: XCTestCase {
     XCTAssertTrue(field.waitForExistence(timeout: 5))
     XCTAssertEqual(
       field.value as? String, savedName, "The final edit must survive saving and reopening.")
+  }
+
+  /// Captures the unchanged app UI for the website with a disposable example
+  /// profile. The destination is selected through the real MapKit search UI;
+  /// no screen content is substituted or drawn by the screenshot harness.
+  @MainActor
+  func testWebsiteScreenshots() {
+    let previousAppearance = XCUIDevice.shared.appearance
+    XCUIDevice.shared.appearance = .light
+    let app = XCUIApplication()
+    app.launchArguments = [
+      "--ui-testing",
+      "-AppleLanguages", "(de)",
+      "-AppleLocale", "de_DE",
+      "-UIPreferredContentSizeCategoryName", "UICTContentSizeCategoryL",
+    ]
+    app.launchEnvironment["NEXTSTOP_UI_TEST_SCENARIO"] = "profile-editor"
+    app.launchEnvironment["NEXTSTOP_UI_TEST_APPEARANCE"] = "light"
+    app.launch()
+    defer {
+      app.terminate()
+      XCUIDevice.shared.appearance = previousAppearance
+    }
+
+    let edit = app.buttons["profile-edit"]
+    XCTAssertTrue(edit.waitForExistence(timeout: 10))
+    edit.tap()
+    let name = app.textFields["profile-name"]
+    XCTAssertTrue(name.waitForExistence(timeout: 5))
+    XCTAssertEqual(name.value as? String, "Leipzig")
+
+    // Replace the existing UI-test placeholder with a public city, using the
+    // same destination picker a user sees. A lookup failure must fail capture.
+    app.buttons["Fahrziel"].tap()
+    let search = app.searchFields.firstMatch
+    XCTAssertTrue(search.waitForExistence(timeout: 5))
+    search.tap()
+    search.typeText("L")
+    dismissFirstUseKeyboardHelp(in: app)
+    search.typeText("eipzig Deutschland\n")
+    let city = app.cells.containing(.staticText, identifier: "Leipzig").firstMatch
+    XCTAssertTrue(city.waitForExistence(timeout: 45), "MapKit must return the city Leipzig.")
+    city.tap()
+    waitForWebsiteElement(search, toExist: false)
+    waitForWebsiteElement(app.keyboards.firstMatch, toExist: false)
+    XCTAssertEqual(app.buttons["Fahrziel"].value as? String, "Leipzig")
+
+    let power = app.buttons["Mindestleistung"]
+    power.tap()
+    let selectedPower = app.buttons["150 kW"]
+    XCTAssertTrue(selectedPower.waitForExistence(timeout: 5))
+    selectedPower.tap()
+
+    let scroll = app.scrollViews.firstMatch
+    let restaurant = app.switches["Restaurant in der Nähe erforderlich"]
+    revealWebsiteElement(restaurant, in: scroll)
+    if restaurant.value as? String != "1" {
+      restaurant.tap()
+    }
+    let chain = app.buttons["Restaurantkette"]
+    revealWebsiteElement(chain, in: scroll)
+    chain.tap()
+    let selectedChain = app.buttons["McDonald's"]
+    XCTAssertTrue(selectedChain.waitForExistence(timeout: 5))
+    selectedChain.tap()
+    XCTAssertEqual(chain.value as? String, "McDonald's")
+
+    let save = app.buttons["profile-save"]
+    XCTAssertTrue(save.isHittable)
+    save.tap()
+    waitForWebsiteElement(name, toExist: false)
+    XCTAssertTrue(edit.waitForExistence(timeout: 5))
+    captureWebsiteScreenshot("website-iphone-profiles", in: app)
+
+    edit.tap()
+    XCTAssertTrue(name.waitForExistence(timeout: 5))
+    XCTAssertEqual(app.buttons["Fahrziel"].value as? String, "Leipzig")
+    XCTAssertEqual(power.value as? String, "150 kW")
+    captureWebsiteScreenshot("website-iphone-profile-editor", in: app)
+
+    // Scroll the real editor to its lower section so the restaurant criteria
+    // and the always-visible save action can be read together.
+    scroll.swipeUp()
+    revealWebsiteElement(chain, in: scroll)
+    XCTAssertEqual(chain.value as? String, "McDonald's")
+    XCTAssertTrue(save.isHittable)
+    captureWebsiteScreenshot("website-iphone-profile-filters", in: app)
+  }
+
+  @MainActor
+  private func waitForWebsiteElement(_ element: XCUIElement, toExist exists: Bool) {
+    let expectation = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "exists == %@", NSNumber(value: exists)), object: element
+    )
+    XCTAssertEqual(XCTWaiter.wait(for: [expectation], timeout: 10), .completed)
+  }
+
+  @MainActor
+  private func revealWebsiteElement(_ element: XCUIElement, in scroll: XCUIElement) {
+    for _ in 0..<4 where !element.isHittable {
+      scroll.swipeUp()
+    }
+    XCTAssertTrue(element.isHittable)
+  }
+
+  @MainActor
+  private func captureWebsiteScreenshot(_ name: String, in app: XCUIApplication) {
+    XCTAssertFalse(app.keyboards.firstMatch.exists, "Website captures must not show a keyboard.")
+    XCTAssertFalse(app.alerts.firstMatch.exists, "Website captures must not show an alert.")
+    let attachment = XCTAttachment(screenshot: app.screenshot())
+    attachment.name = name
+    attachment.lifetime = .keepAlways
+    add(attachment)
   }
 
   @MainActor

@@ -71,7 +71,7 @@ runs its unit, CarPlay presenter, and iPhone UI tests on the GA `macos-26` runne
 with Xcode 26 and an iPhone 17 Pro Simulator. Both workflows run for every push
 and pull request, use read-only repository permissions, and pin GitHub's checkout
 action to v7. The iOS job has a 30-minute timeout and can also be started manually
-from **Actions → iOS App → Run workflow**, selecting `all` or `ui` tests and the
+from **Actions → iOS App → Run workflow**, selecting `all`, `ui`, or `screenshots` and the
 desired branch. A queued GitHub runner does not block local Simulator testing.
 
 Every iOS run uploads the result bundle as `ios-test-results` and exported test
@@ -90,6 +90,25 @@ not pixel-baseline comparisons, and a passing UI test does not establish that
 every layout is visually correct. The iPhone UI suite does not launch or capture
 the external CarPlay display. Actual CarPlay layout still needs the CarPlay
 Simulator or a vehicle; the existing CarPlay unit tests verify presenter behavior.
+
+The website branch also supports a dedicated `screenshots` scope. It checks out
+the requested `app_ref` separately, overlays only the UI test harness, and verifies
+that application sources, the Xcode project, and configuration remain unchanged.
+Use the full current `main` SHA for `app_ref`. This capture uses an isolated profile
+and selects a public city through the app's normal MapKit destination UI. It never
+performs a charging search or opens personal data. The three original PNGs and
+`capture-source.json` are exported with the usual attachment artifact. Website
+capture tests are excluded from the ordinary `all` and `ui` scopes.
+
+```bash
+gh workflow run ios-app.yml --ref codex/app-explainer-website \
+  -f test_scope=screenshots -f app_ref=<full-main-commit-sha>
+gh run download <run-id> -n ios-ui-attachments -D /tmp/nextstop-screenshots
+node website/scripts/import-screenshots.mjs /tmp/nextstop-screenshots <full-main-commit-sha>
+```
+
+The importer verifies the source commit and records original file hashes and
+capture times in `website/public/screenshots/provenance.json`.
 
 ### iOS app
 

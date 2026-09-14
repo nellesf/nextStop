@@ -11,7 +11,12 @@ on:
         options:
           - all
           - ui
+          - screenshots
         default: all
+      app_ref:
+        description: Exact main commit to capture (screenshots only)
+        type: string
+        default: main
 
 permissions:
   contents: read
@@ -33,20 +38,68 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Check out the app to capture
+        if: inputs.test_scope == 'screenshots'
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ inputs.app_ref }}
+          path: screenshot-app
+
+      - name: Install the capture harness without changing the app
+        if: inputs.test_scope == 'screenshots'
+        run: |
+          cp ios/NextStopAppUITests/ProfileEditorUITests.swift \
+            screenshot-app/ios/NextStopAppUITests/ProfileEditorUITests.swift
+          git -C screenshot-app diff --exit-code -- \
+            ios/NextStopApp ios/NextStopCore ios/NextStopCarPlay \
+            ios/NextStop.xcodeproj ios/Config
+          python3 - <<'PY'
+          import json, os, subprocess
+          def git(*args):
+              return subprocess.check_output(['git', '-C', 'screenshot-app', *args], text=True).strip()
+          with open('capture-source.json', 'w') as output:
+              json.dump({
+                  'appCommit': git('rev-parse', 'HEAD'),
+                  'appTree': git('rev-parse', 'HEAD:ios/NextStopApp'),
+                  'harnessCommit': os.environ['GITHUB_SHA'],
+                  'runURL': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
+                  'data': 'Isolated in-memory profile with a city chosen through the app UI',
+                  'device': 'iPhone 17 Pro',
+                  'locale': 'de_DE',
+              }, output, indent=2)
+          PY
+
+      - name: Prepare the screenshot simulator
+        if: inputs.test_scope == 'screenshots'
+        run: |
+          device_id="$(xcrun simctl list devices available --json | python3 -c 'import json,sys; print(next(d["udid"] for devices in json.load(sys.stdin)["devices"].values() for d in devices if d["name"] == "iPhone 17 Pro"))')"
+          xcrun simctl boot "$device_id"
+          xcrun simctl bootstatus "$device_id" -b
+          xcrun simctl status_bar "$device_id" override \
+            --time '9:41' --dataNetwork wifi --wifiMode active --wifiBars 3 \
+            --batteryState charged --batteryLevel 100
+          echo "SCREENSHOT_DEVICE_ID=$device_id" >> "$GITHUB_ENV"
+
       - name: Build and test iOS app
         env:
           TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
         run: |
           set -o pipefail
-          test_selection=()
+          test_selection=(-skip-testing:NextStopAppUITests/ProfileEditorUITests/testWebsiteScreenshots)
+          project=ios/NextStop.xcodeproj
+          destination='platform=iOS Simulator,name=iPhone 17 Pro,OS=latest'
           if [ "$TEST_SCOPE" = "ui" ]; then
-            test_selection=(-only-testing:NextStopAppUITests)
+            test_selection=(-only-testing:NextStopAppUITests -skip-testing:NextStopAppUITests/ProfileEditorUITests/testWebsiteScreenshots)
+          elif [ "$TEST_SCOPE" = "screenshots" ]; then
+            project=screenshot-app/ios/NextStop.xcodeproj
+            destination="platform=iOS Simulator,id=$SCREENSHOT_DEVICE_ID"
+            test_selection=(-only-testing:NextStopAppUITests/ProfileEditorUITests/testWebsiteScreenshots -parallel-testing-enabled NO)
           fi
           xcodebuild \
-            -project ios/NextStop.xcodeproj \
+            -project "$project" \
             -scheme NextStopApp \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -destination "$destination" \
             -resultBundlePath TestResults.xcresult \
             "${test_selection[@]}" \
             CODE_SIGNING_ALLOWED=NO \
@@ -87,6 +140,9 @@ jobs:
             xcrun xcresulttool export attachments \
               --path TestResults.xcresult \
               --output-path UI-Attachments
+            if [ -f capture-source.json ]; then
+              cp capture-source.json UI-Attachments/
+            fi
           fi
 
       - name: Upload Xcode test results
