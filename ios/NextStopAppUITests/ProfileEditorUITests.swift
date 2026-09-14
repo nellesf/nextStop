@@ -150,15 +150,24 @@ final class ProfileEditorUITests: XCTestCase {
     let selectedPower = app.buttons["150 kW"]
     XCTAssertTrue(selectedPower.waitForExistence(timeout: 5))
     selectedPower.tap()
+    XCTAssertEqual(power.value as? String, "150 kW")
 
     let scroll = app.scrollViews.firstMatch
     let restaurant = app.switches["Restaurant in der Nähe erforderlich"]
-    revealWebsiteElement(restaurant, in: scroll)
+    revealWebsiteElement(restaurant, in: app)
     if restaurant.value as? String != "1" {
-      restaurant.tap()
+      // The enclosing SwiftUI label may be hittable while the thumb is still
+      // covered by the fixed save bar. Tap the fully visible native switch.
+      let nativeSwitch = restaurant.switches.firstMatch
+      XCTAssertTrue(nativeSwitch.isHittable)
+      nativeSwitch.tap()
     }
+    let restaurantEnabled = XCTNSPredicateExpectation(
+      predicate: NSPredicate(format: "value == '1'"), object: restaurant
+    )
+    XCTAssertEqual(XCTWaiter.wait(for: [restaurantEnabled], timeout: 5), .completed)
     let chain = app.buttons["Restaurantkette"]
-    revealWebsiteElement(chain, in: scroll)
+    revealWebsiteElement(chain, in: app)
     chain.tap()
     let selectedChain = app.buttons["McDonald's"]
     XCTAssertTrue(selectedChain.waitForExistence(timeout: 5))
@@ -181,7 +190,7 @@ final class ProfileEditorUITests: XCTestCase {
     // Scroll the real editor to its lower section so the restaurant criteria
     // and the always-visible save action can be read together.
     scroll.swipeUp()
-    revealWebsiteElement(chain, in: scroll)
+    revealWebsiteElement(chain, in: app)
     XCTAssertEqual(chain.value as? String, "McDonald's")
     XCTAssertTrue(save.isHittable)
     captureWebsiteScreenshot("website-iphone-profile-filters", in: app)
@@ -196,11 +205,17 @@ final class ProfileEditorUITests: XCTestCase {
   }
 
   @MainActor
-  private func revealWebsiteElement(_ element: XCUIElement, in scroll: XCUIElement) {
-    for _ in 0..<4 where !element.isHittable {
+  private func revealWebsiteElement(_ element: XCUIElement, in app: XCUIApplication) {
+    let scroll = app.scrollViews.firstMatch
+    let save = app.buttons["profile-save"]
+    for _ in 0..<4 {
+      if element.exists, element.isHittable, element.frame.maxY < save.frame.minY - 12 {
+        break
+      }
       scroll.swipeUp()
     }
     XCTAssertTrue(element.isHittable)
+    XCTAssertLessThan(element.frame.maxY, save.frame.minY - 12)
   }
 
   @MainActor
