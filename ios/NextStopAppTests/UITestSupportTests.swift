@@ -24,19 +24,21 @@
       )
     }
 
-    func testFixturesKeepProfilesInMemoryAndIsolateLogConsentAndReceipts() async throws {
+    func testFixturesUseDefaultRecordingAndIsolateProfilesLogsAndReceipts() async throws {
       let empty = try UITestSupport(scenario: .empty)
       let logs = try UITestSupport(scenario: .logsSuccess)
       XCTAssertTrue(empty.modelContainer.configurations.allSatisfy(\.isStoredInMemoryOnly))
       XCTAssertTrue(logs.modelContainer.configurations.allSatisfy(\.isStoredInMemoryOnly))
-      XCTAssertEqual(try empty.modelContainer.mainContext.fetchCount(FetchDescriptor<StoredProfile>()), 0)
-      XCTAssertFalse(empty.diagnostics.recordingEnabled)
+      XCTAssertEqual(
+        try empty.modelContainer.mainContext.fetchCount(FetchDescriptor<StoredProfile>()), 0)
+      XCTAssertTrue(empty.diagnostics.recordingEnabled)
       XCTAssertTrue(empty.diagnostics.events.isEmpty)
       XCTAssertTrue(logs.diagnostics.recordingEnabled)
       XCTAssertEqual(logs.diagnostics.events.count, 1)
       XCTAssertEqual(logs.diagnostics.events.first?.category, .offline)
 
-      let request = try UserErrorReportRequest(message: "Synthetic report.", includeDiagnostics: false)
+      let request = try UserErrorReportRequest(
+        message: "Synthetic report.", includeDiagnostics: false)
       let receipt = try await logs.reportSender.send(request)
       XCTAssertEqual(logs.receipts.receipts, [receipt])
       XCTAssertFalse(receipt.isPending)

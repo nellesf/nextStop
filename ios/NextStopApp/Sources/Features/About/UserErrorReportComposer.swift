@@ -14,13 +14,19 @@ final class UserErrorReportComposer: ObservableObject {
   @Published private(set) var sentReportID: UUID?
   @Published private(set) var error: UserErrorReportError?
   @Published private(set) var privacyConfigured: Bool
+  let diagnosticContext: UserErrorReportDiagnosticContext?
 
   private let sender: any UserErrorReportSending
   private var pendingRequest: UserErrorReportRequest?
 
-  init(sender: any UserErrorReportSending, privacyConfigured: Bool) {
+  init(
+    sender: any UserErrorReportSending, privacyConfigured: Bool,
+    diagnosticContext: UserErrorReportDiagnosticContext? = .current()
+  ) {
     self.sender = sender
     self.privacyConfigured = privacyConfigured
+    // Keep preview and explicit retries tied to the same software-version snapshot.
+    self.diagnosticContext = diagnosticContext
   }
 
   var messageLength: Int { message.unicodeScalars.count }
@@ -62,7 +68,8 @@ final class UserErrorReportComposer: ObservableObject {
         request = try UserErrorReportRequest(
           message: message,
           includeDiagnostics: includeDiagnostics,
-          diagnostics: includeDiagnostics ? diagnostics : []
+          diagnostics: includeDiagnostics ? diagnostics : [],
+          diagnosticContext: diagnosticContext
         )
         pendingRequest = request
       }

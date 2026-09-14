@@ -37,7 +37,8 @@ paths:
         A valid short-lived App Attest access token is required. The legacy staging
         bearer is never accepted. No background collection or upload is implied.
         Body limit 128 KiB, message 1–5000 Unicode scalar values after trimming,
-        optional 1–200 allowlisted diagnostic events, no metadata outside this schema.
+        optional 1–200 allowlisted diagnostic events and coarse software-version
+        context with explicit attachment selection, no metadata outside this schema.
         Same reportId, secret and canonical payload return the original receipt (200);
         changed secret or payload returns 409. A withdrawn report returns 410.
         Retained for 30 days, purged every 15 minutes and on API startup; normal
@@ -407,7 +408,7 @@ components:
         schemaVersion: { const: 1 }
         reportId: { type: string, format: uuid }
         deletionToken: { type: string, format: uuid }
-        consentVersion: { const: '2026-09-13' }
+        consentVersion: { enum: ['2026-09-13', '2026-09-14'] }
         message:
           type: string
           minLength: 1
@@ -419,6 +420,8 @@ components:
           minItems: 1
           maxItems: 200
           items: { $ref: '#/components/schemas/AppDiagnosticEvent' }
+        diagnosticContext:
+          $ref: '#/components/schemas/UserErrorReportDiagnosticContext'
       allOf:
         - if:
             properties:
@@ -427,7 +430,31 @@ components:
             required: [diagnostics]
           else:
             not:
-              required: [diagnostics]
+              anyOf:
+                - required: [diagnostics]
+                - required: [diagnosticContext]
+        - if:
+            required: [diagnosticContext]
+          then:
+            properties:
+              consentVersion: { const: '2026-09-14' }
+    UserErrorReportDiagnosticContext:
+      type: object
+      additionalProperties: false
+      required: [appVersion, buildVersion, operatingSystemVersion]
+      description: |
+        Optional software-version snapshot from report composition, shared only
+        with selected logs under consent version 2026-09-14. This is not a version
+        attribution for each historical event. No device model or identifier.
+      properties:
+        appVersion: { $ref: '#/components/schemas/DiagnosticSoftwareVersion' }
+        buildVersion: { $ref: '#/components/schemas/DiagnosticSoftwareVersion' }
+        operatingSystemVersion: { $ref: '#/components/schemas/DiagnosticSoftwareVersion' }
+    DiagnosticSoftwareVersion:
+      type: string
+      minLength: 1
+      maxLength: 29
+      pattern: '^[0-9]{1,9}(\.[0-9]{1,9}){0,2}$'
     AppDiagnosticEvent:
       type: object
       additionalProperties: false
@@ -439,14 +466,14 @@ components:
           format: date-time
           description: UTC Z timestamp from 1970 through 2100, at most three fractional digits.
         operation:
-          enum: [candidateSearch, route, candidateDistance, authentication, placeLookup, mapsLaunch]
+          enum: [candidateSearch, route, candidateDistance, authentication, placeLookup, mapsLaunch, location, destinationSearch]
         outcome: { enum: [failure, retryScheduled, recovered] }
         category:
           enum: [networkTimeout, networkLost, offline, connection, http, invalidResponse, authentication, noRoute, invalidRoute, throttled, unknown]
         durationMilliseconds: { type: integer, minimum: 0, maximum: 300000 }
         attempt: { type: integer, minimum: 1, maximum: 3 }
         httpStatus: { type: integer, minimum: 100, maximum: 599 }
-        errorDomain: { enum: [url, mapKit, routePlanning, unknown] }
+        errorDomain: { enum: [url, mapKit, routePlanning, coreLocation, unknown] }
         errorCode: { type: integer, minimum: -10000, maximum: 10000 }
         serverRequestID: { type: string, format: uuid }
         edgeRequestID: { type: string, format: uuid }

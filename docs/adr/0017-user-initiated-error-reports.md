@@ -21,9 +21,22 @@ from ordinary ride preparation and search.
 Add a voluntary iPhone report form that sends a description to the nextStop
 backend only after the user explicitly submits it. A separate, initially unchecked
 choice attaches the existing `AppDiagnosticEvent` allowlist for that report only.
+The technical attachment can also include the app version, build version, and
+numeric iOS version shown in its preview. This context is optional, contains no
+device model or identifier, and is absent when the attachment is not selected.
+Capture it when opening the report form and freeze it with the submission across
+retries; do not infer the version that generated an older retained event.
 No automatic background reporting, analytics SDK, account, or CarPlay consent
 prompt is introduced. The attachment choice does not activate future local
-recording; recording remains a separate, default-off choice.
+recording.
+
+On 2026-09-14 the owner explicitly requested local recording to be enabled by
+default so unexpected technical failures can leave evidence before the report
+form is opened. This amends the original default-off choice: enable recording
+when no saved preference exists, respect a saved off preference, and keep an
+iPhone control that disables recording and deletes retained events. Retention
+remains at most 200 events from seven days, excluded from backups. The report
+upload and its attachment remain separate, deliberate user choices.
 
 The form identifies the controller, purpose, data, retention, and withdrawal path
 before submission and links to a localized Article 13 privacy notice. Use consent

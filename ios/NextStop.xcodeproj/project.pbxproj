@@ -41,6 +41,7 @@
 		52B7FF71F1470AD6A78A4D6E /* CurrentLocationProviding.swift in Sources */ = {isa = PBXBuildFile; fileRef = 58F83A8D023616497BD1DEA7 /* CurrentLocationProviding.swift */; };
 		572EB67B7AF9A67D585843DD /* LocalizedFormat.swift in Sources */ = {isa = PBXBuildFile; fileRef = 591141EC9A8DCA661E58575C /* LocalizedFormat.swift */; };
 		607BAC3847F580C18F2AA8C6 /* CarPlayResultPlaceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = CABC5A44BF19A93E65714CD5 /* CarPlayResultPlaceResolver.swift */; };
+		6541879E51B652EE9E55D6F5 /* AppleMapsLauncherDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0BEF798F5996E9487430E896 /* AppleMapsLauncherDiagnosticsTests.swift */; };
 		6675F566DABAC7EDDD7835E1 /* DCAppAttestServiceAdapter.swift in Sources */ = {isa = PBXBuildFile; fileRef = E62112EC206F59BA1D461801 /* DCAppAttestServiceAdapter.swift */; };
 		68A66498D44FD20880CEF9D2 /* InfoPlist.strings in Resources */ = {isa = PBXBuildFile; fileRef = B936DEF99FE1F507CA9B6722 /* InfoPlist.strings */; };
 		6BD17C60665476B21A1D4A5A /* ApplePlaceResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 052BC999E87B980D119B136E /* ApplePlaceResolver.swift */; };
@@ -89,7 +90,9 @@
 		DBCF24C52F1F8595231851AC /* CarPlayAppleMapsLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = DC7171EB62A86F9C6AE1BD96 /* CarPlayAppleMapsLauncher.swift */; };
 		E4147BEFE097271C1E8A3568 /* SwiftDataProfileRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = FC0FB58A345B22966CD0F2F9 /* SwiftDataProfileRepository.swift */; };
 		E61C8E4B495291EB69278A43 /* SupportPrivacyConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = 35262F72F7C1F1C9B6ECFFCA /* SupportPrivacyConfiguration.swift */; };
+		E7D20FAAA8F3093FB2CFCB97 /* MapKitDestinationSearchDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 75D8808FAE20E6437D64995F /* MapKitDestinationSearchDiagnosticsTests.swift */; };
 		E8AA891AF309A2329582AFB4 /* MapKitDrivingDistanceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = A5C45E2E3E3C5EB028720FAB /* MapKitDrivingDistanceTests.swift */; };
+		F16B2FF4C2BA9B119549FA2E /* CoreLocationProviderDiagnosticsTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 501A6DDC797B61ACE6592514 /* CoreLocationProviderDiagnosticsTests.swift */; };
 		F6B276C8E6D5B5AAB4DE860A /* NextStopCarPlaySceneDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = C538D7E5876A339E001C7107 /* NextStopCarPlaySceneDelegate.swift */; };
 		FDB1BC30410969AF967D7425 /* SwiftDataDestinationRepository.swift in Sources */ = {isa = PBXBuildFile; fileRef = 4156FF115B754AA94F263515 /* SwiftDataDestinationRepository.swift */; };
 		FF113A43673E16D8F154F535 /* RidePreparationView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */; };
@@ -122,6 +125,7 @@
 /* Begin PBXFileReference section */
 		052BC999E87B980D119B136E /* ApplePlaceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePlaceResolver.swift; sourceTree = "<group>"; };
 		074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlanning.swift; sourceTree = "<group>"; };
+		0BEF798F5996E9487430E896 /* AppleMapsLauncherDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMapsLauncherDiagnosticsTests.swift; sourceTree = "<group>"; };
 		0D424C30BE2BE86A158FCBF4 /* AppDiagnosticMeasurementTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppDiagnosticMeasurementTests.swift; sourceTree = "<group>"; };
 		0FA01405A06BD37CE85DC6B9 /* RideIntentHandlerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideIntentHandlerTests.swift; sourceTree = "<group>"; };
 		0FF889C48517143932D2C5BC /* CarPlayPresentation.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CarPlayPresentation.swift; sourceTree = "<group>"; };
@@ -146,6 +150,7 @@
 		47D60CB6E90125091339EDB9 /* DestinationLibraryView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationLibraryView.swift; sourceTree = "<group>"; };
 		4A885A6DB978157CEF54EDC5 /* RidePreparationViewModelTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationViewModelTests.swift; sourceTree = "<group>"; };
 		4E225D4FE068D4B55304E423 /* AppAttestKeyStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestKeyStore.swift; sourceTree = "<group>"; };
+		501A6DDC797B61ACE6592514 /* CoreLocationProviderDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CoreLocationProviderDiagnosticsTests.swift; sourceTree = "<group>"; };
 		50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RidePreparationView.swift; sourceTree = "<group>"; };
 		51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DestinationRepositoryTests.swift; sourceTree = "<group>"; };
 		52BBCEDFD7E2DD4EBD37FA7B /* de */ = {isa = PBXFileReference; lastKnownFileType = text.plist.strings; name = de; path = de.lproj/InfoPlist.strings; sourceTree = "<group>"; };
@@ -162,6 +167,7 @@
 		6C69FF29913A65843A6233AD /* CandidateSearchService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CandidateSearchService.swift; sourceTree = "<group>"; };
 		6D2AC9CE6B9D57CA73908DE8 /* RideCandidateSearchCoordinatorTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideCandidateSearchCoordinatorTests.swift; sourceTree = "<group>"; };
 		70A5888D70A4233FD8827E4A /* AppAttestSearchAccessTokenProvider.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppAttestSearchAccessTokenProvider.swift; sourceTree = "<group>"; };
+		75D8808FAE20E6437D64995F /* MapKitDestinationSearchDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MapKitDestinationSearchDiagnosticsTests.swift; sourceTree = "<group>"; };
 		7806F515198D394DE02D9C5C /* DiagnosticsView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DiagnosticsView.swift; sourceTree = "<group>"; };
 		781FE83B6F5761EE04D09918 /* AppleMapsNavigationLauncher.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMapsNavigationLauncher.swift; sourceTree = "<group>"; };
 		7988A5498BC920DC3974ABFF /* ReportComposerTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ReportComposerTests.swift; sourceTree = "<group>"; };
@@ -467,11 +473,14 @@
 				6780E7415AC2367F4CF57432 /* AppAttestAuthenticationTests.swift */,
 				0D424C30BE2BE86A158FCBF4 /* AppDiagnosticMeasurementTests.swift */,
 				BCCB9D9F1EB7C8944CD68F9B /* AppDiagnosticsTests.swift */,
+				0BEF798F5996E9487430E896 /* AppleMapsLauncherDiagnosticsTests.swift */,
 				9438DF8BF63B2018172F6282 /* AuthenticationTransportTests.swift */,
 				B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */,
 				1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */,
+				501A6DDC797B61ACE6592514 /* CoreLocationProviderDiagnosticsTests.swift */,
 				51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */,
 				8FE9DD664DCBE882105B45FE /* HTTPCandidateSearchRecoveryTests.swift */,
+				75D8808FAE20E6437D64995F /* MapKitDestinationSearchDiagnosticsTests.swift */,
 				A5C45E2E3E3C5EB028720FAB /* MapKitDrivingDistanceTests.swift */,
 				8CF6472D1091FB78EC603F4C /* ProfileFormStateTests.swift */,
 				626698CF1C3DAE147B816447 /* ProfileRepositoryTests.swift */,
@@ -783,11 +792,14 @@
 				D7A2AD63F70603ECFDB96D55 /* AppAttestAuthenticationTests.swift in Sources */,
 				6DDA58799D130E4E2C11F807 /* AppDiagnosticMeasurementTests.swift in Sources */,
 				3C89D28C639AAD502FB87212 /* AppDiagnosticsTests.swift in Sources */,
+				6541879E51B652EE9E55D6F5 /* AppleMapsLauncherDiagnosticsTests.swift in Sources */,
 				7316EC8DB9BFD27D29B41487 /* AuthenticationTransportTests.swift in Sources */,
 				27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */,
 				81741127CA7CFE1D5C9DA0C2 /* CandidateSearchResponseDTOTests.swift in Sources */,
+				F16B2FF4C2BA9B119549FA2E /* CoreLocationProviderDiagnosticsTests.swift in Sources */,
 				1EDC3BA1EEB9C7D21BF81C72 /* DestinationRepositoryTests.swift in Sources */,
 				BA225539A2EA27D338309494 /* HTTPCandidateSearchRecoveryTests.swift in Sources */,
+				E7D20FAAA8F3093FB2CFCB97 /* MapKitDestinationSearchDiagnosticsTests.swift in Sources */,
 				E8AA891AF309A2329582AFB4 /* MapKitDrivingDistanceTests.swift in Sources */,
 				13C12D2BDABBDCFBB8B88711 /* ProfileFormStateTests.swift in Sources */,
 				1B3DB1DD33BC94AD11DA1692 /* ProfileRepositoryTests.swift in Sources */,

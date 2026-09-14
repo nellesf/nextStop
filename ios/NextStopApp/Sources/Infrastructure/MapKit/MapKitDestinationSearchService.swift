@@ -3,7 +3,22 @@ import NextStopCore
 
 @MainActor
 final class MapKitDestinationSearchService: DestinationSearching {
+  typealias Search = @MainActor (MKLocalSearch.Request) async throws -> [MKMapItem]
+
+  private let measurement: AppDiagnosticMeasurement
+  private let performSearch: Search
+
+  init(
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics(),
+    now: @escaping AppDiagnosticMeasurement.Now = Date.init,
+    performSearch: @escaping Search = { try await MKLocalSearch(request: $0).start().mapItems }
+  ) {
+    measurement = AppDiagnosticMeasurement(recorder: diagnostics, now: now)
+    self.performSearch = performSearch
+  }
+
   func search(query: String) async throws -> [DestinationSearchResult] {
+    try Task.checkCancellation()
     let trimmedQuery = query.trimmingCharacters(in: .whitespacesAndNewlines)
     guard !trimmedQuery.isEmpty else {
       return []
@@ -13,8 +28,12 @@ final class MapKitDestinationSearchService: DestinationSearching {
     request.naturalLanguageQuery = trimmedQuery
     request.resultTypes = [.address, .pointOfInterest]
 
-    let response = try await MKLocalSearch(request: request).start()
-    return response.mapItems.compactMap(Self.makeResult)
+    let items = try await measurement.perform(.destinationSearch) {
+      let items = try await performSearch(request)
+      try Task.checkCancellation()
+      return items
+    }
+    return items.compactMap(Self.makeResult)
   }
 
   private static func makeResult(from mapItem: MKMapItem) -> DestinationSearchResult? {

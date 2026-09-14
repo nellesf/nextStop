@@ -49,9 +49,11 @@ separate daily OSM projection imports supported chains from cached Geofabrik PBF
 extracts and enforces the exact 500 m restaurant predicate.
 
 The iPhone includes voluntary error reporting with a free-text description and an
-initially unchecked option to attach existing sanitized technical logs. With no
-saved logs it explains the empty state and links directly to local recording
-settings; recording stays optional and cannot recover past errors. Reports are sent
+initially unchecked option to attach existing sanitized technical logs and the
+app/build/iOS versions shown in the attachment preview. Local recording is on by
+default, bounded to 200 events from seven days, and can be turned off and cleared
+on iPhone. With no saved logs the form explains the empty state and links directly
+to recording settings; it cannot recover past errors. Reports are sent
 only after explicit submission, can be withdrawn in the app, and expire after
 30 days with scheduled server cleanup. Search recovery remains silent. The report
 flow includes localized privacy information and requires genuine controller/contact

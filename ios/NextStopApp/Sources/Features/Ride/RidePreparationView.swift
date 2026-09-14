@@ -59,12 +59,12 @@ struct RidePreparationView: View {
     _viewModel = StateObject(
       wrappedValue: RidePreparationViewModel(
         draft: draft,
-        locationProvider: CoreLocationProvider(),
+        locationProvider: CoreLocationProvider(diagnostics: diagnostics),
         routePlanner: routePlanner,
         candidateSearcher: candidateSearcher
       )
     )
-    navigationLauncher = AppleMapsLauncher()
+    navigationLauncher = AppleMapsLauncher(diagnostics: diagnostics)
     placeResolver = MapKitApplePlaceResolver(diagnostics: diagnostics)
   }
 

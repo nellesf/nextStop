@@ -1,4 +1,5 @@
 @preconcurrency import CoreLocation
+import Foundation
 import NextStopCore
 
 @MainActor
@@ -6,29 +7,58 @@ final class CoreLocationProvider: NSObject, CurrentLocationProviding {
   private static let temporaryFullAccuracyPurposeKey = "RouteSearch"
 
   private let locationManager: CLLocationManager
+  private let measurement: AppDiagnosticMeasurement
   private var authorizationContinuation: CheckedContinuation<Void, any Error>?
   private var accuracyContinuation: CheckedContinuation<Void, any Error>?
   private var locationContinuation: CheckedContinuation<Coordinate, any Error>?
 
-  override init() {
-    locationManager = CLLocationManager()
+  init(
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics(),
+    now: @escaping AppDiagnosticMeasurement.Now = Date.init,
+    locationManager: CLLocationManager = CLLocationManager()
+  ) {
+    self.locationManager = locationManager
+    measurement = AppDiagnosticMeasurement(recorder: diagnostics, now: now)
     super.init()
     locationManager.delegate = self
     locationManager.desiredAccuracy = kCLLocationAccuracyBest
   }
 
   func currentLocation() async throws -> Coordinate {
+    try Task.checkCancellation()
     guard authorizationContinuation == nil, accuracyContinuation == nil,
       locationContinuation == nil
     else {
       throw CurrentLocationError.requestAlreadyInProgress
     }
 
-    try await authorizeIfNeeded()
-    try await requestFullAccuracyIfNeeded()
-    return try await withCheckedThrowingContinuation { continuation in
-      locationContinuation = continuation
-      locationManager.requestLocation()
+    let startedAt = measurement.now()
+    do {
+      try await authorizeIfNeeded()
+      try await requestFullAccuracyIfNeeded()
+      let coordinate: Coordinate = try await withCheckedThrowingContinuation { continuation in
+        locationContinuation = continuation
+        locationManager.requestLocation()
+      }
+      try Task.checkCancellation()
+      return coordinate
+    } catch {
+      let nsError = error as NSError
+      if Task.isCancelled || error is CancellationError
+        || (nsError.domain == NSURLErrorDomain && nsError.code == URLError.cancelled.rawValue)
+      {
+        throw CancellationError()
+      }
+      // Permission and precision are deliberate user choices, not defects.
+      let isPermissionChoice =
+        switch error as? CurrentLocationError {
+        case .authorizationDenied, .authorizationRestricted, .reducedAccuracy: true
+        default: nsError.domain == kCLErrorDomain && nsError.code == CLError.denied.rawValue
+        }
+      if !isPermissionChoice {
+        measurement.recordFailure(.location, startedAt: startedAt, error: error)
+      }
+      throw error as? CurrentLocationError ?? .unavailable
     }
   }
 
@@ -124,12 +154,14 @@ final class CoreLocationProvider: NSObject, CurrentLocationProviding {
     continuation.resume(returning: coordinate)
   }
 
-  private func handleLocationError() {
+  private func handleLocationError(_ error: any Error) {
     guard let continuation = locationContinuation else {
       return
     }
     locationContinuation = nil
-    continuation.resume(throwing: CurrentLocationError.unavailable)
+    // Keep the platform error only across this operation's continuation. The
+    // caller receives the existing coarse app error after allowlisted recording.
+    continuation.resume(throwing: error)
   }
 }
 
@@ -153,7 +185,7 @@ extension CoreLocationProvider: CLLocationManagerDelegate {
   nonisolated func locationManager(_ manager: CLLocationManager, didFailWithError error: any Error)
   {
     Task { @MainActor [weak self] in
-      self?.handleLocationError()
+      self?.handleLocationError(error)
     }
   }
 }

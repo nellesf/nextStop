@@ -93,7 +93,10 @@ struct ProfileListView: View {
       .background(Color(.systemGroupedBackground).ignoresSafeArea())
       .toolbar(.hidden, for: .navigationBar)
       .fullScreenCover(item: $editorSelection) { selection in
-        ProfileEditorView(profile: selection.profile) { profile in
+        ProfileEditorView(
+          profile: selection.profile,
+          destinationSearcher: MapKitDestinationSearchService(diagnostics: diagnosticsStore)
+        ) { profile in
           try repository.save(profile)
           try reload()
         }
@@ -105,13 +108,13 @@ struct ProfileListView: View {
             errorReportSender: errorReportSender,
             errorReportReceipts: errorReportReceipts
           )
-            .toolbar {
-              ToolbarItem(placement: .confirmationAction) {
-                Button("action.done") {
-                  showsDataSources = false
-                }
+          .toolbar {
+            ToolbarItem(placement: .confirmationAction) {
+              Button("action.done") {
+                showsDataSources = false
               }
             }
+          }
         }
       }
       .navigationDestination(item: $rideSelection) { selection in

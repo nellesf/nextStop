@@ -18,19 +18,47 @@ protocol AppleMapsLaunching: AnyObject {
 
 @MainActor
 final class AppleMapsLauncher: AppleMapsLaunching {
+  typealias OpenURL = @MainActor (URL, @escaping @MainActor @Sendable (Bool) -> Void) -> Void
+  typealias OpenMapItem = @MainActor (MKMapItem, [String: Any]?) -> Bool
+
+  private let measurement: AppDiagnosticMeasurement
+  private let canOpenURL: @MainActor (URL) -> Bool
+  private let openURL: OpenURL
+  private let openMapItem: OpenMapItem
+  private let nativePlaceURL: @MainActor (MKMapItem) -> URL?
+
+  init(
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics(),
+    now: @escaping AppDiagnosticMeasurement.Now = Date.init,
+    canOpenURL: @escaping @MainActor (URL) -> Bool = { UIApplication.shared.canOpenURL($0) },
+    openURL: @escaping OpenURL = { url, completion in
+      UIApplication.shared.open(url, options: [:]) { success in
+        Task { @MainActor in completion(success) }
+      }
+    },
+    openMapItem: @escaping OpenMapItem = { $0.openInMaps(launchOptions: $1) },
+    nativePlaceURL: @escaping @MainActor (MKMapItem) -> URL? = { mapItem in
+      guard #available(iOS 18.4, *), let identifier = mapItem.identifier?.rawValue else {
+        return nil
+      }
+      return AppleMapsLauncher.placeURL(placeIdentifier: identifier)
+    }
+  ) {
+    measurement = AppDiagnosticMeasurement(recorder: diagnostics, now: now)
+    self.canOpenURL = canOpenURL
+    self.openURL = openURL
+    self.openMapItem = openMapItem
+    self.nativePlaceURL = nativePlaceURL
+  }
+
   @discardableResult
   func openPlace(_ mapItem: MKMapItem) -> Bool {
-    if #available(iOS 18.4, *),
-      let placeIdentifier = mapItem.identifier?.rawValue,
-      let placeURL = Self.placeURL(placeIdentifier: placeIdentifier)
-    {
-      guard UIApplication.shared.canOpenURL(placeURL) else {
-        return false
-      }
-      UIApplication.shared.open(placeURL)
-      return true
+    guard !Task.isCancelled else { return false }
+    let startedAt = measurement.now()
+    if let placeURL = nativePlaceURL(mapItem) {
+      return open(url: placeURL, startedAt: startedAt)
     }
-    return mapItem.openInMaps()
+    return recordResult(openMapItem(mapItem, nil), startedAt: startedAt)
   }
 
   @discardableResult
@@ -39,6 +67,8 @@ final class AppleMapsLauncher: AppleMapsLaunching {
     via foodPOI: FoodPOI?,
     finalDestination: SavedDestination
   ) -> Bool {
+    guard !Task.isCancelled else { return false }
+    let startedAt = measurement.now()
     if #available(iOS 18.4, *),
       let foodPOI,
       let directionsURL = Self.multistopDirectionsURL(
@@ -46,21 +76,38 @@ final class AppleMapsLauncher: AppleMapsLaunching {
         finalDestination: finalDestination
       )
     {
-      guard UIApplication.shared.canOpenURL(directionsURL) else {
-        return false
-      }
-      UIApplication.shared.open(directionsURL)
-      return true
+      return open(url: directionsURL, startedAt: startedAt)
     }
 
     let coordinate = foodPOI?.coordinate ?? park.navigationCoordinate
     let name = foodPOI?.name ?? park.name
     let mapItem = makeMapItem(coordinate: coordinate, name: name)
-    return mapItem.openInMaps(
-      launchOptions: [
-        MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving
-      ]
+    return recordResult(
+      openMapItem(
+        mapItem, [MKLaunchOptionsDirectionsModeKey: MKLaunchOptionsDirectionsModeDriving]
+      ),
+      startedAt: startedAt
     )
+  }
+
+  private func open(url: URL, startedAt: Date) -> Bool {
+    guard canOpenURL(url) else { return recordResult(false, startedAt: startedAt) }
+    let measurement = measurement
+    openURL(url) { success in
+      if !success {
+        measurement.recordFailure(.mapsLaunch, startedAt: startedAt)
+      }
+    }
+    // Keep the existing synchronous acceptance contract. An eventual platform
+    // rejection is diagnosed by the completion callback above.
+    return true
+  }
+
+  private func recordResult(_ succeeded: Bool, startedAt: Date) -> Bool {
+    if !succeeded {
+      measurement.recordFailure(.mapsLaunch, startedAt: startedAt)
+    }
+    return succeeded
   }
 
   static func multistopDirectionsURL(

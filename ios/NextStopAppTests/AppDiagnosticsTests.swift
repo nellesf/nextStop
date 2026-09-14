@@ -70,8 +70,7 @@ final class AppDiagnosticsTests: XCTestCase {
     defer { fixture.remove() }
     let clock = MutableClock(now)
     let store = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { clock.now })
-    XCTAssertFalse(store.recordingEnabled)
-    store.recordingEnabled = true
+    XCTAssertTrue(store.recordingEnabled)
     store.record(event())
     clock.now = now.addingTimeInterval(7 * 24 * 60 * 60 + 1)
     let export = try exportFields(store)
@@ -87,16 +86,14 @@ final class AppDiagnosticsTests: XCTestCase {
     XCTAssertTrue(reloaded.events.isEmpty)
   }
 
-  func testRecordingRequiresOptInAndDisablingDeletesPastAndFutureEvents() throws {
+  func testRecordingStartsAutomaticallyAndOptOutSurvivesRelaunchAndClearing() throws {
     let fixture = try Fixture()
     defer { fixture.remove() }
     let store = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
-    XCTAssertFalse(store.recordingEnabled)
-    store.record(event())
+    XCTAssertTrue(store.recordingEnabled)
     XCTAssertTrue(store.events.isEmpty)
     XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
 
-    store.recordingEnabled = true
     store.record(event())
     XCTAssertEqual(store.events.count, 1)
     let optedIn = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
@@ -111,6 +108,44 @@ final class AppDiagnosticsTests: XCTestCase {
     let optedOut = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
     XCTAssertFalse(optedOut.recordingEnabled)
     XCTAssertTrue(optedOut.events.isEmpty)
+    optedOut.clear()
+    let stillOptedOut = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
+    XCTAssertFalse(stillOptedOut.recordingEnabled)
+    stillOptedOut.record(event())
+    XCTAssertTrue(stillOptedOut.events.isEmpty)
+    stillOptedOut.recordingEnabled = true
+    XCTAssertTrue(stillOptedOut.events.isEmpty)
+    stillOptedOut.record(event())
+    let enabledAgain = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
+    XCTAssertTrue(enabledAgain.recordingEnabled)
+    XCTAssertEqual(enabledAgain.events.count, 1)
+  }
+
+  func testLegacyExplicitOptOutIsMigratedWithoutRestoringEvents() throws {
+    let fixture = try Fixture()
+    defer { fixture.remove() }
+    let legacy = try JSONSerialization.data(withJSONObject: [
+      "schemaVersion": 1, "recordingEnabled": false, "events": [try eventFields(event())],
+    ])
+    try legacy.write(to: fixture.fileURL)
+    let store = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
+    XCTAssertFalse(store.recordingEnabled)
+    XCTAssertTrue(store.events.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
+    XCTAssertFalse(AppDiagnosticsStore(fileURL: fixture.fileURL).recordingEnabled)
+  }
+
+  func testUnreadablePreferenceNeverOverridesOptOut() throws {
+    let fixture = try Fixture()
+    defer { fixture.remove() }
+    let original = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
+    original.record(event())
+    try Data("invalid preference".utf8).write(
+      to: fixture.fileURL.appendingPathExtension("preference"))
+    let reloaded = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
+    XCTAssertFalse(reloaded.recordingEnabled)
+    XCTAssertTrue(reloaded.events.isEmpty)
+    XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
   }
 
   func testReloadAndExportStripUnknownFieldsAndKeepOnlyAllowlistedDetails() throws {
@@ -171,8 +206,10 @@ final class AppDiagnosticsTests: XCTestCase {
       try input.write(to: fixture.fileURL)
       let store = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
       XCTAssertTrue(store.events.isEmpty)
-      XCTAssertFalse(store.recordingEnabled)
+      XCTAssertTrue(store.recordingEnabled)
       XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
+      store.record(event())
+      XCTAssertEqual(store.events.count, 1, "Corrupt old events must not stop future diagnosis.")
     }
   }
 
@@ -198,6 +235,14 @@ final class AppDiagnosticsTests: XCTestCase {
     store.record(event())
     XCTAssertTrue(store.events.isEmpty)
 
+    let stillBlocked = AppDiagnosticsStore(
+      fileURL: fixture.fileURL, clock: { self.now },
+      removeFile: { _ in throw CocoaError(.fileWriteNoPermission) }
+    )
+    XCTAssertFalse(stillBlocked.recordingEnabled)
+    XCTAssertTrue(stillBlocked.events.isEmpty)
+    XCTAssertTrue(stillBlocked.deletionFailed)
+
     deletionAllowed = true
     store.clear()
     XCTAssertFalse(store.deletionFailed)
@@ -208,7 +253,7 @@ final class AppDiagnosticsTests: XCTestCase {
     XCTAssertTrue(reloaded.events.isEmpty)
   }
 
-  func testClearRemovesOldConsentBeforeReplacementWriteCanFail() throws {
+  func testClearRemovesOldEventsBeforeReplacementWriteCanFail() throws {
     let fixture = try Fixture()
     defer { fixture.remove() }
     let store = AppDiagnosticsStore(
@@ -229,7 +274,6 @@ final class AppDiagnosticsTests: XCTestCase {
     XCTAssertTrue(store.events.isEmpty)
     XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
     let reloaded = AppDiagnosticsStore(fileURL: fixture.fileURL, clock: { self.now })
-    XCTAssertFalse(reloaded.recordingEnabled)
     XCTAssertTrue(reloaded.events.isEmpty)
   }
 
@@ -266,6 +310,11 @@ final class AppDiagnosticsTests: XCTestCase {
       XCTAssertEqual(
         try fixture.directory.resourceValues(forKeys: [.isExcludedFromBackupKey])
           .isExcludedFromBackup,
+        true
+      )
+      XCTAssertEqual(
+        try fixture.fileURL.appendingPathExtension("preference")
+          .resourceValues(forKeys: [.isExcludedFromBackupKey]).isExcludedFromBackup,
         true
       )
     #endif

@@ -13,13 +13,13 @@ export const userErrorReportLimits = {
 export interface AppDiagnosticEvent {
   readonly id: string;
   readonly timestamp: string;
-  readonly operation: "candidateSearch" | "route" | "candidateDistance" | "authentication" | "placeLookup" | "mapsLaunch";
+  readonly operation: "candidateSearch" | "route" | "candidateDistance" | "authentication" | "placeLookup" | "mapsLaunch" | "location" | "destinationSearch";
   readonly outcome: "failure" | "retryScheduled" | "recovered";
   readonly category: "networkTimeout" | "networkLost" | "offline" | "connection" | "http" | "invalidResponse" | "authentication" | "noRoute" | "invalidRoute" | "throttled" | "unknown";
   readonly durationMilliseconds: number;
   readonly attempt: number;
   readonly httpStatus?: number;
-  readonly errorDomain?: "url" | "mapKit" | "routePlanning" | "unknown";
+  readonly errorDomain?: "url" | "mapKit" | "routePlanning" | "coreLocation" | "unknown";
   readonly errorCode?: number;
   readonly serverRequestID?: string;
   readonly edgeRequestID?: string;
@@ -27,10 +27,17 @@ export interface AppDiagnosticEvent {
 
 export interface UserErrorReportPayload {
   readonly schemaVersion: 1;
-  readonly consentVersion: "2026-09-13";
+  readonly consentVersion: "2026-09-13" | "2026-09-14";
   readonly message: string;
   readonly includeDiagnostics: boolean;
   readonly diagnostics?: readonly AppDiagnosticEvent[];
+  readonly diagnosticContext?: UserErrorReportDiagnosticContext;
+}
+
+export interface UserErrorReportDiagnosticContext {
+  readonly appVersion: string;
+  readonly buildVersion: string;
+  readonly operatingSystemVersion: string;
 }
 
 export interface UserErrorReportSubmission extends UserErrorReportPayload {
@@ -98,36 +105,56 @@ export class UserErrorReports {
 }
 
 export function validateUserErrorReport(value: unknown): UserErrorReportSubmission {
-  const body = object(value, ["schemaVersion", "reportId", "deletionToken", "consentVersion", "message", "includeDiagnostics", "diagnostics"]);
-  if (body.schemaVersion !== 1 || body.consentVersion !== "2026-09-13" || typeof body.message !== "string" || typeof body.includeDiagnostics !== "boolean") invalid();
+  const body = object(value, ["schemaVersion", "reportId", "deletionToken", "consentVersion", "message", "includeDiagnostics", "diagnostics", "diagnosticContext"]);
+  if (body.schemaVersion !== 1 || (body.consentVersion !== "2026-09-13" && body.consentVersion !== "2026-09-14") || typeof body.message !== "string" || typeof body.includeDiagnostics !== "boolean") invalid();
   const message = body.message.trim();
   // Reject unpaired UTF-16 surrogates; the limit counts Unicode scalar values like iOS.
   if (!message.isWellFormed() || [...message].length < 1 || [...message].length > userErrorReportLimits.maximumMessageCharacters || message.includes("\u0000")) invalid();
   let diagnostics: readonly AppDiagnosticEvent[] | undefined;
+  let diagnosticContext: UserErrorReportDiagnosticContext | undefined;
   if (body.includeDiagnostics) {
     if (!Array.isArray(body.diagnostics) || body.diagnostics.length < 1 || body.diagnostics.length > userErrorReportLimits.maximumDiagnostics) invalid();
     diagnostics = body.diagnostics.map(validateDiagnostic);
     if (new Set(diagnostics.map((event) => event.id)).size !== diagnostics.length) invalid();
-  } else if ("diagnostics" in body) invalid();
+    if ("diagnosticContext" in body) {
+      if (body.consentVersion !== "2026-09-14") invalid();
+      diagnosticContext = validateDiagnosticContext(body.diagnosticContext);
+    }
+  } else if ("diagnostics" in body || "diagnosticContext" in body) invalid();
   return {
     reportId: uuid(body.reportId), deletionToken: uuid(body.deletionToken),
-    schemaVersion: 1, consentVersion: "2026-09-13", message,
+    schemaVersion: 1, consentVersion: body.consentVersion, message,
     includeDiagnostics: body.includeDiagnostics,
     ...(diagnostics === undefined ? {} : { diagnostics }),
+    ...(diagnosticContext === undefined ? {} : { diagnosticContext }),
   };
+}
+
+function validateDiagnosticContext(value: unknown): UserErrorReportDiagnosticContext {
+  const context = object(value, ["appVersion", "buildVersion", "operatingSystemVersion"]);
+  return {
+    appVersion: softwareVersion(context.appVersion),
+    buildVersion: softwareVersion(context.buildVersion),
+    operatingSystemVersion: softwareVersion(context.operatingSystemVersion),
+  };
+}
+
+function softwareVersion(value: unknown): string {
+  if (typeof value !== "string" || value.length > 29 || !/^[0-9]{1,9}(?:\.[0-9]{1,9}){0,2}$/u.test(value)) invalid();
+  return value;
 }
 
 function validateDiagnostic(value: unknown): AppDiagnosticEvent {
   const event = object(value, ["id", "timestamp", "operation", "outcome", "category", "durationMilliseconds", "attempt", "httpStatus", "errorDomain", "errorCode", "serverRequestID", "edgeRequestID"]);
   return {
     id: uuid(event.id), timestamp: timestamp(event.timestamp),
-    operation: member(event.operation, ["candidateSearch", "route", "candidateDistance", "authentication", "placeLookup", "mapsLaunch"]),
+    operation: member(event.operation, ["candidateSearch", "route", "candidateDistance", "authentication", "placeLookup", "mapsLaunch", "location", "destinationSearch"]),
     outcome: member(event.outcome, ["failure", "retryScheduled", "recovered"]),
     category: member(event.category, ["networkTimeout", "networkLost", "offline", "connection", "http", "invalidResponse", "authentication", "noRoute", "invalidRoute", "throttled", "unknown"]),
     durationMilliseconds: integer(event.durationMilliseconds, 0, 300_000),
     attempt: integer(event.attempt, 1, 3),
     ...("httpStatus" in event ? { httpStatus: integer(event.httpStatus, 100, 599) } : {}),
-    ...("errorDomain" in event ? { errorDomain: member(event.errorDomain, ["url", "mapKit", "routePlanning", "unknown"]) } : {}),
+    ...("errorDomain" in event ? { errorDomain: member(event.errorDomain, ["url", "mapKit", "routePlanning", "coreLocation", "unknown"]) } : {}),
     ...("errorCode" in event ? { errorCode: integer(event.errorCode, -10_000, 10_000) } : {}),
     ...("serverRequestID" in event ? { serverRequestID: uuid(event.serverRequestID) } : {}),
     ...("edgeRequestID" in event ? { edgeRequestID: uuid(event.edgeRequestID) } : {}),

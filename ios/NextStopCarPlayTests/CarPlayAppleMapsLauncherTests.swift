@@ -48,8 +48,9 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
 
   func testRejectedPlaceURLReturnsFailureWithoutTryingAnAlternateLaunch() async {
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
+    let recorder = CarPlayMapsLaunchRecorder()
     sceneOpener.result = false
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener) { _ in
+    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener, diagnostics: recorder) { _ in
       AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
     }
 
@@ -58,6 +59,8 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     XCTAssertFalse(opened)
     XCTAssertEqual(sceneOpener.openedURLs.count, 1)
     XCTAssertTrue(sceneOpener.openedMapItems.isEmpty)
+    XCTAssertEqual(recorder.events.map(\.operation), [.mapsLaunch])
+    XCTAssertEqual(recorder.events.map(\.outcome), [.failure])
   }
 
   func testRejectedNativeMapItemReturnsFailureWithoutRetrying() async {
@@ -77,8 +80,9 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
   func testCancelledTaskDoesNotAttemptEitherSceneLaunch() async {
     let selectedPlace = MKMapItem()
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
+    let recorder = CarPlayMapsLaunchRecorder()
     var urlBuilderCallCount = 0
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener) { _ in
+    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener, diagnostics: recorder) { _ in
       urlBuilderCallCount += 1
       return AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
     }
@@ -93,17 +97,24 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     XCTAssertEqual(urlBuilderCallCount, 0)
     XCTAssertTrue(sceneOpener.openedURLs.isEmpty)
     XCTAssertTrue(sceneOpener.openedMapItems.isEmpty)
+    XCTAssertTrue(recorder.events.isEmpty)
   }
 
   func testWaitsForSceneCompletionAndReturnsItsFailure() async {
     let selectedPlace = MKMapItem()
     let sceneOpener = CarPlayMapsSceneOpenerSpy()
+    let recorder = CarPlayMapsLaunchRecorder()
+    let startedAt = Date(timeIntervalSince1970: 1_800_000_000)
+    var instant = startedAt
     let sceneReceivedRequest = expectation(description: "Scene received the place URL")
     sceneOpener.suspendsResult = true
     sceneOpener.onPendingResult = { sceneReceivedRequest.fulfill() }
-    let launcher = CarPlayAppleMapsLauncher(sceneOpener: sceneOpener) { _ in
-      AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
-    }
+    let launcher = CarPlayAppleMapsLauncher(
+      sceneOpener: sceneOpener, diagnostics: recorder, now: { instant },
+      placeURL: { _ in
+        AppleMapsLauncher.placeURL(placeIdentifier: "I1234567890ABCDEF")
+      }
+    )
     var completedResult: Bool?
     let task = Task { @MainActor in
       let opened = await launcher.openPlace(selectedPlace)
@@ -116,13 +127,22 @@ final class CarPlayAppleMapsLauncherTests: XCTestCase {
     XCTAssertEqual(waitResult, .completed)
     XCTAssertNil(completedResult)
     XCTAssertEqual(sceneOpener.openedURLs.count, 1)
+    XCTAssertTrue(recorder.events.isEmpty)
+    instant = startedAt.addingTimeInterval(0.5)
     sceneOpener.complete(with: false)
     let opened = await task.value
 
     XCTAssertFalse(opened)
     XCTAssertEqual(completedResult, false)
     XCTAssertTrue(sceneOpener.openedMapItems.isEmpty)
+    XCTAssertEqual(recorder.events.map(\.durationMilliseconds), [500])
   }
+}
+
+@MainActor
+private final class CarPlayMapsLaunchRecorder: AppDiagnosticRecording {
+  var events: [AppDiagnosticEvent] = []
+  func record(_ event: AppDiagnosticEvent) { events.append(event) }
 }
 
 @MainActor

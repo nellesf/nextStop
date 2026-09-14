@@ -9,15 +9,21 @@ private struct ProfileEditorAlert: Identifiable {
 struct ProfileEditorView: View {
   let profile: UserProfile?
   let onSave: (UserProfile) throws -> Void
+  private let destinationSearcher: any DestinationSearching
 
   @Environment(\.dismiss) private var dismiss
   @State private var form: ProfileFormState
   @State private var isDestinationSearchPresented = false
   @State private var alert: ProfileEditorAlert?
 
-  init(profile: UserProfile?, onSave: @escaping (UserProfile) throws -> Void) {
+  init(
+    profile: UserProfile?,
+    destinationSearcher: any DestinationSearching = MapKitDestinationSearchService(),
+    onSave: @escaping (UserProfile) throws -> Void
+  ) {
     self.profile = profile
     self.onSave = onSave
+    self.destinationSearcher = destinationSearcher
     _form = State(initialValue: ProfileFormState(profile: profile))
   }
 
@@ -53,7 +59,7 @@ struct ProfileEditorView: View {
         saveButton
       }
       .sheet(isPresented: $isDestinationSearchPresented) {
-        DestinationSearchView { result in
+        DestinationSearchView(searchService: destinationSearcher) { result in
           form.destination = result.destination
         }
       }

@@ -170,12 +170,12 @@
 "unit.minimum_count.format" = "at least %lld";
 
 "diagnostics.title" = "Error reports";
-"diagnostics.description" = "When enabled, the app stores technical error codes, timestamps, and request durations locally. Location, routes, destinations, and credentials are excluded.";
+"diagnostics.description" = "To help investigate errors, the app stores technical error codes, timestamps, request durations, and retry attempts locally. Location, routes, destinations, and credentials are excluded.";
 "diagnostics.saved_count" = "Saved events";
 "diagnostics.storage_unavailable" = "The report is currently available only until the app closes.";
 "diagnostics.retention" = "Up to 200 events from the last 7 days. Reports are excluded from device backups.";
 "diagnostics.recording" = "Save error reports locally";
-"diagnostics.recording.description" = "Optional and only on this iPhone. No automatic transfer. Turning this off deletes saved reports.";
+"diagnostics.recording.description" = "On by default and can be turned off at any time. Only on this iPhone, with no automatic transfer. Turning this off deletes saved logs.";
 "diagnostics.export" = "Export report";
 "diagnostics.clear" = "Delete reports";
 "diagnostics.export.description" = "Export the report and share it with the developer if needed.";
@@ -183,7 +183,7 @@
 "diagnostics.dismiss" = "OK";
 "diagnostics.deletion_failed" = "Saved reports could not be deleted. Recording is off for this session. Try deleting them again.";
 "privacy.diagnostics.title" = "Technical diagnostics";
-"privacy.diagnostics.backend" = "For operation and troubleshooting, the nextStop server logs timestamps, response status, durations, and random request IDs. These logs exclude locations, routes, search filters, and credentials. Local technical logs stay on your iPhone until you explicitly attach them to an error report or export them yourself.";
+"privacy.diagnostics.backend" = "The app stores technical error data locally on your iPhone by default: up to 200 events from the last 7 days, excluded from device backups. Under ‘Manage local logs’, you can turn recording off and delete saved logs. Turning recording off deletes existing logs. They are transferred only when you explicitly attach them to an error report or export them yourself. For operation and troubleshooting, the nextStop server logs timestamps, response status, durations, and random request IDs. These technical logs exclude locations, routes, search filters, and credentials.";
 
 "report.title" = "Report a problem";
 "report.message.title" = "What happened?";
@@ -193,12 +193,12 @@
 "report.logs.empty.title" = "No logs to attach";
 "report.logs.empty" = "You can send your error report without logs.";
 "report.logs.recording_off" = "Local recording is off. Enable it before trying again to save technical error data.";
-"report.logs.awaiting_events" = "Recording is on, but no error data has been saved yet. Repeat the action, then reopen this report.";
+"report.logs.awaiting_events" = "Local recording is on. No error data has been saved yet. Detected technical errors and retry attempts are saved automatically.";
 "report.logs.settings" = "Recording and logs";
 "report.logs.not_retroactive" = "Earlier errors cannot be captured retrospectively.";
-"report.logs.description" = "Your selection applies only to this report. Logs contain technical error data with no automatically added locations, routes, search destinations, or credentials. Selecting this does not enable further recording.";
+"report.logs.description" = "Your selection applies only to this report. The displayed app version, build number, and iOS version are sent with the technical error data when available. Locations, routes, search destinations, credentials, and device identifiers are not added. This selection does not change local recording.";
 "report.logs.preview" = "Review included logs";
-"report.logs.preview_description" = "These exact technical events will be included if you select the checkbox. Your description is sent separately.";
+"report.logs.preview_description" = "These technical events and the displayed version details will be included if you select the checkbox. Your description is sent separately.";
 "report.logs.selected" = "Selected";
 "report.logs.unselected" = "Not selected";
 "report.consent" = "By tapping ‘Send error report’, you consent to %@ processing your description and the technical logs you selected to investigate and fix the problem. This is voluntary; nextStop also works without a report. You can withdraw consent and delete the report under ‘Sent reports’.";
@@ -235,11 +235,11 @@
 "report.privacy.purpose" = "Purpose and legal basis";
 "report.privacy.purpose.body" = "We use voluntarily submitted error reports solely to investigate and fix the problem described. Your consent under Article 6(1)(a) GDPR is the legal basis for the description and optional logs. The server records receipt time, this notice version, and your log selection as evidence of your choice.";
 "report.privacy.data" = "Data processed";
-"report.privacy.data.body" = "We transmit your description, a random report reference, your log selection, and the consent version. The description may contain personal information if you enter it. Please limit it to the problem. Optionally, the previously displayed logs are sent: event ID, timestamp, technical operation, outcome, error category, duration, attempt number, and, where present, HTTP status, error domain, error code, and random request IDs. We do not add location, route, destination, profiles, favorites, or credentials. Sending uses the existing App Attest authentication to verify app integrity. This security credential is not stored in the report. The IP address required for the network connection is not stored in the report or our request logs. Your device stores a random deletion key. It is transmitted over an encrypted connection for submission and deletion; the server stores only its hash.";
+"report.privacy.data.body" = "We transmit your description, a random report reference, your log selection, and the consent version. The description may contain personal information if you enter it. Please limit it to the problem. Optionally, the previously displayed logs are sent: event ID, timestamp, technical operation, outcome, error category, duration, attempt number, and, where present, HTTP status, error domain, error code, and random request IDs. Only when logs are selected, the displayed app version, build number, and iOS version are also sent when available. These versions come from when the report form was opened; device identifiers and device name are not captured. We do not add location, route, destination, profiles, favorites, or credentials. Sending uses the existing App Attest authentication to verify app integrity. This security credential is not stored in the report. The IP address required for the network connection is not stored in the report or our request logs. Your device stores a random deletion key. It is transmitted over an encrypted connection for submission and deletion; the server stores only its hash.";
 "report.privacy.recipients" = "Recipients and hosting";
 "report.privacy.recipients.body" = "Only people responsible for fixing errors at nextStop have access. Google Cloud supplies infrastructure as a processor; our server storage location is Frankfurt am Main, Germany. Google and its subprocessors may also process data from third countries for operations and support. Google's data processing terms provide safeguards including EU Standard Contractual Clauses and, where applicable, adequacy decisions. Further details and a copy of the applicable safeguards are available through the contact above. Data is not shared for advertising or tracking.";
 "report.privacy.retention" = "Retention";
-"report.privacy.retention.body" = "Reports expire 30 days after receipt and are technically deleted within the following hour at the latest. If you withdraw earlier in the app, the description and logs are removed from report storage immediately once deletion is confirmed. A minimal blocking record without description or logs remains until the original expiry so a delayed retry cannot recreate the deleted report. If deletion arrives before the report, this block lasts for 30 days from deletion. Repeated deletion requests do not extend it. Error reports are excluded from backups. Your iPhone stores only the report reference, deletion key, timestamps, and receipt status, not a copy of the submitted text or selected logs. Receipts are excluded from device backups and removed after expiry when the app runs. Separately enabled local logs hold at most 200 events from seven days and can be deleted under ‘Manage local logs’.";
+"report.privacy.retention.body" = "Reports expire 30 days after receipt and are technically deleted within the following hour at the latest. If you withdraw earlier in the app, the description and logs are removed from report storage immediately once deletion is confirmed. A minimal blocking record without description or logs remains until the original expiry so a delayed retry cannot recreate the deleted report. If deletion arrives before the report, this block lasts for 30 days from deletion. Repeated deletion requests do not extend it. Error reports are excluded from backups. Your iPhone stores only the report reference, deletion key, timestamps, and receipt status, not a copy of the submitted text or selected logs. Receipts are excluded from device backups and removed after expiry when the app runs. Local recording is on by default and holds at most 200 events from seven days. Under ‘Manage local logs’, you can delete the logs or turn recording off; turning it off also deletes existing logs.";
 "report.privacy.withdrawal" = "Withdrawing consent";
 "report.privacy.integrity" = "Preventing resubmission";
 "report.privacy.integrity.body" = "The minimal blocking record after deletion is used solely to enforce your withdrawal and prevent delayed requests from recreating a report. It contains only the report reference, deletion-key hash, and expiry time. Our legitimate interest under Article 6(1)(f) GDPR is the legal basis for this separate security purpose. Under Article 21 GDPR, you can object to this processing on grounds relating to your particular situation using the contact above. Analysis of your deleted description and logs does not continue.";
@@ -250,4 +250,4 @@
 "report.privacy.voluntary.body" = "You are under no statutory or contractual obligation to send a report or logs. Choosing not to send either does not restrict your use of nextStop. Reports are not used for automated decisions or profiling. Sending does not enable future transfers; each subsequent report requires your own action.";
 "report.privacy.google_terms" = "Google Cloud data processing terms";
 "report.privacy.authorities" = "Data protection authorities";
-"report.privacy.version" = "Last updated: 13 September 2026 · Version 2026-09-13";
+"report.privacy.version" = "Last updated: 14 September 2026 · Version 2026-09-14";

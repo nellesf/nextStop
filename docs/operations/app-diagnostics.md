@@ -9,12 +9,16 @@ sent without logs. The attachment choice applies only to that submission and doe
 not enable future recording or unattended uploads. No account, diagnostic SDK, or
 CarPlay report/consent prompt is introduced.
 
-To include technical events from a reproduced issue, first enable **Fehlerberichte
-lokal speichern** in the diagnostics screen, then reproduce it. Existing logs
-cannot reconstruct failures that happened while recording was disabled. The report
-form uses the retained allowlist described below; it does not collect raw system
-logs or automatically attach the current journey. App version/build is not part of
-the current diagnostic event schema.
+Local recording is enabled by default so retained technical failure evidence can
+already exist when the user opens the report form after an unexpected issue. If
+**Fehlerberichte lokal speichern** was turned off in the diagnostics screen,
+enable it before reproducing the problem. Recording cannot reconstruct failures
+that happened while it was disabled. The report form uses the retained allowlist
+described below; it does not collect raw system logs or automatically attach the
+current journey. The optional attachment preview also shows app version, build
+version, and numeric iOS version if all three can be read in their bounded format.
+These values describe the environment when the report form opens, not necessarily
+the version that produced an older retained event.
 
 The privacy notice explains who receives the description and optional logs, why,
 how long they are retained, and how to withdraw. Warn users against including
@@ -54,12 +58,20 @@ The JSON export remains an alternative for users who prefer their own sharing
 channel. Choose **Bericht exportieren** and share the file deliberately. A local
 export does not itself send anything to nextStop.
 
-Recording defaults to off. Turning it off clears the retained events. The local
-file is atomic, excluded from device backups, and uses iOS file protection after
-the first device unlock. Keep at most 200 events from the last seven days; prune
+Recording defaults to on when no saved preference exists. A persisted off choice
+is respected on later launches. Turning recording off clears the retained events
+and saves the off preference; deleting events alone does not re-enable recording.
+Earlier app versions did not always retain an off preference after deleting their
+diagnostics file, so an absent legacy file cannot identify a prior opt-out. The
+new default applies in that case.
+
+The local file is atomic, excluded from device backups, and uses iOS file
+protection after the first device unlock. Keep at most 200 events from the last
+seven days, removing the oldest entries first when the limit is exceeded; prune
 on load, record, view, and export. A device that remains unused cannot execute
-expiry work until the app runs again. Exported files are user-controlled copies
-and are not deleted when the in-app reports are cleared.
+expiry work until the app runs again. This is an event-count and age bound, not
+a daily archive rotation. Exported files are user-controlled copies and are not
+deleted when the in-app reports are cleared.
 
 Each event has an independently generated UUID, UTC timestamp, fixed operation,
 outcome and category, bounded duration/attempt/status/error-code values, and
@@ -69,8 +81,16 @@ installation identifiers are absent from the schema. Unknown error domains have
 no raw domain name or code in the export. Malformed/oversized storage is discarded;
 unknown decoded fields are not re-exported.
 
-The simulator suite checks backup exclusion, storage bounds, opt-in, deletion,
-and sanitized exports. Run
+For a submitted report with logs selected, optional `diagnosticContext` contains
+exactly `appVersion`, `buildVersion`, and `operatingSystemVersion`. These bounded
+numeric version strings appear alongside the events in the report's attachment
+preview. They are captured when the composer opens and frozen with the request
+for retries. An invalid/missing version omits the whole context; a report without
+logs never includes it. There is no device model or identifier. The separate local
+JSON export still contains the event schema only.
+
+The simulator suite checks backup exclusion, storage bounds, default recording,
+persisted opt-out, deletion, and sanitized exports. Run
 `AppDiagnosticsTests.testStoreUsesFileProtectionOnPhysicalDevice` on a provisioned
 physical iPhone to verify the file's protection class. The simulator does not
 provide a usable protection attribute in the CI environment; this one hardware
@@ -78,10 +98,31 @@ check is explicitly skipped there. The device test still requires the exact
 `completeUntilFirstUserAuthentication` value and fails if it is absent or different.
 
 Captured paths are candidate HTTP requests, authentication failures surfaced by
-candidate search, main-route planning, candidate driving distances, and native
-charger/restaurant lookups. Ordinary successful app operations and cancellation
-are not recorded. A recovered HTTP attempt is recorded only after a failure.
-This is bounded technical diagnosis, not a record of all app activity.
+candidate search, main-route planning, candidate driving distances, native
+charger/restaurant lookups, iPhone destination search, shared iPhone/CarPlay
+location requests, and rejected Apple Maps launches on iPhone and CarPlay.
+Ordinary successful app operations and cancellation are not recorded. A recovered
+HTTP attempt is recorded only after a failure. Route validation uses stable codes
+under `errorDomain: routePlanning`: `1` means no route, `2` invalid distance,
+`3` invalid travel time, and `4` invalid polyline. A failed Maps launch records its
+operation and duration without the launch URL or place details.
+
+Destination search records thrown MapKit failures under `destinationSearch`
+without the query text. Location request failures use `location`; only known
+CoreLocation errors retain their numeric code under `errorDomain: coreLocation`.
+Its network error (`2`) maps to `connection`; other CoreLocation codes map to
+`unknown`. Empty or invalid location callbacks record an unknown failure without
+a code or coordinate. Permission denial, restricted access, and reduced accuracy
+are not diagnostic faults and are not recorded. No new location deadline is
+introduced: the provider still relies on the existing system callback behavior.
+
+This is bounded technical diagnosis, not a record of all app activity. Siri's
+separate destination-lookup path is not instrumented. A bug in uninstrumented
+code, an immediate process termination, an unavailable or full local store, or
+already rotated events can leave gaps. The feature does not capture arbitrary
+crashes, stack traces, or hangs; use Apple's crash reports below for those
+investigations. Do not promise that all information needed for every future bug
+will be available.
 
 ## Correlate with the backend
 
@@ -132,13 +173,19 @@ Sources: [Apple: acquiring crash reports](https://developer.apple.com/documentat
 
 ## Consent and release scope
 
-The app introduces no unsolicited permission dialog. Local diagnostics are
-voluntary and explicitly activated in the iPhone screen; there is no background
-report transfer. This is a conservative implementation boundary, not an assertion
-that any local or anonymized diagnostic collection is automatically exempt from
-consent requirements. Section 25 TDDDG also covers terminal storage/access, with
-a narrowly defined necessity exception. Apple's consent requirements also cover
-data described as anonymous.
+The owner approved default-on local diagnostics on 2026-09-14. The app introduces
+no unsolicited permission dialog or background report transfer. The iPhone
+settings and privacy notice disclose automatic local storage, its diagnostic
+purpose, bounded retention, and the control to disable it and delete events. The
+setting is separate from consent to send a report or attach logs.
+
+Default-on implementation does not by itself establish a legal exemption. Keep the
+scope restricted to technical fault diagnosis and document the applicable basis
+and necessity of local storage before release; do not treat an opt-out as consent.
+Section 25 TDDDG also covers terminal storage/access, with a narrowly defined
+necessity exception. Apple's App Store privacy answers distinguish data processed
+only on device from data sent off device; that label definition is not a blanket
+exemption from applicable privacy law or App Review guideline 5.1.1.
 
 Necessary server operation logs can have a non-consent legal basis, subject to
 documented necessity, proportionality, interests balancing, transparency, and
@@ -194,7 +241,7 @@ identifying and logs can accompany it, so no anonymous-report promise is made.
 Do not infer report consent from TestFlight crash sharing, Apple's system analytics
 choice, location permission, or the local recording toggle.
 
-Sources reviewed 2026-09-13: [TDDDG section 25](https://www.gesetze-im-internet.de/ttdsg/__25.html),
+Sources reviewed 2026-09-13; Apple privacy guidance rechecked 2026-09-14: [TDDDG section 25](https://www.gesetze-im-internet.de/ttdsg/__25.html),
 [GDPR articles 5, 6 and 13](https://eur-lex.europa.eu/eli/reg/2016/679/deu),
 [App Review guideline 5.1.1](https://developer.apple.com/app-store/review/guidelines/#privacy),
 [EDPB consent guidance](https://www.edpb.europa.eu/system/files/documents/files/file1/edpb_guidelines_202005_consent_en.pdf),

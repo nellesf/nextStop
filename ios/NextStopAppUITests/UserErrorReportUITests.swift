@@ -9,7 +9,7 @@ final class UserErrorReportUITests: XCTestCase {
   }
 
   @MainActor
-  func testEmptyLogsExplainNextStepWithoutOfferingAnUnavailableCheckbox() {
+  func testLocalRecordingStartsEnabledAndCanBeDisabledWithoutBlockingReports() {
     let previousAppearance = XCUIDevice.shared.appearance
     let app = launch(scenario: "empty")
     defer {
@@ -21,23 +21,41 @@ final class UserErrorReportUITests: XCTestCase {
     reveal("error-report-no-logs", in: app)
     XCTAssertFalse(element("error-report-include-logs", in: app).exists)
     XCTAssertFalse(element("report-log-preview", in: app).exists)
-    screenshot(app, named: "light-empty-logs")
+    reveal("error-report-recording-active", in: app)
+    XCTAssertFalse(element("error-report-recording-off", in: app).exists)
+    screenshot(app, named: "light-default-recording-awaiting-events")
 
     tap("error-report-recording-settings", in: app)
     let recording = app.switches["diagnostics-recording"]
     reveal("diagnostics-recording", in: app)
-    XCTAssertEqual(recording.value as? String, "0", "Opening settings must not enable recording.")
-    setLocalRecording(true, in: app)
+    XCTAssertEqual(
+      recording.value as? String, "1",
+      "Local recording must start enabled without a settings change.")
     let savedCount = element("diagnostics-saved-count", in: app)
     reveal("diagnostics-saved-count", in: app, direction: .down)
     XCTAssertEqual(
       savedCount.label, "Gespeicherte Ereignisse, 0",
-      "Enabling recording must not invent past error events."
+      "Enabled recording must not invent past error events."
     )
-    screenshot(app, named: "light-local-recording-enabled-without-past-logs")
+    screenshot(app, named: "light-local-recording-enabled-by-default")
+    setLocalRecording(false, in: app)
 
     goBack(in: app)
-    reveal("error-report-no-logs", in: app)
+    reveal("error-report-recording-off", in: app)
+    XCTAssertFalse(element("error-report-recording-active", in: app).exists)
+    XCTAssertFalse(element("error-report-include-logs", in: app).exists)
+    screenshot(app, named: "light-explicit-recording-opt-out")
+
+    tap("error-report-recording-settings", in: app)
+    reveal("diagnostics-recording", in: app)
+    XCTAssertEqual(
+      recording.value as? String, "0", "Reopening settings must preserve the explicit opt-out.")
+    setLocalRecording(true, in: app)
+    reveal("diagnostics-saved-count", in: app, direction: .down)
+    XCTAssertEqual(savedCount.label, "Gespeicherte Ereignisse, 0")
+
+    goBack(in: app)
+    reveal("error-report-recording-active", in: app)
     XCTAssertFalse(element("error-report-include-logs", in: app).exists)
     screenshot(app, named: "light-recording-awaiting-a-new-error")
 
@@ -72,6 +90,10 @@ final class UserErrorReportUITests: XCTestCase {
     XCTAssertTrue(preview.waitForExistence(timeout: 5))
     XCTAssertTrue(preview.label.contains("candidateSearch"))
     XCTAssertTrue(preview.label.contains("offline"))
+    XCTAssertTrue(preview.label.contains("diagnosticContext"))
+    XCTAssertTrue(preview.label.contains("appVersion"))
+    XCTAssertTrue(preview.label.contains("buildVersion"))
+    XCTAssertTrue(preview.label.contains("operatingSystemVersion"))
     XCTAssertFalse(preview.label.contains("latitude"))
     XCTAssertFalse(preview.label.contains("longitude"))
     screenshot(app, named: "light-synthetic-log-preview")
@@ -136,7 +158,9 @@ final class UserErrorReportUITests: XCTestCase {
     screenshot(app, named: "dark-accessibility-log-preview")
     goBack(in: app)
     reveal("error-report-include-logs", in: app, direction: .down)
-    XCTAssertEqual(includeLogs.value as? String, "1", "The attachment choice must survive reviewing its preview.")
+    XCTAssertEqual(
+      includeLogs.value as? String, "1", "The attachment choice must survive reviewing its preview."
+    )
     screenshot(app, named: "dark-accessibility-log-selection-after-preview")
 
     tap("report-privacy", in: app)
@@ -161,8 +185,10 @@ final class UserErrorReportUITests: XCTestCase {
     setLocalRecording(false, in: app)
     goBack(in: app)
     reveal("error-report-no-logs", in: app, direction: .down)
-    XCTAssertFalse(includeLogs.exists, "Deleting local logs must remove the previous attachment choice.")
+    XCTAssertFalse(
+      includeLogs.exists, "Deleting local logs must remove the previous attachment choice.")
     XCTAssertFalse(element("report-log-preview", in: app).exists)
+    reveal("error-report-recording-off", in: app)
     screenshot(app, named: "dark-accessibility-recording-disabled-clears-attachment")
   }
 
@@ -199,7 +225,9 @@ final class UserErrorReportUITests: XCTestCase {
     let input = element("error-report-message", in: app)
     reveal("error-report-message", in: app, direction: .down)
     input.tap()
-    XCTAssertTrue(app.keyboards.firstMatch.waitForExistence(timeout: 5), "The message field must receive keyboard focus.")
+    XCTAssertTrue(
+      app.keyboards.firstMatch.waitForExistence(timeout: 5),
+      "The message field must receive keyboard focus.")
     input.typeText(text)
     XCTAssertEqual(input.value as? String, text)
   }
@@ -217,7 +245,8 @@ final class UserErrorReportUITests: XCTestCase {
     switch identifier {
     case "error-report-include-logs", "diagnostics-recording":
       app.switches.matching(identifier: identifier).firstMatch
-    case "error-report-no-logs", "diagnostics-saved-count", "log-preview-content",
+    case "error-report-no-logs", "error-report-recording-active", "error-report-recording-off",
+      "diagnostics-saved-count", "log-preview-content",
       "report-privacy-content", "report-send-error", "report-send-success", "receipts-empty":
       app.staticTexts.matching(identifier: identifier).firstMatch
     case "error-report-message":
@@ -274,13 +303,16 @@ final class UserErrorReportUITests: XCTestCase {
     for _ in 0..<12 {
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
-      let inputAssistant = app.otherElements.matching(identifier: "SystemInputAssistantView").firstMatch
+      let inputAssistant = app.otherElements.matching(identifier: "SystemInputAssistantView")
+        .firstMatch
       let navigationBar = app.navigationBars.firstMatch
-      let contentTop = navigationBar.exists
+      let contentTop =
+        navigationBar.exists
         ? max(frame.minY + 80, navigationBar.frame.maxY + 12) : frame.minY + 120
       // The prediction bar sits above Keyboard's accessibility frame and also
       // consumes touches; gestures must start above that entire input surface.
-      let keyboardTop = keyboard.exists
+      let keyboardTop =
+        keyboard.exists
         ? min(keyboard.frame.minY, inputAssistant.exists ? inputAssistant.frame.minY : frame.maxY)
         : frame.maxY
       let contentBottom = min(frame.maxY - 50, keyboardTop - 12)
@@ -296,7 +328,8 @@ final class UserErrorReportUITests: XCTestCase {
         // XCTest may report an element under the sheet navigation bar as hittable.
         // Interactive rows must fit in the actual content viewport before tapping.
         let visible = targetFrame.intersection(viewport)
-        let isVisible = targetFrame.height <= viewport.height
+        let isVisible =
+          targetFrame.height <= viewport.height
           ? targetFrame.minY >= viewport.minY && targetFrame.maxY <= viewport.maxY
           : visible.height >= min(100, viewport.height * 0.5)
         if isVisible && target.isHittable { return }
@@ -362,7 +395,9 @@ final class UserErrorReportUITests: XCTestCase {
     recognition.name = "privacy-controller-recognized-text"
     recognition.lifetime = .keepAlways
     add(recognition)
-    XCTFail("The rendered controller must include its final word ‘Firma’; its accessibility label alone is insufficient.")
+    XCTFail(
+      "The rendered controller must include its final word ‘Firma’; its accessibility label alone is insufficient."
+    )
   }
 
   @MainActor

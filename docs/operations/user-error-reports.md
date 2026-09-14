@@ -31,12 +31,20 @@ new app build still needs its real-device TestFlight smoke check.
 The user writes a report on iPhone and explicitly presses Send. Attaching the
 existing allowlisted diagnostics is an independent, initially unchecked choice.
 The POST includes schema/consent version, a random report UUID and deletion secret,
-the text, and the selected diagnostics only. The authenticated App Attest access
-token provides abuse protection but is neither retained with the report nor
-included in diagnostic logs. No installation identifier, route, coordinates,
-destination, profile, credential, device metadata or contact field is automatically
-added. Free text may nevertheless contain personal data the user chooses to write.
-Never claim that a report is anonymous.
+the text, and the selected diagnostics only. When logs are selected, optional
+`diagnosticContext` may accompany them with exactly three bounded numeric version
+strings: `appVersion`, `buildVersion`, and `operatingSystemVersion`. The attachment
+preview shows this context; it describes the environment when the report form
+opens and stays frozen across retries. If any version is unavailable or invalid,
+context is omitted. It is always absent when logs are not selected. It does not
+identify the version that produced an older event before an app or iOS update.
+Older reports without this optional field remain valid.
+
+The authenticated App Attest access token provides abuse protection but is neither
+retained with the report nor included in diagnostic logs. No installation
+identifier, device name/model, route, coordinates, destination, profile, credential,
+or contact field is automatically added. Free text may nevertheless contain
+personal data the user chooses to write. Never claim that a report is anonymous.
 
 The in-app notice and full privacy information describe the voluntary support
 purpose, consent under GDPR Article 6(1)(a), optional logs, controller and processor

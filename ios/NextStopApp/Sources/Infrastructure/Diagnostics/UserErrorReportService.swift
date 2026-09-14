@@ -12,10 +12,52 @@ enum UserErrorReportError: Error, Equatable {
   case withdrawn
 }
 
+/// Coarse software versions for a user-approved attachment. Never accepts a device
+/// model, identifier, free-form system description, or arbitrary bundle metadata.
+struct UserErrorReportDiagnosticContext: Encodable, Equatable, Sendable {
+  let appVersion: String
+  let buildVersion: String
+  let operatingSystemVersion: String
+
+  init?(appVersion: String, buildVersion: String, operatingSystemVersion: String) {
+    guard [appVersion, buildVersion, operatingSystemVersion].allSatisfy(Self.isValidVersion)
+    else { return nil }
+    self.appVersion = appVersion
+    self.buildVersion = buildVersion
+    self.operatingSystemVersion = operatingSystemVersion
+  }
+
+  static func current(
+    bundle: Bundle = .main,
+    operatingSystemVersion: OperatingSystemVersion = ProcessInfo.processInfo.operatingSystemVersion
+  ) -> Self? {
+    guard
+      let appVersion = bundle.object(forInfoDictionaryKey: "CFBundleShortVersionString") as? String,
+      let buildVersion = bundle.object(forInfoDictionaryKey: "CFBundleVersion") as? String
+    else { return nil }
+    let version = operatingSystemVersion
+    return Self(
+      appVersion: appVersion,
+      buildVersion: buildVersion,
+      operatingSystemVersion:
+        "\(version.majorVersion).\(version.minorVersion).\(version.patchVersion)"
+    )
+  }
+
+  private static func isValidVersion(_ value: String) -> Bool {
+    let components = value.split(separator: ".", omittingEmptySubsequences: false)
+    return value.utf8.count <= 29 && (1...3).contains(components.count)
+      && components.allSatisfy { component in
+        (1...9).contains(component.utf8.count)
+          && component.utf8.allSatisfy { (48...57).contains($0) }
+      }
+  }
+}
+
 /// Only an explicit submission constructs this value. It is never persisted.
 struct UserErrorReportRequest: Encodable, Equatable, Sendable {
   static let maximumMessageLength = 5_000
-  static let consentVersion = "2026-09-13"
+  static let consentVersion = "2026-09-14"
   static let maximumDiagnostics = 200
 
   let reportID: UUID
@@ -23,11 +65,13 @@ struct UserErrorReportRequest: Encodable, Equatable, Sendable {
   let message: String
   let includeDiagnostics: Bool
   let diagnostics: [AppDiagnosticEvent]?
+  let diagnosticContext: UserErrorReportDiagnosticContext?
 
   init(
     message: String,
     includeDiagnostics: Bool,
     diagnostics: [AppDiagnosticEvent] = [],
+    diagnosticContext: UserErrorReportDiagnosticContext? = nil,
     reportID: UUID = UUID(),
     deletionToken: UUID = UUID()
   ) throws {
@@ -44,6 +88,7 @@ struct UserErrorReportRequest: Encodable, Equatable, Sendable {
     self.includeDiagnostics = includeDiagnostics
     // The checkbox is authoritative even if the caller supplies events.
     self.diagnostics = includeDiagnostics ? diagnostics : nil
+    self.diagnosticContext = includeDiagnostics ? diagnosticContext : nil
   }
 
   func encode(to encoder: any Encoder) throws {
@@ -55,11 +100,12 @@ struct UserErrorReportRequest: Encodable, Equatable, Sendable {
     try values.encode(message, forKey: .message)
     try values.encode(includeDiagnostics, forKey: .includeDiagnostics)
     try values.encodeIfPresent(diagnostics, forKey: .diagnostics)
+    try values.encodeIfPresent(diagnosticContext, forKey: .diagnosticContext)
   }
 
   private enum CodingKeys: String, CodingKey {
     case schemaVersion, reportId, deletionToken, consentVersion, message
-    case includeDiagnostics, diagnostics
+    case includeDiagnostics, diagnostics, diagnosticContext
   }
 }
 

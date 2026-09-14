@@ -66,7 +66,7 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
     )
     self.init(
       locationReadiness: SystemCarPlayLocationReadinessChecker(),
-      locationProvider: CoreLocationProvider(),
+      locationProvider: CoreLocationProvider(diagnostics: diagnostics),
       routePlanner: routePlanner,
       candidateSearcher: RideCandidateSearchCoordinator(
         pageSearcher: candidatePageSearcher,

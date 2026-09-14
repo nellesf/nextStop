@@ -16,13 +16,16 @@ protocol CarPlayMapsSceneOpening: AnyObject {
 final class CarPlayAppleMapsLauncher: CarPlayAppleMapsLaunching {
   private let sceneOpener: any CarPlayMapsSceneOpening
   private let placeURL: @MainActor (MKMapItem) -> URL?
+  private let measurement: AppDiagnosticMeasurement
 
-  convenience init(scene: UIScene) {
-    self.init(sceneOpener: CarPlayMapsSceneOpener(scene: scene))
+  convenience init(scene: UIScene, diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()) {
+    self.init(sceneOpener: CarPlayMapsSceneOpener(scene: scene), diagnostics: diagnostics)
   }
 
   init(
     sceneOpener: any CarPlayMapsSceneOpening,
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics(),
+    now: @escaping AppDiagnosticMeasurement.Now = Date.init,
     placeURL: @escaping @MainActor (MKMapItem) -> URL? = { mapItem in
       guard #available(iOS 18.4, *), let identifier = mapItem.identifier?.rawValue else {
         return nil
@@ -32,16 +35,24 @@ final class CarPlayAppleMapsLauncher: CarPlayAppleMapsLaunching {
   ) {
     self.sceneOpener = sceneOpener
     self.placeURL = placeURL
+    measurement = AppDiagnosticMeasurement(recorder: diagnostics, now: now)
   }
 
   func openPlace(_ mapItem: MKMapItem) async -> Bool {
     guard !Task.isCancelled else {
       return false
     }
+    let startedAt = measurement.now()
+    let succeeded: Bool
     if let url = placeURL(mapItem) {
-      return await sceneOpener.openPlaceURL(url)
+      succeeded = await sceneOpener.openPlaceURL(url)
+    } else {
+      succeeded = await sceneOpener.openMapItem(mapItem)
     }
-    return await sceneOpener.openMapItem(mapItem)
+    if !succeeded, !Task.isCancelled {
+      measurement.recordFailure(.mapsLaunch, startedAt: startedAt)
+    }
+    return succeeded
   }
 }
 

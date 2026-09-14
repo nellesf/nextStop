@@ -10,7 +10,7 @@ final class UserErrorReportServiceTests: XCTestCase {
     defer { fixture.remove() }
     let request = try UserErrorReportRequest(
       message: " \nDie Suche ist fehlgeschlagen.\n ", includeDiagnostics: false,
-      diagnostics: [fixture.event()]
+      diagnostics: [fixture.event()], diagnosticContext: try diagnosticContext()
     )
     let receipt = try await fixture.service().send(request)
     let sent = try XCTUnwrap(fixture.requests.first)
@@ -24,8 +24,9 @@ final class UserErrorReportServiceTests: XCTestCase {
       ])
     XCTAssertEqual(body["message"] as? String, "Die Suche ist fehlgeschlagen.")
     XCTAssertEqual(body["includeDiagnostics"] as? Bool, false)
-    XCTAssertEqual(body["consentVersion"] as? String, "2026-09-13")
+    XCTAssertEqual(body["consentVersion"] as? String, "2026-09-14")
     XCTAssertNil(body["diagnostics"])
+    XCTAssertNil(body["diagnosticContext"])
     XCTAssertEqual(sent.url?.absoluteString, "https://api.nextstop.test/v1/error-reports")
     XCTAssertEqual(sent.httpMethod, "POST")
     XCTAssertEqual(sent.timeoutInterval, 20)
@@ -40,7 +41,10 @@ final class UserErrorReportServiceTests: XCTestCase {
     defer { fixture.remove() }
     let event = fixture.event()
     _ = try await fixture.service().send(
-      UserErrorReportRequest(message: "Fehler", includeDiagnostics: true, diagnostics: [event])
+      UserErrorReportRequest(
+        message: "Fehler", includeDiagnostics: true, diagnostics: [event],
+        diagnosticContext: try diagnosticContext()
+      )
     )
     let request = try XCTUnwrap(fixture.requests.first)
     let body = try fixture.fields(request)
@@ -52,11 +56,89 @@ final class UserErrorReportServiceTests: XCTestCase {
         "id", "timestamp", "operation", "outcome", "category", "durationMilliseconds", "attempt",
       ])
     XCTAssertEqual(diagnostics[0]["timestamp"] as? String, "2027-01-15T08:00:00Z")
+    XCTAssertEqual(
+      body["diagnosticContext"] as? [String: String],
+      ["appVersion": "0.1.0", "buildVersion": "42", "operatingSystemVersion": "26.0.1"]
+    )
     let stored = try String(contentsOf: fixture.fileURL, encoding: .utf8)
     XCTAssertFalse(stored.contains("Fehler"))
     XCTAssertFalse(stored.contains(event.id.uuidString))
     XCTAssertFalse(stored.contains("networkTimeout"))
     XCTAssertFalse(stored.contains("Authorization"))
+    XCTAssertFalse(stored.contains("operatingSystemVersion"))
+  }
+
+  func testMissingDiagnosticContextDoesNotBlockSelectedLogs() async throws {
+    let fixture = try ReportTransportFixture()
+    defer { fixture.remove() }
+    _ = try await fixture.service().send(
+      UserErrorReportRequest(
+        message: "Fehler", includeDiagnostics: true, diagnostics: [fixture.event()],
+        diagnosticContext: nil
+      )
+    )
+    let body = try fixture.fields(XCTUnwrap(fixture.requests.first))
+    XCTAssertNotNil(body["diagnostics"])
+    XCTAssertNil(body["diagnosticContext"])
+  }
+
+  func testDiagnosticContextOnlyAcceptsBoundedNumericSoftwareVersions() throws {
+    let invalid = [
+      "", "1.", ".1", "1..2", "1.2.3.4", "1.0-beta", "iPhone17,1",
+      "26.0 (Build secret)", "1\n", " 1", "１", "-1", "1234567890",
+      String(repeating: "1", count: 30),
+    ]
+    for value in invalid {
+      XCTAssertNil(
+        UserErrorReportDiagnosticContext(
+          appVersion: value, buildVersion: "42", operatingSystemVersion: "26.0"))
+      XCTAssertNil(
+        UserErrorReportDiagnosticContext(
+          appVersion: "1.0", buildVersion: value, operatingSystemVersion: "26.0"))
+      XCTAssertNil(
+        UserErrorReportDiagnosticContext(
+          appVersion: "1.0", buildVersion: "42", operatingSystemVersion: value))
+    }
+    XCTAssertNotNil(
+      UserErrorReportDiagnosticContext(
+        appVersion: "0", buildVersion: "999999999.999999999.999999999",
+        operatingSystemVersion: "26.0.0"
+      ))
+
+    let cases: [([String: Any], UserErrorReportDiagnosticContext?)] = [
+      (["CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "42"], try diagnosticContext()),
+      ([:], nil),
+      (["CFBundleShortVersionString": "0.1.0", "CFBundleVersion": "PRIVATE_BUILD"], nil),
+    ]
+    for (versions, expected) in cases {
+      let directory = FileManager.default.temporaryDirectory
+        .appendingPathComponent("ReportContext-\(UUID().uuidString).bundle", isDirectory: true)
+      defer { try? FileManager.default.removeItem(at: directory) }
+      try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+      var fields: [String: Any] = [
+        "CFBundleIdentifier": "tech.nextstop.context-test", "PrivateMetadata": "MUST_NOT_LEAK",
+      ]
+      fields.merge(versions) { _, version in version }
+      let info = try PropertyListSerialization.data(
+        fromPropertyList: fields, format: .xml, options: 0
+      )
+      try info.write(to: directory.appendingPathComponent("Info.plist"))
+      let bundle = try XCTUnwrap(Bundle(url: directory))
+      XCTAssertEqual(
+        UserErrorReportDiagnosticContext.current(
+          bundle: bundle,
+          operatingSystemVersion: OperatingSystemVersion(
+            majorVersion: 26, minorVersion: 0, patchVersion: 1)
+        ), expected
+      )
+    }
+  }
+
+  private func diagnosticContext() throws -> UserErrorReportDiagnosticContext {
+    try XCTUnwrap(
+      UserErrorReportDiagnosticContext(
+        appVersion: "0.1.0", buildVersion: "42", operatingSystemVersion: "26.0.1"
+      ))
   }
 
   func testRequestValidatesScalarCountAndRequiresLogsWhenSelected() throws {

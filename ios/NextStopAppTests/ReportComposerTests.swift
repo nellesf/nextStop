@@ -85,7 +85,9 @@ final class ReportComposerTests: XCTestCase {
 
   func testLogsDefaultOffAndSuccessResetsPerReportSelection() async throws {
     let sender = ReportComposerSender()
-    let composer = UserErrorReportComposer(sender: sender, privacyConfigured: true)
+    let context = try diagnosticContext()
+    let composer = UserErrorReportComposer(
+      sender: sender, privacyConfigured: true, diagnosticContext: context)
     let fixture = try DiagnosticFixture()
     defer { fixture.remove() }
     composer.refreshDiagnostics(from: fixture.store)
@@ -93,6 +95,7 @@ final class ReportComposerTests: XCTestCase {
     composer.message = "The search failed."
     await composer.send()
     XCTAssertNil(sender.requests.first?.diagnostics)
+    XCTAssertNil(sender.requests.first?.diagnosticContext)
     XCTAssertEqual(composer.message, "")
     XCTAssertNotNil(composer.sentReportID)
 
@@ -100,20 +103,30 @@ final class ReportComposerTests: XCTestCase {
     composer.includeDiagnostics = true
     await composer.send()
     XCTAssertEqual(sender.requests.last?.diagnostics, fixture.store.events)
+    XCTAssertEqual(sender.requests.last?.diagnosticContext, context)
     XCTAssertFalse(composer.includeDiagnostics)
     XCTAssertTrue(fixture.store.recordingEnabled)
   }
 
-  func testUnchangedExplicitRetryUsesSameReportAndChangedInputGetsNewReference() async {
+  func testUnchangedExplicitRetryUsesSameReportAndChangedInputGetsNewReference() async throws {
     let sender = ReportComposerSender()
     sender.failure = .unavailable
-    let composer = UserErrorReportComposer(sender: sender, privacyConfigured: true)
+    let context = try diagnosticContext()
+    let composer = UserErrorReportComposer(
+      sender: sender, privacyConfigured: true, diagnosticContext: context)
+    let fixture = try DiagnosticFixture()
+    defer { fixture.remove() }
+    composer.refreshDiagnostics(from: fixture.store)
+    composer.includeDiagnostics = true
     composer.message = "Search stopped."
     await composer.send()
     XCTAssertEqual(composer.error, .unavailable)
     XCTAssertEqual(composer.message, "Search stopped.")
     await composer.send()
     XCTAssertEqual(sender.requests[0], sender.requests[1])
+    XCTAssertEqual(sender.requests[0].diagnosticContext, context)
+    XCTAssertEqual(
+      composer.diagnosticContext, context, "The preview uses the same frozen context as the retry.")
     composer.message = "Search stopped after a retry."
     await composer.send()
     XCTAssertNotEqual(sender.requests[1].reportID, sender.requests[2].reportID)
@@ -122,7 +135,9 @@ final class ReportComposerTests: XCTestCase {
   func testUncheckingLogsRemovesThemFromPreviouslyFailedSubmission() async throws {
     let sender = ReportComposerSender()
     sender.failure = .unavailable
-    let composer = UserErrorReportComposer(sender: sender, privacyConfigured: true)
+    let context = try diagnosticContext()
+    let composer = UserErrorReportComposer(
+      sender: sender, privacyConfigured: true, diagnosticContext: context)
     let fixture = try DiagnosticFixture()
     defer { fixture.remove() }
     composer.refreshDiagnostics(from: fixture.store)
@@ -132,7 +147,9 @@ final class ReportComposerTests: XCTestCase {
     composer.includeDiagnostics = false
     await composer.send()
     XCTAssertNotNil(sender.requests[0].diagnostics)
+    XCTAssertEqual(sender.requests[0].diagnosticContext, context)
     XCTAssertNil(sender.requests[1].diagnostics)
+    XCTAssertNil(sender.requests[1].diagnosticContext)
     XCTAssertNotEqual(sender.requests[0].reportID, sender.requests[1].reportID)
   }
 
@@ -164,6 +181,13 @@ final class ReportComposerTests: XCTestCase {
     sender.failure = nil
     await composer.send()
     XCTAssertNotEqual(sender.requests[0].reportID, sender.requests[1].reportID)
+  }
+
+  private func diagnosticContext() throws -> UserErrorReportDiagnosticContext {
+    try XCTUnwrap(
+      UserErrorReportDiagnosticContext(
+        appVersion: "0.1.0", buildVersion: "42", operatingSystemVersion: "26.0.1"
+      ))
   }
 }
 

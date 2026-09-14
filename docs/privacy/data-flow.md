@@ -1,7 +1,8 @@
 # Privacy and data-flow design
 
 Status: Accepted on 2026-08-13; voluntary support reporting amended on 2026-09-13
-by [ADR 0017](../adr/0017-user-initiated-error-reports.md). No accounts, ads,
+by [ADR 0017](../adr/0017-user-initiated-error-reports.md); default-on local diagnostics
+approved by the owner on 2026-09-14. No accounts, ads,
 cross-device sync, user profiling, or third-party analytics SDKs are permitted in MVP.
 
 ## Data inventory
@@ -21,7 +22,7 @@ cross-device sync, user profiling, or third-party analytics SDKs are permitted i
 | App Attest challenge | iPhone Keychain while an attestation is pending + backend auth table | Bind one attestation/assertion exchange and prevent replay | At most 3 minutes; removed locally after Apple succeeds and consumed atomically by the backend |
 | Search access token | iPhone memory | Authorize candidate search after App Attest verification | At most 15 minutes; never persisted |
 | Aggregate telemetry | Backend metrics | Reliability/performance | Short operational window; no route or persistent user ID |
-| Optional app diagnostics | iPhone local protected file, only after explicit activation | Reproduce technical failures; optional attachment to a user-submitted report or local export | At most 200 events from seven days, pruned when the app runs; cleared when disabled; no backup or unattended upload |
+| Local app diagnostics | iPhone local protected file; enabled by default, can be disabled on iPhone | Preserve technical failure evidence before an unexpected issue; optional attachment to a user-submitted report or local export | At most 200 events from seven days, pruned when the app runs; cleared when disabled; no backup or unattended upload |
 | User-submitted error report | Dedicated backend support store | Investigate and fix the described error | Expires after 30 days; physical purge at least hourly; earlier payload deletion on withdrawal |
 | Support consent evidence | Same report record: notice version, attachment choice, receipt time | Record the scope of the user's submission | Same report expiry/deletion lifecycle |
 | Report receipt and deletion secret | iPhone protected file, excluded from backups | Let the user withdraw even if the upload response is lost | At most 50 unexpired receipts; expired receipts pruned when the app runs |
@@ -92,7 +93,13 @@ timestamps, fixed operation/outcome/category values, bounded duration and attemp
 values, optional HTTP status and known error-domain/code values, and validated
 server/proxy correlation UUIDs. The attachment includes no raw error messages,
 URLs, app/device identifiers, credentials, coordinates, destinations, or routes.
-App version/build information is not currently part of this event schema.
+An optional `diagnosticContext` alongside the selected events contains only
+`appVersion`, `buildVersion`, and `operatingSystemVersion`. These are bounded
+numeric version strings from the app/iOS environment when the report form opens,
+shown in the same attachment preview and frozen across submission retries. This
+context is omitted unless logs are selected and all three version values are
+valid. It contains no device model, name, or identifier and does not establish
+which app/iOS version produced a retained event before an update.
 
 Free text can nevertheless contain personal information, including information a
 user types about a place or journey. This owner-approved support-only exception
@@ -137,11 +144,14 @@ criteria, or other request data is sent to OpenStreetMap or Geofabrik.
   Any future backup policy must account for report expiry and withdrawal before
   this support data is included; do not promise a deletion deadline that excludes
   recoverable report copies or operator exports.
-- Local app diagnostics default to off and are excluded from device backups.
-  Enabling them is voluntary on iPhone; there is no CarPlay prompt. Local export
-  remains user-initiated. Attachment requires a separate selection for each report;
-  report submission is never inferred from local recording consent. Unknown error
-  payloads are never serialized. See [app diagnostics](../operations/app-diagnostics.md)
+- Local app diagnostics default to on when no saved preference exists and are
+  excluded from device backups. A saved off preference is respected; the iPhone
+  control can disable recording and clear retained events. There is no CarPlay
+  prompt. Local export remains user-initiated. Attachment requires a separate,
+  initially unchecked selection for each report; report submission is never
+  inferred from the local recording setting. Unknown error payloads are never
+  serialized. Capturing known technical failures does not guarantee a complete
+  crash report or explain every UI defect. See [app diagnostics](../operations/app-diagnostics.md)
   and [request diagnostics](../operations/request-diagnostics.md) for the schema,
   retry policy, correlation limitations, retention, and report retrieval.
 - Submitted report payloads expire after 30 days. A scheduled purge runs at least
@@ -182,7 +192,7 @@ permission later on iPhone rather than trying to force a driving-time prompt.
   portability requests use the published controller contact and report reference;
   collect no additional identity merely to maintain an accountless report store.
 - Withdrawal of report consent does not change the lawfulness of processing before
-  withdrawal. The optional local diagnostic recording control is separate from
+  withdrawal. The local diagnostic recording control is separate from
   deletion of already submitted reports, which must be requested explicitly.
 
 ## Support-report transparency and legal basis

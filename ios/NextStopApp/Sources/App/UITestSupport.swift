@@ -73,9 +73,8 @@
         fileURL: directory.appendingPathComponent("events.json"), clock: { now }
       )
       if scenario != .empty {
-        // Disabling local recording erases existing events in the real store.
-        // Seed through its public API so the fixture preserves that contract.
-        diagnostics.recordingEnabled = true
+        // Seed through the real store's default recording behavior. A default-off
+        // regression must not be hidden by overriding the setting in test fixtures.
         diagnostics.record(
           AppDiagnosticEvent(
             timestamp: now.addingTimeInterval(-60), operation: .candidateSearch,

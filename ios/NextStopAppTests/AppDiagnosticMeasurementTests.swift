@@ -76,18 +76,24 @@ final class AppDiagnosticMeasurementTests: XCTestCase {
     XCTAssertTrue(recorder.events.isEmpty)
   }
 
-  func testRouteValidationFailureKeepsItsCoarseCategory() async throws {
+  func testRouteValidationFailuresKeepDistinctStableCodes() async throws {
     let recorder = MeasurementRecorder()
     let measurement = AppDiagnosticMeasurement(recorder: recorder)
-    do {
-      try await measurement.perform(.route) { throw RoutePlanningError.invalidPolyline }
-      XCTFail("Expected invalid geometry")
-    } catch let error as RoutePlanningError {
-      XCTAssertEqual(error, .invalidPolyline)
+    let failures: [RoutePlanningError] = [
+      .noRoute, .invalidDistance, .invalidTravelTime, .invalidPolyline,
+    ]
+    for failure in failures {
+      do {
+        try await measurement.perform(.route) { throw failure }
+        XCTFail("Expected route validation to fail")
+      } catch let error as RoutePlanningError {
+        XCTAssertEqual(error, failure)
+      }
     }
-    XCTAssertEqual(recorder.events.first?.category, .invalidRoute)
-    XCTAssertEqual(recorder.events.first?.errorDomain, .routePlanning)
-    XCTAssertNil(recorder.events.first?.errorCode)
+    XCTAssertEqual(
+      recorder.events.map(\.category), [.noRoute, .invalidRoute, .invalidRoute, .invalidRoute])
+    XCTAssertEqual(recorder.events.map(\.errorDomain), Array(repeating: .routePlanning, count: 4))
+    XCTAssertEqual(recorder.events.map(\.errorCode), [1, 2, 3, 4])
   }
 }
 

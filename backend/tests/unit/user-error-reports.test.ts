@@ -16,6 +16,7 @@ const diagnostic = {
   httpStatus: 503, errorDomain: "url", errorCode: -1009,
   serverRequestID: randomUUID(), edgeRequestID: "01234567-89ab-cdef-0123-456789abcdef",
 };
+const diagnosticContext = { appVersion: "0.1.0", buildVersion: "42", operatingSystemVersion: "26.0.1" };
 function submission() {
   return { schemaVersion: 1, reportId: randomUUID(), deletionToken: randomUUID(), consentVersion: "2026-09-13", message: "  Retry fixed the search.  ", includeDiagnostics: false };
 }
@@ -75,6 +76,7 @@ void test("submission hashes secrets, fixes retention, and omits logs unless exp
   assert.equal(saved.deletionTokenHash.length, 32);
   assert.deepEqual(saved.deletionTokenHash, hashReportSecret(String(body.deletionToken)));
   assert.equal("diagnostics" in saved.payload, false);
+  assert.equal("diagnosticContext" in saved.payload, false);
   assert.equal("deletionToken" in saved, false);
   assert.equal(JSON.stringify(saved).includes(String(body.deletionToken)), false);
   const retry = await reports.submit({ ...body, message: "Retry fixed the search." });
@@ -83,13 +85,59 @@ void test("submission hashes secrets, fixes retention, and omits logs unless exp
   await assert.rejects(reports.submit({ ...body, message: "Changed" }), UserErrorReportConflictError);
 });
 
+void test("software context is optional, allowlisted, bounded, and requires the current log consent", () => {
+  const withLogs = { ...submission(), includeDiagnostics: true, diagnostics: [diagnostic] };
+  for (const consentVersion of ["2026-09-13", "2026-09-14"]) {
+    assert.equal("diagnosticContext" in validateUserErrorReport({ ...withLogs, consentVersion }), false);
+    assert.equal("diagnosticContext" in validateUserErrorReport({ ...submission(), consentVersion }), false);
+  }
+  const valid = { ...withLogs, consentVersion: "2026-09-14", diagnosticContext };
+  assert.deepEqual(validateUserErrorReport(valid).diagnosticContext, diagnosticContext);
+  assert.equal(validateUserErrorReport({ ...valid, diagnosticContext: { ...diagnosticContext, buildVersion: "999999999.999999999.999999999" } }).diagnosticContext?.buildVersion, "999999999.999999999.999999999");
+  for (const context of [
+    null, [], {}, { appVersion: "1.0", buildVersion: "42" },
+    { ...diagnosticContext, deviceId: "PRIVATE" },
+    { ...diagnosticContext, deviceModel: "iPhone17,1" },
+  ]) assert.throws(() => validateUserErrorReport({ ...valid, diagnosticContext: context }), InvalidUserErrorReportError);
+  for (const key of Object.keys(diagnosticContext)) {
+    for (const value of ["", "1.", ".1", "1..2", "1.2.3.4", "1.0-beta", "26.0 (Build secret)", "1\n", " 1", "１", "-1", "1234567890", "1".repeat(30), 26]) {
+      assert.throws(() => validateUserErrorReport({ ...valid, diagnosticContext: { ...diagnosticContext, [key]: value } }), InvalidUserErrorReportError);
+    }
+  }
+  assert.throws(() => validateUserErrorReport({ ...withLogs, diagnosticContext }), InvalidUserErrorReportError);
+  assert.throws(() => validateUserErrorReport({ ...submission(), consentVersion: "2026-09-14", diagnosticContext }), InvalidUserErrorReportError);
+});
+
+void test("context is part of the immutable report payload and canonical retry hash", async () => {
+  const repository = new MemoryReports();
+  const reports = new UserErrorReports(repository, () => instant);
+  const body = { ...submission(), consentVersion: "2026-09-14", includeDiagnostics: true, diagnostics: [diagnostic], diagnosticContext };
+  const first = await reports.submit(body);
+  const saved = repository.records.get(body.reportId);
+  assert.ok(saved);
+  assert.deepEqual(saved.payload.diagnosticContext, diagnosticContext);
+  const retry = await reports.submit({ ...body, diagnosticContext: { operatingSystemVersion: "26.0.1", buildVersion: "42", appVersion: "0.1.0" } });
+  assert.equal(retry.created, false);
+  assert.deepEqual(retry.receipt, first.receipt);
+  await assert.rejects(reports.submit({ ...body, diagnosticContext: { ...diagnosticContext, buildVersion: "43" } }), UserErrorReportConflictError);
+});
+
+void test("location and destination failures accept only the extended fixed error allowlist", () => {
+  for (const operation of ["location", "destinationSearch"]) {
+    const value = { ...submission(), includeDiagnostics: true, diagnostics: [{ ...diagnostic, operation, errorDomain: "coreLocation", errorCode: 0 }] };
+    assert.equal(validateUserErrorReport(value).diagnostics?.[0]?.operation, operation);
+    assert.equal(validateUserErrorReport(value).diagnostics?.[0]?.errorDomain, "coreLocation");
+    assert.throws(() => validateUserErrorReport({ ...value, diagnostics: [{ ...value.diagnostics[0], latitude: 49.5 }] }), InvalidUserErrorReportError);
+  }
+});
+
 void test("report API requires explicit authenticated POST, supports deletion without auth, and never exposes contents", async (context) => {
   const repository = new MemoryReports();
   const records: RequestDiagnostic[] = [];
   let now = 0;
   const app = createApp({ userErrorReports: new UserErrorReports(repository, () => instant), reportAuthenticator: { isAuthorized: (header) => header === "Bearer accepted" }, reportNowMilliseconds: () => now, diagnostics: { sink: (record) => records.push(record) } });
   context.after(() => app.close());
-  const body = { ...submission(), message: "PRIVATE_LOCATION PRIVATE_ROUTE PRIVATE_TEXT", includeDiagnostics: true, diagnostics: [diagnostic] };
+  const body = { ...submission(), consentVersion: "2026-09-14", message: "PRIVATE_LOCATION PRIVATE_ROUTE PRIVATE_TEXT", includeDiagnostics: true, diagnostics: [diagnostic], diagnosticContext };
   const request = () => app.inject({ method: "POST", url: "/v1/error-reports", headers: { authorization: "Bearer accepted" }, payload: body });
   assert.equal((await app.inject({ method: "POST", url: "/v1/error-reports", payload: body })).statusCode, 401);
   const created = await request();

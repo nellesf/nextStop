@@ -8,6 +8,8 @@ enum AppDiagnosticOperation: String, Codable, Sendable {
   case authentication
   case placeLookup
   case mapsLaunch
+  case location
+  case destinationSearch
 }
 
 enum AppDiagnosticOutcome: String, Codable, Sendable {
@@ -34,6 +36,7 @@ enum AppDiagnosticErrorDomain: String, Codable, Sendable {
   case url
   case mapKit
   case routePlanning
+  case coreLocation
   case unknown
 }
 
@@ -147,24 +150,29 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
   static let eventLimit = 200
   static let retentionInterval: TimeInterval = 7 * 24 * 60 * 60
   static let maximumFileSize = 256 * 1_024
+  private static let maximumPreferenceFileSize = 128
 
   @Published private(set) var events: [AppDiagnosticEvent] = []
   @Published private(set) var persistenceAvailable = true
   @Published private(set) var deletionFailed = false
-  @Published var recordingEnabled = false {
+  @Published var recordingEnabled = true {
     didSet {
-      if oldValue != recordingEnabled {
+      if !isLoading, oldValue != recordingEnabled {
+        // Keep the preference separate from events so clearing logs cannot undo
+        // an explicit opt-out, including when removing the event file fails.
+        let preferenceSaved = persistPreference()
         if recordingEnabled {
           persist()
         } else {
           events = []
-          // Unlink first: an atomic write can fail on a full disk, leaving old consent.
           _ = removeStoredSnapshot()
         }
+        if !preferenceSaved { persistenceAvailable = false }
       }
     }
   }
 
+  private var isLoading = true
   private let fileURL: URL?
   private let clock: () -> Date
   private let removeFile: (URL) throws -> Void
@@ -178,6 +186,8 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
     self.clock = clock
     self.removeFile = removeFile
     load()
+    isLoading = false
+    _ = persistPreference()
   }
 
   func record(_ event: AppDiagnosticEvent) {
@@ -200,7 +210,9 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
       recordingEnabled = false
       return
     }
+    let preferenceSaved = persistPreference()
     if recordingEnabled { persist() }
+    if !preferenceSaved { persistenceAvailable = false }
   }
 
   /// Exports only the event allowlist; consent state and storage details stay local.
@@ -222,11 +234,18 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
   }
 
   private func load() {
+    let preference = loadPreference()
+    recordingEnabled = preference ?? true
     guard let fileURL else {
       persistenceAvailable = false
       return
     }
     guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
+    if preference == false {
+      // A failed deletion must never restore old events or re-enable recording.
+      _ = removeStoredSnapshot()
+      return
+    }
     do {
       let file = try FileHandle(forReadingFrom: fileURL)
       defer { try? file.close() }
@@ -236,15 +255,59 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
       decoder.dateDecodingStrategy = .iso8601
       let snapshot = try decoder.decode(Snapshot.self, from: data)
       guard snapshot.schemaVersion == 1 else { throw StorageError.invalidFile }
-      events = snapshot.recordingEnabled ? retainedEvents(snapshot.events) : []
-      recordingEnabled = snapshot.recordingEnabled
+      // Import a legacy explicit choice before a separate preference exists.
+      recordingEnabled = preference ?? snapshot.recordingEnabled
+      events = recordingEnabled ? retainedEvents(snapshot.events) : []
       // Re-encode the allowlist so unknown fields and expired records cannot linger.
-      persist()
+      if recordingEnabled {
+        persist()
+      } else {
+        _ = removeStoredSnapshot()
+      }
     } catch {
       // A corrupt diagnostics file must never prevent a search or expose its contents.
       events = []
-      recordingEnabled = false
       _ = removeStoredSnapshot()
+    }
+  }
+
+  private var preferenceURL: URL? {
+    fileURL?.appendingPathExtension("preference")
+  }
+
+  private func loadPreference() -> Bool? {
+    guard let preferenceURL else { return nil }
+    do {
+      let file = try FileHandle(forReadingFrom: preferenceURL)
+      defer { try? file.close() }
+      let data = try file.read(upToCount: Self.maximumPreferenceFileSize + 1) ?? Data()
+      guard data.count <= Self.maximumPreferenceFileSize else { throw StorageError.invalidFile }
+      return try JSONDecoder().decode(RecordingPreference.self, from: data).recordingEnabled
+    } catch let error as CocoaError
+      where error.code == .fileReadNoSuchFile || error.code == .fileNoSuchFile
+    {
+      return nil
+    } catch {
+      // An unreadable explicit setting is not permission to override an opt-out.
+      persistenceAvailable = false
+      return false
+    }
+  }
+
+  private func persistPreference() -> Bool {
+    guard let preferenceURL else {
+      persistenceAvailable = false
+      return false
+    }
+    do {
+      try writeProtectedData(
+        Self.encoder().encode(RecordingPreference(recordingEnabled: recordingEnabled)),
+        to: preferenceURL
+      )
+      return true
+    } catch {
+      persistenceAvailable = false
+      return false
     }
   }
 
@@ -254,12 +317,6 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
       return
     }
     do {
-      var directory = fileURL.deletingLastPathComponent()
-      let fileManager = FileManager.default
-      try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
-      var resourceValues = URLResourceValues()
-      resourceValues.isExcludedFromBackup = true
-      try directory.setResourceValues(resourceValues)
       let snapshot = Snapshot(
         schemaVersion: 1,
         recordingEnabled: recordingEnabled,
@@ -267,26 +324,34 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
       )
       let data = try Self.encoder().encode(snapshot)
       guard data.count <= Self.maximumFileSize else { throw StorageError.invalidFile }
-      #if os(iOS)
-        try fileManager.setAttributes(
-          [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
-          ofItemAtPath: directory.path
-        )
-        try data.write(
-          to: fileURL,
-          options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication]
-        )
-      #else
-        try data.write(to: fileURL, options: .atomic)
-      #endif
-      var savedFile = fileURL
-      try savedFile.setResourceValues(resourceValues)
+      try writeProtectedData(data, to: fileURL)
       persistenceAvailable = true
       deletionFailed = false
     } catch {
       // The in-memory report stays usable if storage is locked, full, or unavailable.
       persistenceAvailable = false
     }
+  }
+
+  private func writeProtectedData(_ data: Data, to fileURL: URL) throws {
+    var directory = fileURL.deletingLastPathComponent()
+    let fileManager = FileManager.default
+    try fileManager.createDirectory(at: directory, withIntermediateDirectories: true)
+    var resourceValues = URLResourceValues()
+    resourceValues.isExcludedFromBackup = true
+    try directory.setResourceValues(resourceValues)
+    #if os(iOS)
+      try fileManager.setAttributes(
+        [.protectionKey: FileProtectionType.completeUntilFirstUserAuthentication],
+        ofItemAtPath: directory.path
+      )
+      try data.write(
+        to: fileURL, options: [.atomic, .completeFileProtectionUntilFirstUserAuthentication])
+    #else
+      try data.write(to: fileURL, options: .atomic)
+    #endif
+    var savedFile = fileURL
+    try savedFile.setResourceValues(resourceValues)
   }
 
   @discardableResult
@@ -333,6 +398,10 @@ final class AppDiagnosticsStore: ObservableObject, AppDiagnosticRecording {
     let schemaVersion: Int
     let recordingEnabled: Bool
     let events: [AppDiagnosticEvent]
+  }
+
+  private struct RecordingPreference: Codable {
+    let recordingEnabled: Bool
   }
 
   private struct Export: Encodable {

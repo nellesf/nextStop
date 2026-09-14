@@ -64,6 +64,10 @@ struct UserErrorReportView: View {
               ? "report.logs.awaiting_events" : "report.logs.recording_off"
           )
           .foregroundStyle(.secondary)
+          .accessibilityIdentifier(
+            diagnosticsStore.recordingEnabled
+              ? "error-report-recording-active" : "error-report-recording-off"
+          )
           NavigationLink {
             DiagnosticsView(store: diagnosticsStore)
           } label: {
@@ -77,7 +81,8 @@ struct UserErrorReportView: View {
             .disabled(composer.isSending)
             .accessibilityIdentifier("error-report-include-logs")
           NavigationLink {
-            ReportLogPreview(events: composer.diagnostics)
+            ReportLogPreview(
+              events: composer.diagnostics, diagnosticContext: composer.diagnosticContext)
           } label: {
             LabeledContent("report.logs.preview") {
               Text(composer.diagnostics.count, format: .number)
@@ -87,7 +92,8 @@ struct UserErrorReportView: View {
           .accessibilityIdentifier("report-log-preview")
         }
       } footer: {
-        Text(composer.diagnostics.isEmpty ? "report.logs.not_retroactive" : "report.logs.description")
+        Text(
+          composer.diagnostics.isEmpty ? "report.logs.not_retroactive" : "report.logs.description")
       }
 
       Section {
@@ -203,6 +209,7 @@ private struct ReportCheckboxToggleStyle: ToggleStyle {
 
 private struct ReportLogPreview: View {
   let events: [AppDiagnosticEvent]
+  let diagnosticContext: UserErrorReportDiagnosticContext?
 
   var body: some View {
     ScrollView {
@@ -225,8 +232,14 @@ private struct ReportLogPreview: View {
     let encoder = JSONEncoder()
     encoder.dateEncodingStrategy = .iso8601
     encoder.outputFormatting = [.prettyPrinted, .sortedKeys]
-    guard let data = try? encoder.encode(events) else { return "[]" }
+    let attachment = Attachment(diagnosticContext: diagnosticContext, diagnostics: events)
+    guard let data = try? encoder.encode(attachment) else { return "{}" }
     return String(decoding: data, as: UTF8.self)
+  }
+
+  private struct Attachment: Encodable {
+    let diagnosticContext: UserErrorReportDiagnosticContext?
+    let diagnostics: [AppDiagnosticEvent]
   }
 }
 

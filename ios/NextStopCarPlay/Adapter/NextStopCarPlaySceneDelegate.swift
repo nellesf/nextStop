@@ -22,6 +22,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var placeTask: Task<Void, Never>?
   private var placeRequestID: UUID?
   private var mapsLauncher: (any CarPlayAppleMapsLaunching)?
+  private weak var connectedScene: CPTemplateApplicationScene?
   private let placeSelectionContext = CarPlayPlaceSelectionContext()
   private var placeResolver: any CarPlayResultPlaceResolving = CarPlayResultPlaceResolver()
   private var resultsByID: [UUID: RouteSearchResult] = [:]
@@ -37,7 +38,11 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     didConnect interfaceController: CPInterfaceController
   ) {
     self.interfaceController = interfaceController
-    mapsLauncher = CarPlayAppleMapsLauncher(scene: templateApplicationScene)
+    connectedScene = templateApplicationScene
+    mapsLauncher = CarPlayAppleMapsLauncher(
+      scene: templateApplicationScene,
+      diagnostics: dependencies?.diagnostics ?? NoopAppDiagnostics()
+    )
     templateTransitionGate.reset()
     if searchService == nil, let dependencies {
       searchService = makeSearchService(using: dependencies)
@@ -50,6 +55,11 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     let dependenciesChanged = self.dependencies !== dependencies
     self.dependencies = dependencies
     if dependenciesChanged || searchService == nil {
+      if let connectedScene {
+        mapsLauncher = CarPlayAppleMapsLauncher(
+          scene: connectedScene, diagnostics: dependencies.diagnostics
+        )
+      }
       searchService = makeSearchService(using: dependencies)
       configurePlaceResolver(using: dependencies)
     }
@@ -66,6 +76,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     searchTask = nil
     cancelPlaceSelection()
     mapsLauncher = nil
+    connectedScene = nil
     placeSelectionContext.clear()
     placeResolver = CarPlayResultPlaceResolver()
     resultsByID = [:]
