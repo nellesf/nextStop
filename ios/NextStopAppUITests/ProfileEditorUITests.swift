@@ -133,8 +133,13 @@ final class ProfileEditorUITests: XCTestCase {
     search.typeText("L")
     dismissFirstUseKeyboardHelp(in: app)
     search.typeText("eipzig Deutschland\n")
-    let city = app.cells.containing(.staticText, identifier: "Leipzig").firstMatch
+    // The profile list remains in the hierarchy behind the destination sheet.
+    // Target the result button, not the first cell containing the profile name.
+    let city = app.buttons.matching(
+      NSPredicate(format: "label BEGINSWITH %@ AND label CONTAINS %@", "Leipzig,", "Deutschland")
+    ).firstMatch
     XCTAssertTrue(city.waitForExistence(timeout: 45), "MapKit must return the city Leipzig.")
+    XCTAssertTrue(city.isHittable)
     city.tap()
     waitForWebsiteElement(search, toExist: false)
     waitForWebsiteElement(app.keyboards.firstMatch, toExist: false)
