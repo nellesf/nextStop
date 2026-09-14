@@ -19,11 +19,18 @@ concurrency:
 jobs:
   capture:
     runs-on: macos-26
-    timeout-minutes: 20
+    timeout-minutes: 30
     steps:
       - uses: actions/checkout@v7
       - name: Probe the native CarPlay display
-        run: bash scripts/carplay-capture/probe.sh
+        run: python3 scripts/carplay-capture/preflight.py
+      - name: Check out unchanged main app
+        uses: actions/checkout@v7
+        with:
+          ref: 5fe2fa2332d66d2499fc679617855d41cb0111be
+          path: screenshot-app
+      - name: Prepare a real profile and capture CarPlay
+        run: bash scripts/carplay-capture/capture.sh
       - name: Preserve display diagnostics
         if: always()
         uses: actions/upload-artifact@v7
