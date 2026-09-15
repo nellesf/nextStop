@@ -15,7 +15,7 @@ import struct
 import subprocess
 import time
 
-from capture import DEVICE, OUTPUT, click_visible_text, execute, recognize
+from capture import DEVICE, OUTPUT, await_native_text, click_visible_text, execute, recognize
 
 
 def framebuffer(path, display):
@@ -83,7 +83,6 @@ def capture_phase(state):
 app = Path("CarPlayDerivedData/Build/Products/Debug-iphonesimulator/NextStopApp.app")
 execute(["xcrun", "simctl", "install", DEVICE, str(app)])
 execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"])
-execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location", "com.apple.Maps"])
 execute(["xcrun", "simctl", "location", DEVICE, "set", "49.4521,11.0767"])
 time.sleep(2)
 dismiss_maps_widget_prompt(framebuffer(OUTPUT / "diagnostic-before-hosted-test.png", "internal"))
@@ -138,6 +137,12 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                     print(f"Hosted capture phase: {state}", flush=True)
                     (OUTPUT / f"phase-{phase}.json").write_text(json.dumps(state, indent=2, ensure_ascii=False) + "\n")
                     if state.get("error"):
+                        for display in ["internal", "external"]:
+                            framebuffer(OUTPUT / f"diagnostic-failure-{display}.png", display)
+                        try:
+                            process.wait(timeout=45)
+                        except subprocess.TimeoutExpired:
+                            print("XCTest did not finish preserving its failure report within 45 seconds.", flush=True)
                         raise RuntimeError(f"Hosted test failed: {state}")
                     action = state.get("action")
                     if action == "click":
@@ -155,6 +160,13 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                                     break
                                 time.sleep(2)
                             assert ready, "The native CarPlay home screen must expose the installed nextStop app."
+                            # A connected scene/rootTemplate can exist while
+                            # CarPlay is still finishing setRootTemplate. Wait
+                            # for the actual profile list to be visibly stable
+                            # before the test invokes its first row handler.
+                            await_native_text("Fahrt wählen", "Leipzig")
+                            time.sleep(2)
+                            await_native_text("Fahrt wählen", "Leipzig")
                         else:
                             click_visible_text(state["label"], state.get("display", "external"))
                     elif action == "activate-app":
