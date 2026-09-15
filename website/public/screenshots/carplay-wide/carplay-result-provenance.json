@@ -1,0 +1,758 @@
+{
+  "appCommit": "5fe2fa2332d66d2499fc679617855d41cb0111be",
+  "appTree": "52989dd0997d8f97e982b76b7d6580a63b649847",
+  "harnessCommit": "b49400d2a15edc89adcfefb015bcac7ce7101b74",
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34969883976",
+  "device": "iPhone 17 Pro with native external CarPlay display",
+  "carplayDisplay": {
+    "variant": "wide",
+    "width": 1920,
+    "height": 720,
+    "scale": 3
+  },
+  "locale": "de_DE",
+  "data": "Example EVSE counts and power at live MapKit places; unchanged main app routing, filtering and presentation.",
+  "profileFixtureSHA256": "a0d38981a0d42db23aaea23dd4eec561785043d10499c018812a0a09d0a7589e",
+  "signing": "Xcode simulator ad-hoc signing with the app source entitlement file unchanged",
+  "entitlementsStorage": "Verified directly in the built executable __TEXT,__entitlements Mach-O section; the simulator ad-hoc code-signature entitlement dictionary is recorded separately and may be empty",
+  "appliedEntitlements": {
+    "application-identifier": "FAKETEAMID.de.nextstop.app",
+    "com.apple.developer.carplay-charging": true,
+    "com.apple.developer.devicecheck.appattest-environment": "development"
+  },
+  "buildHarnessCommit": "f8c9390a44b1ae17f3875cbfb125ff3c5034aaaa",
+  "buildRunURL": "https://github.com/nellesf/nextStop/actions/runs/34938078711",
+  "reusedBuildArchiveSHA256": "a585a0ab7558aa0a4a6dbe20cf6d900c66fd118c38ad76b0f900ffd71df28329",
+  "captureScope": "carplay-results-only",
+  "runEvidence": {
+    "conclusion": "failure",
+    "head_sha": "b49400d2a15edc89adcfefb015bcac7ce7101b74",
+    "html_url": "https://github.com/nellesf/nextStop/actions/runs/34969883976",
+    "id": 34969883976,
+    "run_attempt": 1,
+    "status": "completed"
+  },
+  "artifactEvidence": {
+    "created_at": "2026-09-15T12:50:16Z",
+    "digest": "sha256:75033bfa42427c8f5070b2d2434ce6bceedb31e762d4c3fa245438f767228b10",
+    "id": 10397352942,
+    "name": "carplay-captures",
+    "workflow_run": {
+      "head_branch": "codex/app-explainer-website",
+      "head_repository_id": 1333251411,
+      "head_sha": "b49400d2a15edc89adcfefb015bcac7ce7101b74",
+      "id": 34969883976,
+      "repository_id": 1333251411
+    }
+  },
+  "hostedTestPassed": false,
+  "failure": {
+    "phase": "iphone-restaurant-place",
+    "reason": "After the completed CarPlay sequence, the iPhone Apple Maps introduction exceeded its capture deadline. The hosted test was terminated; no passing test summary or complete six-screen manifest exists."
+  },
+  "fixtureSnapshotScope": "The unchanged fixture snapshot was saved during the later iPhone sequence. Its renderedResults field describes the iPhone calculation (89/90 km). The earlier CarPlay calculation displays 89/92 km, as recorded in the original CarPlay PNG and its separate OCR evidence.",
+  "fixture": {
+    "availability": "Unknown; no live availability claim",
+    "candidatePages": [
+      {
+        "candidates": [
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "ID640E922D860FFAD",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.9575605,
+              "longitude": 11.6022605,
+              "name": "EWE Go"
+            },
+            "distanceFromRouteMeters": 308.096952005777,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "A26AB088-762E-4111-9C59-533C06CD08F6",
+            "restaurant": {
+              "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "I29FE360CA245683B",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9573765,
+              "longitude": 11.6028725,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 48.45116950144889
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Theodor-Schmidt-Straße 6, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "IC2075422E207A754",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.9579241,
+              "longitude": 11.6036578,
+              "name": "MOON POWER"
+            },
+            "distanceFromRouteMeters": 202.24337670985093,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "A89539B4-2BD4-4ED1-8B50-0D11C8D08F77",
+            "restaurant": {
+              "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "I29FE360CA245683B",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9573765,
+              "longitude": 11.6028725,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 82.97841472475695
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Otto-Hahn-Straße 1C, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I8E14C73770EC1175",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.932601,
+              "longitude": 11.564181,
+              "name": "EWE Go"
+            },
+            "distanceFromRouteMeters": 2761.656500244678,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "87A7F9FC-3E74-4DA8-BCFA-C0493E9CF991",
+            "restaurant": {
+              "address": "Otto-Hahn-Straße 1 c, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I6DE92293D0F5A5FF",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9325841,
+              "longitude": 11.5639579,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 16.12759736360763
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Otto-Hahn-Straße 1, Altstadt, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I3685A13EBEBEA683",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.9323554,
+              "longitude": 11.5644575,
+              "name": "EDEKA Versorgungsgesellschaft"
+            },
+            "distanceFromRouteMeters": 2739.292873335322,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "8A8BB880-146F-4039-9DCE-8E7F604D4BE2",
+            "restaurant": {
+              "address": "Otto-Hahn-Straße 1 c, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I6DE92293D0F5A5FF",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9325841,
+              "longitude": 11.5639579,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 43.97375505245403
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I125DC764249B26DB",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 50.054747,
+              "longitude": 11.617218,
+              "name": "EWE Go"
+            },
+            "distanceFromRouteMeters": 70.35876298634409,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "BCB5A774-A72E-4765-BAFD-B05B8BB3C347",
+            "restaurant": {
+              "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I758F0C1EAF18D9D0",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 50.054401,
+              "longitude": 11.617101,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 39.387167656994116
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Kulmbacher Straße 7A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I59902C3EB26E4C8D",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 50.0534005,
+              "longitude": 11.6167007,
+              "name": "Porsche Charging Lounge"
+            },
+            "distanceFromRouteMeters": 99.22943885222568,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "610F65D0-96FC-45AC-BE4D-C0ED58399143",
+            "restaurant": {
+              "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I758F0C1EAF18D9D0",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 50.054401,
+              "longitude": 11.617101,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 114.9188782715765
+          }
+        ],
+        "requestID": "4BE01A11-8D92-4001-ABB0-A90C6E37E132",
+        "routeCoordinateCount": 2372,
+        "routeDistanceMethod": "Spherical geodesic point-to-segment distance along the actual MapKit polyline"
+      },
+      {
+        "candidates": [
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "ID640E922D860FFAD",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.9575605,
+              "longitude": 11.6022605,
+              "name": "EWE Go"
+            },
+            "distanceFromRouteMeters": 308.096952005777,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "A26AB088-762E-4111-9C59-533C06CD08F6",
+            "restaurant": {
+              "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "I29FE360CA245683B",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9573765,
+              "longitude": 11.6028725,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 48.45116950144889
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Theodor-Schmidt-Straße 6, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "IC2075422E207A754",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.9579241,
+              "longitude": 11.6036578,
+              "name": "MOON POWER"
+            },
+            "distanceFromRouteMeters": 202.24337670985093,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "A89539B4-2BD4-4ED1-8B50-0D11C8D08F77",
+            "restaurant": {
+              "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+              "applePlaceID": "I29FE360CA245683B",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9573765,
+              "longitude": 11.6028725,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 82.97841472475695
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Otto-Hahn-Straße 1C, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I8E14C73770EC1175",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.932601,
+              "longitude": 11.564181,
+              "name": "EWE Go"
+            },
+            "distanceFromRouteMeters": 2761.656500244678,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "87A7F9FC-3E74-4DA8-BCFA-C0493E9CF991",
+            "restaurant": {
+              "address": "Otto-Hahn-Straße 1 c, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I6DE92293D0F5A5FF",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9325841,
+              "longitude": 11.5639579,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 16.12759736360763
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Otto-Hahn-Straße 1, Altstadt, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I3685A13EBEBEA683",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 49.9323554,
+              "longitude": 11.5644575,
+              "name": "EDEKA Versorgungsgesellschaft"
+            },
+            "distanceFromRouteMeters": 2739.292873335322,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "8A8BB880-146F-4039-9DCE-8E7F604D4BE2",
+            "restaurant": {
+              "address": "Otto-Hahn-Straße 1 c, 95447 Bayreuth, Deutschland",
+              "applePlaceID": "I6DE92293D0F5A5FF",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 49.9325841,
+              "longitude": 11.5639579,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 43.97375505245403
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I125DC764249B26DB",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 50.054747,
+              "longitude": 11.617218,
+              "name": "EWE Go"
+            },
+            "distanceFromRouteMeters": 70.35876298634409,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "BCB5A774-A72E-4765-BAFD-B05B8BB3C347",
+            "restaurant": {
+              "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I758F0C1EAF18D9D0",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 50.054401,
+              "longitude": 11.617101,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 39.387167656994116
+          },
+          {
+            "availability": "unknown",
+            "charger": {
+              "address": "Kulmbacher Straße 7A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I59902C3EB26E4C8D",
+              "category": "MKPOICategoryEVCharger",
+              "latitude": 50.0534005,
+              "longitude": 11.6167007,
+              "name": "Porsche Charging Lounge"
+            },
+            "distanceFromRouteMeters": 99.22943885222568,
+            "exampleChargingPoints": 8,
+            "exampleMinimumPowerKilowatts": 150,
+            "parkID": "610F65D0-96FC-45AC-BE4D-C0ED58399143",
+            "restaurant": {
+              "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+              "applePlaceID": "I758F0C1EAF18D9D0",
+              "category": "MKPOICategoryRestaurant",
+              "latitude": 50.054401,
+              "longitude": 11.617101,
+              "name": "McDonald's"
+            },
+            "restaurantDistanceMeters": 114.9188782715765
+          }
+        ],
+        "requestID": "73CA98C6-736D-4F9D-94FB-D38FAE8CACCB",
+        "routeCoordinateCount": 2387,
+        "routeDistanceMethod": "Spherical geodesic point-to-segment distance along the actual MapKit polyline"
+      }
+    ],
+    "captureLimitations": [
+      {
+        "captureDecision": "Capture the three nextStop CarPlay views and three iPhone views; omit both Apple Maps CarPlay place views. This observation does not establish a general Simulator support limitation.",
+        "environment": "GitHub macOS runner with iOS 26.5 Simulator",
+        "observation": "The restaurant handoff returned success, but the CarPlay content remained blank while the iPhone displayed the resolved place correctly.",
+        "observedRunURL": "https://github.com/nellesf/nextStop/actions/runs/34936686885",
+        "scope": "Apple Maps place views on CarPlay"
+      }
+    ],
+    "drivingDistances": "Calculated by unchanged MapKit routing; never fixture values",
+    "exampleValues": {
+      "chargingPointsPerAppleChargingPlace": 8,
+      "powerKilowatts": 150
+    },
+    "fetchedAt": "2026-09-15T12:45:39Z",
+    "fixtureType": "Provider-only example EVSE counts and power at live MapKit places",
+    "locationNamesAndCoordinates": "Queried from Apple MapKit during this run",
+    "queries": [
+      {
+        "items": [
+          {
+            "address": "Hersbrucker Straße 54, Lauf, 91207 Lauf an der Pegnitz, Deutschland",
+            "applePlaceID": "I6DB8264C7AB194F8",
+            "category": "MKPOICategoryRestaurant",
+            "latitude": 49.5150285,
+            "longitude": 11.2878745,
+            "name": "McDonald's"
+          }
+        ],
+        "kind": "restaurant",
+        "query": "McDonald's Pegnitz"
+      },
+      {
+        "items": [
+          {
+            "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "I29FE360CA245683B",
+            "category": "MKPOICategoryRestaurant",
+            "latitude": 49.9573765,
+            "longitude": 11.6028725,
+            "name": "McDonald's"
+          },
+          {
+            "address": "Otto-Hahn-Straße 1 c, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I6DE92293D0F5A5FF",
+            "category": "MKPOICategoryRestaurant",
+            "latitude": 49.9325841,
+            "longitude": 11.5639579,
+            "name": "McDonald's"
+          }
+        ],
+        "kind": "restaurant",
+        "query": "McDonald's Bayreuth"
+      },
+      {
+        "items": [
+          {
+            "address": "Sophian-Kolb-Straße 16, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "ID640E922D860FFAD",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.9575605,
+            "longitude": 11.6022605,
+            "name": "EWE Go"
+          },
+          {
+            "address": "Theodor-Schmidt-Straße 6, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "IC2075422E207A754",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.9579241,
+            "longitude": 11.6036578,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Sophian-Kolb-Straße 6A, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "IF4347A3BDF857AB",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.957842,
+            "longitude": 11.601896,
+            "name": "Allego Charging Station"
+          },
+          {
+            "address": "Theodor-Schmidt-Straße 6, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "IC6B26E217B8317B9",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.958235,
+            "longitude": 11.603603,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Theodor-Schmidt-Straße 6, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "IC78F329AF2B1CC39",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.9585927,
+            "longitude": 11.6040241,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Königsbergstraße 37, 95448 Bayreuth, Deutschland",
+            "applePlaceID": "ICC310D7899B19811",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.9551622,
+            "longitude": 11.6011502,
+            "name": "Eviny"
+          }
+        ],
+        "kind": "evCharger",
+        "query": "EV chargers within 500 m of McDonald's"
+      },
+      {
+        "items": [
+          {
+            "address": "Otto-Hahn-Straße 1C, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I8E14C73770EC1175",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.932601,
+            "longitude": 11.564181,
+            "name": "EWE Go"
+          },
+          {
+            "address": "Otto-Hahn-Straße 1, Altstadt, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I3685A13EBEBEA683",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.9323554,
+            "longitude": 11.5644575,
+            "name": "EDEKA Versorgungsgesellschaft"
+          },
+          {
+            "address": "Justus-Liebig-Straße 41, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I38ED4B377BFD3D44",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.933108,
+            "longitude": 11.563164,
+            "name": "TotalEnergies EV Charge"
+          },
+          {
+            "address": "Justus-Liebig-Straße 45, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "IE641877734BB8633",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.933425,
+            "longitude": 11.562981,
+            "name": "JET Strom"
+          },
+          {
+            "address": "Justus-Liebig-Straße 45, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I382EA03C0EF1C97",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.933425,
+            "longitude": 11.562981,
+            "name": "JET Strom"
+          },
+          {
+            "address": "Otto-Hahn-Straße 1, Altstadt, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "IEF13D2C251B22B73",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.93122,
+            "longitude": 11.564647,
+            "name": "wallbe GmbH"
+          },
+          {
+            "address": "Otto-Hahn-Straße 1, Altstadt, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I39A8057DEA39D56D",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.93122,
+            "longitude": 11.564647,
+            "name": "ALDI SÜD E-Ladestationen"
+          },
+          {
+            "address": "Justus-Liebig-Straße 45, 95447 Bayreuth, Deutschland",
+            "applePlaceID": "I812BA54AE3E12C42",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 49.933615,
+            "longitude": 11.562697,
+            "name": "JET Ladestation"
+          }
+        ],
+        "kind": "evCharger",
+        "query": "EV chargers within 500 m of McDonald's"
+      },
+      {
+        "items": [
+          {
+            "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "I758F0C1EAF18D9D0",
+            "category": "MKPOICategoryRestaurant",
+            "latitude": 50.054401,
+            "longitude": 11.617101,
+            "name": "McDonald's"
+          }
+        ],
+        "kind": "restaurant",
+        "query": "McDonald's Himmelkron"
+      },
+      {
+        "items": [
+          {
+            "address": "Kulmbacher Straße 5A, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "I125DC764249B26DB",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.054747,
+            "longitude": 11.617218,
+            "name": "EWE Go"
+          },
+          {
+            "address": "Kulmbacher Straße 7A, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "I59902C3EB26E4C8D",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.0534005,
+            "longitude": 11.6167007,
+            "name": "Porsche Charging Lounge"
+          },
+          {
+            "address": "Bahnhofstraße 32, Lanzendorf, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "I25EB33868A67BAD8",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.053033,
+            "longitude": 11.616486,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Bahnhofstraße 32, Lanzendorf, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "IF6F25B0BCF10DD1C",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.0534328,
+            "longitude": 11.6156574,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Bahnhofstraße 32, Lanzendorf, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "IDF248BE4AE431B54",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.0535456,
+            "longitude": 11.6152723,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Bahnhofstraße 32, Lanzendorf, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "IFA6430CDCA728B8C",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.0532936,
+            "longitude": 11.6152119,
+            "name": "MOON POWER"
+          },
+          {
+            "address": "Frankenring 1, Lanzendorf, 95502 Himmelkron, Deutschland",
+            "applePlaceID": "I68F4AC8A6139FD49",
+            "category": "MKPOICategoryEVCharger",
+            "latitude": 50.0521502,
+            "longitude": 11.6207708,
+            "name": "Milence"
+          }
+        ],
+        "kind": "evCharger",
+        "query": "EV chargers within 500 m of McDonald's"
+      }
+    ],
+    "renderedResults": [
+      {
+        "actualMapKitDrivingDistanceMeters": 89221,
+        "chargingPoints": 16,
+        "id": "87A7F9FC-3E74-4DA8-BCFA-C0493E9CF991",
+        "operators": [
+          {
+            "exampleChargingPointCount": 8,
+            "name": "EDEKA Versorgungsgesellschaft"
+          },
+          {
+            "exampleChargingPointCount": 8,
+            "name": "EWE Go"
+          }
+        ],
+        "restaurant": "McDonald's"
+      },
+      {
+        "actualMapKitDrivingDistanceMeters": 89890,
+        "chargingPoints": 16,
+        "id": "A26AB088-762E-4111-9C59-533C06CD08F6",
+        "operators": [
+          {
+            "exampleChargingPointCount": 8,
+            "name": "EWE Go"
+          },
+          {
+            "exampleChargingPointCount": 8,
+            "name": "MOON POWER"
+          }
+        ],
+        "restaurant": "McDonald's"
+      }
+    ],
+    "resolvedApplePlaces": [
+      {
+        "address": "Otto-Hahn-Straße 1 c, 95447 Bayreuth, Deutschland",
+        "applePlaceID": "I6DE92293D0F5A5FF",
+        "category": "MKPOICategoryRestaurant",
+        "kind": "restaurant",
+        "latitude": 49.9325841,
+        "longitude": 11.5639579,
+        "name": "McDonald's",
+        "resolver": "unchanged MapKitApplePlaceResolver"
+      }
+    ],
+    "sourceCode": "Unchanged main app UI, search coordinator, filters, routing, resolver and launcher",
+    "sourceID": "website_example_fixture"
+  },
+  "limitations": [
+    {
+      "captureDecision": "Capture the three nextStop CarPlay views and three iPhone views; omit both Apple Maps CarPlay place views. This observation does not establish a general Simulator support limitation.",
+      "environment": "GitHub macOS runner with iOS 26.5 Simulator",
+      "observation": "The restaurant handoff returned success, but the CarPlay content remained blank while the iPhone displayed the resolved place correctly.",
+      "observedRunURL": "https://github.com/nellesf/nextStop/actions/runs/34936686885",
+      "scope": "Apple Maps place views on CarPlay"
+    },
+    "Only the three completed CarPlay views are imported from this failed overall run. Earlier iPhone originals remain on the website.",
+    "The wide Simulator's native sidebar does not show time or connection/battery indicators in these captures."
+  ],
+  "processing": "Original PNG bytes extracted from the GitHub-digest-verified artifact without pixel modifications",
+  "evidence": [
+    {
+      "file": "evidence/run-evidence.json",
+      "sha256": "dfa40cfcd2928b405e9078afc01e885560cc960179d3096fefbd04cbc4466348"
+    },
+    {
+      "file": "evidence/artifact-evidence.json",
+      "sha256": "49e54dc4b0a9f57f447af2a90317b00c950b98897b9855f4699cb4f2c50945bf"
+    },
+    {
+      "file": "evidence/capture-run.log",
+      "sha256": "8628fe92986465f46f5d959e95e2a276828e641c7ec5584da1550a4015c6987e"
+    },
+    {
+      "file": "evidence/capture-source-base.json",
+      "sha256": "6bc6fb9924d46fb8f2272b28d2792586313256259cd1efdccb8cdec06a4ba147"
+    },
+    {
+      "file": "evidence/preflight.json",
+      "sha256": "4f6c76129829d43af96fb31525cca66d4b2c8e1cf997319a7ec0f8181b933150"
+    },
+    {
+      "file": "evidence/website-capture-fixture.json",
+      "sha256": "38078f5ca4d9383f7b9290880859df002b4f63f059c7bb8e2ead7bd3b1505016"
+    },
+    {
+      "file": "evidence/phase-carplay-results.json",
+      "sha256": "b92b064c613ae6b7a8de2b0f989a0f9b06d86773813a8442ef0192b39fe6248c"
+    },
+    {
+      "file": "evidence/carplay-results.ocr.json",
+      "sha256": "df445b28761843e155f23b0238504beab7093348661ef4a0bd0619623b3a6624"
+    },
+    {
+      "file": "evidence/phase-carplay-result-actions.json",
+      "sha256": "e002d2a57888aa860e0910b5547b6aa9512a8849693533bbfb71806a30923407"
+    },
+    {
+      "file": "evidence/carplay-result-actions.ocr.json",
+      "sha256": "2305c613856540e960b43fd4e946acafdc37323aeaec696fdd7e67cbf475e15b"
+    },
+    {
+      "file": "evidence/phase-carplay-charging-places.json",
+      "sha256": "7b2cd7ec480f1de16be545d5dee4754848991d462e30eddd46f6d8e74e51dafc"
+    },
+    {
+      "file": "evidence/carplay-charging-places.ocr.json",
+      "sha256": "803ec5e29981d1bdfdfc04261971d6dfa3f536c955114de4c2c20ec018dfb95f"
+    }
+  ],
+  "screenshots": [
+    {
+      "file": "carplay-results.png",
+      "display": "external",
+      "ownerApp": "nextStop",
+      "width": 1920,
+      "height": 720,
+      "capturedAt": "2026-09-15T12:46:40.1600260Z",
+      "timestampSource": "GitHub log timestamp of the final native screenshot invocation",
+      "sha256": "fc0a1b7aa0a615b624771e686a751515bb97c90c4c697524d1bb9c63b996b8e8"
+    },
+    {
+      "file": "carplay-result-actions.png",
+      "display": "external",
+      "ownerApp": "nextStop",
+      "width": 1920,
+      "height": 720,
+      "capturedAt": "2026-09-15T12:47:05.7796630Z",
+      "timestampSource": "GitHub log timestamp of the final native screenshot invocation",
+      "sha256": "ac4ddec545287998e137adc52e3f0d6088512b03e9c66e69b20fb8edc310cd86"
+    },
+    {
+      "file": "carplay-charging-places.png",
+      "display": "external",
+      "ownerApp": "nextStop",
+      "width": 1920,
+      "height": 720,
+      "capturedAt": "2026-09-15T12:47:24.7008380Z",
+      "timestampSource": "GitHub log timestamp of the final native screenshot invocation",
+      "sha256": "d257d454ab10bb9705b521f33e5e13f834e3caa3f554ebb78a5602c414967052"
+    }
+  ]
+}

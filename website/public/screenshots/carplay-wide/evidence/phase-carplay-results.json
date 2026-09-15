@@ -1,0 +1,11 @@
+{
+  "display": "external",
+  "expected": [
+    "Passende Ladestopps",
+    "Ladepunkte",
+    "Fahrstrecke"
+  ],
+  "file": "carplay-results.png",
+  "ownerApp": "nextStop",
+  "phase": "carplay-results"
+}

@@ -99,7 +99,21 @@ or a multi-stop Apple Maps itinerary.
 `content/result-screenshots.ts` holds the reviewed captures for the additional
 result and place-selection galleries. Six reviewed captures from
 [run 34938078711](https://github.com/nellesf/nextStop/actions/runs/34938078711)
-are imported and displayed. Empty collections render no empty gallery or
+are retained in `public/screenshots/`. Its three iPhone images remain displayed.
+The result and selection views in CarPlay use the separate native wide capture
+set in `public/screenshots/carplay-wide/`, at 1920 × 720 pixels and @3x UI scale.
+These three completed CarPlay captures come from
+[run 34969883976](https://github.com/nellesf/nextStop/actions/runs/34969883976),
+artifact `10397352942`, capture harness
+`b49400d2a15edc89adcfefb015bcac7ce7101b74`. All three were visually reviewed:
+their native titles and subtitles fit. The overall run **failed later**, at the
+iPhone Apple Maps advertising introduction after 90 seconds; XCTest was aborted
+and there is no passing result-test summary. This is a scoped CarPlay refresh,
+not a successful six-screen capture. Its separate
+`carplay-result-provenance.json` records `captureScope: "carplay-results-only"`
+and the failed run with supporting evidence. The eleven earlier original PNGs,
+their manifests, and the displayed iPhone set remain unchanged.
+Empty collections render no empty gallery or
 missing-image references. Populate each entry with the imported path, accurate alt text and a
 caption that identifies the screen, including Apple Maps when it owns the view.
 Keep the images beside the action they explain rather than collecting them in
@@ -132,6 +146,40 @@ Expected result captures:
   `carplay-charging-places.png`: nextStop result overview, destination actions
   and charging-operator selection, each 800 × 480.
 
+For the website's wide CarPlay format, add `-f display_variant=wide` to dispatch.
+Run `34969883976` verified native 1920 × 720 at @3x through Simulator field
+readback, the connected display's actual scale, and the PNG dimensions. A resized
+default image is not accepted. A future complete six-screen wide run can use
+`import-result-screenshots.mjs` with a separate output directory as its third
+argument; that importer still requires the entire set.
+
+The current three-image refresh instead uses the dedicated
+`import-wide-carplay-screenshots.mjs` importer. It retains only the completed
+CarPlay originals in `public/screenshots/carplay-wide/`, together with their
+scoped manifest and evidence of both capture completion and the later failure.
+From the repository root, after downloading the artifact and its evidence:
+
+```bash
+node website/scripts/import-wide-carplay-screenshots.mjs \
+  /tmp/nextstop-wide-capture-review 5fe2fa2332d66d2499fc679617855d41cb0111be \
+  /tmp/nextstop-wide-capture-review/carplay-captures.zip
+```
+
+The optional fourth argument overrides the output directory. The original ZIP's
+SHA-256 must match GitHub's artifact `digest`; original PNG and capture evidence
+bytes are read directly from that verified ZIP. The artifact directory must also
+contain `run-evidence.json`, `artifact-evidence.json`, and `capture-run.log`.
+The output keeps those records and the source, display, fixture, phase, and OCR
+evidence under `evidence/`, with hashes in the scoped manifest.
+Its `fixtureSnapshotScope` explains that preserved `fixture.renderedResults`
+describes the later iPhone comparison, not an exact transcript of the earlier
+CarPlay screen. Keep the PNG/OCR evidence as the record of its visible values.
+
+Do not manufacture `result-capture-source.json`, a passing test summary, or a
+six-image provenance record for this partial run. See the
+[capture guide](../docs/operations/simulator-screenshots.md#scoped-wide-carplay-refresh)
+for the exact evidence download/import commands and compatible build reuse.
+
 Apple Maps place views in CarPlay are excluded from this capture set. The
 restaurant handoff in
 [Actions run 34936686885](https://github.com/nellesf/nextStop/actions/runs/34936686885)
@@ -163,7 +211,8 @@ Keep the imported PNGs checked into `website/public/screenshots/` together with
 their provenance manifests, so design work does not depend on the retention of
 GitHub Actions artifacts. Use these original files as source images for later
 App Store layouts. iPhone originals are 1206 × 2622 pixels; CarPlay originals
-are 800 × 480 pixels. The website's device frames and captions are CSS/HTML and
+include 800 × 480 pixels and the separate 1920 × 720 wide set. The website's
+device frames and captions are CSS/HTML and
 are not embedded in the PNGs. Save composed marketing images separately and
 retain the source PNGs unchanged, with their manifest hashes intact.
 

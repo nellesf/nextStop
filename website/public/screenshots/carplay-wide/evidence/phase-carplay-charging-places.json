@@ -1,0 +1,10 @@
+{
+  "display": "external",
+  "expected": [
+    "Ladeanbieter",
+    "Ladepunkte"
+  ],
+  "file": "carplay-charging-places.png",
+  "ownerApp": "nextStop",
+  "phase": "carplay-charging-places"
+}

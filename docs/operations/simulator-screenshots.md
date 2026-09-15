@@ -16,18 +16,28 @@ core, CarPlay, Xcode project, and configuration have no production changes.
 Do not change those sources or entitlements to make a screenshot work.
 
 Dispatch works from any checkout with authenticated `gh`; no local Xcode is
-needed. The default command builds the current fixture and runs the six-screen
-result capture:
+needed. This command builds the current fixture and runs the six-screen result
+capture with the website's wide CarPlay display:
 
 ```bash
 gh workflow run carplay-screenshots.yml --repo nellesf/nextStop \
   --ref codex/app-explainer-website \
-  -f capture_mode=results
+  -f capture_mode=results -f display_variant=wide
 gh run list --repo nellesf/nextStop --workflow carplay-screenshots.yml \
   --branch codex/app-explainer-website --limit 5
 ```
 
 Use `capture_mode=profiles` for the two CarPlay profile/preparation images.
+Their existing importer expects `display_variant=default` (800 × 480).
+For the website's wide result images, add **`-f display_variant=wide`**. This
+configures a native **1920 × 720, @3x** CarPlay display; `default` retains
+800 × 480, @2x. The width, height, and scale are set through Simulator's native
+configuration dialog after enabling Apple's documented `CarPlayExtraOptions`.
+The helper reuses the controls observed in run `34953971279`: `CarPlay…`,
+`TV Out Extended Setup`, and the Width/Height/Scale fields. It checks native
+field readback, the connected screen's UI scale, and the PNG's actual dimensions.
+Never resize an 800 × 480 screenshot to claim the wide variant.
+
 To reuse a recent compatible build, add both `reuse_run_id` and `reuse_sha256`
 from the successful-run record below. Omit both inputs for a fresh build.
 Artifacts expire after seven days; do not retry an expired archive. Reuse requires
@@ -77,12 +87,13 @@ attempt as successful.
 | [34936034192](https://github.com/nellesf/nextStop/actions/runs/34936034192) | Failed during an initial location grant with the old 45-second timeout. Installation, location/privacy grants, status bar, and appearance setup now use 180-second limits. |
 | [34936686885](https://github.com/nellesf/nextStop/actions/runs/34936686885) | Five genuine images reached, including the iPhone restaurant card. Apple Maps remained blank on CarPlay despite a successful handoff callback. This attempt failed; no complete manifest was imported. |
 | [34938078711](https://github.com/nellesf/nextStop/actions/runs/34938078711) | **Successful six-screen result capture**, attempt 1, harness/build `f8c9390a44b1ae17f3875cbfb125ff3c5034aaaa`. Hosted test: 1 passed, 0 failed, 0 skipped. All six original PNGs visually reviewed and imported. |
+| [34969883976](https://github.com/nellesf/nextStop/actions/runs/34969883976) | **Three completed wide CarPlay result captures**, native 1920 × 720 at @3x, capture harness `b49400d2a15edc89adcfefb015bcac7ce7101b74`, artifact `10397352942`. All three native titles and subtitles fit on visual review. The overall run **failed later** at the iPhone Apple Maps advertising introduction after 90 seconds; XCTest was aborted and no passing result-test summary exists. Only the completed CarPlay images are retained as a scoped refresh, not a complete six-screen success. |
 
 The successful result build can be reused while its artifact is retained:
 
 ```bash
 gh workflow run carplay-screenshots.yml --repo nellesf/nextStop \
-  --ref codex/app-explainer-website -f capture_mode=results \
+  --ref codex/app-explainer-website -f capture_mode=results -f display_variant=wide \
   -f reuse_run_id=34938078711 \
   -f reuse_sha256=a585a0ab7558aa0a4a6dbe20cf6d900c66fd118c38ad76b0f900ffd71df28329
 ```
@@ -94,12 +105,21 @@ The fresh run took about 13 minutes, including about 3 minutes for build and
 installation before the hosted test. Reuse avoids the build, not simulator
 startup or live MapKit requests.
 
-The final images have loaded native maps and no introduction/permission dialog.
-CarPlay's long heading/subtitle and the Maps charging-card title have native
+The six images from run `34938078711` have loaded native maps and no
+introduction/permission dialog. That default CarPlay set's long heading/subtitle
+and the Maps charging-card title have native
 truncation/marquee behavior; the selected location is also readable on the map.
 Apple Maps shows its own location data (including 3 chargers at the selected
 site), while nextStop's fixture deliberately shows example counts (8 for that
 operator). Keep the visible example-data disclosure. Do not retouch those values.
+
+The later wide run `34969883976` reused that compatible build. Its three completed
+CarPlay PNGs have native 1920 × 720 dimensions and verified @3x UI scale; their
+titles and subtitles fit without editing the pixels. This establishes the wide
+display configuration and those three captures only. The subsequent iPhone Maps
+introduction timeout does not establish a completed iPhone place capture or a
+passing hosted test. Preserve its failed conclusion and scoped evidence when
+reusing these CarPlay originals.
 
 For later captures, update the successful run/attempt, harness commit, archive
 hash, and visual-review result. A build, partial PNGs, or a green unrelated test
@@ -137,6 +157,7 @@ in the review and retain the original pixels. Do not redesign the app for captur
 | --- | --- | --- |
 | `carplay-profiles.png`, `carplay-ride-summary.png` | nextStop | 800 × 480 |
 | `carplay-results.png`, `carplay-result-actions.png`, `carplay-charging-places.png` | nextStop | 800 × 480 |
+| `carplay-wide/carplay-results.png`, `carplay-wide/carplay-result-actions.png`, `carplay-wide/carplay-charging-places.png` | nextStop | 1920 × 720, @3x |
 | `iphone-results.png` | nextStop | 1206 × 2622 |
 | `iphone-restaurant-place.png`, `iphone-charging-place.png` | Apple Maps | 1206 × 2622 |
 
@@ -149,8 +170,97 @@ node website/scripts/import-result-screenshots.mjs \
   /tmp/nextstop-capture-review 5fe2fa2332d66d2499fc679617855d41cb0111be
 ```
 
-For profile mode use `import-carplay-screenshots.mjs` with the same arguments;
-it reads `capture-source.json`. The separate iPhone profile workflow is
+Keep the wide capture set separate so the earlier originals remain available:
+
+```bash
+node website/scripts/import-result-screenshots.mjs \
+  /tmp/nextstop-wide-capture-review 5fe2fa2332d66d2499fc679617855d41cb0111be \
+  website/public/screenshots/carplay-wide
+```
+
+For a successful complete wide run, this preserves all six images and their own
+manifest together. It is **not** the import path for partial run `34969883976`.
+The importer accepts only the two known CarPlay width/height/scale combinations
+and requires the `carplayDisplay` manifest entry for wide captures. Set each image's real
+intrinsic width and height in `website/content/result-screenshots.ts`; the
+website must preserve the native aspect ratio and link to the original PNG.
+
+### Scoped wide CarPlay refresh
+
+The user requested a refresh of the three CarPlay result/selection views. Run
+`34969883976` completed those native images before the later iPhone Apple Maps
+advertising introduction timed out. A separate
+`website/scripts/import-wide-carplay-screenshots.mjs` importer handles this
+explicit **`carplay-results-only`** scope without weakening the complete
+six-screen importer. It imports only `carplay-results.png`,
+`carplay-result-actions.png`, and `carplay-charging-places.png` into
+`website/public/screenshots/carplay-wide/`, with
+`carplay-result-provenance.json` and supporting evidence. Keep the failed run
+conclusion and missing passing-test summary explicit; do not manufacture a
+complete manifest or combine incomplete files with another attempt.
+
+The scoped input includes GitHub run evidence (`id`, `run_attempt`, `head_sha`,
+`status`, `conclusion`, `html_url`) in `run-evidence.json`, artifact evidence
+(`id`, `name`, `created_at`, `digest`, `workflow_run`) in
+`artifact-evidence.json`, and `capture-run.log` from `gh run view --log-failed`.
+Retain the original downloaded artifact ZIP for verification. The capture source
+remains app commit `5fe2fa2332d66d2499fc679617855d41cb0111be`; the capture
+harness is `b49400d2a15edc89adcfefb015bcac7ce7101b74`, with the successful
+build reused as recorded above. Artifact ID `10397352942` identifies this
+attempt's capture evidence.
+
+Download that exact artifact and its external evidence into a fresh directory,
+then run the scoped importer from the website worktree root:
+
+```bash
+wide_capture_review=$(mktemp -d /tmp/nextstop-wide-capture-review.XXXXXX)
+gh api repos/nellesf/nextStop/actions/artifacts/10397352942/zip \
+  > "${wide_capture_review}/carplay-captures.zip"
+unzip "${wide_capture_review}/carplay-captures.zip" -d "${wide_capture_review}"
+gh api repos/nellesf/nextStop/actions/runs/34969883976 \
+  --jq '{id,run_attempt,head_sha,status,conclusion,html_url}' \
+  > "${wide_capture_review}/run-evidence.json"
+gh api repos/nellesf/nextStop/actions/artifacts/10397352942 \
+  --jq '{id,name,created_at,digest,workflow_run}' \
+  > "${wide_capture_review}/artifact-evidence.json"
+gh run view 34969883976 --repo nellesf/nextStop --log-failed \
+  > "${wide_capture_review}/capture-run.log"
+node website/scripts/import-wide-carplay-screenshots.mjs \
+  "${wide_capture_review}" 5fe2fa2332d66d2499fc679617855d41cb0111be \
+  "${wide_capture_review}/carplay-captures.zip"
+```
+
+The CLI takes the artifact directory, full app SHA, and original artifact ZIP,
+in that order, followed by an optional output directory. Its default output is
+`website/public/screenshots/carplay-wide/`. The ZIP's SHA-256 must match the
+GitHub artifact `digest`; the importer reads the original PNG and capture
+evidence bytes directly from that archive with `unzip -p`. It checks the source,
+native display, completed CarPlay phase/OCR records, and their screenshot
+invocations before the later iPhone failure. Altered extracted files cannot
+substitute for archive contents.
+
+The output contains three unchanged PNGs, `carplay-result-provenance.json`, and
+an `evidence/` directory. Evidence includes the two GitHub JSON records,
+`capture-run.log`, `capture-source-base.json`, `preflight.json`,
+`website-capture-fixture.json`, and the three CarPlay phase JSON and OCR JSON
+pairs. Their hashes remain in the scoped manifest. Keep these files in Git;
+the large artifact ZIP is an import verification input, not a website image.
+
+The preserved fixture's `renderedResults` snapshot comes from the later iPhone
+comparison: it records 89/90 km, while the earlier CarPlay result image displays
+89/92 km. `fixtureSnapshotScope` in the scoped manifest identifies that timing.
+Use the original CarPlay PNG and its OCR evidence for the values visible in that
+capture; do not present the later snapshot as an exact CarPlay screen transcript.
+
+The website displays those three wide CarPlay images and the previously reviewed
+iPhone images. All eleven earlier PNG originals and their provenance remain in
+place. The failure concerns the later iPhone phase, not the completion or visual
+review of the three imported CarPlay views.
+
+### Other capture modes and website validation
+
+For profile mode use `import-carplay-screenshots.mjs` with the capture directory
+and full app SHA; it reads `capture-source.json`. The separate iPhone profile workflow is
 `ios-app.yml`, `test_scope=screenshots`, with a full `app_ref`; its artifact is
 `ios-ui-attachments` and importer is `website/scripts/import-screenshots.mjs`.
 See the website branch's

@@ -1,10 +1,10 @@
 import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
-import { access, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { access, cp, mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import test from "node:test";
-import { importResultScreenshots, resultCaptureSpecs } from "../scripts/import-result-screenshots.mjs";
+import { importResultScreenshots, readResultScreenshots, readCarPlayResultScreenshots, resultCaptureSpecs } from "../scripts/import-result-screenshots.mjs";
 
 async function fixture(t) {
   const directory = await mkdtemp(join(tmpdir(), "nextstop-result-import-"));
@@ -50,6 +50,12 @@ test("rejects incomplete, modified or misattributed sets before writing assets",
     "wrong owner": (source) => { source.screenshots.at(-1).ownerApp = "nextStop"; },
     "wrong display": (source) => { source.screenshots.at(-1).display = "external"; },
     "wrong dimensions": (source) => { source.screenshots.at(-1).width = 800; },
+    "wrong display scale": (source) => {
+      source.carplayDisplay = { variant: "wide", width: 1920, height: 720, scale: 2 };
+    },
+    "wide claim with default image pixels": (source) => {
+      source.carplayDisplay = { variant: "wide", width: 1920, height: 720, scale: 3 };
+    },
     "wrong image hash": (source) => { source.screenshots.at(-1).sha256 = "0".repeat(64); },
     "missing place provenance": (source) => { delete source.fixture; },
   };
@@ -62,4 +68,21 @@ test("rejects incomplete, modified or misattributed sets before writing assets",
       await assert.rejects(access(output), { code: "ENOENT" });
     });
   }
+});
+
+test("keeps the completed CarPlay subset distinct from a successful full capture", async (t) => {
+  const directory = await mkdtemp(join(tmpdir(), "nextstop-wide-evidence-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  await cp(new URL("../public/screenshots/carplay-wide/", import.meta.url), directory, { recursive: true });
+  const manifest = join(directory, "carplay-result-provenance.json");
+  const source = JSON.parse(await readFile(manifest, "utf8"));
+  assert.equal((await readCarPlayResultScreenshots(directory, source.appCommit)).captures.length, 3);
+  await assert.rejects(readResultScreenshots(directory, source.appCommit, "carplay-result-provenance.json"));
+  source.hostedTestPassed = true;
+  await writeFile(manifest, JSON.stringify(source));
+  await assert.rejects(readCarPlayResultScreenshots(directory, source.appCommit));
+  source.hostedTestPassed = false;
+  await writeFile(manifest, JSON.stringify(source));
+  await writeFile(join(directory, "evidence", "capture-run.log"), "Changed capture evidence");
+  await assert.rejects(readCarPlayResultScreenshots(directory, source.appCommit));
 });

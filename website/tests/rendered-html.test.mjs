@@ -3,7 +3,7 @@ import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
-import { readResultScreenshots, resultCaptureSpecs } from "../scripts/import-result-screenshots.mjs";
+import { readResultScreenshots, readCarPlayResultScreenshots, resultCaptureSpecs } from "../scripts/import-result-screenshots.mjs";
 
 async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -58,8 +58,9 @@ test("server-renders the complete German nextStop landing page", async () => {
   for (const file of ["carplay-profiles.png", "carplay-ride-summary.png"]) {
     assert.ok(html.slice(drive, find).includes(`src="/screenshots/${file}"`));
   }
-  for (const { file } of resultCaptureSpecs) {
-    assert.ok(html.slice(find).includes(`src="/screenshots/${file}"`));
+  for (const { file, display } of resultCaptureSpecs) {
+    const path = display === "external" ? `carplay-wide/${file}` : file;
+    assert.ok(html.slice(find).includes(`src="/screenshots/${path}"`));
   }
   for (const filename of [
     "iphone-profiles.png", "iphone-profile-editor.png",
@@ -132,10 +133,18 @@ test("publishes result captures only with checked originals and accurate ownersh
   }
   const iphone = JSON.parse(await readFile(new URL("provenance.json", directory), "utf8"));
   await readResultScreenshots(fileURLToPath(directory), iphone.appCommit, "result-provenance.json");
-  for (const { file, ownerApp } of resultCaptureSpecs) {
-    const image = html.match(new RegExp(`<img[^>]+src="/screenshots/${file}"[^>]*>`));
+  const wide = await readCarPlayResultScreenshots(fileURLToPath(new URL("carplay-wide/", directory)),
+    iphone.appCommit);
+  assert.deepEqual(wide.source.carplayDisplay, { variant: "wide", width: 1920, height: 720, scale: 3 });
+  for (const { file, ownerApp, display } of resultCaptureSpecs) {
+    const path = display === "external" ? `carplay-wide/${file}` : file;
+    const image = html.match(new RegExp(`<img[^>]+src="/screenshots/${path}"[^>]*>`));
     assert.ok(image, `${file} must appear after the reviewed result set is activated.`);
-    assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${file}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
+    assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${path}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
+    if (display === "external") {
+      assert.match(image[0], /width="1920"/);
+      assert.match(image[0], /height="720"/);
+    }
     if (ownerApp === "Apple Maps") assert.match(image[0], /alt="[^"]*Apple Maps/);
   }
   assert.match(html, /Ladepunktzahlen und Ladeleistungen in nextStop sind Beispielwerte/);

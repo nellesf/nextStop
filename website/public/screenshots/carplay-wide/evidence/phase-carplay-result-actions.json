@@ -1,0 +1,10 @@
+{
+  "display": "external",
+  "expected": [
+    "Ladeanbieter",
+    "Zum Restaurant"
+  ],
+  "file": "carplay-result-actions.png",
+  "ownerApp": "nextStop",
+  "phase": "carplay-result-actions"
+}

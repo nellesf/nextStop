@@ -54,7 +54,7 @@ function AppScreenshot({
   );
 }
 
-function CarPlayScreenshot({ src, alt, caption }: ResultScreenshot) {
+function CarPlayScreenshot({ src, alt, caption, width = 800, height = 480 }: ResultScreenshot) {
   return (
     <figure className="carplay-wrap">
       <div className="carplay">
@@ -63,8 +63,8 @@ function CarPlayScreenshot({ src, alt, caption }: ResultScreenshot) {
             className="carplay-screenshot"
             src={src}
             alt={alt}
-            width={800}
-            height={480}
+            width={width}
+            height={height}
             sizes="(max-width: 620px) calc(100vw - 52px), 640px"
             unoptimized
           />

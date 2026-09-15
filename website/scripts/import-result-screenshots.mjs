@@ -18,11 +18,37 @@ const repository = fileURLToPath(new URL("../../", import.meta.url));
 const sha256 = (bytes) => createHash("sha256").update(bytes).digest("hex");
 const git = (...arguments_) => execFileSync("git", arguments_, { cwd: repository });
 
+function captureSpecs(source) {
+  // Older manifests predate display configuration and used the verified default.
+  const display = source.carplayDisplay ?? { variant: "default", width: 800, height: 480, scale: 2 };
+  const supported = {
+    default: { variant: "default", width: 800, height: 480, scale: 2 },
+    wide: { variant: "wide", width: 1920, height: 720, scale: 3 },
+  };
+  assert.ok(Object.hasOwn(supported, display.variant), "Unsupported CarPlay display variant.");
+  assert.deepEqual(display, supported[display.variant], "CarPlay resolution and scale must match the selected variant.");
+  return resultCaptureSpecs.map((spec) => spec.display === "external"
+    ? { ...spec, width: display.width, height: display.height }
+    : spec);
+}
+
 export async function readResultScreenshots(
   directory,
   expectedCommit,
   manifestName = "result-capture-source.json",
 ) {
+  return readCheckedScreenshots(directory, expectedCommit, manifestName, "complete");
+}
+
+export async function readCarPlayResultScreenshots(
+  directory,
+  expectedCommit,
+  manifestName = "carplay-result-provenance.json",
+) {
+  return readCheckedScreenshots(directory, expectedCommit, manifestName, "carplay-results-only");
+}
+
+async function readCheckedScreenshots(directory, expectedCommit, manifestName, scope) {
   assert.match(expectedCommit ?? "", /^[0-9a-f]{40}$/, "Supply the full main app commit.");
   const source = JSON.parse(await readFile(join(directory, manifestName), "utf8"));
   assert.equal(source.appCommit, expectedCommit, "The capture must use the requested main commit.");
@@ -41,10 +67,34 @@ export async function readResultScreenshots(
     && Object.keys(source.fixture).length > 0, "MapKit places and example data require fixture provenance.");
   assert.ok(typeof source.data === "string" && source.data.trim(), "Describe the capture data.");
   assert.ok(Array.isArray(source.screenshots));
+  let specs = captureSpecs(source);
+  if (scope === "carplay-results-only") {
+    assert.equal(source.captureScope, scope);
+    assert.equal(source.runEvidence.conclusion, "failure");
+    assert.equal(source.runEvidence.status, "completed");
+    assert.equal(source.runEvidence.head_sha, source.harnessCommit);
+    assert.equal(source.runEvidence.html_url, source.runURL);
+    assert.equal(source.hostedTestPassed, false);
+    assert.equal(source.failure.phase, "iphone-restaurant-place");
+    assert.ok(source.failure.reason);
+    assert.ok(source.evidence.length >= 6, "The scoped import must retain its native capture evidence.");
+    for (const evidence of source.evidence) {
+      assert.match(evidence.file, /^evidence\/[a-z0-9.-]+$/);
+      assert.equal(sha256(await readFile(join(directory, evidence.file))), evidence.sha256);
+    }
+    const evidenceJSON = async (name) => JSON.parse(await readFile(join(directory, "evidence", name), "utf8"));
+    assert.deepEqual(source.runEvidence, await evidenceJSON("run-evidence.json"));
+    assert.deepEqual(source.artifactEvidence, await evidenceJSON("artifact-evidence.json"));
+    assert.deepEqual(source.fixture, await evidenceJSON("website-capture-fixture.json"));
+    assert.equal(source.artifactEvidence.workflow_run.id, source.runEvidence.id);
+    assert.equal(source.artifactEvidence.workflow_run.head_sha, source.harnessCommit);
+    assert.ok(source.fixtureSnapshotScope, "Explain the scope of the retained fixture snapshot.");
+    specs = specs.filter((spec) => spec.display === "external");
+  }
   assert.deepEqual(source.screenshots.map((capture) => capture.file).sort(),
-    resultCaptureSpecs.map((capture) => capture.file).sort(), "Import exactly the six expected result screens.");
+    specs.map((capture) => capture.file).sort(), "Import exactly the expected screens for this capture scope.");
 
-  const captures = await Promise.all(resultCaptureSpecs.map(async (expected) => {
+  const captures = await Promise.all(specs.map(async (expected) => {
     const capture = source.screenshots.find((item) => item.file === expected.file);
     for (const field of ["display", "ownerApp", "width", "height"]) {
       assert.equal(capture[field], expected[field], `${expected.file}: incorrect ${field}.`);
@@ -83,9 +133,9 @@ export async function importResultScreenshots(
 }
 
 if (process.argv[1] && import.meta.url === pathToFileURL(process.argv[1]).href) {
-  const [directory, expectedCommit] = process.argv.slice(2);
+  const [directory, expectedCommit, output] = process.argv.slice(2);
   assert.ok(directory && expectedCommit,
-    "Usage: node website/scripts/import-result-screenshots.mjs <capture directory> <full main SHA>");
-  const count = await importResultScreenshots(directory, expectedCommit);
+    "Usage: node website/scripts/import-result-screenshots.mjs <capture directory> <full main SHA> [output directory]");
+  const count = await importResultScreenshots(directory, expectedCommit, output);
   console.log(`Imported ${count} original result screenshots from main ${expectedCommit}.`);
 }

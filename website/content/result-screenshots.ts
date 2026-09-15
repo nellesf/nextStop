@@ -2,6 +2,8 @@ export type ResultScreenshot = {
   src: string;
   alt: string;
   caption: string;
+  width?: number;
+  height?: number;
 };
 
 // Add only imported, visually reviewed captures. Empty collections render no
@@ -29,17 +31,23 @@ export const iphoneResultScreenshots: ResultScreenshot[] = [
 
 export const carplayResultScreenshots: ResultScreenshot[] = [
   {
-    src: "/screenshots/carplay-results.png",
+    src: "/screenshots/carplay-wide/carplay-results.png",
+    width: 1920,
+    height: 720,
     alt: "nextStop in CarPlay: passende Ladestopps auf der Karte, nach Fahrstrecke sortiert",
     caption: "nextStop · CarPlay · Ergebnisse",
   },
   {
-    src: "/screenshots/carplay-result-actions.png",
+    src: "/screenshots/carplay-wide/carplay-result-actions.png",
+    width: 1920,
+    height: 720,
     alt: "nextStop in CarPlay: Restaurant oder Ladeanbieter desselben Pausenstopps als Ziel öffnen",
     caption: "nextStop · CarPlay · Dein Ziel am Stopp",
   },
   {
-    src: "/screenshots/carplay-charging-places.png",
+    src: "/screenshots/carplay-wide/carplay-charging-places.png",
+    width: 1920,
+    height: 720,
     alt: "nextStop in CarPlay: Ladeanbieter beim gewählten Restaurant mit Öffnen in Apple Maps",
     caption: "nextStop · CarPlay · Ladeanbieter beim Restaurant",
   },
