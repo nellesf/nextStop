@@ -123,7 +123,8 @@ final class ProfileRepositoryTests: XCTestCase {
 
       if carPlayScene() == nil {
         try await phase(
-          "waiting-for-carplay", display: "external", action: "click", label: "nextStop")
+          "waiting-for-carplay", display: "external", expected: ["Profile", profile.name],
+          action: "click", label: "nextStop")
       }
       try await wait("CarPlay scene connection") { self.carPlayScene() != nil }
       let scene = try XCTUnwrap(carPlayScene())
@@ -133,7 +134,7 @@ final class ProfileRepositoryTests: XCTestCase {
       let profiles = try XCTUnwrap(controller.rootTemplate as? CPListTemplate)
       try await phase(
         "carplay-profiles", display: "external", file: "carplay-profiles.png",
-        expected: ["Fahrt wählen", profile.name])
+        expected: ["Profile", profile.name])
       let profileItem = try item(named: profile.name, in: profiles)
       try await invoke(profileItem)
       try await wait("CarPlay ride summary") {
@@ -143,10 +144,7 @@ final class ProfileRepositoryTests: XCTestCase {
       let presentation = CarPlayPresenter().rideSummary(RideSearchDraft(profile: profile))
       try await phase(
         "carplay-ride-summary", display: "external", file: "carplay-ride-summary.png",
-        expected: [
-          presentation.destination, presentation.searchActionTitle,
-          presentation.editActionTitle,
-        ])
+        expected: [presentation.destination, "Suche", "Filter"])
       try await invoke(item(named: presentation.editActionTitle, in: summary))
       try await wait("CarPlay criteria") {
         controller.topTemplate !== summary && controller.topTemplate is CPListTemplate
@@ -154,14 +152,16 @@ final class ProfileRepositoryTests: XCTestCase {
       let criteria = try XCTUnwrap(controller.topTemplate as? CPListTemplate)
       try await phase(
         "carplay-criteria", display: "external", file: "carplay-criteria.png",
-        expected: ["Filter", "Ladestopp"])
-      let optionPhases: [(CarPlayCriteriaField, String, String)] = [
-        (.distanceRange, "carplay-options-distance-range", "km"),
-        (.minimumChargingPoints, "carplay-options-charging-points", "Ladepunkte"),
-        (.minimumPower, "carplay-options-power", "kW"),
-        (.foodChain, "carplay-options-food-chain", "Restaurant"),
+        expected: ["Ladestopp", "mindestens"])
+      // Use visible option rows to identify each page. Long navigation headings
+      // may truncate; phase() still records every complete template string for audit.
+      let optionPhases: [(CarPlayCriteriaField, String, [String])] = [
+        (.distanceRange, "carplay-options-distance-range", ["15–50 km", "50–100 km"]),
+        (.minimumChargingPoints, "carplay-options-charging-points", ["mindestens 2", "mindestens 4"]),
+        (.minimumPower, "carplay-options-power", ["11 kW", "22 kW"]),
+        (.foodChain, "carplay-options-food-chain", ["Kein Restaurant", "McDonald's"]),
       ]
-      for (field, phaseName, readinessAnchor) in optionPhases {
+      for (field, phaseName, readinessAnchors) in optionPhases {
         let criterion = try XCTUnwrap(presentation.criteria.first { $0.field == field })
         try await invoke(item(named: criterion.title, in: criteria))
         try await wait("CarPlay options for \(criterion.title)") {
@@ -170,7 +170,7 @@ final class ProfileRepositoryTests: XCTestCase {
         }
         try await phase(
           phaseName, display: "external", file: "\(phaseName).png",
-          expected: [readinessAnchor])
+          expected: readinessAnchors)
         // Back returns without selecting a new value or changing the ride draft.
         try await popTemplate(in: controller, returningTo: criteria)
       }
@@ -190,7 +190,7 @@ final class ProfileRepositoryTests: XCTestCase {
       delegate.pointOfInterestTemplate(results, didSelectPointOfInterest: point)
       try await phase(
         "carplay-result-actions", display: "external", file: "carplay-result-actions.png",
-        expected: ["Ladean", "Restaurant"])
+        expected: ["Ladean", "Zum Rest"])
       try await phase(
         "carplay-open-charging-places", display: "external",
         action: "click", label: "Ladeanbieter")

@@ -141,11 +141,14 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                     action = state.get("action")
                     if action == "click":
                         if phase == "waiting-for-carplay":
+                            profile_anchors = state["expected"]
+                            assert len(profile_anchors) == 2 and all(profile_anchors), \
+                                "Profile readiness requires its section header and fixture profile name."
                             ready = False
                             for attempt in range(15):
                                 screen = framebuffer(OUTPUT / f"diagnostic-app-icon-{attempt}.png", "external")
                                 words = normalized("\n".join(row["text"] for row in screen["text"]))
-                                if "fahrt wählen" in words:
+                                if all(normalized(anchor) in words for anchor in profile_anchors):
                                     ready = True
                                     break
                                 if "nextstop" in words:
@@ -158,9 +161,11 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                             # CarPlay is still finishing setRootTemplate. Wait
                             # for the actual profile list to be visibly stable
                             # before the test invokes its first row handler.
-                            await_native_text("Fahrt wählen", "Leipzig")
+                            # Its full navigation title is deliberately audited
+                            # separately: clipped titles must not block capture.
+                            await_native_text(*profile_anchors)
                             time.sleep(2)
-                            await_native_text("Fahrt wählen", "Leipzig")
+                            await_native_text(*profile_anchors)
                         else:
                             click_visible_text(state["label"], state.get("display", "external"))
                     elif action == "activate-app":
