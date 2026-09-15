@@ -1,0 +1,113 @@
+{
+  "appCommit": "5fe2fa2332d66d2499fc679617855d41cb0111be",
+  "appTree": "52989dd0997d8f97e982b76b7d6580a63b649847",
+  "harnessCommit": "790af35228e03a02c0c7e5675d24ae24bdf27ea5",
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34972885148",
+  "device": "iPhone 17 Pro with native external CarPlay display",
+  "carplayDisplay": {
+    "variant": "wide",
+    "width": 1920,
+    "height": 720,
+    "scale": 3
+  },
+  "locale": "de_DE",
+  "data": "Example Leipzig profile seeded through the unchanged app persistence model by an opt-in hosted test in a fresh simulator store",
+  "profileFixtureSHA256": "a0d38981a0d42db23aaea23dd4eec561785043d10499c018812a0a09d0a7589e",
+  "signing": "Xcode simulator ad-hoc signing with the app source entitlement file unchanged",
+  "entitlementsStorage": "Verified directly in the built executable __TEXT,__entitlements Mach-O section; the simulator ad-hoc code-signature entitlement dictionary is recorded separately and may be empty",
+  "appliedEntitlements": {
+    "application-identifier": "FAKETEAMID.de.nextstop.app",
+    "com.apple.developer.carplay-charging": true,
+    "com.apple.developer.devicecheck.appattest-environment": "development"
+  },
+  "buildHarnessCommit": "f8c9390a44b1ae17f3875cbfb125ff3c5034aaaa",
+  "buildRunURL": "https://github.com/nellesf/nextStop/actions/runs/34938078711",
+  "reusedBuildArchiveSHA256": "a585a0ab7558aa0a4a6dbe20cf6d900c66fd118c38ad76b0f900ffd71df28329",
+  "processing": "Original Simulator external-display PNG files, copied without pixel modifications",
+  "screenshots": [
+    {
+      "file": "carplay-profiles.png",
+      "width": 1920,
+      "height": 720,
+      "sha256": "e8556873dddec3ab377cc7886bcb4d3722fbb0d612f9de40a28c2957b2ccd00b",
+      "capturedAt": "2026-09-15T13:17:36.379859Z"
+    },
+    {
+      "file": "carplay-ride-summary.png",
+      "width": 1920,
+      "height": 720,
+      "sha256": "61947c9562636305fdaeadfa0fbf8d25234f59c0ceadfafbda96da6644720dbd",
+      "capturedAt": "2026-09-15T13:17:58.409791Z"
+    }
+  ],
+  "displayProof": {
+    "id": "wide",
+    "requested": {
+      "width": 1920,
+      "height": 720,
+      "scale": 3
+    },
+    "readback": {
+      "width": 1920,
+      "height": 720,
+      "scale": 3
+    },
+    "deviceID": "4DEFCEDF-9D36-4910-B83F-C2D63565D7A1",
+    "observationRunURL": "https://github.com/nellesf/nextStop/actions/runs/34953971279",
+    "controlObservation": {
+      "runURL": "https://github.com/nellesf/nextStop/actions/runs/34953971279",
+      "harnessCommit": "69d1f641ef7d33e1edb88b34d2ce2ab9e1ddf375",
+      "artifact": "configuration-discovery/observed-carplay-configuration.json",
+      "menuItem": "CarPlay…",
+      "window": "TV Out Extended Setup"
+    },
+    "fieldAssociation": "Nearest native field to the right of its observed label on the same row",
+    "inputMethod": "Triple-click Width and Height, type and Tab; select Scale from its observed native popup",
+    "configuredAt": "2026-09-15T13:14:10.283262Z",
+    "runURL": "https://github.com/nellesf/nextStop/actions/runs/34972885148",
+    "harnessCommit": "790af35228e03a02c0c7e5675d24ae24bdf27ea5",
+    "runAttempt": 1,
+    "runSubmitted": true,
+    "runtimeScale": 3,
+    "framebufferSize": [
+      1920,
+      720
+    ]
+  },
+  "profileTestSummary": {
+    "devicesAndConfigurations": [
+      {
+        "device": {
+          "architecture": "arm64",
+          "deviceId": "4DEFCEDF-9D36-4910-B83F-C2D63565D7A1",
+          "deviceName": "nextStop CarPlay Capture",
+          "modelName": "iPhone 17 Pro",
+          "osBuildNumber": "23F77",
+          "osVersion": "26.5",
+          "platform": "iOS Simulator"
+        },
+        "expectedFailures": 0,
+        "failedTests": 0,
+        "passedTests": 1,
+        "skippedTests": 0,
+        "testPlanConfiguration": {
+          "configurationId": "1",
+          "configurationName": "Test Scheme Action"
+        }
+      }
+    ],
+    "environmentDescription": "NextStopApp · Built with macOS 26.6.2",
+    "expectedFailures": 0,
+    "failedTests": 0,
+    "finishTime": 1789478206.033,
+    "passedTests": 1,
+    "result": "Passed",
+    "skippedTests": 0,
+    "startTime": 1789478114.115,
+    "statistics": [],
+    "testFailures": [],
+    "title": "Test - NextStopApp",
+    "topInsights": [],
+    "totalTestCount": 1
+  }
+}

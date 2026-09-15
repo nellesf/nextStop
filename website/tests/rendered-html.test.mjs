@@ -4,6 +4,7 @@ import { access, readFile } from "node:fs/promises";
 import test from "node:test";
 import { fileURLToPath } from "node:url";
 import { readResultScreenshots, readCarPlayResultScreenshots, resultCaptureSpecs } from "../scripts/import-result-screenshots.mjs";
+import { readCarPlayScreenshots } from "../scripts/import-carplay-screenshots.mjs";
 
 async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -56,7 +57,7 @@ test("server-renders the complete German nextStop landing page", async () => {
     assert.ok(!html.slice(find).includes(`src="/screenshots/${file}"`));
   }
   for (const file of ["carplay-profiles.png", "carplay-ride-summary.png"]) {
-    assert.ok(html.slice(drive, find).includes(`src="/screenshots/${file}"`));
+    assert.ok(html.slice(drive, find).includes(`src="/screenshots/carplay-wide/${file}"`));
   }
   for (const { file, display } of resultCaptureSpecs) {
     const path = display === "external" ? `carplay-wide/${file}` : file;
@@ -64,7 +65,7 @@ test("server-renders the complete German nextStop landing page", async () => {
   }
   for (const filename of [
     "iphone-profiles.png", "iphone-profile-editor.png",
-    "carplay-profiles.png", "carplay-ride-summary.png",
+    "carplay-wide/carplay-profiles.png", "carplay-wide/carplay-ride-summary.png",
   ]) {
     assert.ok(html.includes(`src="/screenshots/${filename}"`));
     assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${filename}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
@@ -93,6 +94,15 @@ test("uses unchanged original CarPlay captures of the same main app as the iPhon
     assert.equal(createHash("sha256").update(bytes).digest("hex"), capture.sha256);
     assert.equal(bytes.readUInt32BE(16), capture.width);
     assert.equal(bytes.readUInt32BE(20), capture.height);
+  }
+  const wide = await readCarPlayScreenshots(fileURLToPath(new URL("carplay-wide/", directory)), iphone.appCommit);
+  assert.deepEqual(wide.source.carplayDisplay, { variant: "wide", width: 1920, height: 720, scale: 3 });
+  const html = await (await render()).text();
+  const carplayImages = [...html.matchAll(/<img[^>]+src="\/screenshots\/carplay-wide\/carplay-[^"]+"[^>]*>/g)];
+  assert.equal(carplayImages.length, 5);
+  for (const [image] of carplayImages) {
+    assert.match(image, /width="1920"/);
+    assert.match(image, /height="720"/);
   }
 });
 

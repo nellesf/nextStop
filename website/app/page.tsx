@@ -178,8 +178,8 @@ export default function Home() {
             </div>
             <p className="step-lead">Wenn du unterwegs einen Stopp suchst, wählst du dein vorbereitetes Profil in CarPlay aus. Dein Ziel und deine Wünsche sind schon da.</p>
             <div className="carplay-pair">
-              <CarPlayScreenshot src="/screenshots/carplay-profiles.png" alt="nextStop in CarPlay: die vorbereitete Fahrt auswählen" caption="Deine Fahrt auswählen" />
-              <CarPlayScreenshot src="/screenshots/carplay-ride-summary.png" alt="nextStop in CarPlay: gespeicherte Wünsche prüfen und die Suche starten" caption="Bereit für die Suche" />
+              <CarPlayScreenshot src="/screenshots/carplay-wide/carplay-profiles.png" width={1920} height={720} alt="nextStop in CarPlay: die vorbereitete Fahrt auswählen" caption="Deine Fahrt auswählen" />
+              <CarPlayScreenshot src="/screenshots/carplay-wide/carplay-ride-summary.png" width={1920} height={720} alt="nextStop in CarPlay: gespeicherte Wünsche prüfen und die Suche starten" caption="Bereit für die Suche" />
             </div>
           </li>
 

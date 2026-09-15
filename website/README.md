@@ -89,6 +89,11 @@ The page follows one ordered journey, with images at their corresponding step:
    followed by destination actions and provider selection. The two Apple Maps
    place cards are available in an expandable disclosure after that selection.
 
+All five CarPlay views use native **1920 × 720 at @3x** in
+`public/screenshots/carplay-wide/`. The three result/selection images and the
+profile-list/ride-summary pair are imported and visually reviewed. The earlier
+originals and their separate provenance remain available for reuse.
+
 The hero uses one shared charging-and-food stop, rather than separate route
 markers. Keep the product copy conversational: restaurant nearby, actual distance
 to the stop, and the user's preferences. Routing implementation names and spatial
@@ -237,21 +242,51 @@ starts a charging search or navigation. Simulator entitlements are verified in
 the compiled executable; app code and the entitlement source file are unchanged.
 
 ```bash
-gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website -f capture_mode=profiles
+gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website \
+  -f capture_mode=profiles -f display_variant=wide
 ```
 
-Download the successful run's `carplay-captures` artifact, visually inspect both
-PNGs, and import them from the repository root:
+Download the successful run's exact `carplay-captures` artifact, selecting its
+artifact ID as described in the capture guide. Require both
+`carplay-profiles.png` and `carplay-ride-summary.png`, plus a hosted profile-test
+summary with **1 passed, 0 failed, 0 skipped**. Visually inspect both native wide
+PNGs, then import them from the repository root with the output directory as
+the third argument:
 
 ```bash
-gh run download <run-id> -n carplay-captures -D /tmp/nextstop-carplay-captures
-node website/scripts/import-carplay-screenshots.mjs /tmp/nextstop-carplay-captures <full-main-commit-sha>
+node website/scripts/import-carplay-screenshots.mjs \
+  /tmp/nextstop-wide-profile-review 5fe2fa2332d66d2499fc679617855d41cb0111be \
+  website/public/screenshots/carplay-wide
 ```
 
-`carplay-provenance.json` records source revisions, run URL, embedded entitlements,
-capture times, dimensions and SHA-256 hashes. The importer verifies the full set
-before copying any assets. Tests verify the original bytes and ensure both
-iPhone and CarPlay captures use the same app source revision.
+The importer accepts an artifact directory, full app SHA, and optional output
+directory. It supports the default and wide formats; this website import must
+use the explicit `carplay-wide/` destination. There, `carplay-provenance.json`
+records source revisions, run URL, embedded entitlements, `profileTestSummary`,
+`displayProof`, capture times, native dimensions, and SHA-256 hashes. Wide images
+must prove 1920 × 720 at @3x. The importer verifies the complete pair and passing
+test before copying assets; the partial result-run exception does not apply.
+Tests verify original bytes and a shared app source revision across iPhone and
+CarPlay captures.
+
+The current wide profile pair comes from successful
+[run 34972885148](https://github.com/nellesf/nextStop/actions/runs/34972885148),
+attempt 1, capture harness `790af35228e03a02c0c7e5675d24ae24bdf27ea5`.
+Artifact `10397564497` was created at `2026-09-15T13:18:06Z`; the unchanged app
+used the compatible build from run `34938078711` and its recorded archive hash.
+The hosted test passed with 1 passed, 0 failed, and 0 skipped. Both imported
+1920 × 720 @3x PNGs were visually reviewed: full titles and subtitles fit, no
+overlays obscure the views, and native 9:41, battery, and Wi-Fi indicators are
+visible. Their original SHA-256 hashes are retained in the profile manifest and
+capture guide.
+
+The page references both wide profile PNGs with their real intrinsic dimensions.
+Together with the three reviewed result images, all five displayed CarPlay views
+are in `carplay-wide/`.
+Keep `carplay-provenance.json` separate from `carplay-result-provenance.json`,
+because they document different runs and test outcomes. Preserve all eleven
+earlier originals, the three wide result PNGs, and their manifests and evidence
+when adding the pair.
 
 For capture-only retries, manually dispatch the workflow with `reuse_run_id` and
 the verified SHA-256 of that run's `CarPlayBuild.tar.gz` as `reuse_sha256`. The

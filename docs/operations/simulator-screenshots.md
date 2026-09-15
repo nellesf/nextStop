@@ -28,8 +28,9 @@ gh run list --repo nellesf/nextStop --workflow carplay-screenshots.yml \
 ```
 
 Use `capture_mode=profiles` for the two CarPlay profile/preparation images.
-Their existing importer expects `display_variant=default` (800 × 480).
-For the website's wide result images, add **`-f display_variant=wide`**. This
+The website format is **wide for all five CarPlay views**: profile selection,
+ride summary, results, destination actions, and charging-provider selection.
+For either capture mode, add **`-f display_variant=wide`**. This
 configures a native **1920 × 720, @3x** CarPlay display; `default` retains
 800 × 480, @2x. The width, height, and scale are set through Simulator's native
 configuration dialog after enabling Apple's documented `CarPlayExtraOptions`.
@@ -88,6 +89,19 @@ attempt as successful.
 | [34936686885](https://github.com/nellesf/nextStop/actions/runs/34936686885) | Five genuine images reached, including the iPhone restaurant card. Apple Maps remained blank on CarPlay despite a successful handoff callback. This attempt failed; no complete manifest was imported. |
 | [34938078711](https://github.com/nellesf/nextStop/actions/runs/34938078711) | **Successful six-screen result capture**, attempt 1, harness/build `f8c9390a44b1ae17f3875cbfb125ff3c5034aaaa`. Hosted test: 1 passed, 0 failed, 0 skipped. All six original PNGs visually reviewed and imported. |
 | [34969883976](https://github.com/nellesf/nextStop/actions/runs/34969883976) | **Three completed wide CarPlay result captures**, native 1920 × 720 at @3x, capture harness `b49400d2a15edc89adcfefb015bcac7ce7101b74`, artifact `10397352942`. All three native titles and subtitles fit on visual review. The overall run **failed later** at the iPhone Apple Maps advertising introduction after 90 seconds; XCTest was aborted and no passing result-test summary exists. Only the completed CarPlay images are retained as a scoped refresh, not a complete six-screen success. |
+| [34972885148](https://github.com/nellesf/nextStop/actions/runs/34972885148) | **Successful wide profile/preparation capture**, attempt 1, capture harness `790af35228e03a02c0c7e5675d24ae24bdf27ea5`, artifact `10397564497`. Both original PNGs are native 1920 × 720 at @3x; hosted test: 1 passed, 0 failed, 0 skipped. Both were visually reviewed and imported. Full titles and subtitles fit, no overlays cover the views, and native 9:41, battery, and Wi-Fi indicators are visible. |
+
+The wide profile artifact `10397564497` was created at
+`2026-09-15T13:18:06Z`. It used the unchanged pinned app source and reused the
+compatible build from run `34938078711` with the archive hash recorded below.
+The pair is retained in `website/public/screenshots/carplay-wide/`; its
+`carplay-provenance.json` contains the checked `profileTestSummary` and
+`displayProof`.
+
+| Wide profile original | SHA-256 |
+| --- | --- |
+| `carplay-profiles.png` | `e8556873dddec3ab377cc7886bcb4d3722fbb0d612f9de40a28c2957b2ccd00b` |
+| `carplay-ride-summary.png` | `61947c9562636305fdaeadfa0fbf8d25234f59c0ceadfafbda96da6644720dbd` |
 
 The successful result build can be reused while its artifact is retained:
 
@@ -156,6 +170,7 @@ in the review and retain the original pixels. Do not redesign the app for captur
 | Files | Owner | Native dimensions |
 | --- | --- | --- |
 | `carplay-profiles.png`, `carplay-ride-summary.png` | nextStop | 800 × 480 |
+| `carplay-wide/carplay-profiles.png`, `carplay-wide/carplay-ride-summary.png` | nextStop | 1920 × 720, @3x |
 | `carplay-results.png`, `carplay-result-actions.png`, `carplay-charging-places.png` | nextStop | 800 × 480 |
 | `carplay-wide/carplay-results.png`, `carplay-wide/carplay-result-actions.png`, `carplay-wide/carplay-charging-places.png` | nextStop | 1920 × 720, @3x |
 | `iphone-results.png` | nextStop | 1206 × 2622 |
@@ -257,10 +272,54 @@ iPhone images. All eleven earlier PNG originals and their provenance remain in
 place. The failure concerns the later iPhone phase, not the completion or visual
 review of the three imported CarPlay views.
 
+### Wide profile and ride-summary capture
+
+Capture the other two website CarPlay views with the same native wide display:
+
+```bash
+gh workflow run carplay-screenshots.yml --repo nellesf/nextStop \
+  --ref codex/app-explainer-website \
+  -f capture_mode=profiles -f display_variant=wide
+```
+
+Resolve the run's exact non-expired `carplay-captures` artifact as described
+above and extract it into a fresh directory. This mode must finish its complete
+two-image sequence: `carplay-profiles.png` and `carplay-ride-summary.png`.
+The hosted profile test must report **1 passed, 0 failed, 0 skipped**. Inspect
+both original PNGs at native resolution before importing; the scoped partial-run
+exception for the three result views does not apply to this profile capture.
+
+From the website worktree root, pass the wide output directory explicitly:
+
+```bash
+node website/scripts/import-carplay-screenshots.mjs \
+  /tmp/nextstop-wide-profile-review 5fe2fa2332d66d2499fc679617855d41cb0111be \
+  website/public/screenshots/carplay-wide
+```
+
+The CLI accepts the artifact directory, full app SHA, and optional output
+directory. It reads `capture-source.json` and preserves the checked pair in
+`carplay-wide/` with its own `carplay-provenance.json`. That manifest records
+`profileTestSummary` and `displayProof` alongside source revisions, native image
+dimensions, capture timestamps, and hashes. Wide captures must prove native
+1920 × 720 at @3x; the importer also supports the historical default format.
+Never resize a default image or substitute a partial test result.
+
+Both wide profile images are imported and visually reviewed. All five website
+CarPlay images now use `public/screenshots/carplay-wide/`. The profile manifest remains
+separate from `carplay-result-provenance.json`: these are different capture
+runs with different test outcomes. The pair was added without replacing any of
+the eleven earlier originals, the three reviewed wide result PNGs, or their evidence.
+Use the real 1920 × 720 intrinsic dimensions and original-PNG links on the page.
+
+Website verification after import passed all 20 website tests and lint.
+Headless browser review at widths 1440, 768, 390, and 320 pixels confirmed all
+five CarPlay images load with the correct aspect ratio, no horizontal overflow,
+and no image-loading or JavaScript errors.
+
 ### Other capture modes and website validation
 
-For profile mode use `import-carplay-screenshots.mjs` with the capture directory
-and full app SHA; it reads `capture-source.json`. The separate iPhone profile workflow is
+The separate iPhone profile workflow is
 `ios-app.yml`, `test_scope=screenshots`, with a full `app_ref`; its artifact is
 `ios-ui-attachments` and importer is `website/scripts/import-screenshots.mjs`.
 See the website branch's
