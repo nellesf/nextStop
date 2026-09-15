@@ -332,12 +332,6 @@ final class ProfileRepositoryTests: XCTestCase {
       try await phase(
         "iphone-restaurant-place", display: "internal", file: "iphone-restaurant-place.png",
         expected: [restaurantPlace.name ?? restaurant.name], ownerApp: "Apple Maps")
-      let carPlayRestaurantOpened = await CarPlayAppleMapsLauncher(scene: scene).openPlace(
-        restaurantPlace)
-      try require(carPlayRestaurantOpened, "CarPlay Apple Maps restaurant launch failed.")
-      try await phase(
-        "carplay-restaurant-place", display: "external", file: "carplay-restaurant-place.png",
-        expected: [restaurantPlace.name ?? restaurant.name], ownerApp: "Apple Maps")
 
       try await phase("return-to-iphone", display: "internal", action: "activate-app")
       let chargingOperator = try XCTUnwrap(selected.operatorChargingPoints.first)
@@ -359,13 +353,7 @@ final class ProfileRepositoryTests: XCTestCase {
       try await phase(
         "iphone-charging-place", display: "internal", file: "iphone-charging-place.png",
         expected: [chargingPlace.name ?? chargingOperator.name], ownerApp: "Apple Maps")
-      let carPlayChargingOpened = await CarPlayAppleMapsLauncher(scene: scene).openPlace(
-        chargingPlace)
-      try require(carPlayChargingOpened, "CarPlay Apple Maps charging-place launch failed.")
-      try await phase(
-        "carplay-charging-place", display: "external", file: "carplay-charging-place.png",
-        expected: [chargingPlace.name ?? chargingOperator.name], ownerApp: "Apple Maps")
-      try writeState(["phase": "complete", "screenshots": 8])
+      try writeState(["phase": "complete", "screenshots": 6])
       withExtendedLifetime(container) {}
     }
 
@@ -597,6 +585,20 @@ final class ProfileRepositoryTests: XCTestCase {
         "fetchedAt": ISO8601DateFormatter().string(from: fetchedAt),
         "queries": queries, "candidatePages": pages, "renderedResults": renderedResults,
         "resolvedApplePlaces": resolvedPlaces,
+        "captureLimitations": [
+          [
+            "scope": "Apple Maps place views on CarPlay",
+            "environment": "GitHub macOS runner with iOS 26.5 Simulator",
+            "observedRunURL": "https://github.com/nellesf/nextStop/actions/runs/34936686885",
+            "observation":
+              "The restaurant handoff returned success, but the CarPlay content remained blank "
+              + "while the iPhone displayed the resolved place correctly.",
+            "captureDecision":
+              "Capture the three nextStop CarPlay views and three iPhone views; omit both "
+              + "Apple Maps CarPlay place views. This observation does not establish a general "
+              + "Simulator support limitation.",
+          ]
+        ],
       ]
       try JSONSerialization.data(withJSONObject: value, options: [.prettyPrinted, .sortedKeys])
         .write(

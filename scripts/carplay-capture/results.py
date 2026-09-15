@@ -148,7 +148,7 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                     print("Waiting for Xcode to finish installing the hosted test app.", flush=True)
             if state_path.exists():
                 if not permissions_reapplied:
-                    execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"])
+                    execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"], timeout=180)
                     permissions_reapplied = True
                 state = json.loads(state_path.read_text())
                 phase = state["phase"]
@@ -218,10 +218,9 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
         assert process.wait(timeout=30) == 0, "Hosted capture test must pass. Inspect profile-setup.log."
         required_files = {
             "carplay-results.png", "carplay-result-actions.png", "carplay-charging-places.png",
-            "carplay-restaurant-place.png", "carplay-charging-place.png",
             "iphone-results.png", "iphone-restaurant-place.png", "iphone-charging-place.png",
         }
-        assert len(captures) == 8 and {item['file'] for item in captures} == required_files, captures
+        assert len(captures) == 6 and {item['file'] for item in captures} == required_files, captures
         source = json.loads((OUTPUT / "capture-source-base.json").read_text())
         fixture_path = documents / "website-capture-fixture.json"
         assert fixture_path.exists(), "The real MapKit place lookup and example data must have provenance."
@@ -230,6 +229,7 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
         source.update({
             "data": "Example EVSE counts and power supplied through the unchanged app dependency interfaces; real MapKit places, route calculation, driving distances, filtering, presentation, place resolution and Apple Maps",
             "fixture": fixture,
+            "limitations": fixture["captureLimitations"],
             "processing": "Original simctl internal and external display PNG files, without pixel modifications",
             "screenshots": captures,
         })
