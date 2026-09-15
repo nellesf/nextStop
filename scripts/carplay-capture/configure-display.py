@@ -150,16 +150,34 @@ end tell
     (OUTPUT / "display-configuration-controls.json").write_text(json.dumps(initial, indent=2) + "\n")
     fields = validate_dialog(initial)
     run("set-observed-configuration-fields", ["osascript", "-e", '''
+on enterAndCommit(theControl, requestedText)
+    tell application "System Events"
+        set value of attribute "AXFocused" of theControl to true
+        delay 0.1
+        if (value of attribute "AXFocused" of theControl) is not true then
+            error "The observed configuration field did not receive keyboard focus"
+        end if
+        keystroke "a" using command down
+        keystroke requestedText
+        key code 48
+        delay 0.2
+        if (value of attribute "AXFocused" of theControl) is true then
+            error "The configuration edit did not lose focus after Tab"
+        end if
+    end tell
+end enterAndCommit
+
 on run arguments
     tell application "System Events" to tell process "Simulator"
+        set frontmost to true
         set setupWindow to window "TV Out Extended Setup"
         if (count text fields of setupWindow) is not 2 then error "Text field count changed"
         if (count combo boxes of setupWindow) is not 1 then error "Combo box count changed"
-        set value of text field (item 1 of arguments as integer) of setupWindow to item 2 of arguments
-        set value of text field (item 3 of arguments as integer) of setupWindow to item 4 of arguments
-        set value of combo box (item 5 of arguments as integer) of setupWindow to item 6 of arguments
+        my enterAndCommit(text field (item 1 of arguments as integer) of setupWindow, item 2 of arguments)
+        my enterAndCommit(text field (item 3 of arguments as integer) of setupWindow, item 4 of arguments)
+        my enterAndCommit(combo box (item 5 of arguments as integer) of setupWindow, item 6 of arguments)
     end tell
-    return "Requested dimensions entered"
+    return "Requested dimensions entered with keyboard input and committed by focus loss"
 end run
 ''', str(fields["width"]["index"]), str(requested["width"]),
         str(fields["height"]["index"]), str(requested["height"]),
@@ -177,6 +195,7 @@ end run
         "observationRunURL": OBSERVATION["runURL"],
         "controlObservation": OBSERVATION,
         "fieldAssociation": "Nearest native field to the right of its observed label on the same row",
+        "inputMethod": "Focus each observed field, Command+A, type its numeric value, then Tab and verify focus loss",
         "configuredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "runURL": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
         "harnessCommit": os.environ["GITHUB_SHA"], "runSubmitted": False,
