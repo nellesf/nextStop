@@ -113,6 +113,11 @@ running the still-supported iOS 18–25 versions.
 
 ### iPhone UI tests and screenshots
 
+For native CarPlay captures, display-resolution audits, or website screenshots,
+start with the [simulator operations guide](operations/simulator-screenshots.md).
+It identifies the existing runner harnesses, safe build reuse, verified display
+input methods, known startup failures, and original-artifact import checks.
+
 Run only the UI bundle from the repository root:
 
 ```bash
