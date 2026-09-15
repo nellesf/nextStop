@@ -129,10 +129,16 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
             # replace its data-container UUID. Do not keep the pre-test URL.
             if not seen and time.monotonic() >= next_container_check:
                 next_container_check = time.monotonic() + 3
-                lookup = subprocess.run(
-                    ["xcrun", "simctl", "get_app_container", DEVICE, "de.nextstop.app", "data"],
-                    text=True, capture_output=True, timeout=30)
-                if lookup.returncode == 0 and lookup.stdout.strip():
+                try:
+                    lookup = subprocess.run(
+                        ["xcrun", "simctl", "get_app_container", DEVICE, "de.nextstop.app", "data"],
+                        text=True, capture_output=True, timeout=30)
+                except subprocess.TimeoutExpired:
+                    # CoreSimulator can be unresponsive while XCTest installs
+                    # the host. Keep polling within the overall deadline.
+                    lookup = None
+                    print("Waiting for XCTest data container; lookup timed out.", flush=True)
+                if lookup is not None and lookup.returncode == 0 and lookup.stdout.strip():
                     live_container = Path(lookup.stdout.strip())
                     if live_container != container:
                         print(f"XCTest app container changed: {container} -> {live_container}", flush=True)
