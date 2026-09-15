@@ -110,3 +110,15 @@ The configurator now focuses each observed control, selects its text, types the
 requested numeric value, and commits the edit with Tab before reading it back.
 Native PNG dimensions remain the acceptance criterion. The rejected run was
 stopped and supplies no completed resolution evidence.
+
+## Fresh simulator startup
+
+In [run 34957774780](https://github.com/nellesf/nextStop/actions/runs/34957774780),
+the 1280 × 720 @2x display was configured at 10:28:00 UTC, but CarPlay started
+at 10:29:47 and created its launcher at 10:29:53. The previous 90-second
+readability limit triggered a reconnect at 10:29:54, interrupting that startup.
+Preflight now polls native frames for up to 240 seconds initially and 180 seconds
+after its single reconnect, recording `timeoutSeconds` in readiness metadata.
+Individual screenshot and OCR calls remain bounded; exact framebuffer dimensions
+and runtime scale remain required. The longer startup allowance is a response
+to observed timing, not evidence that the affected configuration passed.

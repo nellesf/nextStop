@@ -192,9 +192,9 @@ end tell
 '''], required=False)
 # A booted fresh simulator may still be loading SpringBoard and CarPlay. Poll
 # actual native frames, with one shared deadline for capture, OCR and delays.
-def wait_for_readable_carplay(phase):
+def wait_for_readable_carplay(phase, *, timeout_seconds):
     started = time.monotonic()
-    deadline = started + 90
+    deadline = started + timeout_seconds
     attempts = 0
     ready = False
     while time.monotonic() < deadline:
@@ -222,13 +222,14 @@ def wait_for_readable_carplay(phase):
             time.sleep(min(3, remaining))
     result = {
         "phase": phase, "ready": ready, "attempts": attempts,
+        "timeoutSeconds": timeout_seconds,
         "waitSeconds": round(time.monotonic() - started, 1),
     }
     (OUTPUT / f"readiness-{phase}.json").write_text(json.dumps(result, indent=2) + "\n")
     return result
 
 
-readiness = [wait_for_readable_carplay("initial")]
+readiness = [wait_for_readable_carplay("initial", timeout_seconds=240)]
 if not readiness[-1]["ready"]:
     run("host-screen-before-reconnect", [
         "screencapture", "-x", str(OUTPUT / "diagnostic-host-before-reconnect.png"),
@@ -254,12 +255,15 @@ end timeout
     run("host-screen-after-reconnect", [
         "screencapture", "-x", str(OUTPUT / "diagnostic-host-after-reconnect.png"),
     ], required=False)
-    readiness.append(wait_for_readable_carplay("reconnected"))
+    readiness.append(wait_for_readable_carplay("reconnected", timeout_seconds=180))
 if not readiness[-1]["ready"]:
     run("host-screen-unreadable-carplay", [
         "screencapture", "-x", str(OUTPUT / "diagnostic-host-unreadable-carplay.png"),
     ], required=False)
-    raise RuntimeError("CarPlay remained unreadable after two 90-second waits and one native display reconnect.")
+    raise RuntimeError(
+        "CarPlay remained unreadable after a 240-second initial wait and a "
+        "180-second wait following one native display reconnect."
+    )
 
 configuration = None
 if os.environ.get("CARPLAY_CONFIGURATION"):
