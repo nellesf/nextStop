@@ -1,0 +1,21 @@
+{
+  "appCommit": "200e13d9bb151c88e9786cf96c5690f2ee733d19",
+  "appTree": "52989dd0997d8f97e982b76b7d6580a63b649847",
+  "harnessCommit": "200e13d9bb151c88e9786cf96c5690f2ee733d19",
+  "runAttempt": 1,
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34962890365",
+  "device": "iPhone 17 Pro with native external CarPlay display",
+  "locale": "de_DE",
+  "data": "Example Leipzig profile seeded through the unchanged app persistence model by an opt-in hosted test in a fresh simulator store",
+  "profileFixtureSHA256": "693c04186c144b8aea8f4d02874c6c5694dfc3431142748ac6a82851f737f468",
+  "signing": "Xcode simulator ad-hoc signing with the app source entitlement file unchanged",
+  "entitlementsStorage": "Verified directly in the built executable __TEXT,__entitlements Mach-O section; the simulator ad-hoc code-signature entitlement dictionary is recorded separately and may be empty",
+  "appliedEntitlements": {
+    "application-identifier": "FAKETEAMID.de.nextstop.app",
+    "com.apple.developer.carplay-charging": true,
+    "com.apple.developer.devicecheck.appattest-environment": "development"
+  },
+  "buildHarnessCommit": "200e13d9bb151c88e9786cf96c5690f2ee733d19",
+  "buildRunURL": "https://github.com/nellesf/nextStop/actions/runs/34962890365",
+  "archiveSHA256": "8d7527500fbcb67430f6b164664a2ffc5d5a2c57a496f588ac9eb3aab23fd41c"
+}

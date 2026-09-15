@@ -8,8 +8,10 @@ localized strings are unchanged because the affected Apple-owned text fields
 provide no supported font-size or shrink-to-fit control.
 
 See the [visual review and coverage limits](visual-review.md) and the
-[original capture gallery](captures/README.md). Capture-test success is distinct
-from passing the visual requirement.
+[original capture gallery](captures/README.md), with the final
+[portrait supplement](supplemental/README.md). Eight selected display configurations
+were captured and visually reviewed, ten views each. Capture-test success is
+distinct from passing the visual requirement.
 
 ## Scope
 
@@ -118,10 +120,12 @@ and checks framebuffer dimensions before building the app.
 Run `34955002133` correctly rejected dimensions that only appeared updated in
 the accessibility values. For example, the controls reported 748 × 456 and
 1280 × 720, while the native framebuffers were 748 × 480 and 1280 × 480.
-The configurator now focuses each observed control, selects its text, types the
-requested numeric value, and commits the edit with Tab before reading it back.
-Native PNG dimensions remain the acceptance criterion. The rejected run was
-stopped and supplies no completed resolution evidence.
+The configurator now triple-clicks the observed Width and Height controls, types
+each requested numeric value, and commits the edit with Tab. It selects Scale
+from the native popup rather than typing into that control. See the
+[proven input procedure](../../operations/simulator-screenshots.md#native-display-acceptance-and-bounded-startup).
+Native PNG dimensions and runtime scale remain the acceptance criteria. The
+rejected run was stopped and supplies no completed resolution evidence.
 
 ## Fresh simulator startup
 

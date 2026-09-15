@@ -1,0 +1,82 @@
+{
+  "schemaVersion": 1,
+  "matrixComplete": false,
+  "verifiedConfigurationCount": 1,
+  "expectedConfigurationCount": 8,
+  "source": {
+    "runURL": "https://github.com/nellesf/nextStop/actions/runs/34964912072",
+    "harnessCommit": "3141c8f0d271caa18b1770de9bee97a7ee238447",
+    "appCommit": "200e13d9bb151c88e9786cf96c5690f2ee733d19"
+  },
+  "reviewNotice": "Capture integrity and hosted-test success do not establish unclipped text. OCR may reconstruct clipped words or miss offscreen content. Every original PNG requires visual review; these are reference-flow captures.",
+  "configurations": [
+    {
+      "id": "minimum",
+      "width": 748,
+      "height": 456,
+      "scale": 2,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "standard",
+      "width": 800,
+      "height": 480,
+      "scale": 2,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "wide-960",
+      "width": 960,
+      "height": 540,
+      "scale": 2,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "wide-1280-2x",
+      "width": 1280,
+      "height": 720,
+      "scale": 2,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "wide-1280-3x",
+      "width": 1280,
+      "height": 720,
+      "scale": 3,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "high-resolution",
+      "width": 1920,
+      "height": 720,
+      "scale": 3,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "portrait-2x",
+      "width": 768,
+      "height": 1024,
+      "scale": 2,
+      "status": "absent",
+      "issues": []
+    },
+    {
+      "id": "portrait-3x",
+      "width": 900,
+      "height": 1200,
+      "scale": 3,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "portrait-3x/layout-capture-source.json",
+      "ocrStringsNotRecognized": 12,
+      "visualReview": "required"
+    }
+  ],
+  "unassignedArtifactIssues": []
+}

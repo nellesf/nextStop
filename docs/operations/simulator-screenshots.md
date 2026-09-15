@@ -55,7 +55,10 @@ before using it. A Swift fixture change requires a fresh build. The website's
 The targeted verification below uses the build from `34962890365`, whose app and
 Swift fixture are unchanged. Its capture failed, so the archive is a verified
 build input, not completed screenshot evidence. Reuse verification run
-[34964912072](https://github.com/nellesf/nextStop/actions/runs/34964912072) is pending.
+[34964912072](https://github.com/nellesf/nextStop/actions/runs/34964912072) passed
+and produced all ten native captures. Its manifest preserves the original build
+run and archive digest separately from the capture harness. This verifies that
+the fresh build was skipped; it is not a controlled wall-clock speed comparison.
 
 ```bash
 gh workflow run carplay-layout.yml --repo nellesf/nextStop \
@@ -137,10 +140,15 @@ harness `200e13d9bb151c88e9786cf96c5690f2ee733d19`, verified its display and bui
 successfully, but the native app-icon click left CarPlay on its home screen.
 It has no completed capture manifest. [Selected original diagnostics](../testing/carplay-layout/failed-portrait-3x/README.md)
 preserve both failures after artifact expiry.
-The activation correction is being checked separately in `34964912072` using
-the verified existing build; this pending run does not yet add a completed case.
-The [capture index](../testing/carplay-layout/captures/index.json) records admitted
-evidence; neither pending nor failed configurations count as completed.
+The final [run 34964912072](https://github.com/nellesf/nextStop/actions/runs/34964912072)
+passed using harness `3141c8f0d271caa18b1770de9bee97a7ee238447` and the verified
+build from app commit `200e13d9bb151c88e9786cf96c5690f2ee733d19`.
+The [original capture index](../testing/carplay-layout/captures/index.json) retains
+seven configurations; the [supplemental index](../testing/carplay-layout/supplemental/index.json)
+retains the final portrait case with its separate provenance. Together they contain
+**eight configurations and 80 visually reviewed native images**. Failed attempts
+do not count as completed. Production iOS source is unchanged, and the
+[visual text defects remain](../testing/carplay-layout/visual-review.md).
 
 Artifacts are named `carplay-layout-<configuration>`. Download each newest
 non-expired artifact ID as described below into its own directory under one
@@ -180,6 +188,14 @@ two fresh home observations plus another check immediately before mouse input.
 Any partial/full profile observation disables further icon clicks. Unknown or
 transition frames never justify a click. `root-activation.json` records each
 observation/decision; its PNGs retain what the helper actually saw.
+
+In the successful final portrait run, the helper sent one icon click after
+27.9 seconds, then observed the profile at 62.6 seconds and confirmed it at
+66.9 seconds. The guarded second-click fallback was not exercised in that run;
+its decision and deadline paths were checked offline. The
+[original activation log](../testing/carplay-layout/supplemental/verification/root-activation.json)
+preserves the observed sequence. Do not attribute that success to a retry that
+did not occur.
 
 ## Website capture and verified build reuse
 
@@ -361,7 +377,7 @@ Download that evidence instead of repeatedly polling unavailable run logs.
 | Swift waits for the first ACK but Python sees no phase | XCTest can reinstall the app into a new data-container UUID. `results.py` / `layout.py` re-resolve the container every 3 seconds until a state appears and bind state, command, and fixture paths to that same live container. Tolerate a bounded lookup timeout during installation and reapply the simulator location grant afterward. This path completed in [34938078711](https://github.com/nellesf/nextStop/actions/runs/34938078711). |
 | Profile handler completes but no ride summary appears | The root template's transition gate can still be active. Wait for two stable rendered root frames before ACK, then await the actual public push/pop completion. Handler completion also fires when an action is rejected early; `topTemplate` alone can precede the completed animation. Do not pre-click Leipzig and invoke its handler a second time. |
 | Portrait root stays visible while capture waits for its full title | The 900 × 1200 @3x job in [34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544) rendered an ellipsized `Fahrt wählen`. The corrected harness uses `Profile` + `Leipzig` readiness anchors, preserving the full title in `expectedTexts`. The follow-up stopped earlier at app activation; do not classify the original failed capture as a missing app screen. |
-| The native app-icon click is dispatched but home remains visible | [34962890365](https://github.com/nellesf/nextStop/actions/runs/34962890365) shows the pointer on nextStop, then twelve unchanged home frames. Click dispatch is not readiness. The bounded correction waits for two profile frames and permits one additional click only after delayed, fresh, unambiguous home observations; it does not retap during a transition. Preserve the failed attempt and verify the correction in a new run. |
+| The native app-icon click is dispatched but home remains visible | [34962890365](https://github.com/nellesf/nextStop/actions/runs/34962890365) shows the pointer on nextStop, then twelve unchanged home frames. Click dispatch is not readiness. The bounded correction waits for two profile frames and permits one additional click only after delayed, fresh, unambiguous home observations; it does not retap during a transition. [34964912072](https://github.com/nellesf/nextStop/actions/runs/34964912072) passed with one click and two profile frames; the retry fallback was not needed. |
 | A result is highlighted but no destination buttons appear | `selectedIndex = 0` and the delegate callback only establish focus. The harness clicks the first observed `… km Fahrstrecke` row through the real Simulator UI. |
 | Clicking an app or row has no effect | Use the observed window and OCR coordinates. The proven mouse helper moves the pointer, verifies its position, and sends down/up with click state 1. Tap the nextStop icon above its caption. System Events `click at` and caption-only taps failed. |
 | Blank/delayed external display | Use the explicit Simulator from the selected Xcode, fresh device, and existing bounded preflight/reconnect logic. `caffeinate -diu` keeps the disposable runner session awake. Do not infer readiness from successful menu opening alone. |

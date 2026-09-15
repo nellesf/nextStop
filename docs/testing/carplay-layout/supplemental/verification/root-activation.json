@@ -1,0 +1,62 @@
+{
+  "anchors": [
+    "Profile",
+    "Leipzig"
+  ],
+  "timeoutSeconds": 120,
+  "retryDelaySeconds": 30,
+  "maxClicks": 2,
+  "state": {
+    "clicks": 1,
+    "last_click_at": 1125.568866791,
+    "first_profile_at": 1160.320520416,
+    "profile_frames": 2,
+    "home_frames": 0,
+    "profile_seen": true
+  },
+  "observations": [
+    {
+      "attempt": 1,
+      "kind": "home",
+      "decision": "wait",
+      "elapsedSeconds": 19.4
+    },
+    {
+      "attempt": 2,
+      "kind": "home",
+      "decision": "click",
+      "elapsedSeconds": 27.9,
+      "clickGuardKind": "home"
+    },
+    {
+      "attempt": 3,
+      "kind": "home",
+      "decision": "wait",
+      "elapsedSeconds": 44.2
+    },
+    {
+      "attempt": 4,
+      "kind": "home",
+      "decision": "wait",
+      "elapsedSeconds": 48.7
+    },
+    {
+      "attempt": 5,
+      "kind": "home",
+      "decision": "wait",
+      "elapsedSeconds": 52.6
+    },
+    {
+      "attempt": 6,
+      "kind": "profile",
+      "decision": "wait",
+      "elapsedSeconds": 62.6
+    },
+    {
+      "attempt": 7,
+      "kind": "profile",
+      "decision": "ready",
+      "elapsedSeconds": 66.9
+    }
+  ]
+}

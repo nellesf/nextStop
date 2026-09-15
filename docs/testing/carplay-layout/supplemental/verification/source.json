@@ -1,0 +1,18 @@
+{
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34964912072",
+  "harnessCommit": "3141c8f0d271caa18b1770de9bee97a7ee238447",
+  "files": [
+    {
+      "file": "root-activation.json",
+      "sha256": "6dab02a2ab54e34c586d87cb07be5468dd0bbc46877591cbbc80198cab7969fd"
+    },
+    {
+      "file": "reused-build-source.json",
+      "sha256": "2716cfff915ada5837ed437ce5c1736f2ce284da7a7d25399d8ae3e4128d5b6f"
+    },
+    {
+      "file": "reuse-artifact.json",
+      "sha256": "432bccea11e754ac10fba333fab7e17fb63e4f8d954beb669204abac91b2d9dd"
+    }
+  ]
+}

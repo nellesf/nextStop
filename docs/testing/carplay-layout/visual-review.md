@@ -14,9 +14,19 @@ and exact wording.
 
 ## Evidence
 
-The matrix uses [run 34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544),
+**All eight selected display configurations have ten complete native captures
+each (80 images), with visual review separate from capture-test success.**
+The source app still fails the requested text-fitting guarantee.
+
+Seven configurations use [run 34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544),
 source commit `5f62cd904db3deb8d9677fc7e1b881ad9551ff2a`, Xcode 26.6,
 iOS 26.5, and a fresh iPhone 17 Pro simulator for each display configuration.
+The remaining 900 × 1200 @3x case uses
+[run 34964912072](https://github.com/nellesf/nextStop/actions/runs/34964912072),
+harness `3141c8f0d271caa18b1770de9bee97a7ee238447`, and app commit
+`200e13d9bb151c88e9786cf96c5690f2ee733d19`, with the same Xcode/iOS versions.
+It reuses the verified build from `34962890365` after capture-only corrections.
+Each run's original provenance remains separate; no failed attempt is relabelled.
 The app's entire `ios` tree is `9426d6d5b01b232fbf1e3883d9be98eefa12cb43`,
 identical to main at branch creation (`356bf1c`).
 
@@ -25,7 +35,10 @@ exact framebuffer dimensions, the verified runtime scale, and a hosted test with
 one pass, zero failures, and zero skips. Capture success establishes that the
 reference screens were reached; it is separate from the visual result below.
 
-[Capture index and originals](captures/README.md)
+[Seven-configuration capture index](captures/README.md) ·
+[Supplemental portrait capture](supplemental/README.md).
+The per-run indexes intentionally show seven and one configurations, respectively;
+together they cover the eight-case selection.
 
 ## Visual findings
 
@@ -42,10 +55,11 @@ screens, not every possible string or application state.
 | [1280 × 720 @3x](captures/wide-1280-3x) | Fits | Fits | Other visible labels fit; detail summary absent |
 | [1920 × 720 @3x](captures/high-resolution) | Fits | Fits | Other visible labels fit; detail summary absent |
 | [768 × 1024 @2x](captures/portrait-2x) | Hard-clipped at right edge | Wraps to two lines | Summary is present; count wraps to two lines and EDEKA operator/count entry to three; other visible labels fit |
-| 900 × 1200 @3x | Incomplete | Incomplete | Profile heading ellipsis observed; first attempt blocked on its full title, follow-up stayed on CarPlay home after the app-icon click. [Original failure evidence](failed-portrait-3x/README.md) |
+| [900 × 1200 @3x](supplemental/portrait-3x) | Hard-clipped at right edge | Wraps to two lines | Profile title “Fahrt wähl…” and criteria title “Filter für dies…”; EDEKA name wraps; both provider subtitles ellipsized; detail summary absent |
 
 The result heading is “Passende Ladestopps” in every configuration. The detail
-prompt is “Wohin möchtest du fahren?”. In the landscape views reviewed so far,
+prompt is “Wohin möchtest du fahren?”. In all six landscape configurations and
+the 900 × 1200 @3x portrait case,
 the expected detail summary (distance, matching EVSE count, operator counts, and
 power) is absent, despite those values being passed to the native template. This
 is missing content, not evidence of intact single-line text.
@@ -74,3 +88,14 @@ the complete result heading while its final glyphs are visibly cut off.
 
 These limits prevent a universal “text never clips or wraps” claim even on a
 configuration where the captured visible labels fit.
+
+## Capture recovery evidence
+
+The 900 × 1200 @3x case required capture-helper corrections. Its two failed
+attempts remain [explicitly incomplete diagnostics](failed-portrait-3x/README.md).
+The successful final run used one native app-icon click, then confirmed two
+profile frames at 62.6 and 66.9 seconds after activation polling began. Its
+guarded second-click path was not needed in that run. The
+[original activation log](supplemental/verification/root-activation.json) and
+[build-reuse provenance](supplemental/verification/reused-build-source.json)
+are retained with [source hashes](supplemental/verification/source.json).
