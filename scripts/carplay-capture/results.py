@@ -24,7 +24,8 @@ def framebuffer(path, display):
 
 
 def normalized(value):
-    return re.sub(r"\s+", " ", value.casefold().replace("’", "'").replace("–", "-")).strip()
+    return re.sub(r"\s+", " ", value.casefold().replace("’", "'").replace("–", "-")
+                  .replace("“", '"').replace("”", '"')).strip()
 
 
 def dismiss_maps_widget_prompt(frame):
@@ -33,6 +34,23 @@ def dismiss_maps_widget_prompt(frame):
         click_visible_text("Don't Allow", "internal")
         return True
     return False
+
+
+def complete_maps_introduction(visible):
+    # These exact first-use screens were observed on the disposable runner.
+    # Maps receives only its simulated Nuremberg location; notifications remain
+    # disabled. Finish onboarding before checking any place name behind it.
+    if 'allow "maps" to use your location?' in visible and "allow while using app" in visible:
+        click_visible_text("Allow While Using App", "internal")
+    elif "enable notifications" in visible and "not now" in visible:
+        click_visible_text("Not Now", "internal")
+    elif "welcome to maps" in visible and "continue" in visible:
+        click_visible_text("Continue", "internal")
+    elif "willkommen bei karten" in visible and "fortfahren" in visible:
+        click_visible_text("Fortfahren", "internal")
+    else:
+        return False
+    return True
 
 
 def capture_phase(state):
@@ -50,6 +68,8 @@ def capture_phase(state):
         frame = framebuffer(path, display)
         visible = normalized("\n".join(row["text"] for row in frame["text"]))
         if display == "internal" and dismiss_maps_widget_prompt(frame):
+            continue
+        if display == "internal" and state.get("ownerApp") == "Apple Maps" and complete_maps_introduction(visible):
             continue
         if all(normalized(text) in visible for text in expected):
             time.sleep(2)
@@ -69,13 +89,6 @@ def capture_phase(state):
                 "sha256": hashlib.sha256(data).hexdigest(),
                 "capturedAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
             }
-        # Dismiss only a recognized first-use Maps introduction. Never tap a
-        # generic button on an unrelated alert or accept location/telemetry.
-        if display == "internal" and state.get("ownerApp") == "Apple Maps":
-            if "welcome to maps" in visible and "continue" in visible:
-                click_visible_text("Continue", "internal")
-            elif "willkommen bei karten" in visible and "fortfahren" in visible:
-                click_visible_text("Fortfahren", "internal")
         time.sleep(2)
     raise RuntimeError(f"Native {name} did not show {expected!r}; observed {visible}")
 
