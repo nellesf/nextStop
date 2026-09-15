@@ -100,8 +100,8 @@ run("status-bar", [
     "xcrun", "simctl", "status_bar", device_id, "override", "--time", "9:41",
     "--dataNetwork", "wifi", "--wifiMode", "active", "--wifiBars", "3",
     "--batteryState", "charged", "--batteryLevel", "100",
-])
-run("appearance", ["xcrun", "simctl", "ui", device_id, "appearance", "light"])
+], timeout=180)
+run("appearance", ["xcrun", "simctl", "ui", device_id, "appearance", "light"], timeout=180)
 developer = subprocess.check_output(["xcode-select", "-p"], text=True).strip()
 simulator = str(Path(developer) / "Applications/Simulator.app")
 run("open-simulator", ["open", "-a", simulator, "--args", "-CurrentDeviceUDID", device_id])

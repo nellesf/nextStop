@@ -97,11 +97,9 @@ def capture_phase(state):
 
 app = Path("CarPlayDerivedData/Build/Products/Debug-iphonesimulator/NextStopApp.app")
 execute(["xcrun", "simctl", "install", DEVICE, str(app)], timeout=180)
-execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"])
-execute(["xcrun", "simctl", "location", DEVICE, "set", "49.4521,11.0767"])
-time.sleep(2)
-dismiss_maps_widget_prompt(framebuffer(OUTPUT / "diagnostic-before-hosted-test.png", "internal"))
-container = Path(execute(["xcrun", "simctl", "get_app_container", DEVICE, "de.nextstop.app", "data"]))
+execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"], timeout=180)
+execute(["xcrun", "simctl", "location", DEVICE, "set", "49.4521,11.0767"], timeout=180)
+container = Path(execute(["xcrun", "simctl", "get_app_container", DEVICE, "de.nextstop.app", "data"], timeout=180))
 documents = container / "Documents"
 documents.mkdir(exist_ok=True)
 state_path = documents / "website-capture-state.json"
