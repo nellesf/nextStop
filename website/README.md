@@ -49,7 +49,7 @@ where applicable,
 
 ## App screenshots
 
-The iPhone images in `public/screenshots/` are genuine Simulator captures
+The iPhone profile images in `public/screenshots/` are genuine Simulator captures
 of the app built from `main`, using local example profiles. The capture harness
 does not change the app's production UI or search behavior. The images show the
 profile list, profile editor, and profile filters:
@@ -122,6 +122,26 @@ place-view captions. CarPlay images use at most two desktop columns and one
 column on narrower screens. Each screenshot links to its original PNG and has
 an accessible label identifying the full-size image; no modal or image editing
 is involved.
+
+### Original PNGs for App Store design
+
+Keep the imported PNGs checked into `website/public/screenshots/` together with
+their provenance manifests, so design work does not depend on the retention of
+GitHub Actions artifacts. Use these original files as source images for later
+App Store layouts. iPhone originals are 1206 × 2622 pixels; CarPlay originals
+are 800 × 480 pixels. The website's device frames and captions are CSS/HTML and
+are not embedded in the PNGs. Save composed marketing images separately and
+retain the source PNGs unchanged, with their manifest hashes intact.
+
+The currently pinned `main` revision is
+`5fe2fa2332d66d2499fc679617855d41cb0111be`: app version **0.1.0**, build **1**,
+as declared by `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in that
+revision's `ios/project.yml`. The provenance manifests record the app commit,
+capture/build harness revisions, Actions run URL and image hashes; result
+provenance additionally records the owning app and fixture data. Preserve those
+details when reusing the images, and identify the four Apple Maps place views
+as Apple Maps. These are native capture dimensions, not a claim that every PNG
+already meets every App Store submission format or presentation requirement.
 
 The website branch's on-demand **CarPlay Screenshots** workflow boots a fresh iPhone
 Simulator, opens the native CarPlay display, and builds the pinned `main` source.
@@ -313,6 +333,8 @@ Official references:
 - Product copy is based on the accepted nextStop architecture and domain rules.
 - `public/app-icon.png` is copied from the iOS asset catalog.
 - `public/screenshots/` contains original iPhone and CarPlay captures from the
-  pinned `main` app. Source commits, Actions runs and PNG hashes are recorded in
-  `provenance.json` and `carplay-provenance.json` respectively.
+  pinned `main` app, plus Apple Maps place views once result captures are
+  imported. Source commits, Actions runs and PNG hashes are recorded in
+  `provenance.json`, `carplay-provenance.json` and, after result import,
+  `result-provenance.json`.
 - `public/og.png` is the generated social preview card.

@@ -34,7 +34,7 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Probe the native CarPlay display
-        run: python3 scripts/carplay-capture/preflight.py
+        run: caffeinate -diu python3 scripts/carplay-capture/preflight.py
       - name: Save verified display before app capture
         uses: actions/upload-artifact@v7
         with:
@@ -59,7 +59,7 @@ jobs:
           CARPLAY_CAPTURE_MODE: ${{ inputs.capture_mode }}
           CARPLAY_REUSE_DIR: ${{ inputs.reuse_run_id != '' && 'CarPlay-Reuse' || '' }}
           CARPLAY_REUSE_SHA256: ${{ inputs.reuse_sha256 }}
-        run: bash scripts/carplay-capture/capture.sh
+        run: caffeinate -diu bash scripts/carplay-capture/capture.sh
       - name: Preserve profile setup results
         if: always()
         run: |
