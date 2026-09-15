@@ -12,9 +12,22 @@ on:
         description: Configuration id from display-configurations.json, or all
         type: string
         default: all
+      app_ref:
+        description: Optional full app commit SHA; required for build reuse
+        type: string
+        default: ''
+      reuse_artifact_id:
+        description: Optional exact artifact ID from this repository containing the verified build
+        type: string
+        default: ''
+      reuse_sha256:
+        description: SHA-256 of that artifact's CarPlayBuild.tar.gz
+        type: string
+        default: ''
 
 permissions:
   contents: read
+  actions: read
 
 concurrency:
   group: carplay-layout-${{ github.ref }}-${{ github.run_id }}
@@ -23,6 +36,7 @@ concurrency:
 jobs:
   discover:
     if: github.event_name == 'workflow_dispatch' && inputs.mode == 'discover'
+    needs: configurations
     runs-on: macos-26
     timeout-minutes: 15
     steps:
@@ -42,19 +56,34 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   configurations:
-    if: inputs.mode == 'matrix' || inputs.mode == 'display'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.value }}
+      app_ref: ${{ steps.matrix.outputs.app_ref }}
     steps:
       - uses: actions/checkout@v7
       - id: matrix
         env:
           CONFIGURATION: ${{ inputs.configuration }}
+          CAPTURE_MODE: ${{ inputs.mode }}
+          APP_REF: ${{ inputs.app_ref }}
+          REUSE_ARTIFACT_ID: ${{ inputs.reuse_artifact_id }}
+          REUSE_SHA256: ${{ inputs.reuse_sha256 }}
         run: |
           python3 - <<'PY'
-          import json, os
+          import json, os, re
           from pathlib import Path
+          app_ref = os.environ['APP_REF']
+          artifact_id = os.environ['REUSE_ARTIFACT_ID']
+          archive_sha = os.environ['REUSE_SHA256']
+          if app_ref:
+              assert re.fullmatch(r'[0-9a-f]{40}', app_ref), 'app_ref must be a full lowercase commit SHA'
+          if artifact_id or archive_sha:
+              assert app_ref and artifact_id and archive_sha, 'Reuse requires app_ref, reuse_artifact_id, and reuse_sha256 together'
+              assert re.fullmatch(r'[1-9][0-9]*', artifact_id), 'reuse_artifact_id must be a positive numeric artifact ID'
+              assert re.fullmatch(r'[0-9a-f]{64}', archive_sha), 'reuse_sha256 must be a lowercase SHA-256 digest'
+          if app_ref or artifact_id or archive_sha:
+              assert os.environ['CAPTURE_MODE'] == 'matrix', 'App/build inputs apply only to mode=matrix'
           configurations = json.loads(Path('scripts/carplay-capture/display-configurations.json').read_text())
           selection = os.environ['CONFIGURATION']
           if selection != 'all':
@@ -62,8 +91,10 @@ jobs:
           assert configurations, 'Unknown display configuration'
           with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
               output.write('value=' + json.dumps({'include': configurations}) + '\n')
+              output.write('app_ref=' + (app_ref or os.environ['GITHUB_SHA']) + '\n')
           PY
   capture:
+    if: inputs.mode == 'matrix' || inputs.mode == 'display'
     needs: configurations
     strategy:
       fail-fast: false
@@ -77,7 +108,7 @@ jobs:
       CARPLAY_WIDTH: ${{ matrix.width }}
       CARPLAY_HEIGHT: ${{ matrix.height }}
       CARPLAY_SCALE: ${{ matrix.scale }}
-      CARPLAY_APP_COMMIT: ${{ github.sha }}
+      CARPLAY_APP_COMMIT: ${{ needs.configurations.outputs.app_ref }}
     steps:
       - uses: actions/checkout@v7
       - name: Connect the disposable native display
@@ -86,8 +117,39 @@ jobs:
         if: inputs.mode == 'matrix'
         uses: actions/checkout@v7
         with:
-          ref: ${{ github.sha }}
+          ref: ${{ needs.configurations.outputs.app_ref }}
           path: screenshot-app
+      - name: Download the explicitly selected verified build
+        if: inputs.mode == 'matrix' && inputs.reuse_artifact_id != ''
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          REUSE_ARTIFACT_ID: ${{ inputs.reuse_artifact_id }}
+          REUSE_SHA256: ${{ inputs.reuse_sha256 }}
+        run: |
+          python3 - <<'PY'
+          import json, os, shutil, stat, subprocess, tempfile, zipfile
+          from pathlib import Path
+          root = Path(tempfile.mkdtemp(prefix='carplay-reuse-', dir=os.environ['RUNNER_TEMP']))
+          endpoint = f"repos/{os.environ['GITHUB_REPOSITORY']}/actions/artifacts/{os.environ['REUSE_ARTIFACT_ID']}"
+          artifact = json.loads(subprocess.check_output(['gh', 'api', endpoint], text=True, timeout=60))
+          assert str(artifact['id']) == os.environ['REUSE_ARTIFACT_ID'] and not artifact['expired']
+          assert artifact['name'].startswith('carplay-layout-'), 'Expected a CarPlay layout artifact'
+          with (root / 'artifact.zip').open('wb') as output:
+              subprocess.run(['gh', 'api', endpoint + '/zip'], stdout=output, check=True, timeout=180)
+          with zipfile.ZipFile(root / 'artifact.zip') as archive:
+              for name in ['capture-source-base.json', 'CarPlayBuild.tar.gz']:
+                  entries = [entry for entry in archive.infolist() if entry.filename == name]
+                  assert len(entries) == 1, f'Artifact must contain exactly one {name}'
+                  entry = entries[0]
+                  assert not entry.is_dir() and not stat.S_ISLNK(entry.external_attr >> 16)
+                  # Extract only these fixed top-level files, never archive paths.
+                  with archive.open(entry) as source, (root / name).open('wb') as output:
+                      shutil.copyfileobj(source, output)
+          Path('CarPlay-Captures/reuse-artifact.json').write_text(json.dumps(artifact, indent=2) + '\n')
+          with open(os.environ['GITHUB_ENV'], 'a') as output:
+              output.write(f'CARPLAY_REUSE_DIR={root}\n')
+              output.write(f"CARPLAY_REUSE_SHA256={os.environ['REUSE_SHA256']}\n")
+          PY
       - name: Build and capture the unchanged app
         if: inputs.mode == 'matrix'
         run: caffeinate -diu bash scripts/carplay-capture/capture.sh

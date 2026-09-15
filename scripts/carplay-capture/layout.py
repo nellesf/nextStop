@@ -14,8 +14,9 @@ import re
 import struct
 import subprocess
 import time
+from dataclasses import dataclass
 
-from capture import DEVICE, OUTPUT, await_native_text, click_visible_text, execute, recognize
+from capture import DEVICE, OUTPUT, click_visible_text, execute, recognize
 
 
 def framebuffer(path, display):
@@ -26,6 +27,118 @@ def framebuffer(path, display):
 def normalized(value):
     return re.sub(r"\s+", " ", value.casefold().replace("’", "'").replace("–", "-")
                   .replace("“", '"').replace("”", '"')).strip()
+
+
+def profile_frame_kind(frame, anchors):
+    """Identify only observed root/home content; unknown frames are transitions."""
+    rows = {normalized(row["text"]) for row in frame["text"]}
+    matching = [normalized(anchor) in rows for anchor in anchors]
+    if all(matching):
+        return "profile"
+    if any(matching):
+        return "partial-profile"
+    home_labels = {"messages", "calendar", "settings", "now playing"}
+    if "nextstop" in rows and len(rows & home_labels) >= 2:
+        return "home"
+    return "transition"
+
+
+@dataclass
+class ProfileActivationState:
+    clicks: int = 0
+    last_click_at: float | None = None
+    first_profile_at: float | None = None
+    profile_frames: int = 0
+    home_frames: int = 0
+    profile_seen: bool = False
+
+    def observe(self, kind, now):
+        if kind == "profile":
+            self.profile_seen = True
+            self.home_frames = 0
+            self.profile_frames += 1
+            if self.first_profile_at is None:
+                self.first_profile_at = now
+            if self.profile_frames >= 2 and now - self.first_profile_at >= 2:
+                return "ready"
+            return "wait"
+        if kind == "partial-profile":
+            self.profile_seen = True
+        self.profile_frames = 0
+        self.first_profile_at = None
+        self.home_frames = self.home_frames + 1 if kind == "home" else 0
+        if self.home_frames >= 2 and not self.profile_seen and self.clicks < 2:
+            if self.last_click_at is None or now - self.last_click_at >= 30:
+                self.clicks += 1
+                self.last_click_at = now
+                self.home_frames = 0
+                return "click"
+        return "wait"
+
+
+def activate_profile_root(state):
+    anchors = state["expected"]
+    assert len(anchors) == 2 and all(anchors), \
+        "Profile readiness requires its section header and fixture profile name."
+    assert state["label"] == "nextStop", "Only the observed nextStop icon can activate this root."
+    started = time.monotonic()
+    deadline = started + 120
+    activation = ProfileActivationState()
+    observations = []
+
+    def profile_frame(path):
+        execute([
+            "xcrun", "simctl", "io", DEVICE, "screenshot", "--display=external", str(path),
+        ], deadline=deadline)
+        return recognize(path, deadline=deadline)
+
+    def verify_home_before_click():
+        # The helper's host capture and coordinate lookup take time. Verify
+        # the external frame once more immediately before posting input.
+        guard_path = OUTPUT / f"diagnostic-root-before-click-{activation.clicks}.png"
+        guard_kind = profile_frame_kind(profile_frame(guard_path), anchors)
+        entry["clickGuardKind"] = guard_kind
+        if guard_kind != "home":
+            if guard_kind in {"profile", "partial-profile"}:
+                activation.profile_seen = True
+            raise RuntimeError("The latest native frame is no longer the home page; icon input withheld.")
+
+    # Every synchronous native command receives the same deadline, including
+    # the fresh-frame guard and the helper's mouse dispatch and screenshots.
+    try:
+        while time.monotonic() < deadline:
+            attempt = len(observations) + 1
+            entry = {"attempt": attempt}
+            observations.append(entry)
+            try:
+                path = OUTPUT / f"diagnostic-root-activation-{attempt:02d}.png"
+                frame = profile_frame(path)
+                now = time.monotonic()
+                kind = profile_frame_kind(frame, anchors)
+                decision = activation.observe(kind, now)
+                entry.update({"kind": kind, "decision": decision, "elapsedSeconds": round(now - started, 1)})
+                if decision == "ready" and now < deadline:
+                    return
+                if decision == "click" and deadline - now >= 15:
+                    # click_visible_text rereads the native host window and
+                    # refuses to click if the exact icon label disappeared.
+                    click_visible_text(
+                        state["label"], deadline=deadline, before_click=verify_home_before_click,
+                    )
+            except (RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+                entry["error"] = str(error)
+                # A failed capture interrupts consecutiveness; it cannot count
+                # toward stable root readiness or a home-only retry decision.
+                activation.observe("transition", time.monotonic())
+            remaining = deadline - time.monotonic()
+            if remaining > 0:
+                time.sleep(min(2, remaining))
+        raise TimeoutError("Profile root did not render two stable frames within 120 seconds after at most two native icon clicks.")
+    finally:
+        (OUTPUT / "root-activation.json").write_text(json.dumps({
+            "anchors": anchors, "timeoutSeconds": 120, "retryDelaySeconds": 30,
+            "maxClicks": 2, "state": vars(activation), "observations": observations,
+        }, indent=2, ensure_ascii=False) + "\n")
 
 
 def capture_phase(state):
@@ -141,31 +254,7 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                     action = state.get("action")
                     if action == "click":
                         if phase == "waiting-for-carplay":
-                            profile_anchors = state["expected"]
-                            assert len(profile_anchors) == 2 and all(profile_anchors), \
-                                "Profile readiness requires its section header and fixture profile name."
-                            ready = False
-                            for attempt in range(15):
-                                screen = framebuffer(OUTPUT / f"diagnostic-app-icon-{attempt}.png", "external")
-                                words = normalized("\n".join(row["text"] for row in screen["text"]))
-                                if all(normalized(anchor) in words for anchor in profile_anchors):
-                                    ready = True
-                                    break
-                                if "nextstop" in words:
-                                    click_visible_text(state["label"])
-                                    ready = True
-                                    break
-                                time.sleep(2)
-                            assert ready, "The native CarPlay home screen must expose the installed nextStop app."
-                            # A connected scene/rootTemplate can exist while
-                            # CarPlay is still finishing setRootTemplate. Wait
-                            # for the actual profile list to be visibly stable
-                            # before the test invokes its first row handler.
-                            # Its full navigation title is deliberately audited
-                            # separately: clipped titles must not block capture.
-                            await_native_text(*profile_anchors)
-                            time.sleep(2)
-                            await_native_text(*profile_anchors)
+                            activate_profile_root(state)
                         else:
                             click_visible_text(state["label"], state.get("display", "external"))
                     elif action == "activate-app":

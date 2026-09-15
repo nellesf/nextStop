@@ -22,7 +22,12 @@ captures = []
 click_count = 0
 
 
-def execute(command, *, timeout=45):
+def execute(command, *, timeout=45, deadline=None):
+    if deadline is not None:
+        remaining = deadline - time.monotonic()
+        if remaining <= 0:
+            raise TimeoutError("Native capture operation exhausted its shared deadline.")
+        timeout = min(timeout, remaining)
     print(repr(command), flush=True)
     result = subprocess.run(command, text=True, capture_output=True, timeout=timeout)
     with (OUTPUT / "capture-actions.log").open("a") as log:
@@ -32,8 +37,8 @@ def execute(command, *, timeout=45):
     return result.stdout.strip()
 
 
-def recognize(path):
-    value = json.loads(execute([OCR, str(path)]))
+def recognize(path, *, deadline=None):
+    value = json.loads(execute([OCR, str(path)], deadline=deadline))
     path.with_suffix(".ocr.json").write_text(json.dumps(value, indent=2, ensure_ascii=False) + "\n")
     return value
 
@@ -54,7 +59,7 @@ def await_native_text(*expected):
     raise RuntimeError(f"CarPlay did not display {expected!r}; actual OCR: {text}")
 
 
-def click_visible_text(label, display_kind="external", *, first_match=False):
+def click_visible_text(label, display_kind="external", *, first_match=False, deadline=None, before_click=None):
     global click_count
     click_count += 1
     # Raise the observed CarPlay window; do not click coordinates inferred from
@@ -70,13 +75,13 @@ tell application "System Events" to tell process "Simulator"
     set windowSize to size of captureWindow
     return (item 1 of windowPosition as text) & "|" & (item 2 of windowPosition as text) & "|" & (item 1 of windowSize as text) & "|" & (item 2 of windowSize as text)
 end tell
-'''.replace("WINDOW_SELECTOR", window_selector)])
+'''.replace("WINDOW_SELECTOR", window_selector)], deadline=deadline)
     left, top, width, height = map(float, window.split("|"))
-    time.sleep(1)
+    pause(1, deadline=deadline)
     path = OUTPUT / f"diagnostic-host-click-{click_count}.png"
-    execute(["screencapture", "-x", str(path)])
-    words = recognize(path)
-    display = json.loads(execute([OCR, "display"]))
+    execute(["screencapture", "-x", str(path)], deadline=deadline)
+    words = recognize(path, deadline=deadline)
+    display = json.loads(execute([OCR, "display"], deadline=deadline))
     scale_x, scale_y = display["width"] / words["width"], display["height"] / words["height"]
     candidates = []
     for word in words["text"]:
@@ -101,9 +106,21 @@ end tell
     if len(candidates) != 1:
         raise RuntimeError(f"Expected one visible {label!r} inside the CarPlay window; found {candidates}")
     x, y = candidates[0]
-    execute(["osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(round(x)), str(round(y))])
-    execute(["screencapture", "-x", "-C", str(OUTPUT / f"diagnostic-host-after-click-{click_count}.png")])
-    time.sleep(2)
+    if before_click is not None:
+        before_click()
+    execute(["osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(round(x)), str(round(y))], deadline=deadline)
+    execute(["screencapture", "-x", "-C", str(OUTPUT / f"diagnostic-host-after-click-{click_count}.png")], deadline=deadline)
+    pause(2, deadline=deadline)
+
+
+def pause(seconds, *, deadline=None):
+    if deadline is None:
+        time.sleep(seconds)
+        return
+    remaining = deadline - time.monotonic()
+    if remaining <= 0:
+        raise TimeoutError("Native capture pause exhausted its shared deadline.")
+    time.sleep(min(seconds, remaining))
 
 
 def capture(name, expected):
