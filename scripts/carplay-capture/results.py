@@ -96,7 +96,7 @@ def capture_phase(state):
 
 
 app = Path("CarPlayDerivedData/Build/Products/Debug-iphonesimulator/NextStopApp.app")
-execute(["xcrun", "simctl", "install", DEVICE, str(app)])
+execute(["xcrun", "simctl", "install", DEVICE, str(app)], timeout=180)
 execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"])
 execute(["xcrun", "simctl", "location", DEVICE, "set", "49.4521,11.0767"])
 time.sleep(2)
