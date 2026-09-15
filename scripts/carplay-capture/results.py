@@ -15,11 +15,13 @@ import struct
 import subprocess
 import time
 
-from capture import DEVICE, OUTPUT, await_native_text, click_visible_text, execute, recognize
+from capture import DEVICE, OUTPUT, await_native_text, click_visible_text, execute, recognize, validate_external_frame
 
 
 def framebuffer(path, display):
     execute(["xcrun", "simctl", "io", DEVICE, "screenshot", f"--display={display}", str(path)])
+    if display == "external":
+        validate_external_frame(path)
     return recognize(path)
 
 

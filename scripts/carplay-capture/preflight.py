@@ -8,7 +8,9 @@ import json
 import os
 import atexit
 from pathlib import Path
+import re
 import shutil
+import struct
 import subprocess
 import time
 
@@ -16,6 +18,11 @@ import time
 OUTPUT = Path("CarPlay-Captures")
 OUTPUT.mkdir(exist_ok=True)
 device_id = None
+display_variant = os.environ.get("CARPLAY_DISPLAY_VARIANT", "default")
+display_variants = json.loads(Path(__file__).with_name("display-variants.json").read_text())
+if display_variant not in display_variants:
+    raise ValueError(f"Unknown CarPlay display variant: {display_variant}")
+requested_display = display_variants[display_variant]
 
 
 def run(label, command, *, required=True, timeout=60):
@@ -92,6 +99,7 @@ if requested_runtime := os.environ.get("CARPLAY_RUNTIME_VERSION"):
 device_id = run("create-device", [
     "xcrun", "simctl", "create", "nextStop CarPlay Capture", "iPhone 17 Pro", runtime["identifier"]
 ]).strip()
+os.environ["CARPLAY_DEVICE_ID"] = device_id
 with open(os.environ["GITHUB_ENV"], "a") as output:
     output.write(f"CARPLAY_DEVICE_ID={device_id}\n")
 run("boot-device", ["xcrun", "simctl", "boot", device_id])
@@ -104,6 +112,12 @@ run("status-bar", [
 run("appearance", ["xcrun", "simctl", "ui", device_id, "appearance", "light"], timeout=180)
 developer = subprocess.check_output(["xcode-select", "-p"], text=True).strip()
 simulator = str(Path(developer) / "Applications/Simulator.app")
+# This documented option must be set before Simulator launches. Only the fresh
+# disposable runner is configured; no user's local Simulator is touched.
+run("set-display-options", [
+    "defaults", "write", "com.apple.iphonesimulator", "CarPlayExtraOptions", "-bool",
+    "YES" if display_variant == "wide" else "NO",
+])
 run("open-simulator", ["open", "-a", simulator, "--args", "-CurrentDeviceUDID", device_id])
 run("wait-for-simulator-window", ["osascript", "-e", '''
 tell application "System Events"
@@ -151,7 +165,14 @@ with timeout of 40 seconds
     end tell
 end timeout
 '''
-run("enable-carplay", ["osascript", "-e", carplay_menu_script], timeout=50)
+def connect_carplay(label):
+    if display_variant == "wide":
+        run(label, ["python3", "scripts/carplay-capture/configure-display.py"], timeout=110)
+    else:
+        run(label, ["osascript", "-e", carplay_menu_script], timeout=50)
+
+
+connect_carplay("enable-carplay")
 run("displays-after", ["xcrun", "simctl", "io", device_id, "enumerate"])
 run("simulator-windows-after", ["osascript", "-e", '''
 tell application "System Events"
@@ -227,7 +248,7 @@ with timeout of 30 seconds
     end tell
 end timeout
 '''], timeout=40)
-    run("reconnect-carplay-menu", ["osascript", "-e", carplay_menu_script], timeout=50)
+    connect_carplay("reconnect-carplay-menu")
     run("host-screen-after-reconnect", [
         "screencapture", "-x", str(OUTPUT / "diagnostic-host-after-reconnect.png"),
     ], required=False)
@@ -238,6 +259,27 @@ if not readiness[-1]["ready"]:
     ], required=False)
     raise RuntimeError("CarPlay remained unreadable after two 90-second waits and one native display reconnect.")
 
+native_frame = (OUTPUT / "diagnostic-carplay-home.png").read_bytes()
+assert native_frame[:8] == b"\x89PNG\r\n\x1a\n", "The external framebuffer must be an original PNG."
+native_size = struct.unpack(">II", native_frame[16:24])
+requested_size = (requested_display["width"], requested_display["height"])
+assert native_size == requested_size, f"Requested {requested_size}; native framebuffer is {native_size}"
+connected = run("verified-displays", ["xcrun", "simctl", "io", device_id, "enumerate"])
+# Match the active TVOut screen, not the separate creatable CarPlay default.
+scale_match = re.search(
+    r"Screen Type: TVOut\n(?:(?!Screen Type:).)*?Preferred UI Scale: ([0-9.]+)",
+    connected.partition("Connected Screens:")[2], re.DOTALL,
+)
+assert scale_match, "The active TVOut screen must expose its actual UI scale."
+runtime_scale = float(scale_match.group(1))
+assert runtime_scale == requested_display["scale"], f"Unexpected runtime UI scale: {runtime_scale}"
+configuration = None
+if display_variant == "wide":
+    configuration = json.loads((OUTPUT / "display-configuration.json").read_text())
+    assert configuration["runSubmitted"] and configuration["readback"] == requested_display
+    configuration.update({"runtimeScale": runtime_scale, "framebufferSize": list(native_size)})
+    (OUTPUT / "display-configuration.json").write_text(json.dumps(configuration, indent=2) + "\n")
+
 (OUTPUT / "preflight.json").write_text(json.dumps({
     "deviceID": device_id,
     "device": "iPhone 17 Pro",
@@ -245,5 +287,10 @@ if not readiness[-1]["ready"]:
     "menu": "Simulator > I/O > External Displays > CarPlay",
     "capture": "simctl io screenshot --display=external",
     "readiness": readiness,
+    "carplayDisplay": {
+        "variant": display_variant, "width": native_size[0], "height": native_size[1],
+        "scale": runtime_scale,
+    },
+    "configuration": configuration,
     "result": "Native CarPlay display connected and captured before app build",
 }, indent=2) + "\n")

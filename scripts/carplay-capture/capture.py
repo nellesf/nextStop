@@ -40,7 +40,17 @@ def recognize(path):
 
 def external(path):
     execute(["xcrun", "simctl", "io", DEVICE, "screenshot", "--display=external", str(path)])
+    validate_external_frame(path)
     return recognize(path)
+
+
+def validate_external_frame(path):
+    display = json.loads((OUTPUT / "preflight.json").read_text())["carplayDisplay"]
+    data = path.read_bytes()
+    assert data[:8] == b"\x89PNG\r\n\x1a\n", "Expected an original native PNG."
+    actual = struct.unpack(">II", data[16:24])
+    expected = (display["width"], display["height"])
+    assert actual == expected, f"Native external display changed: expected {expected}, received {actual}."
 
 
 def await_native_text(*expected):

@@ -10,6 +10,13 @@ on:
           - profiles
           - results
         default: profiles
+      display_variant:
+        description: Native CarPlay display geometry (wide is 1920x720 at 3x)
+        type: choice
+        options:
+          - default
+          - wide
+        default: default
       reuse_run_id:
         description: Optional run containing a verified main build artifact
         type: string
@@ -31,6 +38,8 @@ jobs:
   capture:
     runs-on: macos-26
     timeout-minutes: 40
+    env:
+      CARPLAY_DISPLAY_VARIANT: ${{ inputs.display_variant }}
     steps:
       - uses: actions/checkout@v7
       - name: Probe the native CarPlay display

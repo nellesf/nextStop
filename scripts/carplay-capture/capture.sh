@@ -63,6 +63,11 @@ python3 scripts/carplay-capture/read-simulator-entitlements.py \
 python3 - <<'PY'
 import hashlib, json, os, pathlib, plistlib, subprocess
 root = pathlib.Path('CarPlay-Captures')
+preflight = json.loads((root / 'preflight.json').read_text())
+display = preflight['carplayDisplay']
+variants = json.loads(pathlib.Path('scripts/carplay-capture/display-variants.json').read_text())
+variant = os.environ.get('CARPLAY_DISPLAY_VARIANT', 'default')
+assert display == {'variant': variant, **variants[variant]}, 'Preflight must verify the requested native CarPlay geometry.'
 entitlements = plistlib.loads((root / 'applied-entitlements.plist').read_bytes())
 assert entitlements.get('com.apple.developer.carplay-charging') is True
 source = {
@@ -71,6 +76,7 @@ source = {
     'harnessCommit': os.environ['GITHUB_SHA'],
     'runURL': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
     'device': 'iPhone 17 Pro with native external CarPlay display',
+    'carplayDisplay': display,
     'locale': 'de_DE',
     'data': 'Example Leipzig profile seeded through the unchanged app persistence model by an opt-in hosted test in a fresh simulator store',
     'profileFixtureSHA256': hashlib.sha256(pathlib.Path('ios/NextStopAppTests/ProfileRepositoryTests.swift').read_bytes()).hexdigest(),

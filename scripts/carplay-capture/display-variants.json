@@ -1,0 +1,4 @@
+{
+  "default": {"width": 800, "height": 480, "scale": 2},
+  "wide": {"width": 1920, "height": 720, "scale": 3}
+}
