@@ -44,6 +44,8 @@ def complete_maps_introduction(visible):
         click_visible_text("Allow While Using App", "internal")
     elif "enable notifications" in visible and "not now" in visible:
         click_visible_text("Not Now", "internal")
+    elif "maps may show local ads based" in visible and "continue" in visible:
+        click_visible_text("Continue", "internal")
     elif "welcome to maps" in visible and "continue" in visible:
         click_visible_text("Continue", "internal")
     elif "willkommen bei karten" in visible and "fortfahren" in visible:
