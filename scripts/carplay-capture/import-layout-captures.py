@@ -146,6 +146,14 @@ def verify(directory, configurations):
             type(values.get(field)) in (int, float) and values[field] == expected[field]
             for field in ("width", "height", "scale")),
             f"Display configuration {key} differs from the planned matrix")
+    require(type(display.get("runtimeScale")) in (int, float)
+            and display["runtimeScale"] == expected["scale"],
+            "Runtime display scale differs from the requested scale")
+    framebuffer = display.get("framebufferSize")
+    require(isinstance(framebuffer, list) and len(framebuffer) == 2
+            and all(positive_integer(value) for value in framebuffer)
+            and framebuffer == [expected["width"], expected["height"]],
+            "Runtime framebuffer dimensions differ from the requested dimensions")
     require(display.get("runURL") == source["runURL"]
             and display.get("harnessCommit") == source["harnessCommit"],
             "Display configuration and capture manifest provenance differ")

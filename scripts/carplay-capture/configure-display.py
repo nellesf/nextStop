@@ -158,12 +158,11 @@ end tell
         x = round(field["position"][0] + field["size"][0] * 0.3)
         y = round(field["position"][1] + field["size"][1] / 2)
         run(f"click-{key}", [
-            "osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(x), str(y),
+            "osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(x), str(y), "3",
         ])
         run(f"type-and-commit-{key}", ["osascript", "-e", '''
 on run arguments
     tell application "System Events"
-        keystroke "a" using command down
         keystroke (item 1 of arguments)
         key code 48
         delay 0.2
@@ -184,7 +183,7 @@ end run
         "observationRunURL": OBSERVATION["runURL"],
         "controlObservation": OBSERVATION,
         "fieldAssociation": "Nearest native field to the right of its observed label on the same row",
-        "inputMethod": "Click each observed editable field with native mouse events, Command+A, type its numeric value, then Tab",
+        "inputMethod": "Select each observed numeric field with a native triple click, type its value, then Tab",
         "configuredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "runURL": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
         "harnessCommit": os.environ["GITHUB_SHA"], "runSubmitted": False,

@@ -6,6 +6,7 @@ TCC database, private simulator API, or entitlement is modified by this probe.
 
 import json
 import os
+import re
 import atexit
 from pathlib import Path
 import shutil
@@ -266,6 +267,19 @@ if os.environ.get("CARPLAY_CONFIGURATION"):
     native_size = struct.unpack(">II", (OUTPUT / "diagnostic-carplay-home.png").read_bytes()[16:24])
     requested_size = (int(os.environ["CARPLAY_WIDTH"]), int(os.environ["CARPLAY_HEIGHT"]))
     assert native_size == requested_size, f"Requested {requested_size}; native framebuffer is {native_size}"
+    # The public simctl enumeration distinguishes the active TVOut screen from
+    # the creatable default CarPlay screen and the phone's integrated display.
+    connected = run("verified-displays", ["xcrun", "simctl", "io", device_id, "enumerate"])
+    scale_match = re.search(
+        r"Screen Type: TVOut\n(?:(?!Screen Type:).)*?Preferred UI Scale: ([0-9.]+)",
+        connected.partition("Connected Screens:")[2], re.DOTALL,
+    )
+    assert scale_match, "The active TVOut screen must expose its actual UI scale."
+    runtime_scale = float(scale_match.group(1))
+    assert runtime_scale == float(os.environ["CARPLAY_SCALE"]), f"Unexpected runtime scale: {runtime_scale}"
+    configuration["runtimeScale"] = runtime_scale
+    configuration["framebufferSize"] = list(native_size)
+    (OUTPUT / "display-configuration.json").write_text(json.dumps(configuration, indent=2) + "\n")
 
 (OUTPUT / "preflight.json").write_text(json.dumps({
     "deviceID": device_id,
