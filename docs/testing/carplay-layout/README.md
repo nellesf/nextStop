@@ -100,3 +100,13 @@ gh workflow run carplay-layout.yml --repo nellesf/nextStop \
 Use `mode=discover` only when the native configuration controls need another
 inspection. The full matrix uses separate disposable devices for each configuration
 and checks framebuffer dimensions before building the app.
+
+## Configuration input regression
+
+Run `34955002133` correctly rejected dimensions that only appeared updated in
+the accessibility values. For example, the controls reported 748 × 456 and
+1280 × 720, while the native framebuffers were 748 × 480 and 1280 × 480.
+The configurator now focuses each observed control, selects its text, types the
+requested numeric value, and commits the edit with Tab before reading it back.
+Native PNG dimensions remain the acceptance criterion. The rejected run was
+stopped and supplies no completed resolution evidence.

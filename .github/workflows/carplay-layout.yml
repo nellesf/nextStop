@@ -6,8 +6,12 @@ on:
       mode:
         description: Capture the layout matrix or inspect Simulator configuration controls
         type: choice
-        options: [matrix, discover]
+        options: [matrix, display, discover]
         default: matrix
+      configuration:
+        description: Configuration id from display-configurations.json, or all
+        type: string
+        default: all
 
 permissions:
   contents: read
@@ -38,14 +42,27 @@ jobs:
           retention-days: 7
           if-no-files-found: error
   configurations:
-    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'matrix'
+    if: inputs.mode == 'matrix' || inputs.mode == 'display'
     runs-on: ubuntu-latest
     outputs:
       matrix: ${{ steps.matrix.outputs.value }}
     steps:
       - uses: actions/checkout@v7
       - id: matrix
-        run: echo "value=$(jq -c '{include:.}' scripts/carplay-capture/display-configurations.json)" >> "$GITHUB_OUTPUT"
+        env:
+          CONFIGURATION: ${{ inputs.configuration }}
+        run: |
+          python3 - <<'PY'
+          import json, os
+          from pathlib import Path
+          configurations = json.loads(Path('scripts/carplay-capture/display-configurations.json').read_text())
+          selection = os.environ['CONFIGURATION']
+          if selection != 'all':
+              configurations = [item for item in configurations if item['id'] == selection]
+          assert configurations, 'Unknown display configuration'
+          with open(os.environ['GITHUB_OUTPUT'], 'a') as output:
+              output.write('value=' + json.dumps({'include': configurations}) + '\n')
+          PY
   capture:
     needs: configurations
     strategy:
@@ -66,11 +83,13 @@ jobs:
       - name: Connect the disposable native display
         run: caffeinate -diu python3 scripts/carplay-capture/preflight.py
       - name: Check out the app under test
+        if: inputs.mode == 'matrix'
         uses: actions/checkout@v7
         with:
           ref: ${{ github.sha }}
           path: screenshot-app
       - name: Build and capture the unchanged app
+        if: inputs.mode == 'matrix'
         run: caffeinate -diu bash scripts/carplay-capture/capture.sh
       - name: Preserve the hosted test summary
         if: always()

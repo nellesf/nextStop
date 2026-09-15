@@ -149,39 +149,28 @@ end tell
     initial = javascript("read-configuration-controls", DIALOG_READER)
     (OUTPUT / "display-configuration-controls.json").write_text(json.dumps(initial, indent=2) + "\n")
     fields = validate_dialog(initial)
-    run("set-observed-configuration-fields", ["osascript", "-e", '''
-on enterAndCommit(theControl, requestedText)
+    # AXFocused is not reliable for this Simulator dialog. Use the same real
+    # mouse-event helper already verified for app clicks, with coordinates from
+    # the just-observed native controls. Click inside the editable portion of
+    # the Scale combo, away from its popup arrow.
+    for key in ["width", "height", "scale"]:
+        field = fields[key]
+        x = round(field["position"][0] + field["size"][0] * 0.3)
+        y = round(field["position"][1] + field["size"][1] / 2)
+        run(f"click-{key}", [
+            "osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(x), str(y),
+        ])
+        run(f"type-and-commit-{key}", ["osascript", "-e", '''
+on run arguments
     tell application "System Events"
-        set value of attribute "AXFocused" of theControl to true
-        delay 0.1
-        if (value of attribute "AXFocused" of theControl) is not true then
-            error "The observed configuration field did not receive keyboard focus"
-        end if
         keystroke "a" using command down
-        keystroke requestedText
+        keystroke (item 1 of arguments)
         key code 48
         delay 0.2
-        if (value of attribute "AXFocused" of theControl) is true then
-            error "The configuration edit did not lose focus after Tab"
-        end if
     end tell
-end enterAndCommit
-
-on run arguments
-    tell application "System Events" to tell process "Simulator"
-        set frontmost to true
-        set setupWindow to window "TV Out Extended Setup"
-        if (count text fields of setupWindow) is not 2 then error "Text field count changed"
-        if (count combo boxes of setupWindow) is not 1 then error "Combo box count changed"
-        my enterAndCommit(text field (item 1 of arguments as integer) of setupWindow, item 2 of arguments)
-        my enterAndCommit(text field (item 3 of arguments as integer) of setupWindow, item 4 of arguments)
-        my enterAndCommit(combo box (item 5 of arguments as integer) of setupWindow, item 6 of arguments)
-    end tell
-    return "Requested dimensions entered with keyboard input and committed by focus loss"
+    return "Typed numeric value and committed with Tab"
 end run
-''', str(fields["width"]["index"]), str(requested["width"]),
-        str(fields["height"]["index"]), str(requested["height"]),
-        str(fields["scale"]["index"]), str(requested["scale"])])
+''', str(requested[key])])
     readback_state = javascript("readback-configuration-controls", DIALOG_READER)
     readback_fields = validate_dialog(readback_state)
     readback = {key: float(readback_fields[key]["value"]) for key in ["width", "height", "scale"]}
@@ -195,7 +184,7 @@ end run
         "observationRunURL": OBSERVATION["runURL"],
         "controlObservation": OBSERVATION,
         "fieldAssociation": "Nearest native field to the right of its observed label on the same row",
-        "inputMethod": "Focus each observed field, Command+A, type its numeric value, then Tab and verify focus loss",
+        "inputMethod": "Click each observed editable field with native mouse events, Command+A, type its numeric value, then Tab",
         "configuredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "runURL": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
         "harnessCommit": os.environ["GITHUB_SHA"], "runSubmitted": False,
