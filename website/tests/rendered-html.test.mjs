@@ -34,28 +34,33 @@ test("server-renders the complete German nextStop landing page", async () => {
   const html = await response.text();
   assert.match(html, /<html lang="de">/i);
   assert.match(html, /<title>nextStop – Deine Pause\. Deine Entscheidung\.<\/title>/i);
-  assert.match(html, /Deine Pause\.<br\/>Deine Wahl\./);
+  assert.match(html, /Dein Auto lädt\.<br\/><em>Du machst Pause\.<\/em>/);
   assert.match(html, /Lass dir nicht vom Auto vorschreiben, wann und wo du Pause machst/);
+  assert.match(html, /eine gemeinsame Pause/);
   assert.match(html, /Ein Ladepunkt ist belegt, der andere defekt/);
-  assert.match(html, /Mit nextStop bestimmst du die Mindestgröße des Ladeparks/);
-  assert.match(html, /2 \/ 12 frei/);
-  assert.match(html, /5 \/ 8 frei/);
-  assert.match(html, /3 \/ 6 frei/);
-  assert.match(html, /Auslastung ist eine Momentaufnahme, wird je nach verfügbarer Datenlage angezeigt/);
-  assert.doesNotMatch(html, /Status unbekannt/);
+  assert.match(html, /Restaurant oder Ladeanbieter desselben Pausenstopps/);
+  assert.match(html, /Beide gehören zu deinem gewählten Pausenstopp/);
   assert.match(html, /Profile und Vorlieben/);
   assert.match(html, /Route nur für die Suche/);
-  assert.doesNotMatch(html, /Backend|Cloud-Sync|Analyse-SDK|App-Logs|im MVP/);
-  assert.match(html, /Vorbereiten\.<br\/>Nur auf dem iPhone\./);
-  assert.match(html, /vor der Fahrt ausschließlich auf dem iPhone ein/);
-  assert.doesNotMatch(html, /Vorbereiten geht/);
-  assert.match(html, /App-Aufnahme · CarPlay · Fahrt wählen/);
-  assert.match(html, /App-Aufnahme · CarPlay · Fahrt vorbereiten/);
-  assert.doesNotMatch(html, /Designvorschau · CarPlay|carplay-rail|poi-panel/);
-  assert.match(html, /App-Aufnahme · Meine Profile/);
-  assert.match(html, /App-Aufnahme · Profil bearbeiten/);
-  assert.match(html, /echte Simulator-Aufnahmen der unveröffentlichten App mit Beispielprofilen/);
-  assert.doesNotMatch(html, /Designvorschau · (?:iPhone|Profil bearbeiten|Ergebnis auf dem iPhone)/);
+  assert.doesNotMatch(html, /MapKit|geodesisch|Backend|Cloud-Sync|Analyse-SDK|App-Logs|im MVP|in Laufnähe/);
+  assert.doesNotMatch(html, /food-node|charge-node|hero-result-card|Designvorschau · CarPlay/);
+  assert.match(html, /Ein gemeinsamer Stopp zum Laden und Essen/);
+  assert.deepEqual([...html.matchAll(/<li[^>]*id="(profil|losfahren|stopp)"/g)].map((match) => match[1]),
+    ["profil", "losfahren", "stopp"]);
+  const profile = html.indexOf('id="profil"');
+  const drive = html.indexOf('id="losfahren"');
+  const find = html.indexOf('id="stopp"');
+  assert.ok(profile < drive && drive < find);
+  for (const file of ["iphone-profile-editor.png", "iphone-profiles.png"]) {
+    assert.ok(html.slice(profile, drive).includes(`src="/screenshots/${file}"`));
+    assert.ok(!html.slice(find).includes(`src="/screenshots/${file}"`));
+  }
+  for (const file of ["carplay-profiles.png", "carplay-ride-summary.png"]) {
+    assert.ok(html.slice(drive, find).includes(`src="/screenshots/${file}"`));
+  }
+  for (const { file } of resultCaptureSpecs) {
+    assert.ok(html.slice(find).includes(`src="/screenshots/${file}"`));
+  }
   for (const filename of [
     "iphone-profiles.png", "iphone-profile-editor.png",
     "carplay-profiles.png", "carplay-ride-summary.png",
@@ -104,7 +109,7 @@ test("keeps metadata, navigation, legal data, and source assets production-ready
   assert.match(page, /aria-label="Hauptnavigation"/);
   assert.match(page, /href="#privacy"/);
   assert.match(page, /href="#impressum"/);
-  assert.match(page, /mockup-disclaimer/);
+  assert.match(page, /image-note/);
   assert.match(css, /prefers-reduced-motion/);
   assert.doesNotMatch(page, /_sites-preview|SkeletonPreview/);
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
@@ -133,10 +138,9 @@ test("publishes result captures only with checked originals and accurate ownersh
     assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${file}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
     if (ownerApp === "Apple Maps") assert.match(image[0], /alt="[^"]*Apple Maps/);
   }
-  assert.match(html, /Beispielwerten für die Anzahl der Ladepunkte und die Leistung/);
-  assert.match(html, /Die Verfügbarkeit ist unbekannt/);
-  assert.match(html, /Orte und Fahrstrecken stammen aus MapKit/);
-  assert.match(html, /Die Ortsansichten auf dem iPhone gehören zu Apple Maps/);
+  assert.match(html, /Ladepunktzahlen und Ladeleistungen in nextStop sind Beispielwerte/);
+  assert.match(html, /Eine aktuelle Belegung wird in diesen Bildern nicht gezeigt/);
+  assert.match(html, /Apple Maps zeigt seine eigenen Ortsangaben/);
 });
 
 test("exports a self-contained Firebase Hosting document", async () => {

@@ -6,42 +6,6 @@ import {
   type ResultScreenshot,
 } from "../content/result-screenshots";
 
-const searchFacts = [
-  {
-    number: "01",
-    title: "Vor der Fahrt festlegen",
-    text: "Lege ausschließlich auf dem iPhone ein Profil mit Ziel, Entfernung, Mindestleistung, Anzahl der Ladepunkte und optional einer Restaurantkette an.",
-  },
-  {
-    number: "02",
-    title: "Unterwegs auswählen",
-    text: "Starte dein gespeichertes Profil über CarPlay. Änderungen gelten nur für diese Fahrt – dein Originalprofil bleibt unverändert.",
-  },
-  {
-    number: "03",
-    title: "Bis zu fünf Stopps vergleichen",
-    text: "nextStop filtert entlang der echten Route und sortiert ausschließlich nach tatsächlicher Fahrstrecke inklusive Abfahrt und Umweg.",
-  },
-] as const;
-
-const principles = [
-  {
-    kicker: "Echte Route",
-    title: "Nicht nur grob in Fahrtrichtung",
-    text: "Ein Ladepark muss höchstens fünf Kilometer von der tatsächlichen MapKit-Route entfernt liegen.",
-  },
-  {
-    kicker: "Echte Fahrstrecke",
-    title: "Der Umweg zählt mit",
-    text: "Die angezeigte Entfernung kommt von MapKit und enthält die Fahrt von deinem Standort bis zum Stopp – inklusive Abfahrt.",
-  },
-  {
-    kicker: "Keine Tricks",
-    title: "Deine Filter bleiben deine Filter",
-    text: "Keine versteckte Bewertung, keine automatische Lockerung: erst filtern, dann nach Fahrstrecke sortieren, maximal fünf Treffer.",
-  },
-] as const;
-
 function Brand() {
   return (
     <a className="brand" href="#top" aria-label="nextStop Startseite">
@@ -80,12 +44,12 @@ function AppScreenshot({
             alt={alt}
             width={1206}
             height={2622}
-            sizes="(max-width: 620px) 260px, (max-width: 1180px) 221px, 261px"
+            sizes="(max-width: 620px) 260px, 280px"
             unoptimized
           />
         </a>
       </div>
-      <figcaption className="mockup-label">{caption}</figcaption>
+      <figcaption className="screen-caption">{caption}</figcaption>
     </figure>
   );
 }
@@ -101,282 +65,165 @@ function CarPlayScreenshot({ src, alt, caption }: ResultScreenshot) {
             alt={alt}
             width={800}
             height={480}
-            sizes="(max-width: 620px) calc(100vw - 80px), (max-width: 1180px) 760px, 640px"
+            sizes="(max-width: 620px) calc(100vw - 52px), 640px"
             unoptimized
           />
         </a>
       </div>
-      <figcaption className="mockup-label">{caption}</figcaption>
+      <figcaption className="screen-caption">{caption}</figcaption>
     </figure>
   );
 }
 
-function CarPlayScreenshots() {
-  const screens = [
-    {
-      file: "carplay-profiles.png",
-      alt: "Die echte nextStop CarPlay-Ansicht Fahrt wählen mit dem gespeicherten Beispielprofil Leipzig",
-      caption: "App-Aufnahme · CarPlay · Fahrt wählen",
-    },
-    {
-      file: "carplay-ride-summary.png",
-      alt: "Die echte nextStop CarPlay-Fahrtübersicht für Leipzig mit Suche starten und Filter ändern",
-      caption: "App-Aufnahme · CarPlay · Fahrt vorbereiten",
-    },
-  ];
+function CombinedStop() {
   return (
-    <div className="carplay-gallery">
-      {screens.map((screen) => (
-        <CarPlayScreenshot
-          key={screen.file}
-          src={`/screenshots/${screen.file}`}
-          alt={screen.alt}
-          caption={screen.caption}
-        />
-      ))}
-    </div>
-  );
-}
-
-function ResultScreenshots() {
-  if (!iphoneResultScreenshots.length && !carplayResultScreenshots.length) return null;
-
-  return (
-    <div className="result-screenshots" aria-labelledby="result-screenshots-title">
-      <div className="stage-copy">
-        <span className="stage-tag">DEINEN STOPP AUSWÄHLEN</span>
-        <h3 id="result-screenshots-title">Vom passenden Treffer<br />zu deinem nächsten Stopp.</h3>
-        <p>Vergleiche die Ergebnisse und wähle das Restaurant oder den Ladeanbieter für deine Pause. Die jeweilige Ortsansicht zeigt dir das ausgewählte Ziel.</p>
+    <div className="combined-stop-scene" role="img" aria-label="Ein gemeinsamer Stopp zum Laden und Essen auf deiner Fahrt">
+      <svg className="journey-road" viewBox="0 0 600 600" fill="none" aria-hidden="true">
+        <path d="M 28 560 C 25 405 155 472 185 355 S 450 238 424 128 S 478 32 584 40" stroke="currentColor" strokeWidth="72" />
+        <path d="M 28 560 C 25 405 155 472 185 355 S 450 238 424 128 S 478 32 584 40" stroke="#f5f5ed" strokeWidth="3" strokeDasharray="15 17" />
+      </svg>
+      <div className="combined-stop-card">
+        <span className="eyebrow">DEINE NÄCHSTE PAUSE</span>
+        <div className="combined-stop-icons" aria-hidden="true"><span>ϟ</span><b>+</b><span>🍔</span></div>
+        <strong>Laden &amp; Essen</strong>
+        <p>Ein Stopp.<br />Zeit für beides.</p>
+        <span className="combined-stop-foot">Restaurant beim Ladepark</span>
       </div>
-      <p className="mockup-disclaimer">Echte Simulator-Aufnahmen mit Beispielwerten für die Anzahl der Ladepunkte und die Leistung in nextStop. Die Verfügbarkeit ist unbekannt. Orte und Fahrstrecken stammen aus MapKit. Die Ortsansichten auf dem iPhone gehören zu Apple Maps und zeigen dessen eigene Ortsdaten. Du wählst ein Restaurant oder einen Ladeanbieter, keinen einzelnen Stecker.</p>
-      {iphoneResultScreenshots.length > 0 && (
-        <div className="result-screenshot-group">
-          <h4>Auf dem iPhone</h4>
-          <div className="result-phone-gallery">
-            {iphoneResultScreenshots.map((screen) => <AppScreenshot key={screen.src} {...screen} />)}
-          </div>
-        </div>
-      )}
-      {carplayResultScreenshots.length > 0 && (
-        <div className="result-screenshot-group">
-          <h4>In CarPlay</h4>
-          <div className="result-carplay-gallery">
-            {carplayResultScreenshots.map((screen) => <CarPlayScreenshot key={screen.src} {...screen} />)}
-          </div>
-        </div>
-      )}
     </div>
   );
 }
 
 export default function Home() {
+  const phoneResults = iphoneResultScreenshots[0];
+  const carplayResults = carplayResultScreenshots[0];
   return (
     <main id="top">
       <header className="site-header">
         <Brand />
         <nav aria-label="Hauptnavigation">
-          <a href="#story">Die Idee</a>
+          <a href="#idee">Die Idee</a>
           <a href="#so-gehts">So geht’s</a>
-          <a href="#ladepark">Ladepark verstehen</a>
-          <a href="#privacy">Privatsphäre</a>
+          <a href="#fragen">Fragen</a>
         </nav>
         <span className="status-badge"><i /> In Entwicklung</span>
       </header>
 
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
-          <span className="eyebrow"><i /> Für iPhone &amp; Apple CarPlay entwickelt</span>
-          <h1 id="hero-title">Deine Pause.<br />Deine Wahl.</h1>
-          <p className="hero-lead">Finde deinen nächsten Stopp – nach <em>deinen Bedürfnissen.</em></p>
-          <p className="hero-support">Lass dir nicht vom Auto vorschreiben, wann und wo du Pause machst. Etwas essen, mehr Ladepunkte vor Ort oder beides? Du legst fest, was dir wichtig ist. nextStop findet bis zu fünf passende Stopps entlang deiner Route.</p>
-          <div className="hero-actions">
-            <a className="primary-button" href="#so-gehts">So funktioniert nextStop <span>↓</span></a>
-            <a className="text-link" href="#ladepark">Warum ein Ladepark mehr sagt <span>↗</span></a>
-          </div>
-          <div className="hero-proof" aria-label="Produktvorteile">
-            <span><strong>≤ 5 km</strong> zur Route</span>
-            <span><strong>≤ 5</strong> klare Treffer</span>
-            <span><strong>1 Tipp</strong> für Apple Maps</span>
-          </div>
+          <span className="eyebrow">FÜR IPHONE &amp; APPLE CARPLAY</span>
+          <h1 id="hero-title">Dein Auto lädt.<br /><em>Du machst Pause.</em></h1>
+          <p className="hero-lead">Lass dir nicht vom Auto vorschreiben, wann und wo du Pause machst.</p>
+          <p className="hero-support">Du hast Hunger und dein Auto braucht Strom? Finde einen Ladepark mit einem Restaurant in der Nähe. So wird aus Laden und Essen eine gemeinsame Pause – an einem Stopp, der zu dir passt.</p>
+          <a className="primary-button" href="#so-gehts">So findest du deinen Stopp <span>↓</span></a>
+          <p className="hero-footnote">Deine Wünsche. Dein Ladestopp. Deine Pause.</p>
         </div>
-
-        <div className="hero-visual" aria-label="Eine Route verbindet Restaurant, Ladepark und Ziel">
-          <div className="visual-glow" />
-          <div className="hero-road">
-            <span className="road-dash dash-one" />
-            <span className="road-dash dash-two" />
-            <span className="road-dash dash-three" />
-          </div>
-          <div className="route-node food-node"><span>🍔</span><small>Pause</small></div>
-          <div className="route-node charge-node"><span>ϟ</span><small>Laden</small></div>
-          <div className="route-node destination-node"><span>●</span><small>Hamburg</small></div>
-          <div className="car-chip"><span>→</span><strong>unterwegs</strong></div>
-          <div className="hero-result-card">
-            <div className="hero-result-top"><span>PASSENDER STOPP</span><strong>68 km</strong></div>
-            <h2>McDonald’s + Ladepark</h2>
-            <p>26 Ladepunkte ab 150 kW</p>
-            <div><span>IONITY</span><span>EnBW</span><span>Tesla</span></div>
-          </div>
-        </div>
+        <CombinedStop />
       </section>
 
-      <section className="story-section" id="story" aria-labelledby="story-title">
-        <div className="section-heading wide-heading">
-          <span className="section-index">01 · DIE SITUATION</span>
-          <h2 id="story-title">Was brauchst du<br />für eine gute Pause?</h2>
-          <p>Hast du Hunger? Möchtest du einen Ladepark mit mehreren Ladepunkten statt eines kleinen Standorts ohne Ausweichmöglichkeit? Du entscheidest, wie deine nächste Pause aussehen soll. nextStop sucht die Stopps, die zu deinen Wünschen passen.</p>
+      <section className="idea-section" id="idee" aria-labelledby="idea-title">
+        <div className="idea-heading">
+          <span className="eyebrow">PAUSE NACH DEINEN BEDÜRFNISSEN</span>
+          <h2 id="idea-title">Essen gehen,<br />während dein Auto lädt.</h2>
         </div>
-        <div className="moment-grid">
-          <article className="moment-card hunger-card">
-            <div className="moment-time">17:42</div>
-            <div className="moment-icon">🍟</div>
+        <div className="idea-copy">
+          <p>Erst laden und danach noch einmal fürs Essen anhalten? Das geht auch zusammen. Wähle deine bevorzugte Restaurantkette und finde Ladeparks in ihrer Nähe.</p>
+          <div className="more-choice">
+            <span aria-hidden="true">ϟ</span>
             <div>
-              <span>DER MOMENT</span>
-              <h3>„Ich möchte etwas essen.“</h3>
-              <p>Deine bevorzugte Restaurantkette soll in Laufnähe sein. Du entscheidest, ob Essen zu dieser Pause gehört.</p>
+              <h3>Und vor Ort mehr Auswahl haben.</h3>
+              <p>Ein Ladepunkt ist belegt, der andere defekt – mitten im Nirgendwo möchtest du so nicht ankommen. Lege fest, wie viele Ladepunkte ein Standort mindestens haben soll. nextStop berücksichtigt dabei auch mehrere Anbieter am selben Stopp.</p>
             </div>
-          </article>
-          <article className="moment-card charge-card">
-            <div className="moment-time">17:45</div>
-            <div className="moment-icon">ϟ</div>
-            <div>
-              <span>DEINE AUSWAHL</span>
-              <h3>„Ich will mehr als eine Ladesäule.“</h3>
-              <p>Lege fest, wie viele Ladepunkte ein passender Ladepark mindestens haben soll und welche Leistung du brauchst.</p>
-            </div>
-          </article>
-          <article className="moment-card answer-card">
-            <div className="moment-time">17:46</div>
-            <div className="moment-icon">✓</div>
-            <div>
-              <span>DIE ANTWORT</span>
-              <h3>„Dieser Stopp passt zu mir.“</h3>
-              <p>Vergleiche bis zu fünf passende Ergebnisse. Du wählst deinen Stopp – Apple Maps übernimmt die Navigation.</p>
-            </div>
-          </article>
+          </div>
         </div>
       </section>
 
-      <section className="workflow-section" id="so-gehts" aria-labelledby="workflow-title">
-        <div className="section-heading centered-heading">
-          <span className="section-index">02 · SO GEHT’S</span>
-          <h2 id="workflow-title">Einmal einstellen.<br />Unterwegs entspannt finden.</h2>
-          <p>Profile und dauerhafte Vorlieben bereitest du ausschließlich auf dem iPhone vor. Während der Fahrt bleibt CarPlay bewusst knapp.</p>
+      <section className="journey-section" id="so-gehts" aria-labelledby="journey-title">
+        <div className="journey-intro">
+          <span className="eyebrow">SO GEHT’S</span>
+          <h2 id="journey-title">In drei Schritten<br />zu deiner nächsten Pause.</h2>
+          <nav className="journey-nav" aria-label="Die drei Schritte">
+            <a href="#profil"><span>1</span> Profil anlegen</a>
+            <a href="#losfahren"><span>2</span> Losfahren</a>
+            <a href="#stopp"><span>3</span> Passenden Stopp finden</a>
+          </nav>
         </div>
 
-        <div className="workflow-list">
-          {searchFacts.map((fact) => (
-            <article key={fact.number}>
-              <span>{fact.number}</span>
-              <div><h3>{fact.title}</h3><p>{fact.text}</p></div>
-            </article>
-          ))}
-        </div>
-
-        <div className="device-stage phone-stage">
-          <div className="stage-copy">
-            <span className="stage-tag">IPHONE · VOR DER FAHRT</span>
-            <h3>Deine Profile,<br />deine Kriterien.</h3>
-            <p>Erstelle Profile für wiederkehrende Fahrten oder verschiedene Pausen. Name und Ziel bleiben lokal auf deinem iPhone.</p>
-            <ul>
-              <li>Entfernungsbereich von 15 bis 150 km</li>
-              <li>Mindestleistung und Mindestanzahl an Ladepunkten</li>
-              <li>Optional McDonald’s, Burger King, KFC oder Subway</li>
-            </ul>
-          </div>
-          <div className="phones-composition">
-            <AppScreenshot
-              src="/screenshots/iphone-profiles.png"
-              alt="Die nextStop Profilübersicht mit gespeicherten Beispielprofilen auf dem iPhone"
-              caption="App-Aufnahme · Meine Profile"
-            />
-            <AppScreenshot
-              src="/screenshots/iphone-profile-editor.png"
-              alt="Ein nextStop Beispielprofil im Editor mit Name, Ziel und Suchkriterien"
-              caption="App-Aufnahme · Profil bearbeiten"
-              className="editor-device"
-            />
-          </div>
-        </div>
-
-        <div className="device-stage carplay-stage">
-          <div className="stage-copy">
-            <span className="stage-tag dark-tag">CARPLAY · WÄHREND DER FAHRT</span>
-            <h3>Wenig tippen.<br />Klar entscheiden.</h3>
-            <p>Wähle dein gespeichertes Profil und prüfe die Kriterien für diese Fahrt. Änderungen gelten nur unterwegs – dein Originalprofil bleibt erhalten. Die Navigation zu einem ausgewählten Stopp übernimmt Apple Maps.</p>
-          </div>
-          <CarPlayScreenshots />
-        </div>
-
-        <ResultScreenshots />
-
-        <div className="device-stage results-stage">
-          <div className="fact-callout filter-distance">
-            <span>500 m</span>
-            <p>Maximaler geodesischer Abstand zwischen der gewählten Restaurantkette und einem passenden Ladepark.</p>
-          </div>
-          <div className="stage-copy">
-            <span className="stage-tag">IPHONE · DEINE FILTER</span>
-            <h3>Vorbereiten.<br />Nur auf dem iPhone.</h3>
-            <p>Profile und dauerhafte Vorlieben richtest du vor der Fahrt ausschließlich auf dem iPhone ein. Wähle die passende Mindestleistung, die Anzahl der Ladepunkte und bei Bedarf deine Restaurantkette. Unterwegs reicht in CarPlay die Auswahl des vorbereiteten Profils.</p>
-          </div>
-        </div>
-        <p className="mockup-disclaimer">Die Profilansichten auf iPhone und CarPlay zeigen echte Simulator-Aufnahmen der unveröffentlichten App mit Beispielprofilen. Die übrigen Grafiken erläutern das Konzept anhand fiktiver Ladeparks und Zahlen.</p>
-      </section>
-
-      <section className="capacity-section" id="ladepark" aria-labelledby="capacity-title">
-        <div className="capacity-intro">
-          <span className="section-index light-index">03 · MEHR KONTEXT</span>
-          <h2 id="capacity-title">Mehr als die<br />nächste Ladesäule.</h2>
-          <p>Ein Ladepunkt ist belegt, der andere defekt. Gibt es vor Ort keine Alternative, musst du weitersuchen. Für deine Pause möchtest du lieber einen Standort mit mehr Ladepunkten zur Auswahl.</p>
-          <p>Mit nextStop bestimmst du die Mindestgröße des Ladeparks. Du siehst die erfassten Ladepunkte über Anbieter hinweg – ab deiner gewünschten Mindestleistung. So kannst du deinen Stopp nach mehr als der gerade angezeigten Verfügbarkeit auswählen.</p>
-        </div>
-
-        <div className="capacity-demo">
-          <div className="snapshot-card">
-            <span className="demo-label">DEIN AUTO ZEIGT</span>
-            <div className="provider-head"><span className="provider-mark">A</span><div><strong>Anbieter A</strong><small>nächster Ladestopp</small></div></div>
-            <div className="availability-big"><strong>2</strong><span>aktuell frei</span></div>
-            <p>Momentaufnahme – keine Prognose für deine Ankunft.</p>
-          </div>
-
-          <div className="perspective-arrow"><span>+</span><small>mehr<br />Kontext</small></div>
-
-          <div className="park-card">
-            <div className="park-card-head"><div><span className="demo-label">NEXTSTOP ZEIGT</span><h3>Ladepark Elbtal</h3></div><span className="route-distance">68 km</span></div>
-            <div className="total-capacity"><strong>26</strong><div><span>Ladepunkte</span><small>ab 150 kW erfasst</small></div></div>
-            <div className="provider-rows">
-              <div><span className="provider-mark lime-mark">A</span><strong>Anbieter A</strong><span>12 Ladepunkte</span><small className="live">2 / 12 frei</small></div>
-              <div><span className="provider-mark aqua-mark">B</span><strong>Anbieter B</strong><span>8 Ladepunkte</span><small className="live">5 / 8 frei</small></div>
-              <div><span className="provider-mark white-mark">C</span><strong>Anbieter C</strong><span>6 Ladepunkte</span><small className="live">3 / 6 frei</small></div>
+        <ol className="journey-steps">
+          <li className="journey-step profile-step" id="profil">
+            <div className="step-heading">
+              <span className="step-number" aria-hidden="true">1</span>
+              <div><span className="eyebrow">VOR DER FAHRT · AUF DEM IPHONE</span><h3>Profil für deine<br />nächste Fahrt anlegen.</h3></div>
             </div>
-            <p className="capacity-caveat">Auslastung ist eine Momentaufnahme, wird je nach verfügbarer Datenlage angezeigt und beeinflusst weder Auswahl noch Reihenfolge.</p>
-          </div>
-        </div>
+            <div className="profile-layout">
+              <div className="step-copy">
+                <p>Wohin geht’s, und was brauchst du für eine gute Pause? Speichere dein Ziel und deine Wünsche vor dem Losfahren auf dem iPhone.</p>
+                <ul className="preference-list">
+                  <li><strong>Dein Ziel</strong><span>Wohin du fahren möchtest.</span></li>
+                  <li><strong>Dein Ladestopp</strong><span>In welcher Entfernung du suchen möchtest, wie viele Ladepunkte es mindestens geben soll und welche Ladeleistung du brauchst.</span></li>
+                  <li><strong>Deine Essenspause</strong><span>Auf Wunsch mit McDonald’s, Burger King, KFC oder Subway in der Nähe.</span></li>
+                </ul>
+                <p className="quiet-note">Für die nächste ähnliche Fahrt ist dein Profil schon gespeichert.</p>
+              </div>
+              <div className="profile-screens">
+                <AppScreenshot src="/screenshots/iphone-profile-editor.png" alt="nextStop auf dem iPhone: Profil für die nächste Fahrt mit Ziel und Wünschen anlegen" caption="Ziel und Wünsche eintragen" />
+                <AppScreenshot src="/screenshots/iphone-profiles.png" alt="nextStop auf dem iPhone: gespeicherte Fahrtprofile" caption="Dein Profil ist bereit" />
+              </div>
+            </div>
+          </li>
 
-      </section>
+          <li className="journey-step drive-step" id="losfahren">
+            <div className="step-heading">
+              <span className="step-number" aria-hidden="true">2</span>
+              <div><span className="eyebrow">UNTERWEGS · IN CARPLAY</span><h3>Losfahren.<br />Dein Profil ist schon dabei.</h3></div>
+            </div>
+            <p className="step-lead">Wenn du unterwegs einen Stopp suchst, wählst du dein vorbereitetes Profil in CarPlay aus. Dein Ziel und deine Wünsche sind schon da.</p>
+            <div className="carplay-pair">
+              <CarPlayScreenshot src="/screenshots/carplay-profiles.png" alt="nextStop in CarPlay: die vorbereitete Fahrt auswählen" caption="Deine Fahrt auswählen" />
+              <CarPlayScreenshot src="/screenshots/carplay-ride-summary.png" alt="nextStop in CarPlay: gespeicherte Wünsche prüfen und die Suche starten" caption="Bereit für die Suche" />
+            </div>
+          </li>
 
-      <section className="principles-section" aria-labelledby="principles-title">
-        <div className="section-heading wide-heading">
-          <span className="section-index">04 · DARAUF KANNST DU DICH VERLASSEN</span>
-          <h2 id="principles-title">Was „entlang der Route“<br />bei nextStop bedeutet.</h2>
-        </div>
-        <div className="principles-grid">
-          {principles.map((principle, index) => (
-            <article key={principle.kicker}>
-              <span className="principle-number">0{index + 1}</span>
-              <span className="principle-kicker">{principle.kicker}</span>
-              <h3>{principle.title}</h3>
-              <p>{principle.text}</p>
-            </article>
-          ))}
-        </div>
+          <li className="journey-step find-step" id="stopp">
+            <div className="step-heading">
+              <span className="step-number" aria-hidden="true">3</span>
+              <div><span className="eyebrow">WENN ES ZEIT FÜR DEINE PAUSE IST</span><h3>Den passenden Stopp finden.<br />Laden und Essen verbinden.</h3></div>
+            </div>
+            <p className="step-lead">Starte die Suche. nextStop zeigt dir bis zu fünf Stopps entlang deiner Fahrt, die zu deinen Wünschen passen. Der nächste steht zuerst – die angezeigte Fahrstrecke zählt die Abfahrt und den Weg zum Stopp mit.</p>
+            <p className="image-note">Echte Aufnahmen aus der App in Entwicklung. Ladepunktzahlen und Ladeleistungen in nextStop sind Beispielwerte. Eine aktuelle Belegung wird in diesen Bildern nicht gezeigt.</p>
+
+            <div className="result-comparison" aria-label="Suchergebnisse auf iPhone und CarPlay">
+              {carplayResults && <div className="carplay-result"><h4>Unterwegs in CarPlay</h4><CarPlayScreenshot {...carplayResults} /><p className="result-explanation">Restaurant, Ladepunkte und Entfernung gehören zu einem gemeinsamen Stopp. Du entscheidest, welcher zu deiner Pause passt.</p></div>}
+              {phoneResults && <div className="phone-result"><h4>Auch auf dem iPhone</h4><AppScreenshot {...phoneResults} /></div>}
+            </div>
+
+            <div className="arrival-choice">
+              <div className="arrival-heading">
+                <span className="eyebrow">DEINEN STOPP ANSTEUERN</span>
+                <h4>Eine Pause.<br />Du wählst, wo du ankommst.</h4>
+                <p>Öffne den Ladeanbieter oder das Restaurant als Ziel. Beide gehören zu deinem gewählten Pausenstopp. Apple Maps führt dich zu dem Ort, den du antippst.</p>
+              </div>
+              <div className="carplay-pair">
+                {carplayResultScreenshots.slice(1).map((screen) => <CarPlayScreenshot key={screen.src} {...screen} />)}
+              </div>
+              {iphoneResultScreenshots.length > 1 && (
+                <details className="maps-details">
+                  <summary>So sieht dein ausgewähltes Ziel in Apple Maps aus <span>＋</span></summary>
+                  <div className="maps-content">
+                    <p>Hier siehst du das Restaurant und den Ladeanbieter desselben Stopps. Apple Maps zeigt seine eigenen Ortsangaben.</p>
+                    <div className="maps-screens">{iphoneResultScreenshots.slice(1).map((screen) => <AppScreenshot key={screen.src} {...screen} />)}</div>
+                  </div>
+                </details>
+              )}
+            </div>
+          </li>
+        </ol>
+        <div className="journey-outcome"><span aria-hidden="true">ϟ + 🍔</span><p>Einmal anhalten.<br /><strong>Deine Ladezeit wird zur Essenspause.</strong></p></div>
       </section>
 
       <section className="privacy-section" id="privacy" aria-labelledby="privacy-title">
         <div className="privacy-card">
           <div className="privacy-copy">
-            <span className="section-index light-index">05 · PRIVATSPHÄRE</span>
+            <span className="section-index light-index">DEINE PRIVATSPHÄRE</span>
             <h2 id="privacy-title">Deine Vorlieben<br />bleiben deine.</h2>
             <p>Profile, Favoriten und zuletzt verwendete Ziele bleiben auf deinem iPhone. Du brauchst kein Konto und nextStop zeigt keine Werbung.</p>
             <p>Für die Suche wird deine Route kurzzeitig verwendet. Danach wird sie nicht gespeichert und nextStop erstellt daraus kein persönliches Nutzungsprofil.</p>
@@ -390,34 +237,38 @@ export default function Home() {
         </div>
       </section>
 
-      <section className="faq-section" aria-labelledby="faq-title">
+      <section className="faq-section" id="fragen" aria-labelledby="faq-title">
         <div className="section-heading faq-heading">
-          <span className="section-index">06 · KURZ GEKLÄRT</span>
+          <span className="section-index">GUT ZU WISSEN</span>
           <h2 id="faq-title">Noch eine Frage?</h2>
         </div>
         <div className="faq-list">
           <details>
             <summary>Plant nextStop meine komplette Ladereise?<span>＋</span></summary>
-            <p>Nein. nextStop findet passende Pausenstopps entlang einer bestehenden Route. Navigation und Routenführung übernimmt Apple Maps.</p>
+            <p>nextStop hilft dir, den nächsten passenden Stopp zu finden. Du entscheidest, wo du Pause machst. Apple Maps führt dich zum ausgewählten Ort.</p>
           </details>
           <details>
             <summary>Garantiert die App freie Ladepunkte bei Ankunft?<span>＋</span></summary>
-            <p>Nein. Verfügbarkeit ist eine Momentaufnahme, rein informativ und kein Filter. nextStop hilft dir vor allem, Kapazität und Betreiber-Auswahl eines Ladeparks einzuschätzen.</p>
+            <p>Nein. Auch ein jetzt freier Ladepunkt kann bei deiner Ankunft belegt sein. Du kannst aber gezielt nach Standorten mit mehreren Ladepunkten suchen, damit du vor Ort mehr Auswahl hast.</p>
+          </details>
+          <details>
+            <summary>Und wenn ich nichts essen möchte?<span>＋</span></summary>
+            <p>Dann lässt du die Restaurantwahl im Profil einfach weg. nextStop sucht einen Ladestopp, der zu deinen übrigen Wünschen passt.</p>
           </details>
           <details>
             <summary>Kann ich Profile in CarPlay ändern?<span>＋</span></summary>
-            <p>Du kannst Kriterien für die aktuelle Fahrt anpassen. Gespeicherte Profile werden ausschließlich in der iPhone-App gepflegt und bleiben dabei unverändert.</p>
+            <p>Dein Profil legst du vor der Fahrt auf dem iPhone an. In CarPlay kannst du deine Wünsche für die aktuelle Fahrt anpassen. Dein gespeichertes Profil bleibt dabei erhalten.</p>
           </details>
           <details>
             <summary>Wo funktioniert nextStop?<span>＋</span></summary>
-            <p>Die aktuelle Datenbasis ist für Deutschland und die Schweiz ausgelegt. nextStop befindet sich noch in Entwicklung.</p>
+            <p>nextStop wird zunächst für Fahrten in Deutschland und der Schweiz entwickelt. nextStop befindet sich noch in Entwicklung.</p>
           </details>
         </div>
       </section>
 
       <section className="imprint-section" id="impressum" aria-labelledby="imprint-title">
         <div className="imprint-heading">
-          <span className="section-index">07 · RECHTLICHES</span>
+          <span className="section-index">RECHTLICHES</span>
           <h2 id="imprint-title">Impressum</h2>
           <p>Angaben gemäß § 5 DDG und § 18 Abs. 1 MStV</p>
         </div>
@@ -446,21 +297,21 @@ export default function Home() {
               </p>
             </div>
           </div>
-          <p className="imprint-note">Verantwortlich für dieses Telemedienangebot ist die oben genannte natürliche Person.</p>
+          <p className="imprint-note">Verantwortlich für dieses Angebot ist die oben genannte natürliche Person.</p>
         </div>
       </section>
 
       <section className="closing-section">
         <Image src="/app-icon.png" alt="nextStop App-Icon" width={88} height={88} unoptimized />
         <span className="section-index light-index">DEIN NÄCHSTER STOPP</span>
-        <h2>Pause machen.<br />Weiterkommen.</h2>
+        <h2>Eine Pause für dich.<br />Und dein Auto.</h2>
         <p>nextStop wird für iPhone und Apple CarPlay entwickelt.</p>
         <span className="development-pill"><i /> Aktuell in Entwicklung</span>
       </section>
 
       <footer>
         <Brand />
-        <p>Finde passende Ladeparks entlang deiner Route.</p>
+        <p>Laden und Pause machen. An einem Stopp.</p>
         <div><a href="#privacy">Privatsphäre</a><a href="#impressum">Impressum</a><a href="#top">Nach oben ↑</a></div>
         <small>© 2026 nextStop · Restaurantdaten © OpenStreetMap-Mitwirkende</small>
       </footer>

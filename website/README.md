@@ -47,6 +47,18 @@ The final legal text depends on the operator. Relevant official references are
 where applicable,
 [§ 36 VSBG](https://www.gesetze-im-internet.de/vsbg/__36.html).
 
+## Page story and shared-link image
+
+The page explains one combined charging and food break through the ordered flow
+**create a trip profile → drive off → find a matching stop**. Keep screenshots
+inside the step they explain. Apple Maps shows one selected place per action.
+
+`public/social-card.svg` is the editable, code-native source for the shared-link
+image. `public/og.png` is its 1200 × 630 browser render at a device scale of 1.
+Both depict charging and food at one stop. After changing the SVG, render the
+complete image again and keep the metadata dimensions synchronized. This graphic
+is separate from the unchanged native app screenshots below.
+
 ## App screenshots
 
 The iPhone profile images in `public/screenshots/` are genuine Simulator captures
@@ -60,8 +72,8 @@ profile list, profile editor, and profile filters:
 
 The page uses the profile list and editor captures. The lower-filter capture is
 retained with its provenance but is not displayed because the Simulator capture
-contains a rendering artifact in the save button. The 500 m distance is instead
-explained as text. A passing UI test does not replace visual review.
+contains a rendering artifact in the save button. A passing UI test does not
+replace visual review.
 
 `app/page.tsx` displays each image at its native aspect ratio without a recreated
 status bar or UI overlay. `app/globals.css` supplies only the surrounding device
@@ -69,11 +81,20 @@ frame. Keep the original files when refreshing the captures and record the exact
 source revision and runner details alongside them. `npm test` checks that the
 selected images appear in the exported page and exist in the static output.
 
-The CarPlay section uses two original external-display captures of the same
-`main` app: `carplay-profiles.png` and `carplay-ride-summary.png`. These replace
-the former code-based results illustration. These images show profile selection
-and ride preparation.
-The remaining explanatory graphics are labelled as fictional examples.
+The page follows one ordered journey, with images at their corresponding step:
+
+1. Create the upcoming trip profile on iPhone: editor, then saved profiles.
+2. Drive off and recall the prepared trip in CarPlay: profile selection and ride summary.
+3. Find a combined charging/food stop: CarPlay results beside iPhone results,
+   followed by destination actions and provider selection. The two Apple Maps
+   place cards are available in an expandable disclosure after that selection.
+
+The hero uses one shared charging-and-food stop, rather than separate route
+markers. Keep the product copy conversational: restaurant nearby, actual distance
+to the stop, and the user's preferences. Routing implementation names and spatial
+terminology belong in developer documentation, not the landing page. Do not imply
+automatic search on departure, a verified walking route, guaranteed availability,
+or a multi-stop Apple Maps itinerary.
 
 `content/result-screenshots.ts` holds the reviewed captures for the additional
 result and place-selection galleries. Six reviewed captures from
@@ -81,9 +102,9 @@ result and place-selection galleries. Six reviewed captures from
 are imported and displayed. Empty collections render no empty gallery or
 missing-image references. Populate each entry with the imported path, accurate alt text and a
 caption that identifies the screen, including Apple Maps when it owns the view.
-The gallery follows profile preparation and groups iPhone and CarPlay captures
-separately. Keep screenshot provenance separate when the capture run or data
-fixture differs from the existing profile images.
+Keep the images beside the action they explain rather than collecting them in
+a separate gallery. Keep screenshot provenance separate when the capture run or
+data fixture differs from the existing profile images.
 
 For result captures, dispatch the workflow in `results` mode. Download the
 successful run's artifact and inspect the six original screenshots before

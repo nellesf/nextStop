@@ -1,0 +1,24 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <rect width="1200" height="630" fill="#f5f5ed"/>
+  <g font-family="Arial, Helvetica, sans-serif">
+    <text x="64" y="89" font-size="32" font-weight="700" fill="#10271f">nextStop</text>
+    <text x="64" y="235" font-size="67" font-weight="700" letter-spacing="-3" fill="#10271f">Dein Auto lädt.</text>
+    <text x="64" y="318" font-size="67" font-weight="700" letter-spacing="-3" fill="#34745c">Du machst Pause.</text>
+    <text x="67" y="396" font-size="25" fill="#64716b">Laden und Essen. Bei einem gemeinsamen Stopp.</text>
+    <text x="67" y="540" font-size="17" fill="#64716b">Für iPhone und Apple CarPlay · In Entwicklung</text>
+    <path d="M 1090 -30 C 935 70 1160 135 1040 265 S 785 423 953 680" fill="none" stroke="#10271f" stroke-width="64"/>
+    <path d="M 1090 -30 C 935 70 1160 135 1040 265 S 785 423 953 680" fill="none" stroke="#f5f5ed" stroke-width="3" stroke-dasharray="15 18"/>
+    <rect x="825" y="149" width="303" height="333" rx="32" fill="#10271f" opacity=".09"/>
+    <rect x="816" y="139" width="303" height="333" rx="32" fill="#fffefa" stroke="#cdd5ca"/>
+    <text x="967" y="185" font-size="13" font-weight="700" letter-spacing="2" text-anchor="middle" fill="#34745c">DEINE PAUSE</text>
+    <rect x="851" y="216" width="93" height="93" rx="24" fill="#c7ff2e"/>
+    <path d="M 904 233 L 880 269 L 899 269 L 889 292 L 918 256 L 898 256 Z" fill="#10271f"/>
+    <text x="966" y="274" font-size="28" text-anchor="middle" fill="#10271f">+</text>
+    <rect x="989" y="216" width="93" height="93" rx="24" fill="#ff9d50"/>
+    <g fill="none" stroke="#10271f" stroke-width="5" stroke-linecap="round">
+      <path d="M 1017 235 L 1017 288 M 1008 235 L 1008 253 Q 1017 266 1026 253 L 1026 235 M 1053 235 L 1053 288 M 1053 235 Q 1072 256 1053 266"/>
+    </g>
+    <text x="967" y="365" text-anchor="middle" font-size="32" font-weight="700" fill="#10271f">Laden + Essen</text>
+    <text x="967" y="408" text-anchor="middle" font-size="23" fill="#64716b">Ein Stopp für beides.</text>
+  </g>
+</svg>

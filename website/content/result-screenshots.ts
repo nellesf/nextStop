@@ -35,12 +35,12 @@ export const carplayResultScreenshots: ResultScreenshot[] = [
   },
   {
     src: "/screenshots/carplay-result-actions.png",
-    alt: "nextStop in CarPlay: Auswahl zwischen Ladeanbieter und Restaurant für den gewählten Stopp",
-    caption: "nextStop · CarPlay · Stopp auswählen",
+    alt: "nextStop in CarPlay: Restaurant oder Ladeanbieter desselben Pausenstopps als Ziel öffnen",
+    caption: "nextStop · CarPlay · Dein Ziel am Stopp",
   },
   {
     src: "/screenshots/carplay-charging-places.png",
     alt: "nextStop in CarPlay: Ladeanbieter beim gewählten Restaurant mit Öffnen in Apple Maps",
-    caption: "nextStop · CarPlay · Ladeanbieter wählen",
+    caption: "nextStop · CarPlay · Ladeanbieter beim Restaurant",
   },
 ];

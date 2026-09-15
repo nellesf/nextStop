@@ -5,7 +5,7 @@ export const metadata: Metadata = {
   metadataBase: new URL("https://nextstop.tech"),
   title: "nextStop – Deine Pause. Deine Entscheidung.",
   description:
-    "Wähle deinen nächsten Stopp nach deinen Bedürfnissen: passende Ladeparks entlang deiner Route, auf Wunsch mit deiner bevorzugten Restaurantkette in Laufnähe.",
+    "Laden und Essen bei einem gemeinsamen Stopp: Bereite deine Fahrt auf dem iPhone vor und finde unterwegs mit CarPlay den Ladepark, der zu deiner Pause passt.",
   applicationName: "nextStop",
   alternates: { canonical: "/" },
   icons: {
@@ -15,7 +15,7 @@ export const metadata: Metadata = {
   openGraph: {
     title: "Deine Pause. Deine Entscheidung.",
     description:
-      "Du bestimmst, was deine Pause braucht. nextStop findet passende Ladeparks entlang deiner Route – auf Wunsch mit Restaurant.",
+      "Dein Auto lädt, du machst Pause. nextStop findet Ladeparks mit deiner gewünschten Restaurantkette in der Nähe.",
     url: "/",
     siteName: "nextStop",
     locale: "de_DE",
@@ -23,9 +23,9 @@ export const metadata: Metadata = {
     images: [
       {
         url: "/og.png",
-        width: 1731,
-        height: 909,
-        alt: "nextStop – Hunger auf der Strecke? Pause machen. Weiterkommen.",
+        width: 1200,
+        height: 630,
+        alt: "nextStop – Dein Auto lädt. Du machst Pause. Laden und Essen bei einem gemeinsamen Stopp.",
       },
     ],
   },

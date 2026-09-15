@@ -37,7 +37,8 @@ if (!response.ok) {
 }
 
 const html = await response.text();
-if (!html.includes("Hunger auf der Strecke?")) {
+const requiredSections = ["hero-title", "journey-title", "profil", "losfahren", "stopp"];
+if (!requiredSections.every((id) => html.includes(`id="${id}"`))) {
   throw new Error("Static rendering did not contain the expected landing page.");
 }
 if (html.includes("/_next/image?")) {
