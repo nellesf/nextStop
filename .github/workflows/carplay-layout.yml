@@ -1,0 +1,35 @@
+name: CarPlay Layout
+
+on:
+  push:
+    branches: [codex/carplay-text-fit]
+    paths:
+      - .github/workflows/carplay-layout.yml
+      - scripts/carplay-capture/**
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: carplay-layout-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  discover:
+    runs-on: macos-26
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v7
+      - name: Connect the disposable native display
+        run: caffeinate -diu python3 scripts/carplay-capture/preflight.py
+      - name: Discover native display configuration controls
+        run: caffeinate -diu python3 scripts/carplay-capture/discover-configurations.py
+      - name: Preserve discovery evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: carplay-layout-discovery
+          path: CarPlay-Captures/
+          retention-days: 7
+          if-no-files-found: error
