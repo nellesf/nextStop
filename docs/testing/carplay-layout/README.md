@@ -86,3 +86,17 @@ They confirm that the POI picker title is a plain `NSString` property and expose
 no font or fitting property. That run connected a native display successfully,
 but its configuration accessibility probe timed out; it is not resolution-matrix
 evidence. Header hashes and the runner SDK path are retained in its artifact.
+
+## Run the audit
+
+Push the test branch, then dispatch the workflow explicitly. This keeps later
+report and importer commits from starting duplicate simulator matrices.
+
+```bash
+gh workflow run carplay-layout.yml --repo nellesf/nextStop \
+  --ref codex/carplay-text-fit -f mode=matrix
+```
+
+Use `mode=discover` only when the native configuration controls need another
+inspection. The full matrix uses separate disposable devices for each configuration
+and checks framebuffer dimensions before building the app.

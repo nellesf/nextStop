@@ -9,6 +9,7 @@ import os
 import atexit
 from pathlib import Path
 import shutil
+import struct
 import subprocess
 import sys
 import time
@@ -17,6 +18,8 @@ import time
 OUTPUT = Path("CarPlay-Captures")
 OUTPUT.mkdir(exist_ok=True)
 device_id = None
+if os.environ.get("GITHUB_ACTIONS") != "true" or os.environ.get("RUNNER_OS") != "macOS":
+    raise RuntimeError("CarPlay capture is restricted to a disposable GitHub macOS runner.")
 
 
 def run(label, command, *, required=True, timeout=60):
@@ -94,6 +97,7 @@ if requested_runtime := os.environ.get("CARPLAY_RUNTIME_VERSION"):
 device_id = run("create-device", [
     "xcrun", "simctl", "create", "nextStop CarPlay Capture", "iPhone 17 Pro", runtime["identifier"]
 ]).strip()
+os.environ["CARPLAY_DEVICE_ID"] = device_id
 with open(os.environ["GITHUB_ENV"], "a") as output:
     output.write(f"CARPLAY_DEVICE_ID={device_id}\n")
 run("boot-device", ["xcrun", "simctl", "boot", device_id])
@@ -106,6 +110,10 @@ run("status-bar", [
 run("appearance", ["xcrun", "simctl", "ui", device_id, "appearance", "light"], timeout=180)
 developer = subprocess.check_output(["xcode-select", "-p"], text=True).strip()
 simulator = str(Path(developer) / "Applications/Simulator.app")
+if os.environ.get("CARPLAY_CONFIGURATION"):
+    run("enable-display-options", [
+        "defaults", "write", "com.apple.iphonesimulator", "CarPlayExtraOptions", "-bool", "YES",
+    ])
 run("open-simulator", ["open", "-a", simulator, "--args", "-CurrentDeviceUDID", device_id])
 run("wait-for-simulator-window", ["osascript", "-e", '''
 tell application "System Events"
@@ -158,7 +166,14 @@ with timeout of 40 seconds
     end tell
 end timeout
 '''
-run("enable-carplay", ["osascript", "-e", carplay_menu_script], timeout=50)
+def connect_carplay(label):
+    if os.environ.get("CARPLAY_CONFIGURATION"):
+        run(label, ["python3", "scripts/carplay-capture/configure-display.py"], timeout=110)
+    else:
+        run(label, ["osascript", "-e", carplay_menu_script], timeout=50)
+
+
+connect_carplay("enable-carplay")
 run("displays-after", ["xcrun", "simctl", "io", device_id, "enumerate"])
 run("simulator-windows-after", ["osascript", "-e", '''
 tell application "System Events"
@@ -234,7 +249,7 @@ with timeout of 30 seconds
     end tell
 end timeout
 '''], timeout=40)
-    run("reconnect-carplay-menu", ["osascript", "-e", carplay_menu_script], timeout=50)
+    connect_carplay("reconnect-carplay-menu")
     run("host-screen-after-reconnect", [
         "screencapture", "-x", str(OUTPUT / "diagnostic-host-after-reconnect.png"),
     ], required=False)
@@ -245,6 +260,13 @@ if not readiness[-1]["ready"]:
     ], required=False)
     raise RuntimeError("CarPlay remained unreadable after two 90-second waits and one native display reconnect.")
 
+configuration = None
+if os.environ.get("CARPLAY_CONFIGURATION"):
+    configuration = json.loads((OUTPUT / "display-configuration.json").read_text())
+    native_size = struct.unpack(">II", (OUTPUT / "diagnostic-carplay-home.png").read_bytes()[16:24])
+    requested_size = (int(os.environ["CARPLAY_WIDTH"]), int(os.environ["CARPLAY_HEIGHT"]))
+    assert native_size == requested_size, f"Requested {requested_size}; native framebuffer is {native_size}"
+
 (OUTPUT / "preflight.json").write_text(json.dumps({
     "deviceID": device_id,
     "device": "iPhone 17 Pro",
@@ -252,5 +274,6 @@ if not readiness[-1]["ready"]:
     "menu": "Simulator > I/O > External Displays > CarPlay",
     "capture": "simctl io screenshot --display=external",
     "readiness": readiness,
+    "configuration": configuration,
     "result": "Native CarPlay display connected and captured before app build",
 }, indent=2) + "\n")

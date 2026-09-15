@@ -1,22 +1,24 @@
 name: CarPlay Layout
 
 on:
-  push:
-    branches: [codex/carplay-text-fit]
-    paths:
-      - .github/workflows/carplay-layout.yml
-      - scripts/carplay-capture/**
   workflow_dispatch:
+    inputs:
+      mode:
+        description: Capture the layout matrix or inspect Simulator configuration controls
+        type: choice
+        options: [matrix, discover]
+        default: matrix
 
 permissions:
   contents: read
 
 concurrency:
-  group: carplay-layout-${{ github.ref }}
-  cancel-in-progress: true
+  group: carplay-layout-${{ github.ref }}-${{ github.run_id }}
+  cancel-in-progress: false
 
 jobs:
   discover:
+    if: github.event_name == 'workflow_dispatch' && inputs.mode == 'discover'
     runs-on: macos-26
     timeout-minutes: 15
     steps:
@@ -35,14 +37,29 @@ jobs:
           path: CarPlay-Captures/
           retention-days: 7
           if-no-files-found: error
-  standard:
+  configurations:
+    if: github.event_name != 'workflow_dispatch' || inputs.mode == 'matrix'
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.matrix.outputs.value }}
+    steps:
+      - uses: actions/checkout@v7
+      - id: matrix
+        run: echo "value=$(jq -c '{include:.}' scripts/carplay-capture/display-configurations.json)" >> "$GITHUB_OUTPUT"
+  capture:
+    needs: configurations
+    strategy:
+      fail-fast: false
+      max-parallel: 8
+      matrix: ${{ fromJson(needs.configurations.outputs.matrix) }}
+    name: ${{ matrix.id }} (${{ matrix.width }} x ${{ matrix.height }} @${{ matrix.scale }}x)
     runs-on: macos-26
     timeout-minutes: 35
     env:
-      CARPLAY_CONFIGURATION: standard
-      CARPLAY_WIDTH: '800'
-      CARPLAY_HEIGHT: '480'
-      CARPLAY_SCALE: '2'
+      CARPLAY_CONFIGURATION: ${{ matrix.id }}
+      CARPLAY_WIDTH: ${{ matrix.width }}
+      CARPLAY_HEIGHT: ${{ matrix.height }}
+      CARPLAY_SCALE: ${{ matrix.scale }}
       CARPLAY_APP_COMMIT: ${{ github.sha }}
     steps:
       - uses: actions/checkout@v7
@@ -66,7 +83,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: carplay-layout-standard
+          name: carplay-layout-${{ matrix.id }}
           path: CarPlay-Captures/
           retention-days: 7
           if-no-files-found: error
