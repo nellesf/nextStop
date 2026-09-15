@@ -4,6 +4,14 @@ set -euo pipefail
 # The workflow first checks out this exact main commit into screenshot-app and
 # successfully connects the real external CarPlay display before reaching here.
 app_commit=5fe2fa2332d66d2499fc679617855d41cb0111be
+capture_mode="${CARPLAY_CAPTURE_MODE:-profiles}"
+test_method=testPrepareCarPlayScreenshotProfile
+if [ "$capture_mode" = results ]; then
+  test_method=testCaptureWebsiteResultScreenshots
+elif [ "$capture_mode" != profiles ]; then
+  echo "Unsupported capture mode: $capture_mode" >&2
+  exit 1
+fi
 test "$(git -C screenshot-app rev-parse HEAD)" = "$app_commit"
 cp ios/NextStopAppTests/ProfileRepositoryTests.swift \
   screenshot-app/ios/NextStopAppTests/ProfileRepositoryTests.swift
@@ -38,7 +46,7 @@ else
     -scheme NextStopApp -configuration Debug \
     -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \
     -derivedDataPath CarPlayDerivedData \
-    -only-testing:NextStopAppTests/ProfileRepositoryTests/testPrepareCarPlayScreenshotProfile \
+    "-only-testing:NextStopAppTests/ProfileRepositoryTests/$test_method" \
     CODE_SIGNING_ALLOWED=YES CODE_SIGN_IDENTITY=- DEVELOPMENT_TEAM= \
     build-for-testing | tee CarPlay-Captures/build.log
 
@@ -94,6 +102,9 @@ found = False
 for target in targets:
     if target.get('BlueprintName') == 'NextStopAppTests' or 'NextStopAppTests' in target.get('TestBundlePath', ''):
         target.setdefault('EnvironmentVariables', {})['NEXTSTOP_CARPLAY_CAPTURE'] = '1'
+        target['CommandLineArguments'] = ['-AppleLanguages', '(de)', '-AppleLocale', 'de_DE']
+        target['TestLanguage'] = 'de'
+        target['TestRegion'] = 'DE'
         found = True
 assert found, 'Generated xctestrun must contain the hosted app test target.'
 runs[0].write_bytes(plistlib.dumps(run))
@@ -103,6 +114,10 @@ with open(os.environ['GITHUB_ENV'], 'a') as env:
 PY
 
 test_run="$(cat CarPlay-Captures/xctestrun-path.txt)"
+if [ "$capture_mode" = results ]; then
+  CARPLAY_SCREEN_TEXT="$RUNNER_TEMP/nextstop-screen-text" \
+    python3 scripts/carplay-capture/results.py
+else
 TEST_RUNNER_NEXTSTOP_CARPLAY_CAPTURE=1 xcodebuild \
   -xctestrun "$test_run" \
   -destination "platform=iOS Simulator,id=$CARPLAY_DEVICE_ID" \
@@ -110,6 +125,7 @@ TEST_RUNNER_NEXTSTOP_CARPLAY_CAPTURE=1 xcodebuild \
   -only-testing:NextStopAppTests/ProfileRepositoryTests/testPrepareCarPlayScreenshotProfile \
   -parallel-testing-enabled NO \
   test-without-building | tee CarPlay-Captures/profile-setup.log
+fi
 
 xcrun xcresulttool get test-results summary --path CarPlaySetup.xcresult \
   > CarPlay-Captures/profile-test-summary.json
@@ -122,5 +138,7 @@ PY
 xcrun xcresulttool export attachments --path CarPlaySetup.xcresult \
   --output-path CarPlay-Captures/Profile-Setup-Attachments
 test -x "$RUNNER_TEMP/nextstop-screen-text"
-CARPLAY_SCREEN_TEXT="$RUNNER_TEMP/nextstop-screen-text" \
-  python3 scripts/carplay-capture/capture.py
+if [ "$capture_mode" = profiles ]; then
+  CARPLAY_SCREEN_TEXT="$RUNNER_TEMP/nextstop-screen-text" \
+    python3 scripts/carplay-capture/capture.py
+fi

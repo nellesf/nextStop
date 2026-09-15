@@ -112,6 +112,32 @@ node website/scripts/import-screenshots.mjs /tmp/nextstop-screenshots <full-main
 The importer verifies the source commit and records original file hashes and
 capture times in `website/public/screenshots/provenance.json`.
 
+The website branch's **CarPlay Screenshots** workflow also accepts
+`capture_mode=results`. Its opt-in hosted test queries real MapKit places and
+supplies provider example counts and power through the existing dependency
+interfaces. The pinned main application performs routing, driving-distance
+calculation, filtering, presentation, and place resolution. Restaurant and charging-place screens
+are opened by the unchanged Apple Maps launchers on the iPhone and CarPlay scene.
+The app, core, CarPlay sources, project, and configuration are checked for changes
+before building; only the hosted test file is overlaid.
+
+```bash
+gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website \
+  -f capture_mode=results
+gh run download <run-id> -n carplay-captures -D /tmp/nextstop-result-screenshots
+node website/scripts/import-result-screenshots.mjs \
+  /tmp/nextstop-result-screenshots <full-main-commit-sha>
+```
+
+The runner captures original internal/external Simulator PNGs after a bounded
+file handshake with the hosted test. It validates visible text and requires all
+eight screens and a passing test. `result-capture-source.json` records the source
+and harness commits, image hashes, real MapKit lookup evidence, example values,
+and each screen's owning app. Review the images before adding gallery entries.
+Charging-point counts and power are illustrative; availability remains unknown.
+The current UI selects a restaurant or charging location/provider, not an
+individual EVSE or connector.
+
 ### iOS app
 
 ```bash

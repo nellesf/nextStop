@@ -3,6 +3,13 @@ name: CarPlay Screenshots
 on:
   workflow_dispatch:
     inputs:
+      capture_mode:
+        description: Capture saved profiles or result and place selection screens
+        type: choice
+        options:
+          - profiles
+          - results
+        default: profiles
       reuse_run_id:
         description: Optional run containing a verified main build artifact
         type: string
@@ -23,7 +30,7 @@ concurrency:
 jobs:
   capture:
     runs-on: macos-26
-    timeout-minutes: 30
+    timeout-minutes: 40
     steps:
       - uses: actions/checkout@v7
       - name: Probe the native CarPlay display
@@ -49,6 +56,7 @@ jobs:
           github-token: ${{ secrets.GITHUB_TOKEN }}
       - name: Seed an example profile and capture CarPlay
         env:
+          CARPLAY_CAPTURE_MODE: ${{ inputs.capture_mode }}
           CARPLAY_REUSE_DIR: ${{ inputs.reuse_run_id != '' && 'CarPlay-Reuse' || '' }}
           CARPLAY_REUSE_SHA256: ${{ inputs.reuse_sha256 }}
         run: bash scripts/carplay-capture/capture.sh
