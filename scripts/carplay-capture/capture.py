@@ -54,7 +54,7 @@ def await_native_text(*expected):
     raise RuntimeError(f"CarPlay did not display {expected!r}; actual OCR: {text}")
 
 
-def click_visible_text(label, display_kind="external"):
+def click_visible_text(label, display_kind="external", *, first_match=False):
     global click_count
     click_count += 1
     # Raise the observed CarPlay window; do not click coordinates inferred from
@@ -94,6 +94,10 @@ end tell
         first, second = sorted(candidates, key=lambda point: point[1])
         if abs(first[0] - second[0]) < 40 and 0 < second[1] - first[1] < 65:
             candidates = [first]
+    if first_match and candidates:
+        # Explicitly requested for the first visible result row, whose driving
+        # distance can legitimately equal another row's rounded distance.
+        candidates = [min(candidates, key=lambda point: point[1])]
     if len(candidates) != 1:
         raise RuntimeError(f"Expected one visible {label!r} inside the CarPlay window; found {candidates}")
     x, y = candidates[0]

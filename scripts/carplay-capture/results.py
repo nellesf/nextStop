@@ -173,6 +173,16 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
                         execute(["xcrun", "simctl", "launch", DEVICE, "de.nextstop.app"])
                     elif action:
                         raise RuntimeError(f"Unsupported native capture action: {action}")
+                    if phase == "carplay-result-actions":
+                        # selectedIndex highlights a POI row, but CarPlay opens
+                        # its detail card only after a native user selection.
+                        # Select the first observed driving-distance row.
+                        screen = framebuffer(OUTPUT / "diagnostic-before-result-selection.png", "external")
+                        rows = [row for row in screen["text"]
+                                if re.fullmatch(r"\d+(?:[.,]\d+)?\s*km\s+Fahrstrecke", row["text"].strip(), re.IGNORECASE)]
+                        assert rows, "The native result list must expose a driving-distance row."
+                        first = min(rows, key=lambda row: row["y"])
+                        click_visible_text(first["text"].strip(), first_match=True)
                     if state.get("file"):
                         captures.append(capture_phase(state))
                     if state.get("returnToAppAfterCapture"):
