@@ -1,0 +1,102 @@
+{
+  "height": 1024,
+  "text": [
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "<",
+      "width": 21.999999999999996,
+      "x": 32.00000011666667,
+      "y": 30.00000024999997
+    },
+    {
+      "confidence": 1,
+      "height": 38.79798889160156,
+      "text": "Mindestens Ladepunkte",
+      "width": 364.7138366699219,
+      "x": 203.6546131461448,
+      "y": 24.86890434140912
+    },
+    {
+      "confidence": 1,
+      "height": 28,
+      "text": "mindestens 2",
+      "width": 200,
+      "x": 42.00000111111109,
+      "y": 119.99999988888885
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 4",
+      "width": 204,
+      "x": 39.99999852000002,
+      "y": 207.9999997
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 6",
+      "width": 202,
+      "x": 39.999998540000036,
+      "y": 297.9999997
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 8",
+      "width": 202,
+      "x": 39.999998540000036,
+      "y": 387.9999997
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 10",
+      "width": 218,
+      "x": 39.99999882000003,
+      "y": 478.0000003
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 12",
+      "width": 216,
+      "x": 39.99999863333335,
+      "y": 567.99999975
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 16",
+      "width": 218,
+      "x": 39.99999838000002,
+      "y": 657.9999997
+    },
+    {
+      "confidence": 1,
+      "height": 30,
+      "text": "mindestens 20",
+      "width": 222.00000000000006,
+      "x": 39.99999834000002,
+      "y": 747.9999997
+    },
+    {
+      "confidence": 1,
+      "height": 24,
+      "text": "9:41",
+      "width": 55.99999999999999,
+      "x": 116.00000035,
+      "y": 959.9999999
+    },
+    {
+      "confidence": 1,
+      "height": 10,
+      "text": "0000",
+      "width": 39.99999999999994,
+      "x": 611.9999995000001,
+      "y": 974.000000075
+    }
+  ],
+  "width": 768
+}

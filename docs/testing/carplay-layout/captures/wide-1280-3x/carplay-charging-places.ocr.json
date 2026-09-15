@@ -1,0 +1,62 @@
+{
+  "height": 720,
+  "text": [
+    {
+      "confidence": 1,
+      "height": 34.00000000000004,
+      "text": "9:41",
+      "width": 78,
+      "x": 37.999999700000004,
+      "y": 48.000000099999994
+    },
+    {
+      "confidence": 1,
+      "height": 42.000000000000014,
+      "text": "Ladeanbieter",
+      "width": 300,
+      "x": 566.0000011538461,
+      "y": 45.999999930769214
+    },
+    {
+      "confidence": 1,
+      "height": 44,
+      "text": "Bei McDonald's",
+      "width": 360,
+      "x": 208.00000169999998,
+      "y": 149.999999725
+    },
+    {
+      "confidence": 1,
+      "height": 48.00000000000007,
+      "text": "EDEKA Versorgungsgesellschaft",
+      "width": 726,
+      "x": 295.99999481428574,
+      "y": 244.00000008571425
+    },
+    {
+      "confidence": 1,
+      "height": 36.00000000000003,
+      "text": "8 Ladepunkte • In Apple Maps öffnen",
+      "width": 634,
+      "x": 298.00000396249993,
+      "y": 303.99999990000003
+    },
+    {
+      "confidence": 1,
+      "height": 41.99999999999993,
+      "text": "EWE Go",
+      "width": 186,
+      "x": 298.0000004428572,
+      "y": 389.99999970000005
+    },
+    {
+      "confidence": 1,
+      "height": 36.00000000000003,
+      "text": "8 Ladepunkte • In Apple Maps öffnen",
+      "width": 634,
+      "x": 298.0000045285715,
+      "y": 449.9999999142857
+    }
+  ],
+  "width": 1280
+}

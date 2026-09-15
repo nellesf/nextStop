@@ -1,0 +1,70 @@
+{
+  "height": 1024,
+  "text": [
+    {
+      "confidence": 1,
+      "height": 36,
+      "text": "Leipzig",
+      "width": 108,
+      "x": 330.00000051999996,
+      "y": 25.999999640000055
+    },
+    {
+      "confidence": 1,
+      "height": 28,
+      "text": "Suche starten",
+      "width": 210,
+      "x": 95.99999825000003,
+      "y": 106.00000009999997
+    },
+    {
+      "confidence": 1,
+      "height": 20,
+      "text": "Mit den aktuellen Filtern",
+      "width": 270,
+      "x": 98.00000168749997,
+      "y": 149.999999925
+    },
+    {
+      "confidence": 1,
+      "height": 28,
+      "text": "Filter ändern",
+      "width": 190,
+      "x": 98.00000135714282,
+      "y": 203.99999994285713
+    },
+    {
+      "confidence": 1,
+      "height": 20,
+      "text": "Nur für diese Fahrt",
+      "width": 211.99999999999997,
+      "x": 97.99999848571429,
+      "y": 248.0000000857143
+    },
+    {
+      "confidence": 1,
+      "height": 32,
+      "text": "50-100 km • mind. 4 Ladepunkte",
+      "width": 492,
+      "x": 40.000004919999924,
+      "y": 301.99999992000005
+    },
+    {
+      "confidence": 1,
+      "height": 22,
+      "text": "ab 150 kW • McDonald's",
+      "width": 274,
+      "x": 38.00000292499993,
+      "y": 343.99999972499995
+    },
+    {
+      "confidence": 1,
+      "height": 24,
+      "text": "9:41",
+      "width": 55.99999999999999,
+      "x": 116.00000046666668,
+      "y": 959.9999998999999
+    }
+  ],
+  "width": 768
+}

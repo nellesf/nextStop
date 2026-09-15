@@ -1,0 +1,102 @@
+{
+  "schemaVersion": 1,
+  "matrixComplete": false,
+  "verifiedConfigurationCount": 7,
+  "expectedConfigurationCount": 8,
+  "source": {
+    "runURL": "https://github.com/nellesf/nextStop/actions/runs/34959786544",
+    "harnessCommit": "5f62cd904db3deb8d9677fc7e1b881ad9551ff2a",
+    "appCommit": "5f62cd904db3deb8d9677fc7e1b881ad9551ff2a"
+  },
+  "reviewNotice": "Capture integrity and hosted-test success do not establish unclipped text. OCR may reconstruct clipped words or miss offscreen content. Every original PNG requires visual review; these are reference-flow captures.",
+  "configurations": [
+    {
+      "id": "minimum",
+      "width": 748,
+      "height": 456,
+      "scale": 2,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "minimum/layout-capture-source.json",
+      "ocrStringsNotRecognized": 20,
+      "visualReview": "required"
+    },
+    {
+      "id": "standard",
+      "width": 800,
+      "height": 480,
+      "scale": 2,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "standard/layout-capture-source.json",
+      "ocrStringsNotRecognized": 17,
+      "visualReview": "required"
+    },
+    {
+      "id": "wide-960",
+      "width": 960,
+      "height": 540,
+      "scale": 2,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "wide-960/layout-capture-source.json",
+      "ocrStringsNotRecognized": 13,
+      "visualReview": "required"
+    },
+    {
+      "id": "wide-1280-2x",
+      "width": 1280,
+      "height": 720,
+      "scale": 2,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "wide-1280-2x/layout-capture-source.json",
+      "ocrStringsNotRecognized": 9,
+      "visualReview": "required"
+    },
+    {
+      "id": "wide-1280-3x",
+      "width": 1280,
+      "height": 720,
+      "scale": 3,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "wide-1280-3x/layout-capture-source.json",
+      "ocrStringsNotRecognized": 16,
+      "visualReview": "required"
+    },
+    {
+      "id": "high-resolution",
+      "width": 1920,
+      "height": 720,
+      "scale": 3,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "high-resolution/layout-capture-source.json",
+      "ocrStringsNotRecognized": 16,
+      "visualReview": "required"
+    },
+    {
+      "id": "portrait-2x",
+      "width": 768,
+      "height": 1024,
+      "scale": 2,
+      "status": "captured",
+      "screenshotCount": 10,
+      "manifest": "portrait-2x/layout-capture-source.json",
+      "ocrStringsNotRecognized": 7,
+      "visualReview": "required"
+    },
+    {
+      "id": "portrait-3x",
+      "width": 900,
+      "height": 1200,
+      "scale": 3,
+      "status": "incomplete",
+      "issues": [
+        "carplay-layout-portrait-3x: completed layout manifest is absent"
+      ]
+    }
+  ],
+  "unassignedArtifactIssues": []
+}

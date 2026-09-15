@@ -1,5 +1,16 @@
 # CarPlay text layout audit
 
+## Result
+
+The no-clipping requirement is not met. Native captures reproduce clipped
+headings, ellipsized prompts, and automatic wrapping. The production app and
+localized strings are unchanged because the affected Apple-owned text fields
+provide no supported font-size or shrink-to-fit control.
+
+See the [visual review and coverage limits](visual-review.md) and the
+[original capture gallery](captures/README.md). Capture-test success is distinct
+from passing the visual requirement.
+
 ## Scope
 
 The requested behavior is unchanged wording on one line without clipped text,
@@ -61,7 +72,7 @@ No production font change is claimed. A successful capture run establishes that
 the screens were reached and recorded; it does not mean the no-clipping
 requirement passed.
 
-## Planned matrix
+## Display matrix
 
 | Configuration | Framebuffer pixels | Scale |
 | --- | --- | --- |
@@ -77,6 +88,7 @@ requirement passed.
 The 1280 × 720 configuration is exercised at both supported scale factors;
 this avoids treating pixel resolution alone as the complete layout configuration.
 The initial scroll position is captured for each of the ten reference-flow views.
+The [visual review](visual-review.md) records the actual completion and findings.
 
 ## SDK verification
 

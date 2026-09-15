@@ -30,8 +30,11 @@ filter-edit actions and all four current criteria, ride-scoped fixed filter
 choices, and stable maximum-five POI results. Each picker result shows its qualifying
 EVSE total and actual driving distance on two lines. The selected result keeps its
 place name and asks where to go when a restaurant is available; without a
-restaurant it opens the operator list directly. Operator selection, power, known availability,
-coverage, and attribution remain in the details. Explicit refresh, no-result
+restaurant it opens the operator list directly. The app supplies operator selection,
+power, known availability, coverage, and attribution through native detail templates.
+The [CarPlay layout audit](docs/testing/carplay-layout/visual-review.md) records
+clipped text and detail summaries omitted by the native layout on some displays.
+Explicit refresh, no-result
 relaxation, and Apple Maps handoff remain available. Local favorites and the capped
 recent-destination list are shared by the iPhone and CarPlay surfaces. A localized
 App Intent lets Siri resolve a spoken destination through MapKit and open the same
