@@ -10,6 +10,7 @@ import atexit
 from pathlib import Path
 import shutil
 import subprocess
+import sys
 import time
 
 
@@ -74,9 +75,10 @@ assert input_permissions["postEvents"], "macOS mouse-event posting must be grant
 # Compile before booting iOS so the fresh SDK module cache does not compete
 # with the simulator's first-boot migration and rendering work.
 ocr = str(Path(os.environ["RUNNER_TEMP"]) / "nextstop-screen-text")
-run("compile-screen-reader", [
-    "xcrun", "swiftc", "scripts/carplay-capture/screen-text.swift", "-o", ocr,
-], timeout=240)
+if os.environ.get("CARPLAY_DISCOVERY_ONLY") != "1":
+    run("compile-screen-reader", [
+        "xcrun", "swiftc", "scripts/carplay-capture/screen-text.swift", "-o", ocr,
+    ], timeout=240)
 run("simctl-io-help", ["xcrun", "simctl", "io", "help"], required=False)
 run("automation-mode", ["automationmodetool"], required=False)
 runtimes = json.loads(run("runtimes", ["xcrun", "simctl", "list", "runtimes", "--json"]))
@@ -122,6 +124,11 @@ tell application "System Events"
     error "Simulator did not expose a window after launch"
 end tell
 '''], timeout=50)
+if os.environ.get("CARPLAY_DISCOVERY_ONLY") == "1":
+    # Discovery needs only a fresh, booted device and the Simulator menu.
+    # It does not need OCR, an app build, or a connected default framebuffer.
+    atexit.unregister(diagnostics)
+    sys.exit(0)
 run("host-screen-before", ["screencapture", "-x", str(OUTPUT / "diagnostic-host-before.png")], required=False)
 run("displays-before", ["xcrun", "simctl", "io", device_id, "enumerate"], required=False)
 run("simulator-windows-before", ["osascript", "-e", '''

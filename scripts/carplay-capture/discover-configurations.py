@@ -1,6 +1,6 @@
 """Observe Apple's CarPlay display configuration on a disposable Actions runner.
 
-Run after the existing native-display preflight. This enables Apple's documented
+Run after the existing preflight creates its disposable device and window. This enables Apple's documented
 Simulator extra-options preference, restarts that runner's Simulator, and opens
 the observed CarPlay menu item. It records the actual configuration controls and
 public SDK declarations without guessing field positions or changing app code.
@@ -41,8 +41,8 @@ def run(label, command, *, required=True, timeout=30):
         return ""
 
 
-def javascript(label, source):
-    raw = run(label, ["osascript", "-l", "JavaScript", "-e", source])
+def javascript(label, source, *, timeout=20):
+    raw = run(label, ["osascript", "-l", "JavaScript", "-e", source], timeout=timeout)
     value = json.loads(raw)
     (OUTPUT / f"{label}.json").write_text(
         json.dumps(value, indent=2, ensure_ascii=False) + "\n"
@@ -56,26 +56,28 @@ TREE_READER = r"""
 var system = Application('System Events');
 var process = system.processes.byName('Simulator');
 var visited = 0;
-function property(element, name) {
-    try { return element[name](); } catch (error) { return null; }
+function properties(element) {
+    try { return element.properties(); } catch (error) { return {}; }
 }
-function read(element, depth, path) {
+function read(element, depth, path, maximumDepth) {
     var result = {path: path};
+    var values = properties(element);
     for (var key of ['role', 'subrole', 'name', 'description', 'value',
                      'position', 'size', 'enabled', 'visible']) {
-        var value = property(element, key);
+        var value = values[key];
         if (value !== null && value !== undefined) result[key] = value;
     }
     visited++;
-    if (depth >= 9 || visited >= 1500) {
+    if (depth >= maximumDepth || visited >= 70) {
         result.childrenTruncated = true;
         return result;
     }
-    var children = property(element, 'uiElements');
+    var children = [];
+    try { children = element.uiElements(); } catch (error) {}
     if (children && children.length) {
         result.children = [];
-        for (var index = 0; index < children.length && visited < 1500; index++) {
-            result.children.push(read(children[index], depth + 1, path + '/' + index));
+        for (var index = 0; index < children.length && visited < 70; index++) {
+            result.children.push(read(children[index], depth + 1, path + '/' + index, maximumDepth));
         }
         if (result.children.length !== children.length) result.childrenTruncated = true;
     }
@@ -84,18 +86,37 @@ function read(element, depth, path) {
 """
 
 
-def snapshot(label):
-    state = javascript(
-        label,
-        TREE_READER
-        + "\nJSON.stringify({windows: process.windows().map(function(window, index) { "
-        + "return read(window, 0, 'windows/' + index); })});",
-    )
+def snapshot(label, *, inspect_controls=False):
+    # Preserve pixels before asking AX for anything: an unresponsive accessibility
+    # tree must never hide the dialog evidence or prevent the menu probe.
     run(
         f"{label}-host-screen",
         ["screencapture", "-x", str(OUTPUT / f"{label}.png")],
         required=False,
     )
+    try:
+        state = javascript(label, TREE_READER + r"""
+var inspectControls = """ + json.dumps(inspect_controls) + r""";
+JSON.stringify({windows: process.windows().map(function(window, index) {
+    var path = 'windows/' + index;
+    var metadata = read(window, 0, path, 0);
+    if (!inspectControls) return metadata;
+    // Simulator device framebuffers can have enormous AX hierarchies. Inspect
+    // their native sheets, plus separate configuration windows, instead.
+    if ((metadata.name || '').indexOf('nextStop CarPlay Capture') !== -1) {
+        var sheets = [];
+        try { sheets = window.sheets(); } catch (error) {}
+        metadata.children = sheets.map(function(sheet, sheetIndex) {
+            return read(sheet, 0, path + '/sheets/' + sheetIndex, 4);
+        });
+        return metadata;
+    }
+    return read(window, 0, path, 4);
+})});
+""")
+    except (RuntimeError, subprocess.TimeoutExpired, json.JSONDecodeError) as error:
+        state = {"windows": [], "accessibilityError": str(error)}
+        (OUTPUT / f"{label}.json").write_text(json.dumps(state, indent=2) + "\n")
     return state
 
 
@@ -200,7 +221,7 @@ process.frontmost = true;
 var io = process.menuBars[0].menuBarItems.byName('I/O');
 io.click();
 delay(0.5);
-JSON.stringify(read(io, 0, 'menu/I-O'));
+JSON.stringify({opened: 'I/O'});
 """)
     external = javascript("external-display-menu", TREE_READER + r"""
 var external = process.menuBars[0].menuBarItems.byName('I/O')
@@ -208,8 +229,9 @@ var external = process.menuBars[0].menuBarItems.byName('I/O')
 external.click();
 delay(0.5);
 JSON.stringify({items: external.menus[0].menuItems().map(function(item) {
-    return {name: property(item, 'name'), enabled: property(item, 'enabled')};
-}), tree: read(external, 0, 'menu/external-displays')});
+    var values = properties(item);
+    return {name: values.name, enabled: values.enabled};
+})});
 """)
     candidates = [
         item for item in external["items"]
@@ -228,7 +250,7 @@ external.menus[0].menuItems.byName(""" + json.dumps(observed_label) + r""").clic
 delay(1);
 JSON.stringify({opened: """ + json.dumps(observed_label) + r"""});
 """)
-    configuration = snapshot("observed-carplay-configuration")
+    configuration = snapshot("observed-carplay-configuration", inspect_controls=True)
     run("simulator-preferences-after", ["defaults", "read", "com.apple.iphonesimulator"], required=False)
     run("connected-displays", ["xcrun", "simctl", "io", DEVICE, "enumerate"], required=False)
     run("external-display", [

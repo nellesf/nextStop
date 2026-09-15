@@ -1,0 +1,10 @@
+[
+  {"id": "minimum", "width": 748, "height": 456, "scale": 2},
+  {"id": "standard", "width": 800, "height": 480, "scale": 2},
+  {"id": "wide-960", "width": 960, "height": 540, "scale": 2},
+  {"id": "wide-1280-2x", "width": 1280, "height": 720, "scale": 2},
+  {"id": "wide-1280-3x", "width": 1280, "height": 720, "scale": 3},
+  {"id": "high-resolution", "width": 1920, "height": 720, "scale": 3},
+  {"id": "portrait-2x", "width": 768, "height": 1024, "scale": 2},
+  {"id": "portrait-3x", "width": 900, "height": 1200, "scale": 3}
+]

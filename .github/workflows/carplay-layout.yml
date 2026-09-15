@@ -22,6 +22,8 @@ jobs:
     steps:
       - uses: actions/checkout@v7
       - name: Connect the disposable native display
+        env:
+          CARPLAY_DISCOVERY_ONLY: '1'
         run: caffeinate -diu python3 scripts/carplay-capture/preflight.py
       - name: Discover native display configuration controls
         run: caffeinate -diu python3 scripts/carplay-capture/discover-configurations.py
@@ -30,6 +32,41 @@ jobs:
         uses: actions/upload-artifact@v7
         with:
           name: carplay-layout-discovery
+          path: CarPlay-Captures/
+          retention-days: 7
+          if-no-files-found: error
+  standard:
+    runs-on: macos-26
+    timeout-minutes: 35
+    env:
+      CARPLAY_CONFIGURATION: standard
+      CARPLAY_WIDTH: '800'
+      CARPLAY_HEIGHT: '480'
+      CARPLAY_SCALE: '2'
+      CARPLAY_APP_COMMIT: ${{ github.sha }}
+    steps:
+      - uses: actions/checkout@v7
+      - name: Connect the disposable native display
+        run: caffeinate -diu python3 scripts/carplay-capture/preflight.py
+      - name: Check out the app under test
+        uses: actions/checkout@v7
+        with:
+          ref: ${{ github.sha }}
+          path: screenshot-app
+      - name: Build and capture the unchanged app
+        run: caffeinate -diu bash scripts/carplay-capture/capture.sh
+      - name: Preserve the hosted test summary
+        if: always()
+        run: |
+          if [ -d CarPlaySetup.xcresult ]; then
+            xcrun xcresulttool get test-results summary --path CarPlaySetup.xcresult \
+              > CarPlay-Captures/profile-test-summary.json
+          fi
+      - name: Preserve native layout evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: carplay-layout-standard
           path: CarPlay-Captures/
           retention-days: 7
           if-no-files-found: error
