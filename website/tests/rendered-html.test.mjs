@@ -115,6 +115,7 @@ test("keeps metadata, navigation, legal data, and source assets production-ready
 test("publishes result captures only with checked originals and accurate ownership", async () => {
   const directory = new URL("../public/screenshots/", import.meta.url);
   const html = await (await render()).text();
+  assert.doesNotMatch(html, /carplay-(?:restaurant|charging)-place\.png/);
   try {
     await access(new URL("result-provenance.json", directory));
   } catch (error) {
@@ -132,8 +133,10 @@ test("publishes result captures only with checked originals and accurate ownersh
     assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${file}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
     if (ownerApp === "Apple Maps") assert.match(image[0], /alt="[^"]*Apple Maps/);
   }
-  assert.match(html, /Beispielwerten für Ladepunkte und Leistung/);
+  assert.match(html, /Beispielwerten für die Anzahl der Ladepunkte und die Leistung/);
+  assert.match(html, /Die Verfügbarkeit ist unbekannt/);
   assert.match(html, /Orte und Fahrstrecken stammen aus MapKit/);
+  assert.match(html, /Die Ortsansichten auf dem iPhone gehören zu Apple Maps/);
 });
 
 test("exports a self-contained Firebase Hosting document", async () => {

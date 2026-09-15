@@ -148,6 +148,7 @@ function ResultScreenshots() {
         <h3 id="result-screenshots-title">Vom passenden Treffer<br />zu deinem nächsten Stopp.</h3>
         <p>Vergleiche die Ergebnisse und wähle das Restaurant oder den Ladeanbieter für deine Pause. Die jeweilige Ortsansicht zeigt dir das ausgewählte Ziel.</p>
       </div>
+      <p className="mockup-disclaimer">Echte Simulator-Aufnahmen mit Beispielwerten für die Anzahl der Ladepunkte und die Leistung in nextStop. Die Verfügbarkeit ist unbekannt. Orte und Fahrstrecken stammen aus MapKit. Die Ortsansichten auf dem iPhone gehören zu Apple Maps und zeigen dessen eigene Ortsdaten. Du wählst ein Restaurant oder einen Ladeanbieter, keinen einzelnen Stecker.</p>
       {iphoneResultScreenshots.length > 0 && (
         <div className="result-screenshot-group">
           <h4>Auf dem iPhone</h4>
@@ -164,7 +165,6 @@ function ResultScreenshots() {
           </div>
         </div>
       )}
-      <p className="mockup-disclaimer">Echte Simulator-Aufnahmen mit Beispielwerten für Ladepunkte und Leistung. Orte und Fahrstrecken stammen aus MapKit. Die Ortsansichten auf iPhone und CarPlay gehören zu Apple Maps. Du wählst ein Restaurant oder einen Ladeanbieter, keinen einzelnen Stecker.</p>
     </div>
   );
 }

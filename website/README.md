@@ -76,16 +76,17 @@ and ride preparation.
 The remaining explanatory graphics are labelled as fictional examples.
 
 `content/result-screenshots.ts` holds the reviewed captures for the additional
-result and place-selection galleries. Its collections remain empty until real
-captures are imported; the page then renders no empty gallery or missing-image
-references. Populate each entry with the imported path, accurate alt text and a
+result and place-selection galleries. Six reviewed captures from
+[run 34938078711](https://github.com/nellesf/nextStop/actions/runs/34938078711)
+are imported and displayed. Empty collections render no empty gallery or
+missing-image references. Populate each entry with the imported path, accurate alt text and a
 caption that identifies the screen, including Apple Maps when it owns the view.
 The gallery follows profile preparation and groups iPhone and CarPlay captures
 separately. Keep screenshot provenance separate when the capture run or data
 fixture differs from the existing profile images.
 
 For result captures, dispatch the workflow in `results` mode. Download the
-successful run's artifact and inspect the eight original screenshots before
+successful run's artifact and inspect the six original screenshots before
 importing them:
 
 ```bash
@@ -96,7 +97,7 @@ node website/scripts/import-result-screenshots.mjs /tmp/nextstop-result-captures
 
 The importer reads `result-capture-source.json`. It verifies the requested app
 commit and its Git tree, the fixture source hash against the recorded build
-harness commit, the complete eight-file set, native dimensions, display, owning
+harness commit, the complete six-file set, native dimensions, display, owning
 app and PNG hashes before writing anything. Source commits must be available
 in the local Git history. Originals are copied unchanged; fixture details,
 owners and source metadata remain in `result-provenance.json`.
@@ -109,16 +110,28 @@ Expected result captures:
 - `carplay-results.png`, `carplay-result-actions.png` and
   `carplay-charging-places.png`: nextStop result overview, destination actions
   and charging-operator selection, each 800 × 480.
-- `carplay-restaurant-place.png` and `carplay-charging-place.png`: native
-  **Apple Maps** place views in CarPlay, each 800 × 480.
+
+Apple Maps place views in CarPlay are excluded from this capture set. The
+restaurant handoff in
+[Actions run 34936686885](https://github.com/nellesf/nextStop/actions/runs/34936686885)
+succeeded, but its external-display image remained blank. The charging-place
+phase was not reached. Both CarPlay place views are therefore excluded from the
+supported set. This is an observed runner capture limitation; the website does
+not use blank images or recreate their content.
+The supported CarPlay images show nextStop's results, destination actions and
+charging-provider selection. Apple Maps place views are shown on the iPhone.
 
 Result captures use example EVSE counts and charging power, with real MapKit
-places and calculated driving distances. The website must say so beside these
-images; the example capacities are not verified site facts or live availability.
+places and calculated driving distances. Availability in this fixture is unknown.
+Apple Maps shows its own place data, so its charger counts can differ from the
+nextStop example values. Its captured system UI uses English and miles; the
+nextStop app screens are German.
+The website must say so beside these images; the example capacities are not
+verified site facts or live availability.
 Selection is of a restaurant or charging operator, never an individual connector.
 The import does not activate image references. Add the visually reviewed images
-to `content/result-screenshots.ts` afterwards, with Apple Maps named in its four
-place-view captions. CarPlay images use at most two desktop columns and one
+to `content/result-screenshots.ts` afterwards, with Apple Maps named in its two
+iPhone place-view captions. CarPlay images use at most two desktop columns and one
 column on narrower screens. Each screenshot links to its original PNG and has
 an accessible label identifying the full-size image; no modal or image editing
 is involved.
@@ -139,7 +152,7 @@ as declared by `MARKETING_VERSION` and `CURRENT_PROJECT_VERSION` in that
 revision's `ios/project.yml`. The provenance manifests record the app commit,
 capture/build harness revisions, Actions run URL and image hashes; result
 provenance additionally records the owning app and fixture data. Preserve those
-details when reusing the images, and identify the four Apple Maps place views
+details when reusing the images, and identify the two iPhone Apple Maps place views
 as Apple Maps. These are native capture dimensions, not a claim that every PNG
 already meets every App Store submission format or presentation requirement.
 

@@ -29,7 +29,7 @@ async function fixture(t) {
 
 test("imports the complete checked set byte-for-byte and preserves fixture provenance", async (t) => {
   const { directory, output, source } = await fixture(t);
-  assert.equal(await importResultScreenshots(directory, source.appCommit, output), 8);
+  assert.equal(await importResultScreenshots(directory, source.appCommit, output), 6);
   for (const capture of source.screenshots) {
     assert.deepEqual(await readFile(join(output, capture.file)), await readFile(join(directory, capture.file)));
   }
@@ -42,6 +42,9 @@ test("rejects incomplete, modified or misattributed sets before writing assets",
   const mutations = {
     "missing image": (source) => source.screenshots.pop(),
     "duplicate image": (source) => source.screenshots.push(source.screenshots[0]),
+    "unsupported CarPlay place image": (source) => source.screenshots.push({
+      ...source.screenshots[0], file: "carplay-restaurant-place.png", ownerApp: "Apple Maps",
+    }),
     "wrong source tree": (source) => { source.appTree = "0".repeat(40); },
     "wrong fixture hash": (source) => { source.profileFixtureSHA256 = "0".repeat(64); },
     "wrong owner": (source) => { source.screenshots.at(-1).ownerApp = "nextStop"; },

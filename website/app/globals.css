@@ -731,6 +731,7 @@ footer a:hover {
 
 .result-screenshots > .stage-copy { max-width: 800px; margin-bottom: 42px; }
 .result-screenshots .stage-copy > p { max-width: 650px; }
+.result-screenshots > .mockup-disclaimer { margin: 0 0 32px; text-align: left; }
 .result-screenshot-group + .result-screenshot-group { margin-top: 48px; }
 .result-screenshot-group h4 { margin: 0 0 24px; font-size: 18px; }
 .result-phone-gallery,
@@ -739,8 +740,8 @@ footer a:hover {
 .result-carplay-gallery { grid-template-columns: repeat(2, minmax(400px, 1fr)); }
 .result-screenshots .carplay-wrap .mockup-label { color: var(--muted); }
 
-.results-stage .filter-distance { justify-self: center; flex-direction: column; align-items: flex-start; max-width: 340px; }
-.results-stage .filter-distance span { font-size: clamp(72px, 8vw, 112px); }
+.results-stage .filter-distance { display: flex; justify-self: center; flex-direction: column; align-items: flex-start; max-width: 340px; }
+.results-stage .filter-distance span { font-size: clamp(72px, 8vw, 112px); white-space: nowrap; }
 
 .fact-callout { display: grid; grid-template-columns: auto 1fr; gap: 17px; align-items: center; margin-top: 32px; border-top: 1px solid rgba(16,39,31,.18); padding-top: 24px; }
 .fact-callout span { font-size: 40px; line-height: 1; font-weight: 820; letter-spacing: -.05em; }
@@ -754,9 +755,9 @@ footer a:hover {
 }
 
 .light-index { color: var(--aqua); }
-.capacity-intro { display: grid; grid-template-columns: .45fr 1fr 1fr; gap: 50px; align-items: start; }
-.capacity-intro h2 { margin-top: -10px; }
-.capacity-intro > p { color: #b6c2bd; font-size: 16px; line-height: 1.65; margin: 0; }
+.capacity-intro { display: grid; grid-template-columns: .45fr 1fr 1fr; gap: 24px 50px; align-items: start; }
+.capacity-intro h2 { grid-row: span 2; margin-top: -10px; }
+.capacity-intro > p { grid-column: 3; color: #b6c2bd; font-size: 16px; line-height: 1.65; margin: 0; }
 .capacity-demo { max-width: 1120px; margin: 90px auto 0; display: grid; grid-template-columns: .72fr 100px 1.28fr; align-items: center; }
 .snapshot-card,
 .park-card { border-radius: 27px; background: #f7f7f1; color: var(--ink); box-shadow: 0 26px 55px rgba(0,0,0,.3); }
@@ -860,6 +861,7 @@ footer p { color: var(--muted); font-size: 14px; } footer > div { display: flex;
   .hero-visual { width: 100%; height: 560px; transform: scale(.9); transform-origin: center; margin: -30px 0 0; }
   .wide-heading,
   .capacity-intro { grid-template-columns: 1fr; }
+  .capacity-intro h2 { grid-row: auto; }
   .wide-heading > p,
   .capacity-intro > p { grid-column: auto; }
   .moment-grid { grid-template-columns: 1fr; }
@@ -911,6 +913,7 @@ footer p { color: var(--muted); font-size: 14px; } footer > div { display: flex;
   .capacity-intro h2,
   .privacy-copy h2 { font-size: 45px; }
   .moment-card { min-height: 290px; padding: 24px; }
+  .moment-card .moment-icon { top: 32px; right: 26px; font-size: 72px; line-height: 1; }
   .workflow-list article { grid-template-columns: 42px 1fr; }
   .device-stage { border-radius: 25px; padding: 46px 20px; margin: 16px 0; }
   .stage-copy h3 { font-size: 43px; }

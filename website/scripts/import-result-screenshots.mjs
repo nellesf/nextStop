@@ -9,8 +9,6 @@ export const resultCaptureSpecs = [
   { file: "carplay-results.png", display: "external", ownerApp: "nextStop", width: 800, height: 480 },
   { file: "carplay-result-actions.png", display: "external", ownerApp: "nextStop", width: 800, height: 480 },
   { file: "carplay-charging-places.png", display: "external", ownerApp: "nextStop", width: 800, height: 480 },
-  { file: "carplay-restaurant-place.png", display: "external", ownerApp: "Apple Maps", width: 800, height: 480 },
-  { file: "carplay-charging-place.png", display: "external", ownerApp: "Apple Maps", width: 800, height: 480 },
   { file: "iphone-results.png", display: "internal", ownerApp: "nextStop", width: 1206, height: 2622 },
   { file: "iphone-restaurant-place.png", display: "internal", ownerApp: "Apple Maps", width: 1206, height: 2622 },
   { file: "iphone-charging-place.png", display: "internal", ownerApp: "Apple Maps", width: 1206, height: 2622 },
@@ -44,7 +42,7 @@ export async function readResultScreenshots(
   assert.ok(typeof source.data === "string" && source.data.trim(), "Describe the capture data.");
   assert.ok(Array.isArray(source.screenshots));
   assert.deepEqual(source.screenshots.map((capture) => capture.file).sort(),
-    resultCaptureSpecs.map((capture) => capture.file).sort(), "Import exactly the eight expected result screens.");
+    resultCaptureSpecs.map((capture) => capture.file).sort(), "Import exactly the six expected result screens.");
 
   const captures = await Promise.all(resultCaptureSpecs.map(async (expected) => {
     const capture = source.screenshots.find((item) => item.file === expected.file);
