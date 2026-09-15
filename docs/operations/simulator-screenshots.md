@@ -71,7 +71,8 @@ attempt as successful.
 | [34880309048](https://github.com/nellesf/nextStop/actions/runs/34880309048) | Successful CarPlay profile/preparation capture and passing hosted test. |
 | [34928718397](https://github.com/nellesf/nextStop/actions/runs/34928718397) | Verified reusable result-test build; capture failed. Archive SHA-256 is in the quick start. |
 | [34932855914](https://github.com/nellesf/nextStop/actions/runs/34932855914) | Four native nextStop images reached: CarPlay results, result actions, charging-provider list, and iPhone results. The full eight-image set did **not** finish. |
-| [34933714967](https://github.com/nellesf/nextStop/actions/runs/34933714967) | Attempt using harness `63f10b4`, which handles observed Maps location and notification introductions. Full success is **not yet verified**. |
+| [34933714967](https://github.com/nellesf/nextStop/actions/runs/34933714967) | Maps location and notification introductions were handled; capture then stopped at the Maps advertising introduction. |
+| [34936034192](https://github.com/nellesf/nextStop/actions/runs/34936034192) | Attempt using harness `fae083f`, with the observed Maps introductions, 180-second bootstrap installation, and retried container discovery. Full success is **not yet verified**. |
 
 After a complete run, update this table with its run/attempt, harness commit,
 archive hash, and visual-review result. A build, partial PNGs, or a green unrelated
@@ -84,7 +85,7 @@ evidence, and diagnostics. On a rerun, downloading by name can select an older
 attempt's artifact. Resolve the newest non-expired artifact ID instead:
 
 ```bash
-capture_run=34933714967 # Replace with the run being reviewed.
+capture_run=34936034192 # Replace with the run being reviewed.
 capture_artifact_id=$(gh api \
   "repos/nellesf/nextStop/actions/runs/${capture_run}/artifacts?per_page=100" \
   --jq '[.artifacts[] | select(.name == "carplay-captures" and .expired == false)] | max_by([.created_at, .id]) | .id')
@@ -162,13 +163,14 @@ metadata is useful for diagnosis; it is not complete capture provenance.
 
 | Symptom | Established cause and working approach |
 | --- | --- |
-| Swift waits for the first ACK but Python sees no phase | XCTest can reinstall the app into a new data-container UUID. `results.py` re-resolves the container every 3 seconds until a state appears and rebinds state, command, and fixture paths together. Reapply the app's simulator location grant after installation. |
+| Swift waits for the first ACK but Python sees no phase | XCTest can reinstall the app into a new data-container UUID. `results.py` re-resolves the container every 3 seconds until a state appears and rebinds state, command, and fixture paths together. A lookup timeout while installation is running is retried within the overall deadline. Reapply the app's simulator location grant after installation. |
 | Profile handler completes but no ride summary appears | The root template's transition gate can still be active. Wait for two rendered `Fahrt wählen` + `Leipzig` frames before ACK. Handler completion is necessary after an accepted push, but also fires when an action is rejected early. Do not pre-click Leipzig and then invoke it a second time. |
 | A result is highlighted but no destination buttons appear | `selectedIndex = 0` and the delegate callback only establish focus. The harness clicks the first observed `… km Fahrstrecke` row through the real Simulator UI. |
 | Clicking an app or row has no effect | Use the observed window and OCR coordinates. The proven mouse helper moves the pointer, verifies its position, and sends down/up with click state 1. Tap the nextStop icon above its caption. System Events `click at` and caption-only taps failed. |
 | Blank/delayed external display | Use the explicit Simulator from the selected Xcode, fresh device, and existing bounded preflight/reconnect logic. `caffeinate -diu` keeps the disposable runner session awake. Do not infer readiness from successful menu opening alone. |
 | First-boot status-bar command times out | A transient first-boot failure has occurred before app testing. Inspect preflight logs and rerun once; do not change app code for it. |
-| Maps introduction or permission dialog covers a place | Handle only the exact observed screen before validating the place name. The harness allows simulated location while using Maps, declines notification setup with `Not Now`, and declines the separate widgets prompt with `Don't Allow`. An early blanket Maps location grant caused a delayed widgets dialog and was removed. |
+| Bootstrap `simctl install` times out | A cold runner exceeded the generic 45-second command limit. Installation now has an explicit 180-second timeout; keep shorter limits for ordinary UI actions. |
+| Maps introduction or permission dialog covers a place | Handle only the exact observed screen before validating the place name. The harness allows simulated location while using Maps, declines notification setup with `Not Now`, continues past the observed Maps advertising information page, and declines the separate widgets prompt with `Don't Allow`. An early blanket Maps location grant caused a delayed widgets dialog and was removed. |
 | Test stops progressing after opening Maps | Maps can background the hosted nextStop process. `returnToAppAfterCapture` activates nextStop after the screenshot and before writing the phase ACK. |
 | Downloaded diagnostics do not match the rerun | Select the artifact by newest `created_at`/ID, not only its shared name. |
 
