@@ -674,6 +674,9 @@ footer a:hover {
   border-radius: 35px;
 }
 
+.screenshot-link { display: block; border-radius: inherit; }
+.screenshot-link:focus-visible { outline-offset: -4px; }
+
 .mockup-label {
   font-size: 9px;
   line-height: 1.5;
@@ -718,6 +721,23 @@ footer a:hover {
 }
 
 .carplay-wrap .mockup-label { color: white; }
+
+.result-screenshots {
+  margin: 60px 0;
+  padding: 48px 0;
+  border-top: 1px solid var(--line);
+  border-bottom: 1px solid var(--line);
+}
+
+.result-screenshots > .stage-copy { max-width: 800px; margin-bottom: 42px; }
+.result-screenshots .stage-copy > p { max-width: 650px; }
+.result-screenshot-group + .result-screenshot-group { margin-top: 48px; }
+.result-screenshot-group h4 { margin: 0 0 24px; font-size: 18px; }
+.result-phone-gallery,
+.result-carplay-gallery { display: grid; gap: 28px; align-items: start; }
+.result-phone-gallery { grid-template-columns: repeat(3, minmax(0, 1fr)); }
+.result-carplay-gallery { grid-template-columns: repeat(2, minmax(400px, 1fr)); }
+.result-screenshots .carplay-wrap .mockup-label { color: var(--muted); }
 
 .results-stage .filter-distance { justify-self: center; flex-direction: column; align-items: flex-start; max-width: 340px; }
 .results-stage .filter-distance span { font-size: clamp(72px, 8vw, 112px); }
@@ -849,6 +869,8 @@ footer p { color: var(--muted); font-size: 14px; } footer > div { display: flex;
   .stage-copy { max-width: 620px; }
   .phones-composition { order: 2; }
   .results-stage .filter-distance { order: 2; }
+  .result-phone-gallery { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+  .result-carplay-gallery { grid-template-columns: minmax(0, 1fr); max-width: 800px; margin-inline: auto; }
   .capacity-demo { grid-template-columns: 1fr; gap: 30px; max-width: 600px; }
   .snapshot-card { transform: none; }
   .perspective-arrow { transform: rotate(90deg); }
@@ -899,6 +921,8 @@ footer p { color: var(--muted); font-size: 14px; } footer > div { display: flex;
   .carplay-stage { min-height: 0; gap: 36px; }
   .carplay { border-width: 6px; border-radius: 14px; }
   .carplay-gallery { gap: 24px; }
+  .result-screenshots { margin: 36px 0; padding: 36px 0; }
+  .result-phone-gallery { grid-template-columns: 1fr; gap: 36px; }
   .capacity-intro { gap: 28px; }
   .capacity-demo { margin-top: 60px; }
   .snapshot-card,

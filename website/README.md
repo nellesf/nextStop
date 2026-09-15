@@ -71,22 +71,70 @@ selected images appear in the exported page and exist in the static output.
 
 The CarPlay section uses two original external-display captures of the same
 `main` app: `carplay-profiles.png` and `carplay-ride-summary.png`. These replace
-the former code-based results illustration. The page shows profile selection
-and ride preparation; it does not present invented charging results as app UI.
+the former code-based results illustration. These images show profile selection
+and ride preparation.
 The remaining explanatory graphics are labelled as fictional examples.
+
+`content/result-screenshots.ts` holds the reviewed captures for the additional
+result and place-selection galleries. Its collections remain empty until real
+captures are imported; the page then renders no empty gallery or missing-image
+references. Populate each entry with the imported path, accurate alt text and a
+caption that identifies the screen, including Apple Maps when it owns the view.
+The gallery follows profile preparation and groups iPhone and CarPlay captures
+separately. Keep screenshot provenance separate when the capture run or data
+fixture differs from the existing profile images.
+
+For result captures, dispatch the workflow in `results` mode. Download the
+successful run's artifact and inspect the eight original screenshots before
+importing them:
+
+```bash
+gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website -f capture_mode=results
+gh run download <run-id> -n carplay-captures -D /tmp/nextstop-result-captures
+node website/scripts/import-result-screenshots.mjs /tmp/nextstop-result-captures <full-main-commit-sha>
+```
+
+The importer reads `result-capture-source.json`. It verifies the requested app
+commit and its Git tree, the fixture source hash against the recorded build
+harness commit, the complete eight-file set, native dimensions, display, owning
+app and PNG hashes before writing anything. Source commits must be available
+in the local Git history. Originals are copied unchanged; fixture details,
+owners and source metadata remain in `result-provenance.json`.
+
+Expected result captures:
+
+- `iphone-results.png`: nextStop results, 1206 × 2622.
+- `iphone-restaurant-place.png` and `iphone-charging-place.png`: native
+  **Apple Maps** place views, 1206 × 2622.
+- `carplay-results.png`, `carplay-result-actions.png` and
+  `carplay-charging-places.png`: nextStop result overview, destination actions
+  and charging-operator selection, each 800 × 480.
+- `carplay-restaurant-place.png` and `carplay-charging-place.png`: native
+  **Apple Maps** place views in CarPlay, each 800 × 480.
+
+Result captures use example EVSE counts and charging power, with real MapKit
+places and calculated driving distances. The website must say so beside these
+images; the example capacities are not verified site facts or live availability.
+Selection is of a restaurant or charging operator, never an individual connector.
+The import does not activate image references. Add the visually reviewed images
+to `content/result-screenshots.ts` afterwards, with Apple Maps named in its four
+place-view captions. CarPlay images use at most two desktop columns and one
+column on narrower screens. Each screenshot links to its original PNG and has
+an accessible label identifying the full-size image; no modal or image editing
+is involved.
 
 The website branch's on-demand **CarPlay Screenshots** workflow boots a fresh iPhone
 Simulator, opens the native CarPlay display, and builds the pinned `main` source.
-An opt-in hosted test seeds an example Leipzig profile through the app's
+In `profiles` mode, an opt-in hosted test seeds an example Leipzig profile through the app's
 unchanged SwiftData repository, then the job selects it through the actual CarPlay
 interface. This avoids making the capture depend on iPhone UI-test accessibility
 or a live place search. The sample coordinates describe central Leipzig; no live
-charging results are seeded. The capture never
+charging results are seeded. This profile capture never
 starts a charging search or navigation. Simulator entitlements are verified in
 the compiled executable; app code and the entitlement source file are unchanged.
 
 ```bash
-gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website
+gh workflow run carplay-screenshots.yml --ref codex/app-explainer-website -f capture_mode=profiles
 ```
 
 Download the successful run's `carplay-captures` artifact, visually inspect both

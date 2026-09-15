@@ -2,6 +2,8 @@ import assert from "node:assert/strict";
 import { createHash } from "node:crypto";
 import { access, readFile } from "node:fs/promises";
 import test from "node:test";
+import { fileURLToPath } from "node:url";
+import { readResultScreenshots, resultCaptureSpecs } from "../scripts/import-result-screenshots.mjs";
 
 async function render(pathname = "/") {
   const workerUrl = new URL("../dist/server/index.js", import.meta.url);
@@ -31,10 +33,11 @@ test("server-renders the complete German nextStop landing page", async () => {
 
   const html = await response.text();
   assert.match(html, /<html lang="de">/i);
-  assert.match(html, /<title>nextStop – Ladepause und Essenspause verbinden<\/title>/i);
-  assert.match(html, /Hunger auf der Strecke\?/);
-  assert.match(html, /Ein Stopp, der beides kann\./);
-  assert.match(html, /Zwei sind frei\./);
+  assert.match(html, /<title>nextStop – Deine Pause\. Deine Entscheidung\.<\/title>/i);
+  assert.match(html, /Deine Pause\.<br\/>Deine Wahl\./);
+  assert.match(html, /Lass dir nicht vom Auto vorschreiben, wann und wo du Pause machst/);
+  assert.match(html, /Ein Ladepunkt ist belegt, der andere defekt/);
+  assert.match(html, /Mit nextStop bestimmst du die Mindestgröße des Ladeparks/);
   assert.match(html, /2 \/ 12 frei/);
   assert.match(html, /5 \/ 8 frei/);
   assert.match(html, /3 \/ 6 frei/);
@@ -58,6 +61,7 @@ test("server-renders the complete German nextStop landing page", async () => {
     "carplay-profiles.png", "carplay-ride-summary.png",
   ]) {
     assert.ok(html.includes(`src="/screenshots/${filename}"`));
+    assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${filename}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
   }
   assert.ok(!html.includes('src="/screenshots/iphone-profile-filters.png"'));
   assert.match(html, /© OpenStreetMap-Mitwirkende/);
@@ -106,6 +110,30 @@ test("keeps metadata, navigation, legal data, and source assets production-ready
   assert.doesNotMatch(packageJson, /react-loading-skeleton/);
   assert.match(imprint, /placeholdersActive: true/);
   assert.match(imprint, /fullName: "VORNAME NACHNAME"/);
+});
+
+test("publishes result captures only with checked originals and accurate ownership", async () => {
+  const directory = new URL("../public/screenshots/", import.meta.url);
+  const html = await (await render()).text();
+  try {
+    await access(new URL("result-provenance.json", directory));
+  } catch (error) {
+    if (error.code !== "ENOENT") throw error;
+    for (const { file } of resultCaptureSpecs) {
+      assert.ok(!html.includes(`src="/screenshots/${file}"`));
+    }
+    return;
+  }
+  const iphone = JSON.parse(await readFile(new URL("provenance.json", directory), "utf8"));
+  await readResultScreenshots(fileURLToPath(directory), iphone.appCommit, "result-provenance.json");
+  for (const { file, ownerApp } of resultCaptureSpecs) {
+    const image = html.match(new RegExp(`<img[^>]+src="/screenshots/${file}"[^>]*>`));
+    assert.ok(image, `${file} must appear after the reviewed result set is activated.`);
+    assert.match(html, new RegExp(`<a[^>]+href="/screenshots/${file}"[^>]+aria-label="[^"]*in Originalgröße öffnen"`));
+    if (ownerApp === "Apple Maps") assert.match(image[0], /alt="[^"]*Apple Maps/);
+  }
+  assert.match(html, /Beispielwerten für Ladepunkte und Leistung/);
+  assert.match(html, /Orte und Fahrstrecken stammen aus MapKit/);
 });
 
 test("exports a self-contained Firebase Hosting document", async () => {

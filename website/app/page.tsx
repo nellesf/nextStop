@@ -1,5 +1,10 @@
 import Image from "next/image";
 import { imprint } from "../content/imprint";
+import {
+  carplayResultScreenshots,
+  iphoneResultScreenshots,
+  type ResultScreenshot,
+} from "../content/result-screenshots";
 
 const searchFacts = [
   {
@@ -68,15 +73,38 @@ function AppScreenshot({
   return (
     <figure className={`device-column ${className}`}>
       <div className="phone screenshot-frame">
-        <Image
-          className="app-screenshot"
-          src={src}
-          alt={alt}
-          width={1206}
-          height={2622}
-          sizes="(max-width: 620px) 260px, (max-width: 1180px) 221px, 261px"
-          unoptimized
-        />
+        <a className="screenshot-link" href={src} aria-label={`${alt} in Originalgröße öffnen`}>
+          <Image
+            className="app-screenshot"
+            src={src}
+            alt={alt}
+            width={1206}
+            height={2622}
+            sizes="(max-width: 620px) 260px, (max-width: 1180px) 221px, 261px"
+            unoptimized
+          />
+        </a>
+      </div>
+      <figcaption className="mockup-label">{caption}</figcaption>
+    </figure>
+  );
+}
+
+function CarPlayScreenshot({ src, alt, caption }: ResultScreenshot) {
+  return (
+    <figure className="carplay-wrap">
+      <div className="carplay">
+        <a className="screenshot-link" href={src} aria-label={`${alt} in Originalgröße öffnen`}>
+          <Image
+            className="carplay-screenshot"
+            src={src}
+            alt={alt}
+            width={800}
+            height={480}
+            sizes="(max-width: 620px) calc(100vw - 80px), (max-width: 1180px) 760px, 640px"
+            unoptimized
+          />
+        </a>
       </div>
       <figcaption className="mockup-label">{caption}</figcaption>
     </figure>
@@ -99,21 +127,44 @@ function CarPlayScreenshots() {
   return (
     <div className="carplay-gallery">
       {screens.map((screen) => (
-        <figure className="carplay-wrap" key={screen.file}>
-          <div className="carplay">
-            <Image
-              className="carplay-screenshot"
-              src={`/screenshots/${screen.file}`}
-              alt={screen.alt}
-              width={800}
-              height={480}
-              sizes="(max-width: 620px) calc(100vw - 80px), (max-width: 1180px) 760px, 640px"
-              unoptimized
-            />
-          </div>
-          <figcaption className="mockup-label">{screen.caption}</figcaption>
-        </figure>
+        <CarPlayScreenshot
+          key={screen.file}
+          src={`/screenshots/${screen.file}`}
+          alt={screen.alt}
+          caption={screen.caption}
+        />
       ))}
+    </div>
+  );
+}
+
+function ResultScreenshots() {
+  if (!iphoneResultScreenshots.length && !carplayResultScreenshots.length) return null;
+
+  return (
+    <div className="result-screenshots" aria-labelledby="result-screenshots-title">
+      <div className="stage-copy">
+        <span className="stage-tag">DEINEN STOPP AUSWÄHLEN</span>
+        <h3 id="result-screenshots-title">Vom passenden Treffer<br />zu deinem nächsten Stopp.</h3>
+        <p>Vergleiche die Ergebnisse und wähle das Restaurant oder den Ladeanbieter für deine Pause. Die jeweilige Ortsansicht zeigt dir das ausgewählte Ziel.</p>
+      </div>
+      {iphoneResultScreenshots.length > 0 && (
+        <div className="result-screenshot-group">
+          <h4>Auf dem iPhone</h4>
+          <div className="result-phone-gallery">
+            {iphoneResultScreenshots.map((screen) => <AppScreenshot key={screen.src} {...screen} />)}
+          </div>
+        </div>
+      )}
+      {carplayResultScreenshots.length > 0 && (
+        <div className="result-screenshot-group">
+          <h4>In CarPlay</h4>
+          <div className="result-carplay-gallery">
+            {carplayResultScreenshots.map((screen) => <CarPlayScreenshot key={screen.src} {...screen} />)}
+          </div>
+        </div>
+      )}
+      <p className="mockup-disclaimer">Echte Simulator-Aufnahmen mit Beispielwerten für Ladepunkte und Leistung. Orte und Fahrstrecken stammen aus MapKit. Die Ortsansichten auf iPhone und CarPlay gehören zu Apple Maps. Du wählst ein Restaurant oder einen Ladeanbieter, keinen einzelnen Stecker.</p>
     </div>
   );
 }
@@ -135,9 +186,9 @@ export default function Home() {
       <section className="hero" aria-labelledby="hero-title">
         <div className="hero-copy">
           <span className="eyebrow"><i /> Für iPhone &amp; Apple CarPlay entwickelt</span>
-          <h1 id="hero-title">Hunger auf der Strecke?</h1>
-          <p className="hero-lead">Finde den Stopp, der <em>Pause und Laden</em> zusammenbringt.</p>
-          <p className="hero-support">nextStop zeigt dir bis zu fünf Ladeparks entlang deiner echten Route, die zu deinen Kriterien passen – auf Wunsch mit deiner bevorzugten Restaurantkette in Laufnähe.</p>
+          <h1 id="hero-title">Deine Pause.<br />Deine Wahl.</h1>
+          <p className="hero-lead">Finde deinen nächsten Stopp – nach <em>deinen Bedürfnissen.</em></p>
+          <p className="hero-support">Lass dir nicht vom Auto vorschreiben, wann und wo du Pause machst. Etwas essen, mehr Ladepunkte vor Ort oder beides? Du legst fest, was dir wichtig ist. nextStop findet bis zu fünf passende Stopps entlang deiner Route.</p>
           <div className="hero-actions">
             <a className="primary-button" href="#so-gehts">So funktioniert nextStop <span>↓</span></a>
             <a className="text-link" href="#ladepark">Warum ein Ladepark mehr sagt <span>↗</span></a>
@@ -172,8 +223,8 @@ export default function Home() {
       <section className="story-section" id="story" aria-labelledby="story-title">
         <div className="section-heading wide-heading">
           <span className="section-index">01 · DIE SITUATION</span>
-          <h2 id="story-title">Zwei Bedürfnisse.<br />Ein sinnvoller Stopp.</h2>
-          <p>Du bekommst Hunger. Dein Akku braucht ohnehin bald eine Pause. nextStop sucht nicht nach irgendeinem Restaurant oder irgendeiner Säule, sondern nach der Kombination, die zu deiner Fahrt passt.</p>
+          <h2 id="story-title">Was brauchst du<br />für eine gute Pause?</h2>
+          <p>Hast du Hunger? Möchtest du einen Ladepark mit mehreren Ladepunkten statt eines kleinen Standorts ohne Ausweichmöglichkeit? Du entscheidest, wie deine nächste Pause aussehen soll. nextStop sucht die Stopps, die zu deinen Wünschen passen.</p>
         </div>
         <div className="moment-grid">
           <article className="moment-card hunger-card">
@@ -181,17 +232,17 @@ export default function Home() {
             <div className="moment-icon">🍟</div>
             <div>
               <span>DER MOMENT</span>
-              <h3>„Ich könnte langsam etwas essen.“</h3>
-              <p>Dein Profil kennt bereits die Restaurantkette, die für diese Fahrt infrage kommt.</p>
+              <h3>„Ich möchte etwas essen.“</h3>
+              <p>Deine bevorzugte Restaurantkette soll in Laufnähe sein. Du entscheidest, ob Essen zu dieser Pause gehört.</p>
             </div>
           </article>
           <article className="moment-card charge-card">
             <div className="moment-time">17:45</div>
             <div className="moment-icon">ϟ</div>
             <div>
-              <span>DIE GELEGENHEIT</span>
-              <h3>„Laden muss ich sowieso.“</h3>
-              <p>Leistung, Parkgröße und Entfernung sind vorab festgelegt. Unterwegs reicht ein Profil-Tipp.</p>
+              <span>DEINE AUSWAHL</span>
+              <h3>„Ich will mehr als eine Ladesäule.“</h3>
+              <p>Lege fest, wie viele Ladepunkte ein passender Ladepark mindestens haben soll und welche Leistung du brauchst.</p>
             </div>
           </article>
           <article className="moment-card answer-card">
@@ -199,8 +250,8 @@ export default function Home() {
             <div className="moment-icon">✓</div>
             <div>
               <span>DIE ANTWORT</span>
-              <h3>Ein Stopp, der beides kann.</h3>
-              <p>Bis zu fünf passende Ergebnisse – danach übernimmt Apple Maps die Navigation.</p>
+              <h3>„Dieser Stopp passt zu mir.“</h3>
+              <p>Vergleiche bis zu fünf passende Ergebnisse. Du wählst deinen Stopp – Apple Maps übernimmt die Navigation.</p>
             </div>
           </article>
         </div>
@@ -257,6 +308,8 @@ export default function Home() {
           <CarPlayScreenshots />
         </div>
 
+        <ResultScreenshots />
+
         <div className="device-stage results-stage">
           <div className="fact-callout filter-distance">
             <span>500 m</span>
@@ -268,15 +321,15 @@ export default function Home() {
             <p>Profile und dauerhafte Vorlieben richtest du vor der Fahrt ausschließlich auf dem iPhone ein. Wähle die passende Mindestleistung, die Anzahl der Ladepunkte und bei Bedarf deine Restaurantkette. Unterwegs reicht in CarPlay die Auswahl des vorbereiteten Profils.</p>
           </div>
         </div>
-        <p className="mockup-disclaimer">Die iPhone- und CarPlay-Bilder zeigen echte Simulator-Aufnahmen der unveröffentlichten App mit Beispielprofilen. Die übrigen Grafiken erläutern das Konzept anhand fiktiver Ladeparks und Zahlen.</p>
+        <p className="mockup-disclaimer">Die Profilansichten auf iPhone und CarPlay zeigen echte Simulator-Aufnahmen der unveröffentlichten App mit Beispielprofilen. Die übrigen Grafiken erläutern das Konzept anhand fiktiver Ladeparks und Zahlen.</p>
       </section>
 
       <section className="capacity-section" id="ladepark" aria-labelledby="capacity-title">
         <div className="capacity-intro">
           <span className="section-index light-index">03 · MEHR KONTEXT</span>
-          <h2 id="capacity-title">Zwei sind frei.<br />Aber wie lange noch?</h2>
-          <p>Dein Auto zeigt dir vielleicht den nächsten Anbieter mit zwei aktuell freien Ladepunkten. Bis du dort ankommst, kann diese Momentaufnahme längst anders aussehen.</p>
-          <p>nextStop schaut deshalb breiter: auf den anbieterübergreifenden Ladepark und seine insgesamt erfasste Kapazität ab deiner Mindestleistung.</p>
+          <h2 id="capacity-title">Mehr als die<br />nächste Ladesäule.</h2>
+          <p>Ein Ladepunkt ist belegt, der andere defekt. Gibt es vor Ort keine Alternative, musst du weitersuchen. Für deine Pause möchtest du lieber einen Standort mit mehr Ladepunkten zur Auswahl.</p>
+          <p>Mit nextStop bestimmst du die Mindestgröße des Ladeparks. Du siehst die erfassten Ladepunkte über Anbieter hinweg – ab deiner gewünschten Mindestleistung. So kannst du deinen Stopp nach mehr als der gerade angezeigten Verfügbarkeit auswählen.</p>
         </div>
 
         <div className="capacity-demo">
