@@ -207,7 +207,7 @@ JSON.stringify(nodes);
         (OUTPUT / "display-scale-options.json").write_text(json.dumps(options, indent=2) + "\n")
         matches = []
         for node in options:
-            if node.get("role") not in {"AXStaticText", "AXMenuItem", "AXRow"}:
+            if node.get("role") not in {"AXStaticText", "AXTextField", "AXMenuItem", "AXRow"}:
                 continue
             value = str(node.get("value", node.get("name", ""))).strip()
             if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value) and float(value) == requested["scale"]:
@@ -241,7 +241,8 @@ JSON.stringify(nodes);
         "inputMethod": "Triple-click Width and Height, type and Tab; select Scale from its observed native popup",
         "configuredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "runURL": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
-        "harnessCommit": os.environ["GITHUB_SHA"], "runSubmitted": False,
+        "harnessCommit": os.environ["GITHUB_SHA"],
+        "runAttempt": int(os.environ["GITHUB_RUN_ATTEMPT"]), "runSubmitted": False,
     }
     manifest = OUTPUT / "display-configuration.json"
     manifest.write_text(json.dumps(record, indent=2, ensure_ascii=False) + "\n")

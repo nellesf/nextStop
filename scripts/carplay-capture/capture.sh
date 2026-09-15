@@ -69,6 +69,7 @@ source = {
     'appCommit': subprocess.check_output(['git', '-C', 'screenshot-app', 'rev-parse', 'HEAD'], text=True).strip(),
     'appTree': subprocess.check_output(['git', '-C', 'screenshot-app', 'rev-parse', 'HEAD:ios/NextStopApp'], text=True).strip(),
     'harnessCommit': os.environ['GITHUB_SHA'],
+    'runAttempt': int(os.environ['GITHUB_RUN_ATTEMPT']),
     'runURL': f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
     'device': 'iPhone 17 Pro with native external CarPlay display',
     'locale': 'de_DE',
