@@ -24,7 +24,15 @@ def framebuffer(path, display):
 
 
 def normalized(value):
-    return value.casefold().replace("’", "'").replace("–", "-").replace("\u00a0", " ")
+    return re.sub(r"\s+", " ", value.casefold().replace("’", "'").replace("–", "-")).strip()
+
+
+def dismiss_maps_widget_prompt(frame):
+    visible = normalized(" ".join(row["text"] for row in frame["text"]))
+    if 'allow widgets from "maps" to' in visible and "use your location?" in visible:
+        click_visible_text("Don't Allow", "internal")
+        return True
+    return False
 
 
 def capture_phase(state):
@@ -41,6 +49,8 @@ def capture_phase(state):
         path = OUTPUT / f"diagnostic-{state['phase']}-{attempt}.png"
         frame = framebuffer(path, display)
         visible = normalized("\n".join(row["text"] for row in frame["text"]))
+        if display == "internal" and dismiss_maps_widget_prompt(frame):
+            continue
         if all(normalized(text) in visible for text in expected):
             time.sleep(2)
             final = OUTPUT / name
@@ -75,6 +85,8 @@ execute(["xcrun", "simctl", "install", DEVICE, str(app)])
 execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"])
 execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location", "com.apple.Maps"])
 execute(["xcrun", "simctl", "location", DEVICE, "set", "49.4521,11.0767"])
+time.sleep(2)
+dismiss_maps_widget_prompt(framebuffer(OUTPUT / "diagnostic-before-hosted-test.png", "internal"))
 container = Path(execute(["xcrun", "simctl", "get_app_container", DEVICE, "de.nextstop.app", "data"]))
 documents = container / "Documents"
 documents.mkdir(exist_ok=True)
@@ -96,8 +108,30 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
     process = subprocess.Popen(command, stdout=log, stderr=subprocess.STDOUT)
     try:
         deadline = time.monotonic() + 1_200
+        next_container_check = 0
+        permissions_reapplied = False
         while time.monotonic() < deadline:
+            # Xcode installs the app host again before XCTest starts and can
+            # replace its data-container UUID. Do not keep the pre-test URL.
+            if not seen and time.monotonic() >= next_container_check:
+                next_container_check = time.monotonic() + 3
+                lookup = subprocess.run(
+                    ["xcrun", "simctl", "get_app_container", DEVICE, "de.nextstop.app", "data"],
+                    text=True, capture_output=True, timeout=30)
+                if lookup.returncode == 0 and lookup.stdout.strip():
+                    live_container = Path(lookup.stdout.strip())
+                    if live_container != container:
+                        print(f"XCTest app container changed: {container} -> {live_container}", flush=True)
+                        container = live_container
+                    documents = container / "Documents"
+                    state_path = documents / "website-capture-state.json"
+                    command_path = documents / "website-capture-command.json"
+                else:
+                    print("Waiting for Xcode to finish installing the hosted test app.", flush=True)
             if state_path.exists():
+                if not permissions_reapplied:
+                    execute(["xcrun", "simctl", "privacy", DEVICE, "grant", "location-always", "de.nextstop.app"])
+                    permissions_reapplied = True
                 state = json.loads(state_path.read_text())
                 phase = state["phase"]
                 if phase not in seen:
@@ -161,6 +195,10 @@ with (OUTPUT / "profile-setup.log").open("w") as log:
         (OUTPUT / "result-capture-source.json").write_text(json.dumps(source, indent=2, ensure_ascii=False) + "\n")
         print(f"Captured {len(captures)} verified native result and place screens.", flush=True)
     finally:
+        for name in ["website-capture-state.json", "website-capture-fixture.json"]:
+            path = documents / name
+            if path.exists():
+                (OUTPUT / name).write_bytes(path.read_bytes())
         if process.poll() is None:
             process.terminate()
             try:
