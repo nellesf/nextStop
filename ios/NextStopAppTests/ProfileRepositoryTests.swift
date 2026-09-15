@@ -243,12 +243,12 @@ final class ProfileRepositoryTests: XCTestCase {
       let controller = scene.interfaceController
       let profiles = try XCTUnwrap(controller.rootTemplate as? CPListTemplate)
       let profileItem = try item(named: profile.name, in: profiles)
-      try invoke(profileItem)
+      try await invoke(profileItem)
       try await wait("CarPlay ride summary") {
         controller.topTemplate !== profiles && controller.topTemplate is CPListTemplate
       }
       let summary = try XCTUnwrap(controller.topTemplate as? CPListTemplate)
-      try invoke(item(named: "Suche starten", in: summary))
+      try await invoke(item(named: "Suche starten", in: summary))
       try await wait("CarPlay search results") {
         (controller.topTemplate as? CPPointOfInterestTemplate)?.pointsOfInterest.isEmpty == false
       }
@@ -399,9 +399,25 @@ final class ProfileRepositoryTests: XCTestCase {
           .first { $0.text == name })
     }
 
-    private func invoke(_ item: CPListItem) throws {
+    @MainActor
+    private final class HandlerCompletion {
+      var hasCompleted = false
+    }
+
+    private func invoke(_ item: CPListItem) async throws {
       let handler = try XCTUnwrap(item.handler)
-      handler(item, {})
+      let completion = HandlerCompletion()
+      handler(item) {
+        Task { @MainActor in
+          completion.hasCompleted = true
+        }
+      }
+      // A template can become topTemplate before its push animation completes.
+      // The app releases its transition gate before calling this completion;
+      // await that signal so the next action cannot be silently discarded.
+      try await wait("handler completion for \(item.text ?? "CarPlay item")") {
+        completion.hasCompleted
+      }
     }
 
     private func phase(
