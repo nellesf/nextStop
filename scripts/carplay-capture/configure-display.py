@@ -153,7 +153,7 @@ end tell
     # mouse-event helper already verified for app clicks, with coordinates from
     # the just-observed native controls. Click inside the editable portion of
     # the Scale combo, away from its popup arrow.
-    for key in ["width", "height", "scale"]:
+    for key in ["width", "height"]:
         field = fields[key]
         x = round(field["position"][0] + field["size"][0] * 0.3)
         y = round(field["position"][1] + field["size"][1] / 2)
@@ -170,6 +170,61 @@ on run arguments
     return "Typed numeric value and committed with Tab"
 end run
 ''', str(requested[key])])
+    if float(fields["scale"]["value"]) != requested["scale"]:
+        popup = javascript("observe-scale-popup-button", r'''
+var process = Application('System Events').processes.byName('Simulator');
+var combo = process.windows.byName('TV Out Extended Setup').comboBoxes[0];
+var buttons = combo.buttons();
+if (buttons.length !== 1) throw new Error('Expected the observed single Scale popup button');
+var properties = buttons[0].properties();
+JSON.stringify({position: properties.position, size: properties.size});
+''')
+        x = round(popup["position"][0] + popup["size"][0] / 2)
+        y = round(popup["position"][1] + popup["size"][1] / 2)
+        run("open-scale-popup", [
+            "osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(x), str(y),
+        ])
+        time.sleep(0.3)
+        run("scale-popup-screen", ["screencapture", "-x", str(OUTPUT / "display-scale-options.png")])
+        options = javascript("observe-scale-options", r'''
+var process = Application('System Events').processes.byName('Simulator');
+var nodes = [];
+function visit(element, depth) {
+    if (depth > 7 || nodes.length >= 100) return;
+    var properties = element.properties();
+    var node = {};
+    for (var key of ['role', 'name', 'value', 'position', 'size']) {
+        if (properties[key] !== undefined && properties[key] !== null) node[key] = properties[key];
+    }
+    nodes.push(node);
+    element.uiElements().forEach(function(child) { visit(child, depth + 1); });
+}
+process.windows().forEach(function(window) {
+    if (window.name().indexOf('nextStop CarPlay Capture') !== 0) visit(window, 0);
+});
+JSON.stringify(nodes);
+''')
+        (OUTPUT / "display-scale-options.json").write_text(json.dumps(options, indent=2) + "\n")
+        matches = []
+        for node in options:
+            if node.get("role") not in {"AXStaticText", "AXMenuItem", "AXRow"}:
+                continue
+            value = str(node.get("value", node.get("name", ""))).strip()
+            if re.fullmatch(r"[0-9]+(?:\.[0-9]+)?", value) and float(value) == requested["scale"]:
+                if node.get("position") and node.get("size"):
+                    matches.append(node)
+        labels = [node for node in matches if node["role"] == "AXStaticText"]
+        if labels:
+            matches = labels
+        centers = set((round(node["position"][0] + node["size"][0] / 2),
+                       round(node["position"][1] + node["size"][1] / 2)) for node in matches)
+        if len(centers) != 1:
+            raise RuntimeError(f"Expected one observed Scale {requested['scale']} option; found {matches!r}")
+        x, y = next(iter(centers))
+        run("choose-observed-scale", [
+            "osascript", "-l", "JavaScript", "scripts/carplay-capture/mouse.jxa", str(x), str(y),
+        ])
+        time.sleep(0.3)
     readback_state = javascript("readback-configuration-controls", DIALOG_READER)
     readback_fields = validate_dialog(readback_state)
     readback = {key: float(readback_fields[key]["value"]) for key in ["width", "height", "scale"]}
@@ -183,7 +238,7 @@ end run
         "observationRunURL": OBSERVATION["runURL"],
         "controlObservation": OBSERVATION,
         "fieldAssociation": "Nearest native field to the right of its observed label on the same row",
-        "inputMethod": "Select each observed numeric field with a native triple click, type its value, then Tab",
+        "inputMethod": "Triple-click Width and Height, type and Tab; select Scale from its observed native popup",
         "configuredAt": datetime.now(timezone.utc).isoformat().replace("+00:00", "Z"),
         "runURL": f"https://github.com/{os.environ['GITHUB_REPOSITORY']}/actions/runs/{os.environ['GITHUB_RUN_ID']}",
         "harnessCommit": os.environ["GITHUB_SHA"], "runSubmitted": False,
