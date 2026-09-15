@@ -1,0 +1,11 @@
+{
+  "action": "click",
+  "display": "external",
+  "expected": [
+    "Profile",
+    "Leipzig"
+  ],
+  "label": "nextStop",
+  "ownerApp": "nextStop",
+  "phase": "waiting-for-carplay"
+}

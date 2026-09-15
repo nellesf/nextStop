@@ -42,7 +42,7 @@ screens, not every possible string or application state.
 | [1280 × 720 @3x](captures/wide-1280-3x) | Fits | Fits | Other visible labels fit; detail summary absent |
 | [1920 × 720 @3x](captures/high-resolution) | Fits | Fits | Other visible labels fit; detail summary absent |
 | [768 × 1024 @2x](captures/portrait-2x) | Hard-clipped at right edge | Wraps to two lines | Summary is present; count wraps to two lines and EDEKA operator/count entry to three; other visible labels fit |
-| 900 × 1200 @3x | Repeat capture pending | Repeat capture pending | Initial capture stopped because the profile-page readiness check expected the already-ellipsized full title “Fahrt wählen” |
+| 900 × 1200 @3x | Incomplete | Incomplete | Profile heading ellipsis observed; first attempt blocked on its full title, follow-up stayed on CarPlay home after the app-icon click. [Original failure evidence](failed-portrait-3x/README.md) |
 
 The result heading is “Passende Ladestopps” in every configuration. The detail
 prompt is “Wohin möchtest du fahren?”. In the landscape views reviewed so far,

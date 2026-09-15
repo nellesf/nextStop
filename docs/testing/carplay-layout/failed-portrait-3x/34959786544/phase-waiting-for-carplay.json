@@ -1,0 +1,8 @@
+{
+  "action": "click",
+  "display": "external",
+  "expected": [],
+  "label": "nextStop",
+  "ownerApp": "nextStop",
+  "phase": "waiting-for-carplay"
+}

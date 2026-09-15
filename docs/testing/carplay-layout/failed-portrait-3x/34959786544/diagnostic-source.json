@@ -1,0 +1,36 @@
+{
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34959786544",
+  "completeCapture": false,
+  "reason": "Root title ellipsized; full-title readiness gate prevented capture.",
+  "processing": "Selected original diagnostic bytes copied without pixel changes",
+  "files": [
+    {
+      "file": "diagnostic-external-0-9.png",
+      "sha256": "549e80198629c78d5871dddad6d4b82cf29bedc896182eb1d110ceb17abf0904",
+      "dimensions": [
+        900,
+        1200
+      ]
+    },
+    {
+      "file": "diagnostic-external-0-9.ocr.json",
+      "sha256": "71d52761b17d47ee4aa5bffbfcec653cb0e048eb8a596746ec088b86a5379ad9"
+    },
+    {
+      "file": "capture-source-base.json",
+      "sha256": "d71dda3c499d8660ab4b40c28d1eb8f5e94545fe1f76cc38ed91e5f91c3e3580"
+    },
+    {
+      "file": "display-configuration.json",
+      "sha256": "c5354021e54e4a6774499a22bfdbddb8efa5d24a94763e6c54e225597add19e3"
+    },
+    {
+      "file": "preflight.json",
+      "sha256": "dc0166b631967bb28ac9882cec0ade4a586829ef71b3bed405362e61bbf12c48"
+    },
+    {
+      "file": "phase-waiting-for-carplay.json",
+      "sha256": "e71f6254479eef864df8e80349813fee63c7e31e0aca73d9ec22b19ab3b90e16"
+    }
+  ]
+}

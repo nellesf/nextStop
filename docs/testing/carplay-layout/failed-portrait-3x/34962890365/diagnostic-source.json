@@ -1,0 +1,44 @@
+{
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34962890365",
+  "completeCapture": false,
+  "reason": "Native click targeted the app icon, but all subsequent observed frames remained on CarPlay home.",
+  "processing": "Selected original diagnostic bytes copied without pixel changes",
+  "files": [
+    {
+      "file": "diagnostic-external-0-11.png",
+      "sha256": "1dddc7d77acafb9a7df343ad179969bb1392f8c7a4a94bc5b6fdf18ff7503703",
+      "dimensions": [
+        900,
+        1200
+      ]
+    },
+    {
+      "file": "diagnostic-external-0-11.ocr.json",
+      "sha256": "ec114e56d859258cfc56655903afd96b7af140f56392b60815fadb8baf562924"
+    },
+    {
+      "file": "diagnostic-host-after-click-1.png",
+      "sha256": "1ea6596dcdc2aeb4fd2a0562786b7f26d367cb32b193098fdd3b66b24d55a04c",
+      "dimensions": [
+        1024,
+        768
+      ]
+    },
+    {
+      "file": "capture-source-base.json",
+      "sha256": "e0d08570a8cdd59c0a5000044702b130b4432908f3c46cbd88075d93a65aeba9"
+    },
+    {
+      "file": "display-configuration.json",
+      "sha256": "f519fbcabd6d02521ac67e4d380c22f9f94e58338971f31b4d21a7ad4225eadc"
+    },
+    {
+      "file": "preflight.json",
+      "sha256": "a5448e8e4876127c8ca2973c2bf4a0537b5139cc94170e83ea7389fd17427041"
+    },
+    {
+      "file": "phase-waiting-for-carplay.json",
+      "sha256": "fbbeafce37f41da0f50b55bc73285a045b0623dc63baf259b4f01c637991f3ae"
+    }
+  ]
+}

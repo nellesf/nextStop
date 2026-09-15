@@ -40,13 +40,39 @@ gh run list --repo nellesf/nextStop --workflow carplay-layout.yml \
 
 These are separate choices, not commands to dispatch together. Use
 `-f mode=discover` only when controls or the runner image changed; preserve its
-`carplay-layout-discovery` artifact before adapting the configurator. The layout
-workflow has **no dispatch build-reuse inputs**. Low-level `CARPLAY_REUSE_DIR` /
-`CARPLAY_REUSE_SHA256` support in `capture.sh` does not make the website's
-`reuse_run_id` / `reuse_sha256` flags available here.
+`carplay-layout-discovery` artifact before adapting the configurator.
 
-The layout app checkout is the dispatched commit, recorded separately from its
-`ios` tree. The eight cases cover documented configurations and common sizes,
+For a Python/workflow-only correction, layout now accepts optional verified reuse:
+`app_ref` (the full original app commit), `reuse_artifact_id` (an exact artifact ID
+from this repository), and `reuse_sha256` (the build archive digest). Both reuse
+inputs require all three values. Ubuntu validates them before allocating macOS
+runners; they apply only to `mode=matrix`. The download extracts only the source
+manifest and build archive to fixed temporary paths. `capture.sh` checks the
+original app commit, app subtree, current Swift fixture hash, and archive digest
+before using it. A Swift fixture change requires a fresh build. The website's
+`reuse_run_id` flag is not a layout input.
+
+The targeted verification below uses the build from `34962890365`, whose app and
+Swift fixture are unchanged. Its capture failed, so the archive is a verified
+build input, not completed screenshot evidence. Reuse verification run
+[34964912072](https://github.com/nellesf/nextStop/actions/runs/34964912072) is pending.
+
+```bash
+gh workflow run carplay-layout.yml --repo nellesf/nextStop \
+  --ref codex/carplay-text-fit -f mode=matrix -f configuration=portrait-3x \
+  -f app_ref=200e13d9bb151c88e9786cf96c5690f2ee733d19 \
+  -f reuse_artifact_id=10394194384 \
+  -f reuse_sha256=8d7527500fbcb67430f6b164664a2ffc5d5a2c57a496f588ac9eb3aab23fd41c
+```
+
+Artifact retention is seven days. After expiry, build once from the required
+app/fixture and record the new exact artifact ID and archive digest; do not
+remove the checks or silently switch to another archive.
+
+The layout app checkout defaults to the dispatched commit. The manifest's
+`appTree` is specifically `HEAD:ios/NextStopApp`; compare the complete `ios` tree
+separately when verifying unchanged production sources. The eight cases cover
+documented configurations and common sizes,
 including both scales at 1280 × 720 and an additional 900 × 1200 @3x portrait
 case. Simulator accepts arbitrary dimensions: eight cases are not every possible
 display or content state. See the [audit](../testing/carplay-layout/README.md)
@@ -55,6 +81,9 @@ coverage, and observed defects.
 
 ### Native display acceptance and bounded startup
 
+Preflight enables `com.apple.iphonesimulator CarPlayExtraOptions` before opening
+Simulator. The observed **I/O → External Displays → CarPlay…** menu then opens
+**TV Out Extended Setup**; the default CarPlay path alone produced 800 × 480.
 The proven input path is in `configure-display.py`: locate the observed Width
 and Height controls, **triple-click** their actual positions, type each value,
 and press **Tab** to commit. Simulator intercepts Command-A; AX `setValue` and
@@ -74,13 +103,20 @@ Matching AX readback is necessary but insufficient. Preflight must establish:
   `runtimeScale`, and `framebufferSize`, plus the identical configuration in
   `preflight.json` and the same fresh device ID.
 
-Compile the Vision OCR helper **before booting** the fresh simulator; its first
-compilation can be slow. Use Simulator from the selected Xcode and keep the
+For display/matrix mode, compile the Vision OCR helper **before booting** the
+fresh simulator; its first compilation can be slow. Use Simulator from the selected Xcode and keep the
 runner awake with `caffeinate -diu`. Preflight allows **240 seconds** for the
 first readable CarPlay frame, then **one** native close/reconnect and **180
 seconds** more. Individual calls also have bounded timeouts. Failure after that
 budget stops capture and preserves diagnostics; do not add indefinite polling or
 repeated blind reconnects.
+
+Discovery intentionally skips OCR compilation and default-display readiness.
+Its bounded probe enables the extra options and restarts Simulator itself.
+Capture the configuration screenshot first, then use bulk properties and shallow,
+bounded accessibility reads of that dialog. Recursive per-property traversal of
+the whole Simulator tree timed out in run `34953004743`; the focused probe worked
+in `34953971279`.
 
 In the seven successful jobs of
 [run 34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544),
@@ -97,7 +133,12 @@ configurations (70 native PNGs, each configuration's hosted test passed).
 `portrait-3x` failed root readiness because the title under audit was ellipsized.
 The corrected single-configuration
 [run 34962890365](https://github.com/nellesf/nextStop/actions/runs/34962890365),
-harness `200e13d9bb151c88e9786cf96c5690f2ee733d19`, is pending verification.
+harness `200e13d9bb151c88e9786cf96c5690f2ee733d19`, verified its display and built
+successfully, but the native app-icon click left CarPlay on its home screen.
+It has no completed capture manifest. [Selected original diagnostics](../testing/carplay-layout/failed-portrait-3x/README.md)
+preserve both failures after artifact expiry.
+The activation correction is being checked separately in `34964912072` using
+the verified existing build; this pending run does not yet add a completed case.
 The [capture index](../testing/carplay-layout/captures/index.json) records admitted
 evidence; neither pending nor failed configurations count as completed.
 
@@ -114,7 +155,8 @@ The importer requires exactly ten PNGs with matching original SHA-256 hashes and
 dimensions, corresponding OCR, display/preflight provenance, a completed
 `layout-capture-source.json`, and a hosted summary of one test passed, zero failed,
 zero skipped. It copies only that evidence into `docs/testing/carplay-layout/captures`;
-build archives, diagnostics, and Apple SDK copies stay outside Git. It reports
+build archives, bulk diagnostics, and Apple SDK copies stay outside Git. Selected
+failure evidence may be preserved separately and labelled incomplete. It reports
 missing/failed configurations and exits nonzero after importing a valid subset.
 Use `--allow-partial` only for an explicitly partial import, and `--replace` only
 to intentionally replace different existing evidence. Run/harness/app provenance
@@ -130,6 +172,14 @@ an OCR match can reconstruct clipped words, and missing OCR can indicate an
 offscreen row. Neither OCR nor a passed capture test establishes a visual pass.
 Review every original PNG at native size and distinguish horizontal clipping,
 ellipsis, extra wrapping, missing detail content, and ordinary scroll boundaries.
+
+Root activation has a shared 120-second budget, including native commands and
+delays. It requires two stable profile frames at least two seconds apart. It may
+send at most two icon clicks, separated by at least 30 seconds, and only after
+two fresh home observations plus another check immediately before mouse input.
+Any partial/full profile observation disables further icon clicks. Unknown or
+transition frames never justify a click. `root-activation.json` records each
+observation/decision; its PNGs retain what the helper actually saw.
 
 ## Website capture and verified build reuse
 
@@ -310,7 +360,8 @@ Download that evidence instead of repeatedly polling unavailable run logs.
 | Fresh display starts just as the harness reconnects | [34957774780](https://github.com/nellesf/nextStop/actions/runs/34957774780) created its launcher about 113 seconds after configuration; the old 90-second budget interrupted it. The current harness allows 240 seconds initially plus 180 seconds after one reconnect. Run [34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544) had already started on the older 90-second limits and nevertheless completed seven configurations; the longer allowance first applies to the targeted follow-up. |
 | Swift waits for the first ACK but Python sees no phase | XCTest can reinstall the app into a new data-container UUID. `results.py` / `layout.py` re-resolve the container every 3 seconds until a state appears and bind state, command, and fixture paths to that same live container. Tolerate a bounded lookup timeout during installation and reapply the simulator location grant afterward. This path completed in [34938078711](https://github.com/nellesf/nextStop/actions/runs/34938078711). |
 | Profile handler completes but no ride summary appears | The root template's transition gate can still be active. Wait for two stable rendered root frames before ACK, then await the actual public push/pop completion. Handler completion also fires when an action is rejected early; `topTemplate` alone can precede the completed animation. Do not pre-click Leipzig and invoke its handler a second time. |
-| Portrait root stays visible while capture waits for its full title | The 900 × 1200 @3x job in [34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544) rendered an ellipsized `Fahrt wählen`. The corrected harness uses `Profile` + `Leipzig` readiness anchors, preserving the full title in `expectedTexts`. [34962890365](https://github.com/nellesf/nextStop/actions/runs/34962890365) is the pending targeted verification; do not classify the failed capture as a missing app screen. |
+| Portrait root stays visible while capture waits for its full title | The 900 × 1200 @3x job in [34959786544](https://github.com/nellesf/nextStop/actions/runs/34959786544) rendered an ellipsized `Fahrt wählen`. The corrected harness uses `Profile` + `Leipzig` readiness anchors, preserving the full title in `expectedTexts`. The follow-up stopped earlier at app activation; do not classify the original failed capture as a missing app screen. |
+| The native app-icon click is dispatched but home remains visible | [34962890365](https://github.com/nellesf/nextStop/actions/runs/34962890365) shows the pointer on nextStop, then twelve unchanged home frames. Click dispatch is not readiness. The bounded correction waits for two profile frames and permits one additional click only after delayed, fresh, unambiguous home observations; it does not retap during a transition. Preserve the failed attempt and verify the correction in a new run. |
 | A result is highlighted but no destination buttons appear | `selectedIndex = 0` and the delegate callback only establish focus. The harness clicks the first observed `… km Fahrstrecke` row through the real Simulator UI. |
 | Clicking an app or row has no effect | Use the observed window and OCR coordinates. The proven mouse helper moves the pointer, verifies its position, and sends down/up with click state 1. Tap the nextStop icon above its caption. System Events `click at` and caption-only taps failed. |
 | Blank/delayed external display | Use the explicit Simulator from the selected Xcode, fresh device, and existing bounded preflight/reconnect logic. `caffeinate -diu` keeps the disposable runner session awake. Do not infer readiness from successful menu opening alone. |
