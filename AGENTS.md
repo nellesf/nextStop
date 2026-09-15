@@ -15,6 +15,14 @@ The architecture and recommendations were approved by the owner on 2026-08-13.
 Implementation is authorized under the accepted ADRs. New changes to an accepted
 decision still require the explicit approval described at the end of this file.
 
+## Simulator screenshots
+
+Before capturing iPhone or CarPlay images, read
+[`docs/operations/simulator-screenshots.md`](docs/operations/simulator-screenshots.md).
+It contains the runner quick start, verified build reuse, artifact retrieval,
+known UI timing failures, and import checks. The capture harness lives on
+`codex/app-explainer-website`, not `main`; preserve the requested main app source.
+
 ## Critical domain rules
 
 1. Use the actual route geometry. Corridor membership is geodesic distance to the
