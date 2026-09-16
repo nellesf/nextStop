@@ -310,20 +310,30 @@ final class UserErrorReportUITests: XCTestCase {
     // callers allow its accessibility snapshots extra time on hosted runners.
     let deadline = Date().addingTimeInterval(timeout ?? controlTimeout)
     for _ in 0..<24 {
-      let frame = app.frame
-      let keyboard = app.keyboards.firstMatch
-      let inputAssistant = app.otherElements.matching(identifier: "SystemInputAssistantView")
-        .firstMatch
-      let navigationBar = app.navigationBars.firstMatch
+      // A navigation transition can dismiss the keyboard between an `exists`
+      // query and a `frame` query. Read all viewport bounds from one snapshot.
+      let snapshot: any XCUIElementSnapshot
+      do {
+        snapshot = try app.snapshot()
+      } catch {
+        XCTFail("Cannot capture the scrolling viewport: \(error)", file: file, line: line)
+        return
+      }
+      let frame = snapshot.frame
+      let keyboard = firstSnapshot(in: snapshot) { $0.elementType == .keyboard }
+      let inputAssistant = firstSnapshot(in: snapshot) {
+        $0.identifier == "SystemInputAssistantView"
+      }
+      let navigationBar = firstSnapshot(in: snapshot) { $0.elementType == .navigationBar }
       let contentTop =
-        navigationBar.exists
-        ? max(frame.minY + 80, navigationBar.frame.maxY + 12) : frame.minY + 120
+        navigationBar.map { max(frame.minY + 80, $0.frame.maxY + 12) }
+        ?? frame.minY + 120
       // The prediction bar sits above Keyboard's accessibility frame and also
       // consumes touches; gestures must start above that entire input surface.
       let keyboardTop =
-        keyboard.exists
-        ? min(keyboard.frame.minY, inputAssistant.exists ? inputAssistant.frame.minY : frame.maxY)
-        : frame.maxY
+        keyboard.map {
+          min($0.frame.minY, inputAssistant?.frame.minY ?? frame.maxY)
+        } ?? frame.maxY
       let contentBottom = min(frame.maxY - 50, keyboardTop - 12)
       let viewport = CGRect(
         x: frame.minX, y: contentTop, width: frame.width,
@@ -356,11 +366,13 @@ final class UserErrorReportUITests: XCTestCase {
       let low = viewport.maxY - 30
       let startY = scrollDirection == .up ? low : high
       let endY = scrollDirection == .up ? startY - distance : startY + distance
-      // Keep gestures inside the sheet and outside the text field, above the keyboard.
+      // The left gutter stays inside the scrolling surface but outside links,
+      // form controls, and the trailing scroll indicator.
+      // Keep the vertical gesture above the keyboard and below the navigation bar.
       let start = app.coordinate(withNormalizedOffset: .zero).withOffset(
-        CGVector(dx: frame.width - 24, dy: startY))
+        CGVector(dx: 8, dy: startY))
       let end = app.coordinate(withNormalizedOffset: .zero).withOffset(
-        CGVector(dx: frame.width - 24, dy: endY))
+        CGVector(dx: 8, dy: endY))
       start.press(forDuration: 0.05, thenDragTo: end)
     }
     // Never query a missing element's identifier while recording the original failure.
@@ -370,6 +382,18 @@ final class UserErrorReportUITests: XCTestCase {
     hierarchy.lifetime = .keepAlways
     add(hierarchy)
     XCTFail("Control was not reachable after scrolling: \(identifier)", file: file, line: line)
+  }
+
+  @MainActor
+  private func firstSnapshot(
+    in snapshot: any XCUIElementSnapshot,
+    matching predicate: (any XCUIElementSnapshot) -> Bool
+  ) -> (any XCUIElementSnapshot)? {
+    if predicate(snapshot) { return snapshot }
+    for child in snapshot.children {
+      if let match = firstSnapshot(in: child, matching: predicate) { return match }
+    }
+    return nil
   }
 
   @MainActor

@@ -26,7 +26,8 @@ limits, cancel obsolete searches, and handle ambiguous destinations explicitly.
 Do not assume this template supplies dictation or Siri integration.
 
 **Approval:** explicit owner approval and an amendment to ADR 0002 and the CarPlay
-architecture are required. They currently prohibit `CPSearchTemplate`. Apple's
+architecture are required. The CarPlay architecture currently prohibits
+`CPSearchTemplate`; ADR 0002 records the selected template family. Apple's
 expanded API permission does not itself change the accepted product decision.
 On iOS 18–26, retain the existing destination entry paths.
 
