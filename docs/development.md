@@ -2,24 +2,36 @@
 
 ## Prerequisites
 
-- A full current Xcode installation with an iOS SDK and CarPlay simulator support.
-- Swift 6 toolchain (provided by Xcode for app builds).
+- A full current Xcode installation with an iOS SDK and CarPlay simulator support
+  on the build/test Mac or CI runner. It is not required in the editing VM.
+- Swift 6 toolchain (Command Line Tools suffice for local core builds; Xcode is
+  used for app builds and XCTest).
 - Node.js active LTS and npm for the accepted TypeScript backend.
 - PostgreSQL with PostGIS, preferably through a pinned container setup.
 - An Apple Developer team. The app core and iPhone UI must work without the final
   EV-charging entitlement; running the CarPlay surface requires Apple's managed
   `com.apple.developer.carplay-charging` capability and matching provisioning.
 
-Observed on 2026-08-17: this machine has Swift 6.3 command-line tools, but the
-active developer directory is Command Line Tools rather than full Xcode. The local
-Swift compiler and installed macOS SDKs have incompatible build revisions, and the
-Command Line Tools do not provide a usable XCTest setup. Node.js 24 LTS and npm are
-installed. PostgreSQL 17 and PostGIS 3.6 are installed through Homebrew for
-isolated local backend integration tests; Docker/Podman is not installed.
+Observed on 2026-09-16: the editing VM has macOS 27 and Swift 6.4 Command Line
+Tools. The unchanged core builds successfully. XCTest, the iOS SDK, and Simulator
+are not available here, so app compilation and tests run on the Xcode Mac or CI.
+Installing full Xcode in this VM is optional, not an iOS 27 migration requirement.
+The existing backend environment remains separate from this platform migration.
 
-As a local fallback, all Swift sources and tests pass the parser and Swift format
-lint passes. Full Swift typechecking and XCTest execution happen on the Xcode Mac
-or in CI.
+For a sandboxed local core build, put compiler caches and output in a writable
+temporary directory:
+
+```bash
+CLANG_MODULE_CACHE_PATH=/private/tmp/nextstop-clang-cache \
+SWIFTPM_MODULECACHE_OVERRIDE=/private/tmp/nextstop-swift-cache \
+swift build --package-path ios/NextStopCore \
+  --scratch-path /private/tmp/nextstop-core-build \
+  --cache-path /private/tmp/nextstop-spm-cache --disable-sandbox
+```
+
+This compiles the portable package; it does not verify SwiftUI, MapKit, CarPlay,
+or the iOS tests. `swift format lint` and Swift parser checks are also available
+locally.
 
 ## Intended workflow after scaffolding
 
@@ -66,17 +78,35 @@ on the next regeneration.
 ### GitHub verification
 
 `.github/workflows/swift-core.yml` runs `swift format lint` and `swift test` for
-the portable package. `.github/workflows/ios-app.yml` builds the Debug app and
-runs its unit, CarPlay presenter, and iPhone UI tests on the GA `macos-26` runner
-with Xcode 26 and an iPhone 17 Pro Simulator. Both workflows run for every push
-and pull request, use read-only repository permissions, and pin GitHub's checkout
-action to v7. The iOS job has a 30-minute timeout and can also be started manually
+the portable package with explicitly selected Xcode 26.6 and 27.0 toolchains.
+`.github/workflows/ios-app.yml` builds the Debug app and runs its unit, CarPlay
+presenter, and iPhone UI tests in this matrix:
+
+| Runner | Xcode / SDK | Simulator | Purpose |
+| --- | --- | --- | --- |
+| `macos-15` | 26.3 / iOS 26.2 | iPhone 16 Pro, iOS 18.6 | Supported iOS 18 runtime regression |
+| `macos-26` | 26.6 / iOS 26.5 | iPhone 17 Pro, iOS 26.5 | Existing stable baseline |
+| `xcode-27` | 27.0 / iOS 27.0 | iPhone 17 Pro, iOS 27.0 | New SDK/runtime compatibility |
+
+The iOS jobs verify the selected Xcode version and simulator SDK and preserve the
+actual build, resolved installation path, Swift version, and runtime inventory in
+`toolchain.txt`. As of 2026-09-16, GitHub's published `xcode-27` image still contains
+Xcode 27 beta 6 (`27A5252f`). Its tests are preliminary compatibility evidence,
+not a final-SDK release qualification. Keep release archives on a verified stable
+toolchain per ADR 0001 and repeat the iOS 27 checks with Apple's final Xcode 27
+(`27A266a`) before release. The iOS 18 job uses Xcode 26.3; it does not establish
+that an Xcode 27 binary runs on iOS 18.0.
+
+Both workflows run for every push and pull request, use read-only repository
+permissions, and pin GitHub's checkout action to v7. Each iOS job has a 30-minute
+timeout and can also be started manually
 from **Actions → iOS App → Run workflow**, selecting `all` or `ui` tests and the
 desired branch. A queued GitHub runner does not block local Simulator testing.
 
-Every iOS run uploads the result bundle as `ios-test-results` and exported test
-attachments as `ios-ui-attachments`, when those files exist, even after a test
-failure. Both artifacts expire after seven days. Open a workflow run's
+Every iOS job uploads its result bundle and toolchain record as
+`ios-test-results-ios-18`, `ios-test-results-ios-26`, or `ios-test-results-ios-27`.
+Exported test attachments use the corresponding `ios-ui-attachments-ios-*` name,
+when present, even after a test failure. Artifacts expire after seven days. Open a workflow run's
 **Artifacts** section to download them; the attachments include screenshots from
 successful UI checkpoints as well as failure evidence. Their `manifest.json`
 maps exported files to test and attachment names. Extract
@@ -102,9 +132,17 @@ xcodebuild \
   test
 ```
 
-Replace the simulator name with one installed by the selected Xcode version. The
-app requires an Xcode 26 SDK to compile its current MapKit compatibility adapter
-while retaining the accepted iOS 18 deployment target.
+Replace the simulator name with one installed by the selected Xcode version; for
+repeatable checks specify its exact OS version as in the CI matrix. The app needs
+an iOS 26 or newer SDK for its MapKit adapter and retains the accepted iOS 18.0
+deployment target. XcodeGen's `xcodeVersion` metadata is not an SDK pin.
+
+The iOS 27 compatibility change uses SwiftUI's builder-based `overlay` overload
+to avoid the modified-`ShapeStyle` overload ambiguity documented in
+[Apple TN3211](https://developer.apple.com/documentation/technotes/tn3211-resolving-swiftui-source-incompatibilities-for-state-and-contentbuilder).
+The tint and hit-testing behavior are unchanged. The existing launch-screen and
+scene declarations already meet the new SDK requirements. Deprecated APIs such as
+`FileDocument` remain in place while they support the accepted deployment range.
 
 MapKit deprecated `MKMapItem.placemark` in iOS 26 when it introduced the modern
 `location` and `address` properties. The adapter uses the modern API on iOS 26+

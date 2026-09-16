@@ -22,20 +22,63 @@ concurrency:
 
 jobs:
   test:
-    name: Build and test NextStopApp
-    runs-on: macos-26
+    name: NextStopApp (${{ matrix.id }})
+    runs-on: ${{ matrix.runner }}
     timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - id: ios-18
+            runner: macos-15
+            xcode: '26.3'
+            sdk: '26.2'
+            device: iPhone 16 Pro
+            os: '18.6'
+          - id: ios-26
+            runner: macos-26
+            xcode: '26.6'
+            sdk: '26.5'
+            device: iPhone 17 Pro
+            os: '26.5'
+          # The hosted xcode-27 image may lag Apple's stable release.
+          # Record its exact build below; this is a compatibility check,
+          # not evidence that a release archive used a final toolchain.
+          - id: ios-27
+            runner: xcode-27
+            xcode: '27.0'
+            sdk: '27.0'
+            device: iPhone 17 Pro
+            os: '27.0'
+    env:
+      DEVELOPER_DIR: /Applications/Xcode_${{ matrix.xcode }}.app/Contents/Developer
 
     steps:
       - name: Check out repository
         uses: actions/checkout@v7
 
-      - name: Show Xcode version
-        run: xcodebuild -version
+      - name: Verify Xcode and simulator SDK
+        env:
+          EXPECTED_XCODE: ${{ matrix.xcode }}
+          EXPECTED_SDK: ${{ matrix.sdk }}
+        run: |
+          set -o pipefail
+          {
+            xcodebuild -version
+            xcrun swift --version
+            xcrun --sdk iphonesimulator --show-sdk-version
+            python3 -c 'import os, pathlib; print(pathlib.Path(os.environ["DEVELOPER_DIR"]).resolve())'
+            xcrun simctl list runtimes
+          } | tee toolchain.txt
+          actual_xcode="$(xcodebuild -version | awk 'NR == 1 {print $2}')"
+          test "$actual_xcode" = "$EXPECTED_XCODE"
+          test "$(xcrun --sdk iphonesimulator --show-sdk-version)" = "$EXPECTED_SDK"
+          cat toolchain.txt >> "$GITHUB_STEP_SUMMARY"
 
       - name: Build and test iOS app
         env:
           TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
+          TEST_DESTINATION: platform=iOS Simulator,name=${{ matrix.device }},OS=${{ matrix.os }}
         run: |
           set -o pipefail
           test_selection=()
@@ -46,7 +89,7 @@ jobs:
             -project ios/NextStop.xcodeproj \
             -scheme NextStopApp \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -destination "$TEST_DESTINATION" \
             -resultBundlePath TestResults.xcresult \
             "${test_selection[@]}" \
             CODE_SIGNING_ALLOWED=NO \
@@ -93,8 +136,10 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-test-results
-          path: TestResults.xcresult.tar.gz
+          name: ios-test-results-${{ matrix.id }}
+          path: |
+            TestResults.xcresult.tar.gz
+            toolchain.txt
           if-no-files-found: ignore
           retention-days: 7
           compression-level: 0
@@ -103,7 +148,7 @@ jobs:
         if: always()
         uses: actions/upload-artifact@v7
         with:
-          name: ios-ui-attachments
+          name: ios-ui-attachments-${{ matrix.id }}
           path: UI-Attachments/
           if-no-files-found: ignore
           retention-days: 7

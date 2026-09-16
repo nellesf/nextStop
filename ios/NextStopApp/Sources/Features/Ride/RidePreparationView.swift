@@ -101,7 +101,9 @@ struct RidePreparationView: View {
     }
     .background(
       Color(.systemGroupedBackground)
-        .overlay(Color.nextStopHighlight.opacity(0.025))
+        .overlay {
+          Color.nextStopHighlight.opacity(0.025)
+        }
     )
     .navigationTitle("ride.title")
     .navigationBarTitleDisplayMode(.inline)

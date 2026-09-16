@@ -179,6 +179,7 @@ requires Apple's managed capability and matching provisioning.
 - [CarPlay architecture and screen flow](docs/architecture/carplay.md)
 - [API contract](docs/api/openapi.yaml)
 - [Apple platform research](docs/research/apple-platform.md)
+- [Optional iOS 27 experience proposals](docs/research/ios-27-opportunities.md)
 - [Charging data source research](docs/research/charging-data-sources.md)
 - [POI source research](docs/research/poi-sources.md)
 - [Privacy data flow](docs/privacy/data-flow.md)
@@ -197,12 +198,13 @@ requires Apple's managed capability and matching provisioning.
 ## Build and test status
 
 The checked-in `ios/NextStop.xcodeproj` opens the iPhone app and its local
-`NextStopCore` package directly. On 2026-08-15, the Xcode 26 CI suite compiled and
-tested the iPhone app, CarPlay adapter, local destination persistence, and App
-Intent metadata successfully; the Swift core and backend/PostGIS workflows were
-also green. This machine has Node.js 24 LTS for backend checks but no active full
-Xcode installation, so interactive MapKit, signing, and provisioned CarPlay checks
-still run on the separate Xcode Mac. See
+`NextStopCore` package directly. CI explicitly selects toolchains and simulator
+versions for iOS 18.6, 26.5, and 27.0, with core tests on Xcode 26.6 and 27.0.
+The hosted Xcode 27 image currently contains a beta, so its results are preliminary
+compatibility checks; final-SDK validation remains a release requirement. The
+editing VM has Swift 6.4 Command Line Tools and can build the core without a local
+Xcode installation. App/XCTest, interactive MapKit, signing, and provisioned
+CarPlay checks use CI or the separate Xcode Mac. See
 [`docs/development.md`](docs/development.md).
 
 ## Current next step
