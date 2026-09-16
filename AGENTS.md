@@ -19,9 +19,11 @@ decision still require the explicit approval described at the end of this file.
 
 Before capturing iPhone or CarPlay images, read
 [`docs/operations/simulator-screenshots.md`](docs/operations/simulator-screenshots.md).
-It contains the runner quick start, verified build reuse, artifact retrieval,
-known UI timing failures, and import checks. The capture harness lives on
-`codex/app-explainer-website`, not `main`; preserve the requested main app source.
+It contains the runner quick starts, verified build reuse, display configuration,
+known UI timing/input failures, stable capture anchors, and artifact/import checks.
+The website harness lives on `codex/app-explainer-website`; the resolution audit
+lives on `codex/carplay-text-fit` under `scripts/carplay-capture/`. Select the
+documented harness and preserve the requested main app source.
 
 ## Critical domain rules
 

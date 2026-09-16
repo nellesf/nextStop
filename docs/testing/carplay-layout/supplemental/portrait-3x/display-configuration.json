@@ -1,0 +1,34 @@
+{
+  "id": "portrait-3x",
+  "requested": {
+    "width": 900,
+    "height": 1200,
+    "scale": 3
+  },
+  "readback": {
+    "width": 900.0,
+    "height": 1200.0,
+    "scale": 3.0
+  },
+  "deviceID": "B43940A9-6A96-4779-816E-BA7D70BC078A",
+  "observationRunURL": "https://github.com/nellesf/nextStop/actions/runs/34953971279",
+  "controlObservation": {
+    "runURL": "https://github.com/nellesf/nextStop/actions/runs/34953971279",
+    "harnessCommit": "69d1f641ef7d33e1edb88b34d2ce2ab9e1ddf375",
+    "artifact": "configuration-discovery/observed-carplay-configuration.json",
+    "menuItem": "CarPlay\u2026",
+    "window": "TV Out Extended Setup"
+  },
+  "fieldAssociation": "Nearest native field to the right of its observed label on the same row",
+  "inputMethod": "Triple-click Width and Height, type and Tab; select Scale from its observed native popup",
+  "configuredAt": "2026-09-15T11:49:26.067497Z",
+  "runURL": "https://github.com/nellesf/nextStop/actions/runs/34964912072",
+  "harnessCommit": "3141c8f0d271caa18b1770de9bee97a7ee238447",
+  "runAttempt": 1,
+  "runSubmitted": true,
+  "runtimeScale": 3.0,
+  "framebufferSize": [
+    900,
+    1200
+  ]
+}
