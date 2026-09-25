@@ -105,10 +105,10 @@ challenge creation at 120/minute globally, proof exchanges at 60/minute globally
 and cryptographic proof work at two concurrent operations. Rate and capacity
 rejections return `429` with `Retry-After: 60`.
 
-Authentication activation is currently blocked on an external Apple Developer
-value. Enable App Attest for `de.nextstop.app`, refresh the provisioning profiles,
-and obtain the exact App ID prefix. Do not assume it equals the Team ID. Then edit
-the mode-`0600` environment file through IAP:
+For initial activation, enable App Attest for `de.nextstop.app`, refresh the
+provisioning profiles, and obtain the exact App ID prefix from Apple Developer.
+Do not assume it equals the Team ID. Then edit the mode-`0600` environment file
+through IAP:
 
 ```bash
 sudoedit /etc/nextstop/backend.env
@@ -138,11 +138,11 @@ production keys remain valid.
 
 `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` is a comma-separated allowlist without
 whitespace (at most 32 unique values, each 1–64 characters from
-`A-Z`, `a-z`, `0-9`, `.`, `_`, or `-`). The installer initializes it to the
-current `CFBundleVersion` `1`; add a new build number before distributing that
-build and retain supported older values during rollout. For iOS 27 proofs, Apple
-validation category and bundle version must occur as a pair. Development keys
-accept category `3`, while production keys accept category `2` (TestFlight) or
+`A-Z`, `a-z`, `0-9`, `.`, `_`, or `-`). The installer initializes a missing value
+to `1` and preserves an existing value; it does not synchronize later app
+releases. For iOS 27 proofs, Apple validation category and bundle version must
+occur as a pair. Development keys accept category `3`, while production keys
+accept category `2` (TestFlight) or
 `4` (App Store); the bundle version must also be allowlisted. The auth service
 checks both values on every proof but does not require equality with the initial
 attestation, so legitimate allowlisted updates can retain their key. Missing
@@ -153,6 +153,37 @@ Until `APP_ATTEST_APP_ID` is configured, the three App Attest endpoints return
 `503` and signed-token search remains available only to the Debug Simulator broker
 described below. The explicitly enabled legacy bearer may continue serving old
 private builds during that interval.
+
+### Allow each distributed app build
+
+Before distributing a build, add its actual `CFBundleVersion` to
+`APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` in `/etc/nextstop/backend.env` and retain
+every older build that remains supported. Use the build number shown in
+TestFlight or App Store Connect: Xcode's distribution version management can make
+it differ from `CURRENT_PROJECT_VERSION` in the source project. For example,
+TestFlight `0.1.0 (10)` requires `10`; the marketing version `0.1.0` is not the
+allowlist value.
+
+Apply an allowlist edit on the VM by recreating only the authentication service:
+
+```bash
+cd /opt/nextstop/current
+sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
+  -f deploy/gcp-vm/compose.yaml up -d --wait --wait-timeout 120 --no-deps auth-backend
+```
+
+`docker compose restart` alone retains the container's previous environment.
+An allowlist correction needs no app rebuild or charging/restaurant provider
+refresh. Verify both initial registration on a real iOS 27 TestFlight installation
+and a later token renewal: the build is checked on attestations and assertions.
+A healthy authentication container alone does not verify either device exchange.
+
+On 2026-09-25, TestFlight `0.1.0 (10)` on a newly added iOS 27 iPhone failed search
+authentication. The live authentication service allowed only build `1`; logs at
+18:22 UTC showed successful challenge requests followed by two `401` attestation
+responses. The correction is to allow `1,10` and recreate the authentication
+service as above. Real-device registration and renewal verification
+remained pending when this incident note was written.
 
 ## Debug Simulator broker
 
