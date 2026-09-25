@@ -1,0 +1,18 @@
+[Unit]
+Description=Synchronize nextStop internal TestFlight build permissions
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=oneshot
+ExecStart=/usr/bin/python3 /opt/nextstop/operations/testflight-sync/sync-testflight-builds.py
+Environment=PYTHONDONTWRITEBYTECODE=1
+TimeoutStartSec=510
+UMask=0077
+NoNewPrivileges=true
+PrivateTmp=true
+ProtectHome=true
+ProtectSystem=strict
+ReadWritePaths=/etc/nextstop
+

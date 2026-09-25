@@ -1,0 +1,12 @@
+[Unit]
+Description=Check nextStop internal TestFlight builds automatically
+
+[Timer]
+OnBootSec=1min
+OnUnitInactiveSec=1min
+AccuracySec=10s
+RandomizedDelaySec=10s
+Unit=nextstop-testflight-sync.service
+
+[Install]
+WantedBy=timers.target

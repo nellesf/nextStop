@@ -63,6 +63,12 @@ jobs:
         working-directory: backend
         run: npm test
 
+      - name: Test TestFlight build synchronization
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y python3-cryptography
+          /usr/bin/python3 -m unittest discover -s deploy/gcp-vm -p 'test_*.py'
+
       - name: PostGIS integration tests
         working-directory: backend
         env:

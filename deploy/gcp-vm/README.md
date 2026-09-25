@@ -185,6 +185,78 @@ responses. The correction is to allow `1,10` and recreate the authentication
 service as above. Real-device registration and renewal verification
 remained pending when this incident note was written.
 
+### Automatic synchronization for Xcode Cloud
+
+Xcode Cloud can build and distribute a new internal TestFlight version after each
+merge to `main`. The optional staging synchronization timer reads the resulting
+builds from Apple's App Store Connect API; it does not infer a build number from
+Git commits, source project settings, or an unfinished archive. No change to the
+Xcode Cloud workflow or Google Cloud credential in Apple CI is required.
+
+Only builds for `de.nextstop.app` that Apple reports as `VALID`, not expired, and
+`IN_BETA_TESTING` for internal testing are added. Existing supported versions are
+preserved. The existing 32-build maximum still applies: reaching it stops updates
+until an operator explicitly retires obsolete entries. Lookup failures, invalid
+responses, and empty results never remove build permissions. The updater locks
+its changes, preserves unrelated environment settings, recreates only
+`auth-backend`, and verifies its active allowlist. A failed application restores
+the previous environment and attempts to restore the authentication service.
+
+One-time setup on the staging VM:
+
+1. Enable App Store Connect API access and provision a dedicated team API key
+   with the Developer role. Apple requires the Account Holder to request API
+   access and accept its terms; approval may require Apple review. Team keys
+   cover all apps and Developer includes write permissions; this is not a
+   read-only credential. The synchronizer issues five-minute JWTs restricted to
+   its GET requests and nextStop app filter. Keep the downloaded `.p8`
+   outside Git and install it as `/etc/nextstop/app-store-connect.p8`, owned by
+   root with mode `0600`. Never paste the private key into chat or logs.
+2. Create root-owned mode-`0600` `/etc/nextstop/testflight-sync.json`:
+
+   ```json
+   {
+     "appId": "6804153717",
+     "keyId": "<Apple API key ID>",
+     "issuerId": "<Apple API issuer UUID>",
+     "privateKeyPath": "/etc/nextstop/app-store-connect.p8"
+   }
+   ```
+
+3. Ensure Ubuntu's `python3-cryptography` package is installed. From the release
+   containing these scripts, run `sudo bash deploy/gcp-vm/install-testflight-sync.sh`.
+   The installer checks Apple access before enabling anything, applies one sync,
+   and enables `nextstop-testflight-sync.timer`. This step changes the server
+   allowlist and may briefly recreate the auth service.
+
+The timer checks about once per minute after the previous run finishes; Apple
+processing, network delays, and service health checks can delay availability.
+Existing permissions are unchanged when Apple is unavailable. Scripts live in
+`/opt/nextstop/operations/testflight-sync`, outside expiring release directories.
+Rerun the installer when updating these operations scripts. Normal app builds
+need no manual server command and no backend artifact rebuild.
+
+```bash
+sudo systemctl status nextstop-testflight-sync.timer
+sudo systemctl start nextstop-testflight-sync.service
+sudo journalctl -u nextstop-testflight-sync.service --since '30 minutes ago'
+```
+
+Successful unchanged runs are quiet. Failures are recorded by systemd with
+sanitized errors; this timer does not configure email or external notifications.
+Disable automatic updates with `sudo systemctl disable --now nextstop-testflight-sync.timer`;
+this preserves all current permissions. Verify initial registration and a later
+token renewal on the actual iOS 27 TestFlight build after activation.
+
+Run the isolated operations tests with Python 3 plus `cryptography`:
+
+```bash
+python3 -m unittest discover -s deploy/gcp-vm -p 'test_*.py'
+```
+
+Apple references: [list builds](https://developer.apple.com/documentation/appstoreconnectapi/get-v1-builds),
+[API authentication](https://developer.apple.com/documentation/appstoreconnectapi/generating-tokens-for-api-requests).
+
 ## Debug Simulator broker
 
 Apple App Attest is unavailable in the iOS Simulator. On the developer Mac,

@@ -294,9 +294,13 @@ attestations use the production environment. Neither path is testable in the iOS
 Simulator.
 
 Set `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` to the comma-separated, whitespace-free
-allowlist of shipped `CFBundleVersion` values (currently `1`). Add a new build
+allowlist of shipped `CFBundleVersion` values. Add the actual TestFlight build
 number before distributing that build; keep still-supported older build numbers
-during the rollout. For iOS 27 proofs, Apple's validation category and bundle
+during the rollout. The installer default `1` is not synchronized with later app
+releases. For Xcode Cloud, the optional
+[TestFlight synchronization timer](../deploy/gcp-vm/README.md#automatic-synchronization-for-xcode-cloud)
+can apply available internal builds automatically after its one-time API setup.
+For iOS 27 proofs, Apple's validation category and bundle
 version extensions must either both be present or both be absent. When present,
 every attestation and assertion is checked independently: category `3` is allowed
 only for a development key, categories `2` (TestFlight) and `4` (App Store) only
