@@ -11,6 +11,14 @@ release_id=$(date -u +%Y%m%dT%H%M%SZ)
 release_directory=/opt/nextstop/releases/$release_id
 environment_file=/etc/nextstop/backend.env
 
+# Serialize the whole deployment with automatic TestFlight allowlist updates.
+# Otherwise a timer can restart auth between the stop and migration steps below.
+umask 077
+mkdir -p /etc/nextstop
+exec 9>>"$environment_file.allow-build.lock"
+chmod 600 "$environment_file.allow-build.lock"
+flock -w 520 9
+
 mkdir -p "$release_directory" /etc/nextstop /var/www/letsencrypt
 tar -xzf "$archive" -C "$release_directory"
 

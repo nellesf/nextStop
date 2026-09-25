@@ -102,6 +102,31 @@ void test("deployment isolates mutable authentication tables from the read-only 
   assert.match(roles, /inherited or assumable membership/u);
 });
 
+void test("release installation holds the build-sync lock through migrations and auth restart", async () => {
+  const installer = await readFile(
+    new URL("../../../deploy/gcp-vm/install-release.sh", import.meta.url),
+    "utf8",
+  );
+  const updater = await readFile(
+    new URL("../../../deploy/gcp-vm/allow-testflight-build.py", import.meta.url),
+    "utf8",
+  );
+  assert.match(installer, /exec 9>>"\$environment_file\.allow-build\.lock"/u);
+  assert.match(updater, /environment_file\.name \+ "\.allow-build\.lock"/u);
+  const lockIndex = installer.indexOf("flock -w 520 9");
+  assert.ok(lockIndex >= 0);
+  for (const action of [
+    'touch "$environment_file"',
+    'ln -sfn "$release_directory" /opt/nextstop/current',
+    '"${compose[@]}" stop backend auth-backend worker',
+    '"${compose[@]}" run --rm --no-deps migrator',
+    '"${compose[@]}" up -d --wait --wait-timeout 120',
+  ]) {
+    assert.ok(installer.indexOf(action) > lockIndex, `${action} must hold the sync lock`);
+  }
+  assert.doesNotMatch(installer, /flock\s+(?:-u|--unlock)|exec\s+9>&-/u);
+});
+
 function serviceBlock(compose: string, serviceName: string): string {
   const escapedName = serviceName.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
   const match = compose.match(

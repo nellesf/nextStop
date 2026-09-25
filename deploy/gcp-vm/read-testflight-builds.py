@@ -67,10 +67,19 @@ def sign_jwt(config, issued_at):
         ):
             raise ValueError("Wrong key type")
         header = {"alg": "ES256", "kid": config["keyId"], "typ": "JWT"}
+        # Apple ignores pagination/sort parameters when matching token scope;
+        # all other query parameters must match the actual read requests.
+        scoped_build_query = {
+            key: value for key, value in build_query(config["appId"]).items()
+            if key not in {"limit", "cursor", "sort"}
+        }
         payload = {
             "iss": config["issuerId"], "iat": issued_at, "exp": issued_at + 300,
             "aud": "appstoreconnect-v1",
-            "scope": [f"GET /v1/apps/{config['appId']}", f"GET /v1/builds?filter[app]={config['appId']}"],
+            "scope": [
+                "GET " + app_request_path(config["appId"]),
+                "GET " + build_request_path(scoped_build_query),
+            ],
         }
         encode = lambda value: base64.urlsafe_b64encode(value).rstrip(b"=")
         signing_input = b".".join(encode(json.dumps(value, separators=(",", ":")).encode())
@@ -111,12 +120,20 @@ def fetch_json(url, token, opener=None):
         raise SyncError("Unable to read a valid App Store Connect response.") from None
 
 
+def app_request_path(app_id):
+    return f"/v1/apps/{app_id}?" + urlencode({"fields[apps]": "bundleId"})
+
+
 def build_query(app_id):
     return {
         "filter[app]": app_id, "filter[processingState]": "VALID", "filter[expired]": "false",
-        "include": "buildBetaDetail", "fields[builds]": "version,expired,processingState,buildBetaDetail,app",
-        "fields[buildBetaDetails]": "internalBuildState", "limit": "200",
+        "include": "buildBetaDetail,app", "fields[builds]": "version,expired,processingState,buildBetaDetail,app",
+        "fields[buildBetaDetails]": "internalBuildState", "fields[apps]": "bundleId", "limit": "200",
     }
+
+
+def build_request_path(query):
+    return "/v1/builds?" + urlencode(query)
 
 
 def next_page_url(value, query):
@@ -132,7 +149,7 @@ def next_page_url(value, query):
             or len(cursor) != 1 or not 1 <= len(cursor[0]) <= 1024):
             raise ValueError("Unexpected pagination")
         # Rebuild from fixed parameters, never forward a server-supplied URL verbatim.
-        return API + "/v1/builds?" + urlencode({**query, "cursor": cursor[0]})
+        return API + build_request_path({**query, "cursor": cursor[0]})
     except (ValueError, TypeError, AttributeError):
         raise SyncError("App Store Connect returned unsafe pagination.") from None
 
@@ -173,7 +190,7 @@ def read_builds(config, *, requester=fetch_json, now=time.time, signer=sign_jwt)
     config = validate_config(config)
     app_id = config["appId"]
     token = signer(config, int(now()))
-    app_url = API + f"/v1/apps/{app_id}?" + urlencode({"fields[apps]": "bundleId"})
+    app_url = API + app_request_path(app_id)
     try:
         app = requester(app_url, token)["data"]
         if (app["type"] != "apps" or app["id"] != app_id
@@ -182,7 +199,7 @@ def read_builds(config, *, requester=fetch_json, now=time.time, signer=sign_jwt)
     except (KeyError, TypeError, ValueError):
         raise SyncError("The configured App Store Connect app does not match nextStop.") from None
     query = build_query(app_id)
-    url = API + "/v1/builds?" + urlencode(query)
+    url = API + build_request_path(query)
     seen, versions = set(), set()
     for _ in range(MAX_PAGES):
         if url in seen:

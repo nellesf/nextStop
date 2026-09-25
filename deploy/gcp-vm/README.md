@@ -181,9 +181,10 @@ A healthy authentication container alone does not verify either device exchange.
 On 2026-09-25, TestFlight `0.1.0 (10)` on a newly added iOS 27 iPhone failed search
 authentication. The live authentication service allowed only build `1`; logs at
 18:22 UTC showed successful challenge requests followed by two `401` attestation
-responses. The correction is to allow `1,10` and recreate the authentication
-service as above. Real-device registration and renewal verification
-remained pending when this incident note was written.
+responses. Build `10` was added to the existing allowlist and the authentication
+service was recreated on 2026-09-25. Runtime verification confirmed `1,10`, with
+development attestations still disabled, and the owner confirmed that device
+search worked again. A later token renewal remains a separate validation check.
 
 ### Automatic synchronization for Xcode Cloud
 
@@ -201,6 +202,9 @@ responses, and empty results never remove build permissions. The updater locks
 its changes, preserves unrelated environment settings, recreates only
 `auth-backend`, and verifies its active allowlist. A failed application restores
 the previous environment and attempts to restore the authentication service.
+Normal release installation holds the same lock across configuration changes,
+migrations, and container recreation, so the timer cannot restart auth midway
+through a deployment.
 
 One-time setup on the staging VM:
 

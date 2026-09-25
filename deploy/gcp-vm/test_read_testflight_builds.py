@@ -26,6 +26,11 @@ CONFIG = {
     "issuerId": "11111111-2222-3333-4444-555555555555", "privateKeyPath": "/unused/key.p8",
 }
 APP = {"data": {"type": "apps", "id": CONFIG["appId"], "attributes": {"bundleId": "de.nextstop.app"}}}
+EXPECTED_BUILD_QUERY = {
+    "filter[app]": "6804153717", "filter[processingState]": "VALID", "filter[expired]": "false",
+    "include": "buildBetaDetail,app", "fields[builds]": "version,expired,processingState,buildBetaDetail,app",
+    "fields[buildBetaDetails]": "internalBuildState", "fields[apps]": "bundleId", "limit": "200",
+}
 
 
 def build_page(versions=("10",), state="IN_BETA_TESTING"):
@@ -40,7 +45,7 @@ def build_page(versions=("10",), state="IN_BETA_TESTING"):
         } for index, version in enumerate(versions)],
         "included": [{"type": "buildBetaDetails", "id": f"detail-{index}",
                       "attributes": {"internalBuildState": state}}
-                     for index in range(len(versions))],
+                     for index in range(len(versions))] + [deepcopy(APP["data"])],
         "links": {"next": None},
     }
 
@@ -60,8 +65,10 @@ class ReadBuildsTests(unittest.TestCase):
         self.signer.assert_called_once_with(CONFIG, 1000)
         app_call, builds_call = self.requester.call_args_list
         self.assertEqual(urlsplit(app_call.args[0]).path, "/v1/apps/6804153717")
+        self.assertEqual(parse_qs(urlsplit(app_call.args[0]).query), {"fields[apps]": ["bundleId"]})
+        self.assertEqual(urlsplit(builds_call.args[0]).path, "/v1/builds")
         self.assertEqual(parse_qs(urlsplit(builds_call.args[0]).query), {
-            key: [value] for key, value in helper.build_query(CONFIG["appId"]).items()
+            key: [value] for key, value in EXPECTED_BUILD_QUERY.items()
         })
 
     def test_rejects_wrong_app_before_build_request(self):
@@ -94,6 +101,9 @@ class ReadBuildsTests(unittest.TestCase):
         pages = [{"data": None}, {"data": [None]}, build_page(("bad,version",)), build_page((3,))]
         page = build_page()
         page["data"][0]["relationships"]["app"]["data"]["id"] = "123"
+        pages.append(page)
+        page = build_page()
+        page["data"][0]["relationships"]["app"] = {"links": {"related": "unused"}}
         pages.append(page)
         page = build_page()
         page["included"].append(deepcopy(page["included"][0]))
@@ -232,15 +242,41 @@ class SigningTests(unittest.TestCase):
         header, payload, signature = token.split(".")
         decode = lambda value: base64.urlsafe_b64decode(value + "=" * (-len(value) % 4))
         self.assertEqual(json.loads(decode(header)), {"alg": "ES256", "kid": CONFIG["keyId"], "typ": "JWT"})
-        self.assertEqual(json.loads(decode(payload)), {
+        claims = json.loads(decode(payload))
+        self.assertEqual(claims, {
             "iss": CONFIG["issuerId"], "iat": 1000, "exp": 1300, "aud": "appstoreconnect-v1",
-            "scope": ["GET /v1/apps/6804153717", "GET /v1/builds?filter[app]=6804153717"],
+            "scope": [
+                "GET /v1/apps/6804153717?fields%5Bapps%5D=bundleId",
+                "GET /v1/builds?" + urlencode({
+                    key: value for key, value in EXPECTED_BUILD_QUERY.items() if key != "limit"
+                }),
+            ],
         })
         raw_signature = decode(signature)
         self.assertEqual(len(raw_signature), 64)
         der_signature = utils.encode_dss_signature(int.from_bytes(raw_signature[:32], "big"),
                                                    int.from_bytes(raw_signature[32:], "big"))
         key.public_key().verify(der_signature, (header + "." + payload).encode(), ec.ECDSA(hashes.SHA256()))
+
+        # Check the signed scope against every actual request, including a
+        # subsequent page, so fields/include/filter changes cannot drift.
+        first_page = build_page()
+        first_page["links"]["next"] = page_url()
+        requester = Mock(side_effect=[deepcopy(APP), first_page, build_page(("11",))])
+        helper.read_builds(CONFIG, requester=requester, signer=lambda *_: token, now=lambda: 1000)
+        scoped_requests = {}
+        for scope in claims["scope"]:
+            method, path = scope.split(" ", 1)
+            self.assertEqual(method, "GET")
+            parsed = urlsplit(path)
+            scoped_requests[parsed.path] = parse_qs(parsed.query)
+        for request in requester.call_args_list:
+            parsed = urlsplit(request.args[0])
+            parameters = parse_qs(parsed.query)
+            for ignored in ("limit", "cursor", "sort"):
+                parameters.pop(ignored, None)
+            self.assertEqual(scoped_requests[parsed.path], parameters)
+            self.assertEqual(request.args[1], token)
 
     def test_refuses_other_curve_or_invalid_private_key(self):
         key = ec.generate_private_key(ec.SECP384R1())
