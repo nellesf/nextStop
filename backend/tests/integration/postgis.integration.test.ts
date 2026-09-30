@@ -1535,20 +1535,56 @@ void test(
         [projectionId],
       );
       assert.deepEqual(campusThresholds.rows, thresholds.rows);
-      const indexes = await pool.query<{ readonly indexname: string }>(
-        `SELECT indexname
-         FROM pg_indexes
-         WHERE schemaname = 'nextstop'
-           AND indexname IN (
+      // With one qualifying row, a B-tree scan plus a sort is a valid cheaper
+      // plan. Verify the deployed GiST index contract and its KNN capability,
+      // independently of that fixture's cost estimates or planner preferences.
+      const indexes = await pool.query<{
+        readonly indexname: string;
+        readonly tableName: string;
+        readonly accessMethod: string;
+        readonly columns: string[];
+        readonly usable: boolean;
+        readonly coversAllRows: boolean;
+        readonly distanceOrderable: boolean;
+      }>(
+        `SELECT index_class.relname AS indexname,
+                table_class.relname AS "tableName",
+                access_method.amname AS "accessMethod",
+                (SELECT array_agg(attribute.attname::text ORDER BY key.ordinality)
+                 FROM unnest(index_info.indkey) WITH ORDINALITY AS key(attnum, ordinality)
+                 JOIN pg_attribute AS attribute
+                   ON attribute.attrelid = index_info.indrelid
+                  AND attribute.attnum = key.attnum) AS columns,
+                index_info.indisvalid AND index_info.indisready AS usable,
+                index_info.indpred IS NULL AS "coversAllRows",
+                pg_index_column_has_property(index_info.indexrelid, 3, 'distance_orderable')
+                  AS "distanceOrderable"
+         FROM pg_index AS index_info
+         JOIN pg_class AS index_class ON index_class.oid = index_info.indexrelid
+         JOIN pg_class AS table_class ON table_class.oid = index_info.indrelid
+         JOIN pg_namespace AS namespace ON namespace.oid = index_class.relnamespace
+         JOIN pg_am AS access_method ON access_method.oid = index_class.relam
+         WHERE namespace.nspname = 'nextstop'
+           AND index_class.relname IN (
              'charging_park_power_projection_lookup_gist',
              'charging_campus_power_projection_lookup_gist'
            )
-         ORDER BY indexname`,
+         ORDER BY index_class.relname`,
       );
       assert.deepEqual(indexes.rows.map(({ indexname }) => indexname), [
         "charging_campus_power_projection_lookup_gist",
         "charging_park_power_projection_lookup_gist",
       ]);
+      for (const { indexname, ...properties } of indexes.rows) {
+        assert.deepEqual(properties, {
+          tableName: indexname.replace("_lookup_gist", ""),
+          accessMethod: "gist",
+          columns: ["projection_id", "minimum_power_kw", "navigation_coordinate"],
+          usable: true,
+          coversAllRows: true,
+          distanceOrderable: true,
+        });
+      }
       const functionSettings = await pool.query<{
         readonly settings: string[] | null;
       }>(
@@ -1564,38 +1600,6 @@ void test(
       );
       assert.equal(functionSettings.rows.length, 2);
       assert.ok(functionSettings.rows.every(({ settings }) => settings?.includes("work_mem=128MB")));
-      await pool.query("SET enable_seqscan = off");
-      const plan = await pool.query<{ readonly "QUERY PLAN": unknown }>(
-         `EXPLAIN (FORMAT JSON)
-         SELECT park_id
-         FROM nextstop.charging_park_power_projection
-         WHERE projection_id = $1
-           AND minimum_power_kw = 100
-         ORDER BY navigation_coordinate <->
-           ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography
-         LIMIT 1`,
-        [projectionId],
-      );
-      assert.match(
-        JSON.stringify(plan.rows),
-        /charging_park_power_projection_lookup_gist/u,
-      );
-      const campusPlan = await pool.query<{ readonly "QUERY PLAN": unknown }>(
-        `EXPLAIN (FORMAT JSON)
-         SELECT campus_id
-         FROM nextstop.charging_campus_power_projection
-         WHERE projection_id = $1
-           AND minimum_power_kw = 100
-         ORDER BY navigation_coordinate <->
-           ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography
-         LIMIT 1`,
-        [projectionId],
-      );
-      assert.match(
-        JSON.stringify(campusPlan.rows),
-        /charging_campus_power_projection_lookup_gist/u,
-      );
-      await pool.query("RESET enable_seqscan");
     });
 
     await context.test(

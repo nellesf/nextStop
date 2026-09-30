@@ -116,7 +116,7 @@ async function pruneBatch(
       await client.query(
         `UPDATE nextstop.projection_versions
          SET search_prune_stage = search_prune_stage + 1,
-             search_prune_completed_at = CASE WHEN $3 THEN $2 ELSE NULL END
+             search_prune_completed_at = CASE WHEN $3::boolean THEN $2::timestamptz ELSE NULL END
          WHERE id = $1`,
         [target.id, timestamp, completed],
       );
