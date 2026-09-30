@@ -95,3 +95,40 @@ select a complete version with `search_pruned_at IS NULL`.
 The single-VM staging topology still shares CPU/storage resources. Query fixes,
 deadlines and bounded cleanup reduce this incident mechanism; they do not provide
 infrastructure failover or a general availability guarantee.
+
+## Verified recovery on 2026-09-30
+
+The backend changes were validated with 128 unit tests and all 21 PostGIS
+integration tests on PostgreSQL 17.11/PostGIS 3.5.6. Type checking, lint and the
+production build passed. The integration cases include a stale-statistics bulk
+build, restricted worker permissions, unchanged-input reuse, and interrupted
+retention with pinned search tokens.
+
+The corrected backend was installed in
+`/opt/nextstop/releases/20260930T145003Z`. Additive migrations used a 500 ms lock
+deadline; the minimal new worker grants were committed atomically. A parallel API
+on loopback port 3002 passed synthetic searches before a graceful Nginx handoff.
+After the normal API on port 3000 passed the same searches, Nginx switched back
+and the temporary process was removed only after its requests drained. The auth
+process remained running. The worker restarted at 14:54:26 UTC.
+
+The first complete refresh was published at 15:02:31 UTC according to its stage
+completion log, approximately eight minutes after worker startup. It contained
+134,587 locations, 227,279 normalized charging points, 53,895 fine parks and 50,855
+campuses. Measured phases were 43.024 seconds for park power, 39.199 seconds for
+campus power, 46.878 seconds for statistics and 31.957 seconds for food matches.
+Synthetic public searches with and without a McDonald's filter returned HTTP 200
+throughout the sampled import/build phases, with observed response times of
+approximately 0.1–1.9 seconds. These samples establish successful searches during
+this run; they are not a continuous availability measurement or an SLO guarantee.
+
+This handoff was performed explicitly for the incident. The ordinary
+`install-release.sh` still stops API processes during a release; it is not a
+general rolling-deployment implementation.
+
+A separate upstream OSM issue was observed during verification: the Swiss
+Geofabrik endpoint redirected to `switzerland-260929.osm.pbf/` and returned HTTP
+404. Cache files and permissions were intact; the OSM downloader was unchanged.
+The active food corpus, published on 2026-09-29 at 05:03 UTC with 3,353 POIs, stayed
+available. German conditional requests returned HTTP 304. This incident fix does
+not resolve that upstream Swiss redirect.
