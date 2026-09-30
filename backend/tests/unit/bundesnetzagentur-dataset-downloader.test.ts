@@ -1,6 +1,8 @@
 import assert from "node:assert/strict";
-import { readFile } from "node:fs/promises";
-import test from "node:test";
+import { mkdtemp, readFile, readdir, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import test, { type TestContext } from "node:test";
 
 import { downloadLatestBundesnetzagenturDataset } from "../../src/providers/bundesnetzagentur/dataset-downloader.js";
 
@@ -11,7 +13,7 @@ const oldDatasetURL =
 const currentDatasetURL =
   "https://data.bundesnetzagentur.de/Bundesnetzagentur/DE/Fachthemen/ElektrizitaetundGas/E-Mobilitaet/Ladesaeulenregister_BNetzA_2026-07-28.csv";
 
-void test("discovers, validates, hashes, and cleans up the latest official dataset", async () => {
+void test("discovers, validates, hashes, and cleans up the latest official dataset", async (t) => {
   const requested: string[] = [];
   const fetchImplementation: typeof fetch = (input) => {
     const url = requestURL(input);
@@ -37,6 +39,7 @@ void test("discovers, validates, hashes, and cleans up the latest official datas
   };
 
   const artifact = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory: await temporaryCache(t),
     fetchImplementation,
     now: () => new Date("2026-08-15T12:00:00.000Z"),
   });
@@ -54,7 +57,7 @@ void test("discovers, validates, hashes, and cleans up the latest official datas
   await assert.rejects(readFile(artifact.filePath), /ENOENT/u);
 });
 
-void test("rejects a dataset link outside the strict official allowlist", async () => {
+void test("rejects a dataset link outside the strict official allowlist", async (t) => {
   const fetchImplementation: typeof fetch = () =>
     Promise.resolve(
       response(
@@ -65,12 +68,12 @@ void test("rejects a dataset link outside the strict official allowlist", async 
     );
 
   await assert.rejects(
-    downloadLatestBundesnetzagenturDataset({ fetchImplementation }),
+    downloadLatestBundesnetzagenturDataset({ fetchImplementation, cacheDirectory: await temporaryCache(t) }),
     /contains no approved/u,
   );
 });
 
-void test("rejects oversized datasets before creating a usable artifact", async () => {
+void test("rejects oversized datasets before creating a usable artifact", async (t) => {
   const fetchImplementation: typeof fetch = (input) => {
     const url = requestURL(input);
     return Promise.resolve(
@@ -86,12 +89,13 @@ void test("rejects oversized datasets before creating a usable artifact", async 
     downloadLatestBundesnetzagenturDataset({
       fetchImplementation,
       maximumDatasetBytes: 8,
+      cacheDirectory: await temporaryCache(t),
     }),
     /exceeds 8 bytes/u,
   );
 });
 
-void test("rejects an unexpected content type", async () => {
+void test("rejects an unexpected content type", async (t) => {
   const fetchImplementation: typeof fetch = (input) => {
     const url = requestURL(input);
     return Promise.resolve(
@@ -102,13 +106,135 @@ void test("rejects an unexpected content type", async () => {
   };
 
   await assert.rejects(
-    downloadLatestBundesnetzagenturDataset({ fetchImplementation }),
+    downloadLatestBundesnetzagenturDataset({ fetchImplementation, cacheDirectory: await temporaryCache(t) }),
     /unexpected content type/u,
   );
 });
 
+void test("reuses a validated cached CSV after 304 and keeps each artifact private", async (t) => {
+  const cacheDirectory = await temporaryCache(t);
+  const first = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory,
+    now: () => new Date("2026-08-15T12:00:00.000Z"),
+    fetchImplementation: csvFetcher("first\n", '"first"'),
+  });
+  await first.cleanup();
+  const second = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory,
+    now: () => new Date("2026-08-16T12:00:00.000Z"),
+    fetchImplementation: (input, init) => {
+      if (requestURL(input) === pageURL) return Promise.resolve(datasetPage());
+      const headers = new Headers(init?.headers);
+      assert.equal(headers.get("if-none-match"), '"first"');
+      assert.equal(headers.get("if-modified-since"), "Tue, 28 Jul 2026 00:00:00 GMT");
+      return Promise.resolve(response(null, currentDatasetURL, "text/csv", {}, 304));
+    },
+  });
+  assert.equal(second.sha256, first.sha256);
+  assert.equal(second.observedAt, first.observedAt);
+  assert.equal(second.fetchedAt, "2026-08-16T12:00:00.000Z");
+  assert.equal(await readFile(second.filePath, "utf8"), "first\n");
+  assert.notEqual(second.filePath, first.filePath);
+  await second.cleanup();
+});
+
+void test("replaces changed CSV bytes while bounding the cache to one dataset", async (t) => {
+  const cacheDirectory = await temporaryCache(t);
+  const first = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory, fetchImplementation: csvFetcher("first\n", '"first"'),
+  });
+  const second = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory, fetchImplementation: csvFetcher("second\n", '"second"'),
+  });
+  assert.notEqual(second.sha256, first.sha256);
+  assert.equal(await readFile(first.filePath, "utf8"), "first\n");
+  assert.equal(await readFile(second.filePath, "utf8"), "second\n");
+  assert.deepEqual((await readdir(join(cacheDirectory, "bundesnetzagentur"))).sort(),
+    ["body", "metadata.json"]);
+  await first.cleanup();
+  await second.cleanup();
+});
+
+void test("does not reuse a prior URL's validators when discovery selects a newer CSV", async (t) => {
+  const cacheDirectory = await temporaryCache(t);
+  const first = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory, fetchImplementation: csvFetcher("old\n", '"old"', oldDatasetURL),
+  });
+  await first.cleanup();
+  const second = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory,
+    fetchImplementation: (input, init) => {
+      if (requestURL(input) === pageURL) return Promise.resolve(datasetPage());
+      assert.equal(new Headers(init?.headers).get("if-none-match"), null);
+      return Promise.resolve(response("new\n", currentDatasetURL, "text/csv"));
+    },
+  });
+  assert.equal(second.observedAt, "2026-07-28T00:00:00.000Z");
+  await second.cleanup();
+});
+
+void test("a rejected or interrupted download does not replace the validated cache", async (t) => {
+  const cacheDirectory = await temporaryCache(t);
+  const first = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory, fetchImplementation: csvFetcher("good\n", '"good"'),
+  });
+  await first.cleanup();
+  for (const failure of ["oversized", "interrupted", "redirect"] as const) {
+    await assert.rejects(downloadLatestBundesnetzagenturDataset({
+      cacheDirectory,
+      maximumDatasetBytes: 10,
+      fetchImplementation: (input) => {
+        if (requestURL(input) === pageURL) return Promise.resolve(datasetPage());
+        if (failure === "oversized") {
+          return Promise.resolve(response("this body is too long", currentDatasetURL, "text/csv"));
+        }
+        if (failure === "redirect") {
+          return Promise.resolve(response(null, oldDatasetURL, "text/csv", {}, 304));
+        }
+        const stream = new ReadableStream<Uint8Array>({
+          start(controller) { controller.error(new Error("connection interrupted")); },
+        });
+        return Promise.resolve(response(stream, currentDatasetURL, "text/csv"));
+      },
+    }));
+    assert.equal(await readFile(join(cacheDirectory, "bundesnetzagentur", "body"), "utf8"), "good\n");
+  }
+});
+
+void test("corrupt cache bytes discard validators and an unsolicited 304 cannot succeed", async (t) => {
+  const cacheDirectory = await temporaryCache(t);
+  const first = await downloadLatestBundesnetzagenturDataset({
+    cacheDirectory, fetchImplementation: csvFetcher("good\n", '"good"'),
+  });
+  await first.cleanup();
+  await writeFile(join(cacheDirectory, "bundesnetzagentur", "body"), "bad!\n");
+  await assert.rejects(downloadLatestBundesnetzagenturDataset({
+    cacheDirectory,
+    fetchImplementation: (input, init) => {
+      if (requestURL(input) === pageURL) return Promise.resolve(datasetPage());
+      assert.equal(new Headers(init?.headers).get("if-none-match"), null);
+      return Promise.resolve(response(null, currentDatasetURL, "text/csv", {}, 304));
+    },
+  }), /HTTP 304/u);
+});
+
+async function temporaryCache(t: TestContext): Promise<string> {
+  const directory = await mkdtemp(join(tmpdir(), "nextstop-bnetza-cache-test-"));
+  t.after(() => rm(directory, { recursive: true, force: true }));
+  return directory;
+}
+
+function datasetPage(url = currentDatasetURL): Response {
+  return response(`<a href="${url}">current</a>`, pageURL, "text/html");
+}
+
+function csvFetcher(body: string, etag: string, url = currentDatasetURL): typeof fetch {
+  return (input) => Promise.resolve(requestURL(input) === pageURL ? datasetPage(url) :
+    response(body, url, "text/csv", { etag, "last-modified": "Tue, 28 Jul 2026 00:00:00 GMT" }));
+}
+
 function response(
-  body: string,
+  body: ConstructorParameters<typeof Response>[0],
   url: string,
   contentType: string,
   headers: Readonly<Record<string, string>> = {},

@@ -10,9 +10,13 @@ import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
 
+import { assertProjectionBuildRegression } from "./projection-build-regression.js";
+
 import { PostGISCandidateSearch } from "../../src/application/postgis-candidate-search.js";
 import { SignedPaginationCodec } from "../../src/application/signed-pagination.js";
 import { importStaticProjection } from "../../src/application/static-projection-importer.js";
+import { verifyProjectionRetention } from "./projection-retention-regression.js";
+import { verifyStaticInputReuse } from "./static-input-reuse-regression.js";
 import {
   buildChargingCampusProjection,
   buildChargingParkProjection,
@@ -71,6 +75,16 @@ void test(
     context.after(async () => pool.end());
     await pool.query("DROP SCHEMA IF EXISTS nextstop CASCADE");
     await applyMigrations(pool);
+    await context.test("derived search retention preserves active snapshots and audit evidence", async () => {
+      await verifyProjectionRetention(pool);
+    });
+    await context.test(
+      "power builds preserve semantics and finish with stale shared-table statistics",
+      async () => assertProjectionBuildRegression(pool),
+    );
+    await context.test("equivalent provider inputs reuse immutable search versions", async () => {
+      await verifyStaticInputReuse(pool);
+    });
 
     await context.test("support report persistence is atomic, bounded, withdrawable and expires", async () => {
       const repository = new PostgresUserErrorReportRepository(pool);
@@ -1777,6 +1791,9 @@ void test(
           [10, 52],
           [10.2, 52],
         ]);
+        // The current reader requires all additive migrations after the v8
+        // upgrade assertions above have verified the historical transition.
+        await applyMigrations(pool);
         const response = await candidateSearch(pool).search({
           ...request,
           criteria: {

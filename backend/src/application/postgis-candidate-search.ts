@@ -96,6 +96,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
       projection === undefined ||
       (request.criteria.foodChain == null && projection.campusCount === 0)
     ) {
+      if (page.snapshot !== undefined) throw new InvalidPaginationTokenError();
       throw new NoProjectionAvailableError();
     }
     const foodProjectionId = await this.resolveFoodProjectionId(request, page.snapshot);
@@ -121,6 +122,12 @@ export class PostGISCandidateSearch implements CandidateSearching {
       page.cursor,
       foodProjectionId,
     );
+    // A retention batch may start between token validation and the candidate
+    // statement. Recheck after reading so a partially removed retired projection
+    // never becomes a successful but incomplete/empty search response.
+    if (page.snapshot !== undefined && await this.projection(projection.id) === undefined) {
+      throw new InvalidPaginationTokenError();
+    }
     const hasNextPage = rows.length > pageSize;
     const visibleRows = rows.slice(0, pageSize);
     const last = visibleRows.at(-1);
@@ -215,7 +222,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
               active_sources AS "activeSources",
               unavailable_sources AS "unavailableSources"
        FROM nextstop.projection_versions
-       WHERE status = 'active'`,
+       WHERE status = 'active' AND search_pruned_at IS NULL`,
     );
     return result.rows[0];
   }
@@ -229,7 +236,8 @@ export class PostGISCandidateSearch implements CandidateSearching {
               active_sources AS "activeSources",
               unavailable_sources AS "unavailableSources"
        FROM nextstop.projection_versions
-       WHERE id = $1 AND status IN ('active', 'retired')`,
+       WHERE id = $1 AND status IN ('active', 'retired')
+         AND search_pruned_at IS NULL`,
       [id],
     );
     return result.rows[0];

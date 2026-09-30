@@ -13,9 +13,11 @@ import type {
 } from "../domain/normalized-charging.js";
 import {
   ProjectionWriter,
+  type ProjectionBuildObserver,
   type ProjectionCounts,
   type QuarantineInput,
 } from "../persistence/projection-writer.js";
+import { staticInputFingerprint, type ParsedStaticProviderDataset } from "./static-input-fingerprint.js";
 
 const writeBatchSize = 250;
 const projectionPolicyVersion =
@@ -47,15 +49,32 @@ export async function importStaticProjection(
   datasets: readonly StaticProviderDataset[],
   unavailableSources: readonly string[],
   now: () => Date = () => new Date(),
+  observe: ProjectionBuildObserver = () => undefined,
 ): Promise<StaticProjectionImportResult> {
   validateDatasets(datasets);
   const activeSources = datasets.map(({ providerId }) => providerId).toSorted();
   const sortedUnavailableSources = [...new Set(unavailableSources)].toSorted();
   const sourceDatasetHash = combinedDatasetHash(datasets, sortedUnavailableSources);
-  const writer = new ProjectionWriter(pool);
+  const writer = new ProjectionWriter(pool, observe);
   const activeProjectionId = await writer.activeProjectionIdForHash(sourceDatasetHash);
   if (activeProjectionId !== undefined) {
     return { kind: "unchanged", projectionId: activeProjectionId };
+  }
+
+  const parsedDatasets: ParsedStaticProviderDataset[] = [];
+  for (const dataset of datasets) {
+    const records: StaticProviderRecordResult[] = [];
+    for await (const record of dataset.records) records.push(record);
+    parsedDatasets.push({ ...dataset, records });
+  }
+  const inputContentHash = staticInputFingerprint(
+    parsedDatasets, sortedUnavailableSources, projectionPolicyVersion,
+  );
+  const equivalentProjectionId = await writer.reuseEquivalentInput(
+    inputContentHash, sourceDatasetHash, now().toISOString(),
+  );
+  if (equivalentProjectionId !== undefined) {
+    return { kind: "unchanged", projectionId: equivalentProjectionId };
   }
 
   const projectionId = randomUUID();
@@ -63,6 +82,7 @@ export async function importStaticProjection(
   await writer.create({
     id: projectionId,
     sourceDatasetHash,
+    inputContentHash,
     sourceObservedAt: datasets.map(({ observedAt }) => observedAt).toSorted().at(-1) as string,
     builtAt,
     coverageStatus: sortedUnavailableSources.length === 0 ? "complete" : "degraded",
@@ -76,8 +96,8 @@ export async function importStaticProjection(
     let chargingPointCount = 0;
     let quarantineCount = 0;
 
-    for (const dataset of datasets) {
-      for await (const result of dataset.records) {
+    for (const dataset of parsedDatasets) {
+      for (const result of dataset.records) {
         if (result.kind === "observation") {
           observations.push(result.observation);
           locations.push(result.observation.location);

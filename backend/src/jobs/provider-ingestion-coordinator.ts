@@ -5,6 +5,7 @@ import {
   refreshSwissLiveAvailability,
 } from "./refresh-providers.js";
 import { refreshFoodPOIs } from "./refresh-food-pois.js";
+import { pruneRetiredChargingSearchProjections } from "../persistence/projection-retention.js";
 
 const staticSuccessIntervalMilliseconds = 24 * 60 * 60 * 1_000;
 const staticRetryIntervalMilliseconds = 15 * 60 * 1_000;
@@ -12,6 +13,7 @@ const liveSuccessIntervalMilliseconds = 60 * 1_000;
 const liveRetryIntervalMilliseconds = 30 * 1_000;
 const foodSuccessIntervalMilliseconds = 24 * 60 * 60 * 1_000;
 const foodRetryIntervalMilliseconds = 30 * 60 * 1_000;
+const retentionIntervalMilliseconds = 2 * 60 * 1_000;
 
 export interface IngestionLogger {
   info(details: Readonly<Record<string, unknown>>, message: string): void;
@@ -23,6 +25,7 @@ export class ProviderIngestionCoordinator {
   private staticTimer: NodeJS.Timeout | undefined;
   private liveTimer: NodeJS.Timeout | undefined;
   private foodTimer: NodeJS.Timeout | undefined;
+  private retentionTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly pool: Pool,
@@ -40,6 +43,7 @@ export class ProviderIngestionCoordinator {
     if (this.foodPOIIngestionEnabled) {
       this.foodTimer = setTimeout(() => void this.refreshFood(), 0);
     }
+    this.retentionTimer = setTimeout(() => void this.pruneSearchHistory(), retentionIntervalMilliseconds);
   }
 
   stop(): void {
@@ -53,12 +57,20 @@ export class ProviderIngestionCoordinator {
     if (this.foodTimer !== undefined) {
       clearTimeout(this.foodTimer);
     }
+    if (this.retentionTimer !== undefined) {
+      clearTimeout(this.retentionTimer);
+    }
   }
 
   private async refreshStatic(): Promise<void> {
     let nextDelay = staticSuccessIntervalMilliseconds;
     try {
-      const result = await refreshStaticProviders(this.pool);
+      const result = await refreshStaticProviders(this.pool, {
+        onProgress: (progress) => this.logger.info(
+          { event: "static-projection-stage", ...progress },
+          "Static charging projection build progress.",
+        ),
+      });
       this.logger.info(
         { event: "static-provider-refresh", result: result.kind },
         "Static charging providers refreshed.",
@@ -112,6 +124,20 @@ export class ProviderIngestionCoordinator {
     }
     if (!this.stopped) {
       this.foodTimer = setTimeout(() => void this.refreshFood(), nextDelay);
+    }
+  }
+
+  private async pruneSearchHistory(): Promise<void> {
+    try {
+      const result = await pruneRetiredChargingSearchProjections(this.pool);
+      if (result.deletedRows > 0 || result.completedVersions > 0) {
+        this.logger.info({ event: "search-projection-retention", ...result }, "Old derived search rows pruned in bounded batches.");
+      }
+    } catch (error) {
+      this.logger.warn({ event: "search-projection-retention-failed", failure: failureCode(error) }, "Search projection retention will retry on its next bounded run.");
+    }
+    if (!this.stopped) {
+      this.retentionTimer = setTimeout(() => void this.pruneSearchHistory(), retentionIntervalMilliseconds);
     }
   }
 }

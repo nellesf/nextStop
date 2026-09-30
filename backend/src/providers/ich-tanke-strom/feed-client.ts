@@ -1,4 +1,9 @@
 import { createHash } from "node:crypto";
+import { mkdtemp, readFile, rm, writeFile } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+
+import { conditionalHeaders, StaticFeedCache } from "../static-feed-cache.js";
 
 const staticFeedURL =
   "https://data.geo.admin.ch/ch.bfe.ladestellen-elektromobilitaet/data/oicp/ch.bfe.ladestellen-elektromobilitaet.json";
@@ -29,17 +34,60 @@ export interface IchTankeStromFeedOptions {
   readonly fetchImplementation?: typeof fetch;
   readonly now?: () => Date;
   readonly maximumBytes?: number;
+  readonly cacheDirectory?: string;
 }
 
 export async function downloadIchTankeStromFeed(
   kind: IchTankeStromFeedKind,
   options: IchTankeStromFeedOptions = {},
 ): Promise<IchTankeStromFeed> {
+  if (kind === "live") {
+    const response = await requestFeed(kind, options);
+    const body = await validatedResponseBody(response, kind, options);
+    return parseFeed(kind, body, response.headers.get("last-modified"),
+      response.headers.get("etag"), options);
+  }
+  const directory = await mkdtemp(join(tmpdir(), "nextstop-swiss-static-"));
+  const filePath = join(directory, "feed.json");
+  try {
+    const cache = new StaticFeedCache("ich-tanke-strom-static", options.cacheDirectory);
+    const cached = await cache.readInto(
+      staticFeedURL, filePath, options.maximumBytes ?? maximumBytes.static,
+    );
+    const response = await requestFeed(kind, options, conditionalHeaders(cached));
+    if (response.status === 304 && cached !== undefined) {
+      return parseFeed(kind, await readFile(filePath), cached.lastModified ?? null,
+        cached.etag ?? null, options);
+    }
+    const body = await validatedResponseBody(response, kind, options);
+    const feed = parseFeed(kind, body, response.headers.get("last-modified"),
+      response.headers.get("etag"), options);
+    await writeFile(filePath, body, { mode: 0o600 });
+    await cache.write(filePath, {
+      sourceURL: staticFeedURL,
+      sha256: feed.sha256,
+      observedAt: feed.observedAt,
+      fetchedAt: feed.fetchedAt,
+      lastModified: feed.lastModified,
+      ...(feed.etag === undefined ? {} : { etag: feed.etag }),
+    });
+    return feed;
+  } finally {
+    await rm(directory, { recursive: true, force: true });
+  }
+}
+
+async function requestFeed(
+  kind: IchTankeStromFeedKind,
+  options: IchTankeStromFeedOptions,
+  conditional: Readonly<Record<string, string>> = {},
+): Promise<Response> {
   const url = kind === "static" ? staticFeedURL : liveFeedURL;
   const response = await (options.fetchImplementation ?? fetch)(url, {
     headers: {
       accept: "application/json",
       "user-agent": "nextStop-backend/0.1 (+https://github.com/)",
+      ...conditional,
     },
     redirect: "follow",
     signal: AbortSignal.timeout(timeoutMilliseconds[kind]),
@@ -47,6 +95,14 @@ export async function downloadIchTankeStromFeed(
   if (response.url !== url) {
     throw new Error(`ich-tanke-strom ${kind} feed redirected unexpectedly.`);
   }
+  return response;
+}
+
+async function validatedResponseBody(
+  response: Response,
+  kind: IchTankeStromFeedKind,
+  options: IchTankeStromFeedOptions,
+): Promise<Buffer> {
   if (!response.ok) {
     throw new Error(`ich-tanke-strom ${kind} feed returned HTTP ${response.status}.`);
   }
@@ -59,8 +115,16 @@ export async function downloadIchTankeStromFeed(
     throw new Error(`ich-tanke-strom ${kind} feed returned an unexpected content type.`);
   }
   const limit = options.maximumBytes ?? maximumBytes[kind];
-  const body = await readLimitedBody(response, limit);
-  const lastModified = response.headers.get("last-modified");
+  return readLimitedBody(response, limit);
+}
+
+function parseFeed(
+  kind: IchTankeStromFeedKind,
+  body: Buffer,
+  lastModified: string | null,
+  etag: string | null,
+  options: IchTankeStromFeedOptions,
+): IchTankeStromFeed {
   if (lastModified === null || !Number.isFinite(Date.parse(lastModified))) {
     throw new Error(`ich-tanke-strom ${kind} feed has no valid Last-Modified value.`);
   }
@@ -75,7 +139,6 @@ export async function downloadIchTankeStromFeed(
   } catch {
     throw new Error(`ich-tanke-strom ${kind} feed is not valid JSON.`);
   }
-  const etag = response.headers.get("etag");
   return {
     kind,
     payload,

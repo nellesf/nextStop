@@ -191,6 +191,7 @@ requires Apple's managed capability and matching provisioning.
 - [Google Cloud single-VM staging](deploy/gcp-vm/README.md)
 - [Known limitations](docs/known-limitations.md)
 - [OpenStreetMap food-POI import runbook](docs/operations/openstreetmap-food-poi-import.md)
+- [Charging refresh performance and recovery](docs/operations/charging-refresh.md)
 - [Approved decisions and remaining external blockers](docs/open-decisions.md)
 - [Architecture decision records](docs/adr/)
 

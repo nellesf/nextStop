@@ -61,6 +61,7 @@ ALTER ROLE nextstop_worker
   NOSUPERUSER NOCREATEDB NOCREATEROLE NOINHERIT NOREPLICATION NOBYPASSRLS;
 ALTER ROLE nextstop_worker SET default_transaction_read_only = off;
 ALTER ROLE nextstop_worker SET lock_timeout = '5s';
+ALTER ROLE nextstop_worker SET statement_timeout = '5min';
 ALTER ROLE nextstop_worker SET idle_in_transaction_session_timeout = '30s';
 
 ALTER ROLE nextstop_support
@@ -72,6 +73,7 @@ ALTER ROLE nextstop_support SET idle_in_transaction_session_timeout = '10s';
 
 REVOKE ALL ON DATABASE nextstop FROM PUBLIC;
 GRANT CONNECT ON DATABASE nextstop TO nextstop_api, nextstop_auth, nextstop_worker, nextstop_support;
+GRANT TEMPORARY ON DATABASE nextstop TO nextstop_worker;
 
 REVOKE CREATE ON SCHEMA public FROM PUBLIC;
 REVOKE ALL ON SCHEMA nextstop FROM PUBLIC;
@@ -119,6 +121,7 @@ REVOKE ALL ON ALL TABLES IN SCHEMA nextstop FROM nextstop_worker;
 GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   nextstop.projection_versions,
   nextstop.provider_records,
+  nextstop.static_projection_input_checks,
   nextstop.provider_quarantine,
   nextstop.projection_conflicts,
   nextstop.normalized_charging_locations,
@@ -140,6 +143,8 @@ TO nextstop_worker;
 GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_park_power_projection(uuid)
 TO nextstop_worker;
 GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_campus_power_projection(uuid)
+TO nextstop_worker;
+GRANT EXECUTE ON FUNCTION nextstop.refresh_charging_projection_statistics()
 TO nextstop_worker;
 
 DO $verify$

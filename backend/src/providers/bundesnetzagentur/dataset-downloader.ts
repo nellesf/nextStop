@@ -3,6 +3,8 @@ import { open, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
+import { conditionalHeaders, StaticFeedCache } from "../static-feed-cache.js";
+
 const officialPageURL =
   "https://www.bundesnetzagentur.de/DE/Fachthemen/ElektrizitaetundGas/E-Mobilitaet/Ladesaeulenkarte/start.html";
 const datasetHost = "data.bundesnetzagentur.de";
@@ -30,6 +32,7 @@ export interface BundesnetzagenturDownloadOptions {
   readonly now?: () => Date;
   readonly pageURL?: string;
   readonly maximumDatasetBytes?: number;
+  readonly cacheDirectory?: string;
 }
 
 export async function downloadLatestBundesnetzagenturDataset(
@@ -50,38 +53,52 @@ export async function downloadLatestBundesnetzagenturDataset(
   const page = (await readLimitedBody(pageResponse, maximumPageBytes)).toString("utf8");
   const dataset = selectLatestDatasetURL(page, pageResponse.url);
 
-  const response = await fetchWithTimeout(
-    fetchImplementation,
-    dataset.url.href,
-    datasetTimeoutMilliseconds,
-  );
-  validateDatasetURL(new URL(response.url));
-  if (response.url !== dataset.url.href) {
-    throw new Error("Bundesnetzagentur dataset redirected unexpectedly.");
-  }
-  requireSuccessfulResponse(response, "Bundesnetzagentur dataset");
-  requireContentType(
-    response,
-    ["text/csv", "text/plain", "application/csv", "application/octet-stream"],
-    "Bundesnetzagentur dataset",
-  );
-
   const maximumDatasetBytes =
     options.maximumDatasetBytes ?? defaultMaximumDatasetBytes;
-  validateContentLength(response, maximumDatasetBytes);
   const directory = await mkdtemp(join(tmpdir(), "nextstop-bnetza-"));
   const filePath = join(directory, basename(dataset.url.pathname));
   try {
+    const cache = new StaticFeedCache("bundesnetzagentur", options.cacheDirectory);
+    const cached = await cache.readInto(dataset.url.href, filePath, maximumDatasetBytes);
+    const response = await fetchWithTimeout(
+      fetchImplementation,
+      dataset.url.href,
+      datasetTimeoutMilliseconds,
+      conditionalHeaders(cached),
+    );
+    validateDatasetURL(new URL(response.url));
+    if (response.url !== dataset.url.href) {
+      throw new Error("Bundesnetzagentur dataset redirected unexpectedly.");
+    }
+    if (response.status === 304 && cached !== undefined) {
+      return {
+        ...cached,
+        filePath,
+        fetchedAt: (options.now ?? (() => new Date()))().toISOString(),
+        cleanup: async () => rm(directory, { recursive: true, force: true }),
+      };
+    }
+    requireSuccessfulResponse(response, "Bundesnetzagentur dataset");
+    requireContentType(
+      response,
+      ["text/csv", "text/plain", "application/csv", "application/octet-stream"],
+      "Bundesnetzagentur dataset",
+    );
+    validateContentLength(response, maximumDatasetBytes);
+    await rm(filePath, { force: true });
     const digest = await writeLimitedBody(response, filePath, maximumDatasetBytes);
-    const fetchedAt = (options.now ?? (() => new Date()))().toISOString();
-    return {
-      filePath,
+    const metadata = {
       sha256: digest,
       observedAt: dataset.observedAt,
-      fetchedAt,
+      fetchedAt: (options.now ?? (() => new Date()))().toISOString(),
       sourceURL: dataset.url.href,
       ...optionalHeader("etag", response.headers.get("etag")),
       ...optionalHeader("lastModified", response.headers.get("last-modified")),
+    };
+    await cache.write(filePath, metadata);
+    return {
+      ...metadata,
+      filePath,
       cleanup: async () => rm(directory, { recursive: true, force: true }),
     };
   } catch (error) {
@@ -166,9 +183,10 @@ async function fetchWithTimeout(
   fetchImplementation: typeof fetch,
   url: string,
   timeoutMilliseconds: number,
+  conditional: Readonly<Record<string, string>> = {},
 ): Promise<Response> {
   return fetchImplementation(url, {
-    headers: { accept: "*/*", "user-agent": userAgent },
+    headers: { accept: "*/*", "user-agent": userAgent, ...conditional },
     redirect: "follow",
     signal: AbortSignal.timeout(timeoutMilliseconds),
   });

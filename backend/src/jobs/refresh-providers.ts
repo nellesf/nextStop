@@ -23,7 +23,7 @@ import {
 } from "../providers/ich-tanke-strom/feed-client.js";
 import { readIchTankeStromLiveFeed } from "../providers/ich-tanke-strom/live-provider.js";
 import { readIchTankeStromStaticFeed } from "../providers/ich-tanke-strom/static-provider.js";
-import { ProjectionWriter } from "../persistence/projection-writer.js";
+import { ProjectionWriter, type ProjectionBuildObserver } from "../persistence/projection-writer.js";
 
 const writeBatchSize = 1_000;
 
@@ -48,6 +48,7 @@ export interface ProviderRefreshDependencies {
   readonly downloadBundesnetzagentur?: () => Promise<BundesnetzagenturDatasetArtifact>;
   readonly downloadSwissFeed?: (kind: "static" | "live") => Promise<IchTankeStromFeed>;
   readonly now?: () => Date;
+  readonly onProgress?: ProjectionBuildObserver;
 }
 
 export async function refreshStaticProviders(
@@ -114,7 +115,7 @@ export async function refreshStaticProviders(
     if (datasets.length === 0) {
       throw new Error("No static charging provider could be refreshed.");
     }
-    return await importStaticProjection(pool, datasets, unavailableSources, now);
+    return await importStaticProjection(pool, datasets, unavailableSources, now, dependencies.onProgress);
   } finally {
     await bundesnetzagentur?.cleanup();
   }

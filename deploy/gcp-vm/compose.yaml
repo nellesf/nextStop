@@ -24,9 +24,10 @@ services:
   cache-initializer:
     image: busybox:1.37
     restart: "no"
-    command: ["chown", "-R", "1000:1000", "/var/lib/nextstop/osm-cache"]
+    command: ["chown", "-R", "1000:1000", "/var/lib/nextstop/osm-cache", "/var/lib/nextstop/provider-cache"]
     volumes:
       - osm-cache:/var/lib/nextstop/osm-cache
+      - provider-cache:/var/lib/nextstop/provider-cache
 
   migrator:
     image: nextstop-backend:staging
@@ -174,9 +175,11 @@ services:
       OSM_INGESTION_ENABLED: "true"
       OSM_GEOFABRIK_PBF_URLS: https://download.geofabrik.de/europe/germany-latest.osm.pbf,https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
       OSM_CACHE_DIRECTORY: /var/lib/nextstop/osm-cache
+      PROVIDER_CACHE_DIRECTORY: /var/lib/nextstop/provider-cache
       NODE_OPTIONS: --max-old-space-size=4608
     volumes:
       - osm-cache:/var/lib/nextstop/osm-cache
+      - provider-cache:/var/lib/nextstop/provider-cache
     logging:
       driver: json-file
       options:
@@ -186,3 +189,4 @@ services:
 volumes:
   postgres-data:
   osm-cache:
+  provider-cache:

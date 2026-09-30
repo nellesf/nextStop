@@ -9,6 +9,7 @@ if (databaseURL === undefined) {
 const pool = createDatabasePool(databaseURL, {
   applicationName: "nextstop-worker",
   maxConnections: 4,
+  statementTimeoutMilliseconds: 5 * 60 * 1_000,
 });
 const coordinator = new ProviderIngestionCoordinator(
   pool,

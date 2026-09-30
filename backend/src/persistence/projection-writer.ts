@@ -20,6 +20,7 @@ export interface ProjectionMetadata {
   readonly coverageStatus: "complete" | "degraded" | "stale";
   readonly activeSources: readonly string[];
   readonly unavailableSources: readonly string[];
+  readonly inputContentHash?: string;
 }
 
 export interface QuarantineInput {
@@ -37,8 +38,21 @@ export interface ProjectionCounts {
   readonly conflictCount: number;
 }
 
+export interface ProjectionBuildProgress {
+  readonly stage: "park_power" | "campus_power" | "statistics" | "food_matches" | "publish";
+  readonly state: "started" | "completed";
+  readonly durationMilliseconds?: number;
+}
+
+export type ProjectionBuildObserver = (progress: ProjectionBuildProgress) => void;
+
+const buildStatementTimeoutMilliseconds = 5 * 60 * 1_000;
+
 export class ProjectionWriter {
-  constructor(private readonly pool: Pool) {}
+  constructor(
+    private readonly pool: Pool,
+    private readonly observe: ProjectionBuildObserver = () => undefined,
+  ) {}
 
   async activeProjectionId(): Promise<string | undefined> {
     const result = await this.pool.query<{ readonly id: string }>(
@@ -52,19 +66,36 @@ export class ProjectionWriter {
       `SELECT id
        FROM nextstop.projection_versions
        WHERE status = 'active'
-         AND source_dataset_hash = $1
+         AND (source_dataset_hash = $1 OR EXISTS (
+           SELECT 1 FROM nextstop.static_projection_input_checks AS checked
+           WHERE checked.projection_id = nextstop.projection_versions.id
+             AND checked.source_dataset_hash = $1
+         ))
          AND campus_count > 0`,
       [sourceDatasetHash],
     );
     return result.rows[0]?.id;
   }
 
+  async reuseEquivalentInput(inputContentHash: string, sourceDatasetHash: string, checkedAt: string): Promise<string | undefined> {
+    const result = await this.pool.query<{ projection_id: string }>(
+      `INSERT INTO nextstop.static_projection_input_checks (source_dataset_hash, projection_id, checked_at)
+       SELECT $2, id, $3 FROM nextstop.projection_versions
+       WHERE status = 'active' AND input_content_hash = $1 AND campus_count > 0
+       ON CONFLICT (source_dataset_hash) DO UPDATE
+         SET projection_id = EXCLUDED.projection_id, checked_at = EXCLUDED.checked_at
+       RETURNING projection_id`,
+      [inputContentHash, sourceDatasetHash, checkedAt],
+    );
+    return result.rows[0]?.projection_id;
+  }
+
   async create(metadata: ProjectionMetadata): Promise<void> {
     await this.pool.query(
       `INSERT INTO nextstop.projection_versions (
          id, source_dataset_hash, source_observed_at, built_at, status,
-         coverage_status, active_sources, unavailable_sources
-       ) VALUES ($1, $2, $3, $4, 'building', $5, $6, $7)`,
+         coverage_status, active_sources, unavailable_sources, input_content_hash
+       ) VALUES ($1, $2, $3, $4, 'building', $5, $6, $7, $8)`,
       [
         metadata.id,
         metadata.sourceDatasetHash,
@@ -73,6 +104,7 @@ export class ProjectionWriter {
         metadata.coverageStatus,
         metadata.activeSources,
         metadata.unavailableSources,
+        metadata.inputContentHash ?? null,
       ],
     );
   }
@@ -301,7 +333,40 @@ export class ProjectionWriter {
   ): Promise<void> {
     const client = await this.pool.connect();
     try {
+      // Build only unpublished rows, with fresh per-version SQL statistics. Each
+      // bounded phase commits independently; searches continue on the active ID.
+      for (const [stage, statement] of [
+        ["park_power", "SELECT nextstop.rebuild_charging_park_power_projection($1)"],
+        ["campus_power", "SELECT nextstop.rebuild_charging_campus_power_projection($1)"],
+      ] as const) {
+        await client.query("BEGIN");
+        await client.query("SELECT set_config('statement_timeout', $1, true)", [
+          String(buildStatementTimeoutMilliseconds),
+        ]);
+        const building = await client.query(
+          "SELECT id FROM nextstop.projection_versions WHERE id = $1 AND status = 'building' FOR UPDATE",
+          [projectionId],
+        );
+        if (building.rowCount !== 1) {
+          throw new Error("Projection is not in the building state.");
+        }
+        const started = performance.now();
+        this.report({ stage, state: "started" });
+        await client.query(statement, [projectionId]);
+        await client.query("COMMIT");
+        this.report({ stage, state: "completed", durationMilliseconds: Math.round(performance.now() - started) });
+      }
+      const statisticsStarted = performance.now();
+      this.report({ stage: "statistics", state: "started" });
       await client.query("BEGIN");
+      await client.query("SET LOCAL statement_timeout = '60s'");
+      await client.query("SELECT nextstop.refresh_charging_projection_statistics()");
+      await client.query("COMMIT");
+      this.report({ stage: "statistics", state: "completed", durationMilliseconds: Math.round(performance.now() - statisticsStarted) });
+      await client.query("BEGIN");
+      await client.query("SELECT set_config('statement_timeout', $1, true)", [
+        String(buildStatementTimeoutMilliseconds),
+      ]);
       await client.query("SELECT pg_advisory_xact_lock(684237155161395695)");
       const actual = await client.query<{
         readonly locations: number;
@@ -334,15 +399,11 @@ export class ProjectionWriter {
       ) {
         throw new Error("Projection row counts do not match the validated import.");
       }
-      await client.query(
-        "SELECT nextstop.rebuild_charging_park_power_projection($1)",
-        [projectionId],
-      );
-      await client.query(
-        "SELECT nextstop.rebuild_charging_campus_power_projection($1)",
-        [projectionId],
-      );
+      const foodStarted = performance.now();
+      this.report({ stage: "food_matches", state: "started" });
       await rebuildFoodMatchesForChargingProjection(client, projectionId);
+      this.report({ stage: "food_matches", state: "completed", durationMilliseconds: Math.round(performance.now() - foodStarted) });
+      this.report({ stage: "publish", state: "started" });
       await client.query(
         `UPDATE nextstop.projection_versions
          SET status = 'retired'
@@ -374,11 +435,20 @@ export class ProjectionWriter {
         throw new Error("Projection is not in the building state.");
       }
       await client.query("COMMIT");
+      this.report({ stage: "publish", state: "completed" });
     } catch (error) {
       await client.query("ROLLBACK");
       throw error;
     } finally {
       client.release();
+    }
+  }
+
+  private report(progress: ProjectionBuildProgress): void {
+    try {
+      this.observe(progress);
+    } catch {
+      // Operational observers must not alter publication or leak provider data.
     }
   }
 

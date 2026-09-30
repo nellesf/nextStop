@@ -96,6 +96,11 @@ need.
   versions therefore do not enlarge current spatial index scans.
 - The serial power-projection rebuild has a function-local `work_mem` override;
   API sessions retain PostgreSQL defaults and cannot multiply that memory budget.
+- Power builds use indexed temporary inputs with fresh per-version statistics and
+  commit before publication. The worker receives TEMP and a fixed-table statistics
+  refresh function, with bounded SQL deadlines. Static feed files use a persistent
+  `PROVIDER_CACHE_DIRECTORY`. See the [refresh runbook](operations/charging-refresh.md)
+  for input reuse, derived-history retention and incident recovery.
 - A separate GiST-indexed OSM food-POI projection and version-pinned derived
   fine-park/POI cache; do not merge it into redistributed charging source tables.
 - Separate roles for migrations, worker writes, API read/search, App Attest auth
