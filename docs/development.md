@@ -355,7 +355,8 @@ From the repository root, start the corresponding broker and keep it running:
 # Use with the NextStop-Staging scheme.
 NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh
 
-# Use with NextStop-ProductionTest or the default NextStopApp scheme.
+# After the first production release installs the stable helper:
+# use with NextStop-ProductionTest or the default NextStopApp scheme.
 NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh
 ```
 
@@ -390,8 +391,38 @@ with `X-NextStop-Simulator-Auth: 1`; the response is the usual access-token JSON
 The Simulator permits 95 seconds for refresh because IAP/SSH minting has a
 90-second timeout.
 
+**Temporary production setup, verified 2026-10-01:** staging already has the
+release installation and stable mint helper. Production still runs its existing
+legacy deployment; the named `production` broker command above becomes usable
+after its first release installation supplies that helper. Until then, run the
+existing production compose minter through the explicit compatibility mode on
+port 8766:
+
+```bash
+env -u NEXTSTOP_BACKEND_ENVIRONMENT \
+  -u NEXTSTOP_GCP_PROJECT -u NEXTSTOP_GCP_INSTANCE -u NEXTSTOP_GCP_ZONE \
+  NEXTSTOP_SIMULATOR_AUTH_MODE=staging \
+  NEXTSTOP_SIMULATOR_AUTH_LEGACY_COMMAND=true \
+  NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT=8766 \
+  ios/start-simulator-auth-broker.sh
+```
+
+Run the `NextStop-ProductionTest` scheme with its checked-in
+`NEXTSTOP_BACKEND_ENVIRONMENT=production` launch setting and no API or broker URL
+override. The compatibility variables above belong only to the Mac broker
+process. Its historical `staging` mode name selects the existing production VM
+in `nextstop-tech-staging`; the app remains paired with `api.nextstop.tech` and
+loopback port 8766. This uses the existing minter and does not install or update
+production services.
+
+On 2026-10-01, both this production recipe and the named staging recipe passed a
+real token mint followed by exactly one synthetic search against their public
+API. Each search returned HTTP 200 with a snapshot; tokens stayed in memory and
+both temporary brokers were stopped with their ports released. These checks
+verified the broker/API connection, not the full Simulator app interaction.
+
 For an explicit transition before the stable command is installed, the old
-compose minter is available only through:
+compose minter also retains its original port 9482 recipe:
 
 ```bash
 NEXTSTOP_SIMULATOR_AUTH_MODE=staging \
@@ -409,7 +440,8 @@ The API override accepts only the known staging/production origins or HTTP
 loopback; use the actual pre-cutover origin. Remove these compatibility settings
 when adopting a named preset. An explicit broker override must be HTTP loopback
 (`127.0.0.1` or `::1`) with exactly `/token`, and without user info, query, or
-fragment. Do not combine legacy mode with a named preset.
+fragment. Do not combine legacy mode and a named backend preset in the same
+broker process.
 
 ### Debug Simulator search against a local backend
 

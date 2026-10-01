@@ -8,8 +8,12 @@ it does not change the existing outage or failover model.
 
 Status on 2026-10-01: the separate staging VM and database are provisioned;
 the public-data seed, database statistics and public DNS/TLS are verified.
-Application startup and live release rehearsals are pending. Release tooling has passed mocked host/cloud tests;
-automatic deployment is **not yet activated**. See the exact
+Staging API/auth/worker startup, a controlled activation rejection and rollback
+in both directions passed live checks with 146 successful synthetic search
+samples. These are sampled availability checks, not a continuous-availability
+guarantee; see the [verification record](../../docs/operations/staging-release-verification-2026-10-01.md)
+for latency and limitations. Production backup/restore verification and first
+adoption remain pending; automatic deployment is **not yet activated**. See the exact
 [activation status](../gcp/README.md) and
 [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
 

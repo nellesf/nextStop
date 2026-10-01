@@ -10,8 +10,12 @@ the HTTP redirect are verified, with a valid Let's Encrypt certificate through
 2026-12-30 and automatic renewal enabled.
 The public-data seed and `ANALYZE` completed: one active charging version with
 53,895 parks and one active food version with 3,353 POIs. App Attest keys,
-challenges and user error reports were verified empty. API/auth/worker services
-are not yet started.
+challenges and user error reports were verified empty before application startup.
+Staging API, auth and the real ingestion worker are now running. Two immutable
+images were deployed; a controlled activation rejection, rollback and forward
+recovery passed with 146 successful concurrent synthetic search samples.
+See the [live verification record](../../docs/operations/staging-release-verification-2026-10-01.md)
+for exact images, timings, latency and the limits of that evidence.
 The private production release-backup bucket exists with enforced public-access
 prevention, uniform access and a 30-day object lifecycle. The combined monthly
 budget alert covers both projects at EUR 200 without automatic shutdown.
@@ -22,8 +26,12 @@ main-only GitHub environments and mandatory owner review for production.
 No long-lived service-account keys or VM runtime identities were added.
 `NEXTSTOP_RELEASES_ENABLED=false` is verified. The first trusted-main workflow
 authenticated successfully with the repository's immutable OIDC subject.
-Backup restoration, live release/rollback rehearsals and release-gate activation
-remain pending. Release deployment stays disabled until the checks below pass.
+The production backup/isolated restore, first production adoption and release-gate
+activation remain pending. Production still serves its original deployment.
+Automatic deployment stays disabled until the remaining checks below pass;
+the successful staging deployments were operator initiated, not CI deployments.
+Both Simulator broker/API connections passed live smoke checks; the current
+production transition command is documented in [iOS development](../../docs/development.md#connected-debug-simulator-search).
 
 See [ADR 0018](../../docs/adr/0018-staging-production-releases.md), the
 [release runner](../gcp-vm/README.md), and
