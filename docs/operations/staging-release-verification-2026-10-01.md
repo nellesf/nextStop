@@ -2,7 +2,7 @@
 
 ## Scope and final state
 
-The tests used the separate `nextstop-tech-testing` project, its
+The release-switching tests used the separate `nextstop-tech-testing` project, its
 `nextstop-backend` VM in `europe-west3-a`, and
 `https://api-staging.nextstop.tech`. Production application services, database,
 credentials and DNS were unchanged. Staging uses its own database and keys,
@@ -24,7 +24,7 @@ change. GitHub builds verified the commit/OCI revision binding and reused the
 immutable registry tags. `verify-promotion.py` accepted the exact B commit,
 image and successful explicit staging deployment.
 
-At the final audit, green B was active and blue A retained. Both API/auth pairs
+At the end of the operator rehearsal, green B was active and blue A retained. Both API/auth pairs
 were ready, all five application containers were running with zero restarts,
 and exactly one worker was running B. Nginx matched release state; no pending
 release journal or temporary registry credential directory remained.
@@ -86,6 +86,45 @@ client timing also includes DNS, TLS and network time. No cause was isolated and
 no performance tuning was added. This setup retains the existing single-VM
 resource and failure model.
 
+## Real production backup and isolated restore
+
+The owner explicitly authorized a consistent production backup including private
+App Attest state and excluding all `user_error_reports` data. The existing backup
+helper validated and uploaded the archive to the designated private bucket. A
+separate private download of its exact immutable generation passed checksum and
+size verification. The backup object identifier, receipt and private contents
+are not part of this repository record.
+
+The full application schema was restored into a disposable native macOS
+PostgreSQL cluster with a private Unix socket, fresh credentials and no production
+signing keys or worker. The test used artifact B's exact source commit. Ordinary
+staging received no production authentication or report data.
+
+| Verification | Result |
+| --- | --- |
+| Archive size | 2,534,700,328 bytes / 2.361 GiB |
+| Restore and verification duration | 251 seconds |
+| Exact-generation archive integrity | Passed |
+| Full application-schema restore | Passed |
+| Private auth preservation and report-data exclusion | Passed |
+| Candidate migration, function ownership, runtime grants and valid indexes | Passed |
+| API and auth readiness | Passed |
+| Authenticated synthetic campus and food searches | Passed |
+| Private local archives, credentials, cluster and test-process cleanup | Passed |
+
+The source was PostgreSQL 17.5/PostGIS 3.5.2; the target was native PostgreSQL
+17.11/PostGIS 3.5.6 with `btree_gist` 1.7 and locale `C`. This establishes logical
+restore compatibility, not an exact Linux/container copy, production recovery
+cutover or auth-counter continuity after reverting production state. No production
+application, schema, worker, credentials or DNS was changed. The exact-image and
+one-hour receipt requirements remain in force for every production migration.
+Only the private receipt and sanitized technical evidence were retained locally.
+
+A separate bounded production probe returned HTTP 200 for **21 of 21** synthetic
+search requests, sampled once per minute during the backup activity. No private
+auth contents or individual registration counts were emitted. These samples
+cannot exclude interruptions between requests or establish a latency/load SLA.
+
 ## Simulator connectivity and remaining gates
 
 The named staging broker on loopback port 8765 and the explicit production
@@ -96,21 +135,32 @@ released their ports. This validates broker/API connectivity, not a complete
 Simulator UI session or real-device App Attest continuity. The production
 transition command is in [development.md](../development.md#connected-debug-simulator-search).
 
-CI identity/protection setup and real OIDC image builds passed. The deployments
-in this rehearsal used the authorized operator account; GitHub deploy-service-
-account execution still needs its first live run. `NEXTSTOP_RELEASES_ENABLED`
-remains `false`. The production backup and isolated full restore have not run;
-the synthetic restore harness is not evidence of production backup recovery.
-Production adoption, protected promotion activation and real-device continuity
+CI identity/protection setup and real OIDC image builds passed. The successful
+deployments in this rehearsal used the authorized operator account. Automatic
+releases were briefly enabled for a direct staging CI attempt, but
+[run `36858146070`, attempt 2](https://github.com/nellesf/nextStop/actions/runs/36858146070/attempts/2)
+failed early at 12:00 UTC before any SSH operation was observed. This is not a
+successful GitHub deploy-service-account rollout. `NEXTSTOP_RELEASES_ENABLED`
+is `false` again. Investigation identified a stale gcloud `core/account`: after
+builder authentication and SDK setup, switching to deploy authentication without
+another SDK setup left OS Login profile lookup selecting the builder account
+while token authentication used the deploy identity. A second SDK setup and
+explicit identity guard are implemented, and `actionlint` passed. The upcoming
+live CI run must still validate that correction; no successful CI deployment is
+claimed yet. Production still serves its legacy deployment. A successful staging
+run under the CI deploy identity, first production adoption, protected owner review
+before the first production release and real-device App Attest continuity
 verification remain outstanding.
 
-Backend and Swift Core CI passed for B. Its
+Backend and Swift Core CI passed for B. Its earlier
 [iOS CI run](https://github.com/nellesf/nextStop/actions/runs/36852498463)
 reported 267 passed, one failed and one skipped test. The failure was
 `UserErrorReportUITests/testDarkModeWithLargestAccessibilityTextKeepsReportControlsReachable`:
 the test could not reveal `info-error-report` after scrolling. This occurred
 before report submission or backend access. App/CarPlay unit suites, including
-environment and authentication guards, passed. There are no iOS source or iOS
-workflow changes between the earlier successful `585f890` run and B; that alone
-does not establish the failure's cause. The UI failure remains open for rerun;
-do not describe the complete iOS suite as green.
+environment and authentication guards, passed. The subsequent complete
+[iOS CI run for `6c33d4b`](https://github.com/nellesf/nextStop/actions/runs/36854802506)
+passed without an app change, closing the outstanding rerun check. The earlier
+UI failure did not reproduce; its precise cause was not isolated. The later full
+[iOS CI run for `e106f2e`](https://github.com/nellesf/nextStop/actions/runs/36857990355)
+also passed.

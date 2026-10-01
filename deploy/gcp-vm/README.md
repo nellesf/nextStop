@@ -12,8 +12,20 @@ Staging API/auth/worker startup, a controlled activation rejection and rollback
 in both directions passed live checks with 146 successful synthetic search
 samples. These are sampled availability checks, not a continuous-availability
 guarantee; see the [verification record](../../docs/operations/staging-release-verification-2026-10-01.md)
-for latency and limitations. Production backup/restore verification and first
-adoption remain pending; automatic deployment is **not yet activated**. See the exact
+for latency and limitations. The real production backup and isolated native
+restore passed: a 2.361 GiB archive, 251 seconds of restore/checks, successful
+migration/readiness/search gates and removal of private local copies. Production
+PostgreSQL 17.5/PostGIS 3.5.2 was restored into native PostgreSQL 17.11/PostGIS
+3.5.6, not an identical Linux environment. All 21 accompanying production search
+samples returned HTTP 200 at one-minute intervals.
+The first direct staging CI deployment, run `36858146070` attempt 2, failed early
+at 12:00 UTC before any SSH operation was observed. Automatic releases are
+**disabled again**. The stale gcloud builder-account selection was identified;
+a second SDK setup and identity guard are implemented, with `actionlint` passing.
+Their live CI validation remains pending. Production remains on
+its legacy deployment; first adoption and protected owner review still precede
+the first production release. The full iOS CI runs for `6c33d4b` and the later
+`e106f2e` passed without an app change. See the exact
 [activation status](../gcp/README.md) and
 [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
 
@@ -141,6 +153,16 @@ The receipt must bind `environment`, exact `image`, `project`, VM `instance`,
 `status=SUCCESSFUL`, `completedAt` within one hour and immutable
 `backupId=gs://bucket/object#generation`. This is a release backup requirement;
 periodic backup policy and recovery drills remain separate operational work.
+
+The authorized production backup/restore rehearsal on 2026-10-01 passed for
+artifact B (`58c7345`), including auth preservation, report-data exclusion,
+function ownership, runtime grants, valid indexes, API/auth readiness and
+synthetic campus/food searches. Private local archives, credentials, cluster and
+test processes were removed. Only private receipt and sanitized evidence were
+retained locally; no backup object identifier or private contents are recorded in
+the [public verification record](../../docs/operations/staging-release-verification-2026-10-01.md).
+That rehearsal does not waive the exact-image or one-hour receipt check for a
+later production deployment, and it did not change the production database.
 
 After provisioning and initial validation, protected workflows test/build/stage an
 image and explicitly promote its identical digest. Manual equivalents are:

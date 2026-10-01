@@ -53,6 +53,20 @@ jobs:
         with:
           workload_identity_provider: ${{ vars.NEXTSTOP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.NEXTSTOP_DEPLOY_SERVICE_ACCOUNT }}
+      # Reconfigure the CLI after switching identities: OS Login reads the
+      # active gcloud account as well as the exported credential file.
+      - uses: google-github-actions/setup-gcloud@v3
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
+      - name: Verify deployment identity
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
+        env:
+          EXPECTED_DEPLOY_ACCOUNT: ${{ vars.NEXTSTOP_DEPLOY_SERVICE_ACCOUNT }}
+        run: |
+          active_account=$(gcloud config get-value account 2>/dev/null)
+          if [[ -z "$EXPECTED_DEPLOY_ACCOUNT" || "$active_account" != "$EXPECTED_DEPLOY_ACCOUNT" ]]; then
+            echo "Deployment CLI identity does not match the configured deployment account." >&2
+            exit 1
+          fi
       - name: Record the selected release
         if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
         id: deployment

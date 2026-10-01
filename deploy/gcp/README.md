@@ -24,12 +24,24 @@ readback passed: three dedicated identities, restricted GitHub federation,
 VM-scoped deployment access, bucket-scoped backup access, immutable image tags,
 main-only GitHub environments and mandatory owner review for production.
 No long-lived service-account keys or VM runtime identities were added.
-`NEXTSTOP_RELEASES_ENABLED=false` is verified. The first trusted-main workflow
-authenticated successfully with the repository's immutable OIDC subject.
-The production backup/isolated restore, first production adoption and release-gate
-activation remain pending. Production still serves its original deployment.
-Automatic deployment stays disabled until the remaining checks below pass;
-the successful staging deployments were operator initiated, not CI deployments.
+The first trusted-main workflow authenticated successfully with the repository's
+immutable OIDC subject. An authorized real production backup and isolated native
+restore passed: the 2.361 GiB archive was restored and checked in 251 seconds,
+including migrations, role boundaries, both readiness endpoints and synthetic
+campus/food searches. Private local copies and the disposable cluster were removed.
+Production search returned HTTP 200 in all 21 accompanying one-minute samples.
+The full iOS CI runs for `6c33d4b` and the later `e106f2e` also passed without an
+app change.
+`NEXTSTOP_RELEASES_ENABLED` was briefly enabled for the first direct staging CI
+deployment. Run `36858146070`, attempt 2, failed early at 12:00 UTC before any SSH
+operation was observed. Automatic releases are disabled again (`false`). The
+cause was a stale builder account in gcloud configuration after switching to the
+deploy identity. A second SDK setup and identity guard are implemented and
+`actionlint` passed; live CI validation of the fix is still pending. The successful staging deployments were
+operator initiated, not CI deployments. Production still serves its legacy
+deployment; first adoption and the protected owner-review gate remain ahead of
+the first production release. See the verification record for these evidence
+limits and the remaining gates.
 Both Simulator broker/API connections passed live smoke checks; the current
 production transition command is documented in [iOS development](../../docs/development.md#connected-debug-simulator-search).
 
@@ -268,10 +280,24 @@ functions owned by an unrelated temporary test role for a real recovery.
    recovery requires a separately controlled writer cutover and continuity checks;
    application rollback continues using the current database.
 
-The schema-filter failure, missing UUID GiST dependency, successful filtered
-restore, function ownership, auth preservation and report exclusion were verified
-locally on 2026-10-01 using synthetic data with PostgreSQL 17/PostGIS. This does
-not certify a production archive or replace the isolated full-backup rehearsal.
+The schema-filter and missing UUID GiST dependency failure cases were first
+verified with synthetic data. On 2026-10-01, an explicitly authorized real
+production backup also passed the full isolated rehearsal for artifact B
+(`58c7345`). Its 2.361 GiB archive passed exact-generation and checksum checks;
+restore, auth preservation, report exclusion, candidate migration, grants/indexes,
+API/auth readiness and synthetic campus/food searches all passed in 251 seconds.
+Private archives, credentials, the disposable cluster and test processes were
+removed afterward. Exact object identity and the receipt remain in private
+operator evidence, outside this repository.
+
+Production PostgreSQL 17.5/PostGIS 3.5.2 was logically restored into native macOS
+PostgreSQL 17.11/PostGIS 3.5.6 with `btree_gist` 1.7 and locale `C`. This is a
+successful logical restore, not an identical Linux/container environment or a
+production recovery cutover. No production application, schema or worker was
+changed. All 21 production search samples returned HTTP 200 at a one-minute
+sampling interval; interruptions between samples remain unobserved. The normal
+exact-image, one-hour backup-receipt requirement for production migration remains
+unchanged. See the [verification record](../../docs/operations/staging-release-verification-2026-10-01.md).
 
 The candidate API and auth start beside the serving slot, pass private readiness
 and authenticated synthetic searches, then receive traffic through a graceful
