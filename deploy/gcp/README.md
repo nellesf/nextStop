@@ -20,8 +20,9 @@ readback passed: three dedicated identities, restricted GitHub federation,
 VM-scoped deployment access, bucket-scoped backup access, immutable image tags,
 main-only GitHub environments and mandatory owner review for production.
 No long-lived service-account keys or VM runtime identities were added.
-`NEXTSTOP_RELEASES_ENABLED=false` is verified. Actual workflow authentication,
-backup restoration, live release/rollback rehearsals and release-gate activation
+`NEXTSTOP_RELEASES_ENABLED=false` is verified. The first trusted-main workflow
+authenticated successfully with the repository's immutable OIDC subject.
+Backup restoration, live release/rollback rehearsals and release-gate activation
 remain pending. Release deployment stays disabled until the checks below pass.
 
 See [ADR 0018](../../docs/adr/0018-staging-production-releases.md), the
@@ -103,10 +104,13 @@ Each provider's CEL condition checks the numeric repository and owner IDs,
 `assertion.ref == 'refs/heads/main'`, the exact workflow file/ref, and the exact
 environment subject. The staging workflow is
 `nellesf/nextStop/.github/workflows/backend-staging.yml@refs/heads/main`; production
-uses `backend-production.yml`. Subjects are respectively
-`repo:nellesf/nextStop:environment:staging` and
-`repo:nellesf/nextStop:environment:production`. Do not give a repository-wide
-identity access to production without those workflow/environment restrictions.
+uses `backend-production.yml`. This repository uses GitHub's immutable OIDC
+subject prefix; setup verifies the repository's actual subject template before
+changing cloud trust. Subjects are respectively
+`repo:nellesf@26274002/nextStop@1333251411:environment:staging` and
+`repo:nellesf@26274002/nextStop@1333251411:environment:production`. Do not give a
+repository-wide identity access to production without those workflow/environment
+restrictions.
 
 The dedicated `nextstop` Artifact Registry repository in the existing
 `nextstop-tech-staging` project must enforce immutable tags. The staging builder

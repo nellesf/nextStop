@@ -17,8 +17,18 @@ class ConfigureCITests(unittest.TestCase):
             for required in ["assertion.repository_id == '1333251411'", "assertion.repository_owner_id == '26274002'",
                              "assertion.ref == 'refs/heads/main'",
                              f"assertion.workflow_ref == 'nellesf/nextStop/.github/workflows/backend-{environment}.yml@refs/heads/main'",
-                             f"assertion.sub == 'repo:nellesf/nextStop:environment:{environment}'"]:
+                             f"assertion.sub == 'repo:nellesf@26274002/nextStop@1333251411:environment:{environment}'"]:
                 self.assertIn(required, expression)
+
+    def test_github_subject_template_must_match_the_exact_immutable_identity(self):
+        template = {"use_default": True, "use_immutable_subject": True,
+                    "sub_claim_prefix": "repo:nellesf@26274002/nextStop@1333251411"}
+        setup.verify_subject_template(template)
+        for changed in [{"use_default": False}, {"use_immutable_subject": False},
+                        {"sub_claim_prefix": "repo:nellesf/nextStop"},
+                        {"sub_claim_prefix": "repo:nellesf@26274002/nextStop@999"}]:
+            with self.subTest(changed=changed), self.assertRaisesRegex(setup.SetupError, "subject template"):
+                setup.verify_subject_template({**template, **changed})
 
     def test_iap_binding_preserves_existing_policy_and_restricts_ssh(self):
         original = {"etag": "unchanged-version", "bindings": [{"role": "roles/iap.admin", "members": ["user:owner@example.test"]}]}

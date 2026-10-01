@@ -17,6 +17,7 @@ from common import configuration
 REPOSITORY = "nellesf/nextStop"
 REPOSITORY_ID = "1333251411"
 OWNER_ID = "26274002"
+SUBJECT_PREFIX = f"repo:nellesf@{OWNER_ID}/nextStop@{REPOSITORY_ID}"
 PROJECT_NUMBERS = {"staging": "353471052580", "production": "1022346259037"}
 POOL = "nextstop-github"
 PROVIDER = "release"
@@ -60,7 +61,15 @@ def condition(environment):
     return (f"assertion.repository_id == '{REPOSITORY_ID}' && assertion.repository_owner_id == '{OWNER_ID}'"
             f" && assertion.ref == 'refs/heads/main'"
             f" && assertion.workflow_ref == '{REPOSITORY}/.github/workflows/backend-{environment}.yml@refs/heads/main'"
-            f" && assertion.sub == 'repo:{REPOSITORY}:environment:{environment}'")
+            f" && assertion.sub == '{SUBJECT_PREFIX}:environment:{environment}'")
+
+
+def verify_subject_template(template):
+    # New GitHub repositories use immutable owner/repository IDs in their sub.
+    # Reject drift instead of silently broadening the cloud trust condition.
+    if (template.get("use_default") is not True or template.get("use_immutable_subject") is not True
+            or template.get("sub_claim_prefix") != SUBJECT_PREFIX):
+        raise SetupError("GitHub OIDC subject template does not match the approved immutable identity.")
 
 
 def identities(environment, config):
@@ -271,6 +280,7 @@ def main():
     repo = run(["gh", "api", f"repos/{REPOSITORY}"])
     if str(repo["id"]) != REPOSITORY_ID or str(repo["owner"]["id"]) != OWNER_ID:
         raise SetupError("GitHub repository identity mismatch.")
+    verify_subject_template(github("actions/oidc/customization/sub"))
     registry_project = configs["staging"]["registryProject"]
     if args.apply:
         # Disable before granting any identity, including on an intentional rerun.
