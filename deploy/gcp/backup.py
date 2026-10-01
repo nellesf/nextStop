@@ -37,9 +37,12 @@ def archive_sha256(path: Path) -> str:
 
 
 def run_command(arguments: list[str], timeout: int = 180) -> None:
+    # Large archives must not create temporary composite-upload components:
+    # the backup identity intentionally has no object-deletion permission.
+    environment = {**os.environ, "CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED": "false"}
     try:
         result = subprocess.run(arguments, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL,
-                                timeout=timeout, check=False)
+                                timeout=timeout, check=False, env=environment)
     except subprocess.TimeoutExpired:
         raise RuntimeError("Backup command exceeded its time budget.") from None
     if result.returncode:

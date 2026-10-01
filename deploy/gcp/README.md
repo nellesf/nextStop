@@ -175,7 +175,11 @@ deployment's successful status and digest. It does not rebuild the application.
 
 Before production DDL, `backup.py` must obtain a consistent dump from the existing
 local database, upload it to the private GCS bucket, and verify the uploaded
-object. The receipt identifies production project, VM/database, immutable object
+object. Its subprocesses explicitly set
+`CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED=false`, overriding inherited
+values without changing global gcloud configuration, so large archives use a
+resumable single-object upload without temporary components or deletion rights.
+The receipt identifies production project, VM/database, immutable object
 generation, image and completion time. The host migrator rejects an expired or
 mismatched receipt. This requirement is a release backup gate, not a claim of
 continuous point-in-time recovery. Dump contents and retention must preserve the

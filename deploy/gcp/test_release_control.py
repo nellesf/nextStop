@@ -164,6 +164,26 @@ class ReleaseControlTests(unittest.TestCase):
                 backup.run_command(["gcloud"])
             self.assertNotIn("private", str(error.exception))
 
+    def test_backup_commands_disable_composite_uploads_without_changing_parent_environment(self):
+        property_name = "CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED"
+        for inherited_value in [None, "true", "false"]:
+            with self.subTest(inherited_value=inherited_value):
+                inherited = {
+                    "PATH": "/synthetic/tools",
+                    "CLOUDSDK_CONFIG": "/synthetic/gcloud",
+                    "GOOGLE_APPLICATION_CREDENTIALS": "/synthetic/credentials.json",
+                }
+                if inherited_value is not None:
+                    inherited[property_name] = inherited_value
+                arguments = ["gcloud", "storage", "cp", "/synthetic/archive.dump", "gs://synthetic/archive.dump"]
+                with patch.dict(backup.os.environ, inherited, clear=True), \
+                     patch.object(backup.subprocess, "run", return_value=SimpleNamespace(returncode=0)) as command:
+                    backup.run_command(arguments, timeout=1800)
+                    self.assertEqual(command.call_args.args, (arguments,))
+                    self.assertEqual(command.call_args.kwargs["env"], {**inherited, property_name: "false"})
+                    self.assertEqual(command.call_args.kwargs["timeout"], 1800)
+                    self.assertEqual(dict(backup.os.environ), inherited)
+
     def test_remote_dump_script_is_valid_bash_without_executing_it(self):
         arguments = shlex.split(backup.dump_script("/srv/nextstop/.release-backup-" + "a" * 32))
         self.assertEqual(arguments[:5], ["timeout", "--kill-after=10s", "1800s", "bash", "-c"])
