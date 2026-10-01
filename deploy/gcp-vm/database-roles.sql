@@ -1,4 +1,13 @@
 \set ON_ERROR_STOP on
+\getenv api_password API_DATABASE_PASSWORD
+\getenv auth_password AUTH_DATABASE_PASSWORD
+\getenv support_password SUPPORT_DATABASE_PASSWORD
+\getenv worker_password WORKER_DATABASE_PASSWORD
+
+-- The release runner invokes psql --single-transaction: grants are never
+-- temporarily absent for requests using the previous application slot.
+SET LOCAL lock_timeout = '500ms';
+SET LOCAL statement_timeout = '60s';
 
 DO $roles$
 BEGIN
@@ -146,6 +155,9 @@ GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_campus_power_projection(uuid
 TO nextstop_worker;
 GRANT EXECUTE ON FUNCTION nextstop.refresh_charging_projection_statistics()
 TO nextstop_worker;
+
+GRANT EXECUTE ON FUNCTION nextstop.required_migrations_applied(text[])
+TO nextstop_api, nextstop_auth;
 
 DO $verify$
 DECLARE

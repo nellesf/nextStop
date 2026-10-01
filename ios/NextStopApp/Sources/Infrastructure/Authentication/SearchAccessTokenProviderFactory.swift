@@ -6,14 +6,12 @@ enum SearchAccessTokenProviderFactory {
     baseURL: URL,
     session: URLSession = .shared,
     bundle: Bundle = .main,
+    launchEnvironment: [String: String] = ProcessInfo.processInfo.environment,
     service: (any AppAttestServicing)? = nil
   ) -> any SearchAccessTokenProviding {
-    let environment: AppAttestEnvironment
-    #if DEBUG
-      environment = .development
-    #else
-      environment = .production
-    #endif
+    guard let value = bundle.object(forInfoDictionaryKey: "NextStopAppAttestEnvironment") as? String,
+      let environment = AppAttestEnvironment(rawValue: value)
+    else { return InvalidConfigurationAccessTokenProvider() }
 
     let bundleIdentifier = bundle.bundleIdentifier ?? "de.nextstop.app"
     let keyStore = KeychainAppAttestKeyStore(
@@ -24,7 +22,7 @@ enum SearchAccessTokenProviderFactory {
 
     #if DEBUG && targetEnvironment(simulator)
       let fallback = SimulatorSearchAccessTokenProvider(
-        brokerURL: SimulatorSearchAccessTokenProvider.configuredBrokerURL(),
+        brokerURL: BackendEnvironmentConfiguration.brokerURL(for: baseURL, environment: launchEnvironment),
         session: session
       )
       return AppAttestSearchAccessTokenProvider(
@@ -40,5 +38,11 @@ enum SearchAccessTokenProviderFactory {
         client: AppAttestAuthenticationClient(baseURL: baseURL, session: session)
       )
     #endif
+  }
+}
+
+private struct InvalidConfigurationAccessTokenProvider: SearchAccessTokenProviding {
+  func accessToken(forceRefresh: Bool) async throws -> String {
+    throw SearchAccessTokenProviderError.invalidConfiguration
   }
 }

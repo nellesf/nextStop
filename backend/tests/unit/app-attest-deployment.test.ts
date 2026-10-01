@@ -50,7 +50,7 @@ void test("deployment isolates mutable authentication tables from the read-only 
     "utf8",
   );
   const simulatorBroker = await readFile(
-    new URL("../../../ios/SimulatorAuthBroker/server.mjs", import.meta.url),
+    new URL("../../../ios/SimulatorAuthBroker/configuration.mjs", import.meta.url),
     "utf8",
   );
   const simulatorMintService = serviceBlock(compose, "simulator-token-mint");
@@ -77,7 +77,7 @@ void test("deployment isolates mutable authentication tables from the read-only 
   );
   assert.match(
     simulatorBroker,
-    /run --rm --no-deps -T simulator-token-mint/u,
+    /sudo \/usr\/local\/sbin\/nextstop-mint-simulator-token/u,
   );
   assert.doesNotMatch(
     simulatorBroker,
@@ -85,7 +85,8 @@ void test("deployment isolates mutable authentication tables from the read-only 
   );
   assert.doesNotMatch(searchServer, /AUTH_DATABASE_URL|PostgresAppAttestAuthenticationRepository/u);
   assert.match(authServer, /AUTH_DATABASE_URL/u);
-  assert.match(nginx, /location \^~ \/v1\/auth\/app-attest\/[\s\S]*127\.0\.0\.1:3001/u);
+  assert.match(nginx, /location \^~ \/v1\/auth\/app-attest\/[\s\S]*proxy_pass http:\/\/nextstop_auth/u);
+  assert.match(nginx, /location = \/ready\/auth \{\s*proxy_pass http:\/\/nextstop_auth\/ready;/u);
   assert.match(nginx, /zone=nextstop_auth:10m rate=12r\/m/u);
   assert.match(nginx, /location \^~ \/v1\/auth\/app-attest\/[\s\S]*limit_req zone=nextstop_auth/u);
   assert.match(nginx, /error_page 429 = @auth_rate_limited/u);
@@ -93,7 +94,7 @@ void test("deployment isolates mutable authentication tables from the read-only 
   assert.match(nginx, /urn:nextstop:error:authentication-rate-limited/u);
   assert.match(nginx, /location @auth_rate_limited[\s\S]*Retry-After 60/u);
   assert.match(nginx, /authentication endpoint body limit/u);
-  assert.match(nginx, /location = \/v1\/charging-parks\/search[\s\S]*127\.0\.0\.1:3000/u);
+  assert.match(nginx, /location = \/v1\/charging-parks\/search[\s\S]*proxy_pass http:\/\/nextstop_api/u);
   assert.match(repository, /AND \$3 > sign_count/u);
   assert.match(
     roles,

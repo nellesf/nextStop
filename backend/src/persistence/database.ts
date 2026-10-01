@@ -5,6 +5,7 @@ export interface DatabasePoolOptions {
   readonly maxConnections?: number;
   readonly queryTimeoutMilliseconds?: number;
   readonly statementTimeoutMilliseconds?: number;
+  readonly connectionTimeoutMilliseconds?: number;
 }
 
 export function createDatabasePool(
@@ -14,7 +15,7 @@ export function createDatabasePool(
   const configuration: PoolConfig = {
     connectionString,
     max: options.maxConnections ?? 10,
-    connectionTimeoutMillis: 5_000,
+    connectionTimeoutMillis: options.connectionTimeoutMilliseconds ?? 5_000,
     idleTimeoutMillis: 30_000,
     application_name: options.applicationName ?? "nextstop-backend",
   };

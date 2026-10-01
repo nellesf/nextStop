@@ -1,4 +1,5 @@
 import Combine
+import CryptoKit
 import Foundation
 
 /// The deletion capability is the only persisted report data. Never add message
@@ -31,13 +32,23 @@ final class UserErrorReportReceiptStore: ObservableObject {
 
   init(
     fileURL: URL? = nil,
+    backendURL: URL = BackendEnvironmentConfiguration.productionURL,
+    storageDirectory: URL? = nil,
     clock: @escaping () -> Date = Date.init,
     write: ((Data, URL) throws -> Void)? = nil
   ) {
-    self.fileURL = fileURL ?? Self.defaultFileURL()
+    let directory = storageDirectory ?? Self.defaultDirectoryURL()
+    self.fileURL = fileURL ?? directory.flatMap { Self.scopedFileURL(backendURL: backendURL, directory: $0) }
     self.clock = clock
     self.write = write ?? Self.writeProtected
-    load()
+    if fileURL == nil,
+      KeychainAppAttestKeyStore.normalizedBackendOrigin(backendURL)
+        == KeychainAppAttestKeyStore.normalizedBackendOrigin(BackendEnvironmentConfiguration.productionURL),
+      let directory
+    {
+      migrateLegacyReceipts(from: directory.appendingPathComponent("receipts.json"))
+    }
+    if !loadFailed { load() }
   }
 
   @discardableResult
@@ -93,21 +104,7 @@ final class UserErrorReportReceiptStore: ObservableObject {
     }
     guard FileManager.default.fileExists(atPath: fileURL.path) else { return }
     do {
-      let file = try FileHandle(forReadingFrom: fileURL)
-      defer { try? file.close() }
-      let data = try file.read(upToCount: Self.maximumFileSize + 1) ?? Data()
-      guard data.count <= Self.maximumFileSize else {
-        throw UserErrorReportError.storageUnavailable
-      }
-      let decoder = JSONDecoder()
-      decoder.dateDecodingStrategy = .iso8601
-      let snapshot = try decoder.decode(Snapshot.self, from: data)
-      guard snapshot.schemaVersion == 1,
-        snapshot.receipts.count <= Self.receiptLimit,
-        Set(snapshot.receipts.map(\.reportID)).count == snapshot.receipts.count,
-        snapshot.receipts.allSatisfy(Self.isValid)
-      else { throw UserErrorReportError.storageUnavailable }
-      receipts = snapshot.receipts
+      receipts = try Self.readReceipts(from: fileURL)
       // Re-encode only the receipt allowlist and discard expired capabilities.
       try persist(receipts.filter { $0.expiresAt > clock() })
     } catch {
@@ -116,6 +113,50 @@ final class UserErrorReportReceiptStore: ObservableObject {
       persistenceAvailable = false
       loadFailed = true
     }
+  }
+
+  private func migrateLegacyReceipts(from legacyURL: URL) {
+    guard let fileURL, FileManager.default.fileExists(atPath: legacyURL.path) else { return }
+    do {
+      let legacy = try Self.readReceipts(from: legacyURL)
+      let current = FileManager.default.fileExists(atPath: fileURL.path)
+        ? try Self.readReceipts(from: fileURL) : []
+      var merged = Dictionary(uniqueKeysWithValues: current.map { ($0.reportID, $0) })
+      for receipt in legacy where receipt.expiresAt > clock() {
+        if let existing = merged[receipt.reportID] {
+          guard existing.deletionToken == receipt.deletionToken,
+            existing.createdAt == receipt.createdAt,
+            existing == receipt || existing.isPending || receipt.isPending
+          else { throw UserErrorReportError.storageUnavailable }
+          if existing.isPending { merged[receipt.reportID] = receipt }
+        } else { merged[receipt.reportID] = receipt }
+      }
+      let retained = merged.values.filter { $0.expiresAt > clock() }
+        .sorted { $0.createdAt < $1.createdAt }
+      guard retained.count <= Self.receiptLimit else { throw UserErrorReportError.storageUnavailable }
+      try persist(retained)
+      // Remove the old capabilities only after the scoped file is written safely.
+      try FileManager.default.removeItem(at: legacyURL)
+    } catch {
+      persistenceAvailable = false
+      loadFailed = true
+    }
+  }
+
+  private static func readReceipts(from fileURL: URL) throws -> [UserErrorReportReceipt] {
+    let file = try FileHandle(forReadingFrom: fileURL)
+    defer { try? file.close() }
+    let data = try file.read(upToCount: maximumFileSize + 1) ?? Data()
+    guard data.count <= maximumFileSize else { throw UserErrorReportError.storageUnavailable }
+    let decoder = JSONDecoder()
+    decoder.dateDecodingStrategy = .iso8601
+    let snapshot = try decoder.decode(Snapshot.self, from: data)
+    guard snapshot.schemaVersion == 1,
+      snapshot.receipts.count <= receiptLimit,
+      Set(snapshot.receipts.map(\.reportID)).count == snapshot.receipts.count,
+      snapshot.receipts.allSatisfy(isValid)
+    else { throw UserErrorReportError.storageUnavailable }
+    return snapshot.receipts
   }
 
   private func persist(_ updated: [UserErrorReportReceipt]) throws {
@@ -179,11 +220,17 @@ final class UserErrorReportReceiptStore: ObservableObject {
     try savedFile.setResourceValues(values)
   }
 
-  private static func defaultFileURL() -> URL? {
+  static func scopedFileURL(backendURL: URL, directory: URL) -> URL? {
+    guard let origin = KeychainAppAttestKeyStore.normalizedBackendOrigin(backendURL) else { return nil }
+    let key = SHA256.hash(data: Data(origin.utf8)).map { String(format: "%02x", $0) }.joined()
+    return directory.appendingPathComponent(key, isDirectory: true)
+      .appendingPathComponent("receipts.json", isDirectory: false)
+  }
+
+  private static func defaultDirectoryURL() -> URL? {
     try? FileManager.default.url(
       for: .applicationSupportDirectory, in: .userDomainMask, appropriateFor: nil, create: true
     ).appendingPathComponent("ErrorReportReceipts", isDirectory: true)
-      .appendingPathComponent("receipts.json", isDirectory: false)
   }
 
   private struct Snapshot: Codable {

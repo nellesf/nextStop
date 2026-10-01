@@ -1,84 +1,56 @@
 #!/usr/bin/env bash
 set -euo pipefail
 
-if [[ $# -ne 1 ]]; then
-  echo "usage: $0 RELEASE_ARCHIVE" >&2
+if [[ $# -lt 1 ]]; then
+  echo "usage: $0 RELEASE_ARCHIVE [deploy|migrate|rollback] --environment ENV --image IMAGE@sha256:DIGEST ..." >&2
   exit 64
 fi
-
 archive=$1
-release_id=$(date -u +%Y%m%dT%H%M%SZ)
-release_directory=/opt/nextstop/releases/$release_id
-environment_file=/etc/nextstop/backend.env
-
-mkdir -p "$release_directory" /etc/nextstop /var/www/letsencrypt
-tar -xzf "$archive" -C "$release_directory"
-
-umask 077
-touch "$environment_file"
-ensure_secret() {
-  local name=$1
-  if ! grep -q "^${name}=" "$environment_file"; then
-    printf '%s=%s\n' "$name" "$(openssl rand -hex 32)" >> "$environment_file"
-  fi
+shift
+action=deploy
+if [[ ${1:-} == deploy || ${1:-} == migrate || ${1:-} == rollback || ${1:-} == verify-public ]]; then
+  action=$1
+  shift
+fi
+[[ -f /etc/nextstop/backend.env && -f /etc/nextstop/release.env ]] || {
+  echo "Provision environment-specific host configuration and secrets first." >&2
+  exit 78
 }
-ensure_secret POSTGRES_PASSWORD
-ensure_secret API_DATABASE_PASSWORD
-ensure_secret AUTH_DATABASE_PASSWORD
-ensure_secret SUPPORT_DATABASE_PASSWORD
-ensure_secret WORKER_DATABASE_PASSWORD
-ensure_secret SNAPSHOT_SIGNING_KEY
-ensure_secret SEARCH_ACCESS_TOKEN_SIGNING_KEY
-ensure_secret SEARCH_API_BEARER_TOKEN
-if ! grep -q '^ALLOW_LEGACY_STAGING_BEARER=' "$environment_file"; then
-  printf '%s=%s\n' ALLOW_LEGACY_STAGING_BEARER true >> "$environment_file"
+umask 077
+chmod 600 /etc/nextstop/backend.env
+mkdir -p /opt/nextstop/releases /var/lib/nextstop/releases /var/www/letsencrypt
+release_directory=$(mktemp -d /opt/nextstop/releases/release.XXXXXXXX)
+# Deployment archives contain only vetted deployment tooling, never source code,
+# .env files, node_modules, or build output. Reject path traversal/link members.
+python3 - "$archive" "$release_directory" <<'PY'
+from pathlib import Path
+import sys, tarfile
+archive, destination = sys.argv[1:]
+with tarfile.open(archive) as bundle:
+    for member in bundle.getmembers():
+        parts = Path(member.name).parts
+        if member.issym() or member.islnk() or member.name.startswith('/') or '..' in parts:
+            raise SystemExit('Invalid release archive member.')
+        if not member.isfile() and not member.isdir():
+            raise SystemExit('Unsupported release archive member.')
+        if not (member.name.startswith('deploy/gcp-vm/') or member.name.startswith('deploy/releases/')
+                or member.name in ('deploy', 'deploy/gcp-vm', 'deploy/releases')):
+            raise SystemExit('Unexpected release archive scope.')
+    bundle.extractall(destination)
+PY
+
+# Include/log files contain no upstream selection and preserve the diagnostic
+# redaction contract. Serving Nginx is reloaded only by the gated release runner.
+if [[ -d /etc/nginx ]]; then
+  install -m 644 "$release_directory/deploy/gcp-vm/nginx-request-diagnostics.conf" /etc/nginx/nextstop-request-diagnostics.conf
+  install -m 644 "$release_directory/deploy/gcp-vm/nginx-diagnostics.logrotate" /etc/logrotate.d/nextstop-diagnostics
+  install -d -m 750 -o www-data -g adm /var/log/nextstop
+  touch /var/log/nextstop/nginx-errors.jsonl
+  chown www-data:adm /var/log/nextstop/nginx-errors.jsonl
+  chmod 640 /var/log/nextstop/nginx-errors.jsonl
 fi
-if ! grep -q '^APP_ATTEST_ALLOW_DEVELOPMENT=' "$environment_file"; then
-  printf '%s=%s\n' APP_ATTEST_ALLOW_DEVELOPMENT false >> "$environment_file"
+python3 "$release_directory/deploy/releases/release.py" "$action" --root "$release_directory" "$@"
+if [[ $action == deploy ]]; then
+  ln -sfn "$release_directory" /opt/nextstop/current
+  install -m 755 "$release_directory/deploy/releases/mint-simulator-token.sh" /usr/local/sbin/nextstop-mint-simulator-token
 fi
-if ! grep -q '^APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS=' "$environment_file"; then
-  printf '%s=%s\n' APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS 1 >> "$environment_file"
-fi
-chmod 600 "$environment_file"
-
-ln -sfn "$release_directory" /opt/nextstop/current
-
-install -m 644 "$release_directory/deploy/gcp-vm/nginx-request-diagnostics.conf" \
-  /etc/nginx/nextstop-request-diagnostics.conf
-install -m 644 "$release_directory/deploy/gcp-vm/nginx-diagnostics.logrotate" \
-  /etc/logrotate.d/nextstop-diagnostics
-install -d -m 750 -o www-data -g adm /var/log/nextstop
-touch /var/log/nextstop/nginx-errors.jsonl
-chown www-data:adm /var/log/nextstop/nginx-errors.jsonl
-chmod 640 /var/log/nextstop/nginx-errors.jsonl
-
-if [[ -f /etc/letsencrypt/live/api.nextstop.tech/fullchain.pem ]]; then
-  install -m 644 "$release_directory/deploy/gcp-vm/nginx-https.conf" \
-    /etc/nginx/sites-available/nextstop
-else
-  install -m 644 "$release_directory/deploy/gcp-vm/nginx-http.conf" \
-    /etc/nginx/sites-available/nextstop
-fi
-ln -sfn /etc/nginx/sites-available/nextstop /etc/nginx/sites-enabled/nextstop
-rm -f /etc/nginx/sites-enabled/default
-nginx -t
-systemctl reload nginx
-
-cd "$release_directory"
-compose=(
-  docker compose
-  --project-name gcp-vm
-  --env-file "$environment_file"
-  -f deploy/gcp-vm/compose.yaml
-)
-
-"${compose[@]}" build backend
-"${compose[@]}" stop backend auth-backend worker
-"${compose[@]}" up -d --wait database
-"${compose[@]}" run --rm --no-deps migrator
-"${compose[@]}" run --rm --no-deps database-role-initializer
-"${compose[@]}" run --rm --no-deps cache-initializer
-"${compose[@]}" up -d --wait --wait-timeout 120 --no-deps --remove-orphans backend auth-backend worker
-
-find /opt/nextstop/releases -mindepth 1 -maxdepth 1 -type d \
-  ! -path "$release_directory" -mtime +7 -exec rm -rf -- {} +

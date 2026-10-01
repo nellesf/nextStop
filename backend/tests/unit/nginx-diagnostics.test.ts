@@ -39,7 +39,8 @@ void test("nginx error records can interpolate only allowlisted metadata", async
 
   const routeMap = mapBody(configuration, "$uri", "$nextstop_diagnostic_route");
   assert.deepEqual(routeMap.trim().split(/\s*;\s*/u).filter(Boolean), [
-    "default unknown", "/health health", "/v1/charging-parks/search charging_park_search",
+    "default unknown", "/health health", "/ready readiness", "/ready/auth auth_readiness",
+    "/v1/charging-parks/search charging_park_search",
     "/v1/error-reports user_error_report",
     "/v1/auth/app-attest/challenge app_attest_challenge",
     "/v1/auth/app-attest/attest app_attest_attestation",
@@ -101,7 +102,11 @@ void test("deployment installs private bounded log rotation without truncating r
   assert.match(await readConfiguration("bootstrap-vm.sh"), /apt-get install[^\n]* logrotate\b/u);
   for (const name of ["install-release.sh", "enable-tls.sh"]) {
     const installer = await readConfiguration(name);
-    assert.ok(installer.indexOf("/etc/nginx/nextstop-request-diagnostics.conf") < installer.indexOf("nginx -t"));
+    const activation = name === "install-release.sh"
+      ? 'python3 "$release_directory/deploy/releases/release.py"'
+      : "nginx -t";
+    assert.ok(installer.indexOf(activation) > 0);
+    assert.ok(installer.indexOf("/etc/nginx/nextstop-request-diagnostics.conf") < installer.indexOf(activation));
     assert.match(installer, /\/etc\/logrotate\.d\/nextstop-diagnostics/u);
     assert.match(installer, /install -d -m 750 -o www-data -g adm \/var\/log\/nextstop/u);
     assert.match(installer, /chmod 640 \/var\/log\/nextstop\/nginx-errors\.jsonl/u);

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { installReadiness, type ReadinessChecking } from "./readiness.js";
 import type { UserErrorReports } from "../application/user-error-reports.js";
 import { registerUserErrorReports } from "./user-error-reports.js";
 
@@ -29,6 +30,8 @@ import {
 } from "./request-diagnostics.js";
 
 interface AppDependencies {
+  readonly readiness?: ReadinessChecking;
+  readonly release?: string;
   readonly candidateSearch?: CandidateSearching;
   readonly makeErrorId?: () => string;
   readonly searchAuthenticator?: SearchAuthenticating;
@@ -130,6 +133,7 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
   });
 
   app.get("/health", () => ({ status: "ok" }));
+  installReadiness(app, dependencies.readiness, dependencies.release);
   void app.register(async (reportsApp) => {
     await Promise.resolve(registerUserErrorReports(reportsApp, {
       ...(dependencies.userErrorReports === undefined ? {} : { reports: dependencies.userErrorReports }),

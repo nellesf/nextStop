@@ -10,16 +10,13 @@
   EV-charging entitlement; running the CarPlay surface requires Apple's managed
   `com.apple.developer.carplay-charging` capability and matching provisioning.
 
-Observed on 2026-08-17: this machine has Swift 6.3 command-line tools, but the
-active developer directory is Command Line Tools rather than full Xcode. The local
-Swift compiler and installed macOS SDKs have incompatible build revisions, and the
-Command Line Tools do not provide a usable XCTest setup. Node.js 24 LTS and npm are
-installed. PostgreSQL 17 and PostGIS 3.6 are installed through Homebrew for
-isolated local backend integration tests; Docker/Podman is not installed.
-
-As a local fallback, all Swift sources and tests pass the parser and Swift format
-lint passes. Full Swift typechecking and XCTest execution happen on the Xcode Mac
-or in CI.
+Verified locally on 2026-10-01: Xcode 27.0 (`27A266a`) is active at
+`/Applications/Xcode.app/Contents/Developer`, with an iOS 27 iPhone 18 Pro
+Simulator. The environment/authentication and report-receipt suites pass in
+Debug and Release configurations; the exact commands are recorded below. Node.js
+24 LTS and npm are installed. PostgreSQL 17 and PostGIS 3.6 were installed through
+Homebrew for isolated backend integration tests; Docker/Podman was not installed
+at that earlier check. Check the actual tools before choosing a local workflow.
 
 ## Intended workflow after scaffolding
 
@@ -110,6 +107,82 @@ MapKit deprecated `MKMapItem.placemark` in iOS 26 when it introduced the modern
 `location` and `address` properties. The adapter uses the modern API on iOS 26+
 and keeps the old call isolated behind an availability branch solely for devices
 running the still-supported iOS 18–25 versions.
+
+### Backend environments and distribution
+
+All schemes build the same `de.nextstop.app` target and use the existing signing
+and CarPlay provisioning. Installing another scheme replaces the same app; local
+profiles remain available. Select the backend before launch, without an in-app
+switch:
+
+| Scheme | Run configuration | Debug Simulator backend | Archive |
+| --- | --- | --- | --- |
+| `NextStop-Staging` | Debug | `https://api-staging.nextstop.tech` | Release, production |
+| `NextStop-ProductionTest` | Debug | `https://api.nextstop.tech` | Release, production |
+| `NextStop-Release` | Release | `https://api.nextstop.tech`; App Attest unavailable in Simulator | Release, production |
+| `NextStopApp` | Debug | Production by default; retained for CI and existing workflows | Release, production |
+
+Every physical-device build and every Release build resolves to
+`https://api.nextstop.tech`. Launch environment variables and changed API values
+in Info.plist cannot redirect these builds. Every checked-in scheme archives
+Release, so TestFlight always uses production and excludes Simulator credential
+fallbacks. The iPhone and CarPlay clients are created together at startup.
+
+App Attest's `development`/`production` namespace is read from
+`NextStopAppAttestEnvironment`, expanded from the same
+`NEXTSTOP_APP_ATTEST_ENVIRONMENT` build setting as the entitlement. Debug remains
+`development`; Release remains `production`. A physical Debug build may therefore
+fail closed against production. Verify real devices with Release/TestFlight; do
+not enable development attestations globally on production to make Debug work.
+
+App Attest Keychain state is already scoped by backend origin and signing
+environment. Access tokens and candidate snapshots stay in their startup-created
+clients. Report withdrawal receipts now use a directory derived from the
+canonical backend origin. Existing unscoped receipts belong to the previous
+`api.nextstop.tech` service and migrate only to its production namespace. Staging
+never adopts them. Migration validates both files and writes the merged scoped
+file before removing the old file; conflicts or write failures preserve the
+original withdrawal capabilities and fail closed.
+
+### Verified environment regression tests
+
+On 2026-10-01, these targeted commands passed on Xcode 27.0: 28 tests in Staging
+Debug and 23 tests in Release. The Release run exercises the compiled production
+URL guard and the absence of Debug Simulator fallbacks. The difference in count
+is the tests that compile only for Debug Simulator. `ENABLE_TESTABILITY=YES` is a
+command-line override for this Release test run only; distribution settings remain
+unchanged. These checks do not establish real-device App Attest or CarPlay
+provisioning success.
+
+```bash
+xcodebuild \
+  -project ios/NextStop.xcodeproj \
+  -scheme NextStop-Staging \
+  -destination 'platform=iOS Simulator,id=54BA0ED5-91B0-4A52-8ABA-920362698E8A' \
+  -derivedDataPath /private/tmp/nextstop-environment-ios-derived \
+  -resultBundlePath /private/tmp/nextstop-environment-staging-tests.xcresult \
+  -only-testing:NextStopAppTests/AuthenticationTransportTests \
+  -only-testing:NextStopAppTests/UserErrorReportReceiptStoreTests \
+  CODE_SIGNING_ALLOWED=NO test
+
+xcodebuild \
+  -project ios/NextStop.xcodeproj \
+  -scheme NextStop-Release -configuration Release \
+  -destination 'platform=iOS Simulator,id=54BA0ED5-91B0-4A52-8ABA-920362698E8A' \
+  -derivedDataPath /private/tmp/nextstop-environment-ios-derived \
+  -resultBundlePath /private/tmp/nextstop-environment-release-verified-tests.xcresult \
+  -only-testing:NextStopAppTests/AuthenticationTransportTests \
+  -only-testing:NextStopAppTests/UserErrorReportReceiptStoreTests \
+  CODE_SIGNING_ALLOWED=NO ENABLE_TESTABILITY=YES ONLY_ACTIVE_ARCH=YES test
+
+node --test ios/SimulatorAuthBroker/*.test.mjs
+```
+
+Use `xcrun simctl list devices available` to choose an installed device ID on
+another Mac. Use a new result bundle path when rerunning; Xcode does not overwrite
+one. The broker suite passed all eight tests, covering paired presets, rejected
+cross-environment overrides, explicit compatibility modes, archive configuration,
+and bounded token-cache lifetime.
 
 ### iPhone UI tests and screenshots
 
@@ -237,8 +310,8 @@ identifier plus the verification material and replay counter; inactive or revoke
 key records are purged after 90 days.
 
 Before a physical-device exchange can succeed, enable App Attest for the App ID
-`de.nextstop.app`, refresh the matching provisioning profile, and set the staging
-backend's `APP_ATTEST_APP_ID` to the exact full App ID:
+`de.nextstop.app`, refresh the matching provisioning profile, and configure the
+production backend's `APP_ATTEST_APP_ID` with the exact full App ID:
 
 ```text
 <exact App ID prefix>.de.nextstop.app
@@ -246,14 +319,13 @@ backend's `APP_ATTEST_APP_ID` to the exact full App ID:
 
 The App ID prefix is an external Apple Developer value and must not be inferred
 from the Team ID. Until it is known and configured, the App Attest endpoints
-intentionally return `503`; this remains an external activation blocker. Set
-`APP_ATTEST_ALLOW_DEVELOPMENT=true` only for the bounded development-signed device
-check. The verifier accepts Apple's current sandbox AAGUID and the legacy
-development AAGUID only while that flag is enabled. Setting it back to `false`
-rejects both new development attestations and assertions from development keys
-registered earlier; production keys remain valid. TestFlight/App Store
-attestations use the production environment. Neither path is testable in the iOS
-Simulator.
+intentionally return `503`. Production keeps
+`APP_ATTEST_ALLOW_DEVELOPMENT=false`: it rejects both new development attestations
+and assertions from development keys registered earlier. Release/TestFlight
+verification requires matching production signing and provisioning. The backend
+still supports a bounded development verifier for isolated testing, but the app's
+physical-device guard does not route that app to staging or a local origin.
+Apple App Attest itself is unavailable in the iOS Simulator.
 
 Set `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` to the comma-separated, whitespace-free
 allowlist of shipped `CFBundleVersion` values (currently `1`). Add a new build
@@ -267,50 +339,84 @@ the accepted legacy pre-iOS-27 proof shape. The assertion values need not equal
 the initial attestation values, so a legitimate allowlisted app update can keep
 using its existing key.
 
-### Connected Debug Simulator search through staging
+### Connected Debug Simulator search
 
-The checked-in Debug configuration targets `https://api.nextstop.tech`. Nginx on
-that origin routes only `/v1/auth/app-attest/*` to the isolated authentication
-service on VM loopback port `3001`; health and candidate search go to the
-read-only search API on VM loopback port `3000`. Because
-Apple reports App Attest as unsupported in the Simulator, only a
-`DEBUG && targetEnvironment(simulator)` build may fall back to the loopback Mac
-broker. Release builds do not compile this fallback and fail closed when App
-Attest is unavailable.
+Only `DEBUG && targetEnvironment(simulator)` builds can obtain a credential from
+the loopback Mac broker. The named scheme preset pairs the API and broker; a
+conflicting API or broker override fails configuration instead of silently mixing
+environments. Release builds omit this fallback and fail closed when App Attest
+is unavailable.
 
-Install the Google Cloud CLI, authenticate the developer account, and ensure it
-has IAP/SSH access to the `nextstop-tech-staging` VM. Then run from the repository
-root and keep the process open while using the Simulator:
+Install the Google Cloud CLI, authenticate the developer account with
+`gcloud auth login`, and ensure it has IAP/SSH access to the selected environment.
+From the repository root, start the corresponding broker and keep it running:
 
 ```bash
-gcloud auth login
+# Use with the NextStop-Staging scheme.
+NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh
+
+# Use with NextStop-ProductionTest or the default NextStopApp scheme.
+NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh
+```
+
+| Preset | Loopback port | Google Cloud project | Minter VM | Zone |
+| --- | --- | --- | --- | --- |
+| `staging` | 8765 | `nextstop-tech-testing` | `nextstop-backend` | `europe-west3-a` |
+| `production` (default) | 8766 | `nextstop-tech-staging` | `nextstop-backend` | `europe-west3-a` |
+
+The production project retains its historical `nextstop-tech-staging` ID and the
+existing VM/database; its name does not describe its current role. The new
+`nextstop-tech-testing` project hosts isolated staging. This initial split adds
+no production database migration or production redundancy. The central image
+registry remains in `nextstop-tech-staging`, independently of staging compute.
+
+Both brokers may run simultaneously. Named presets reject cloud-target and port
+overrides that disagree with this table. A preset describes the intended target;
+its service and access permissions must have been provisioned before a connected
+search can succeed.
+
+The broker binds only to `127.0.0.1`. It uses `gcloud compute ssh` with
+`--tunnel-through-iap` to invoke
+`sudo /usr/local/sbin/nextstop-mint-simulator-token` without arguments. Release
+installation supplies this stable host command; it starts the selected immutable
+backend image as a one-shot container with no network, a read-only filesystem,
+dropped Linux capabilities, and no persisted container stdout. It receives only
+the search-token signing key. Neither the signing key nor a manually copied bearer
+is configured in Xcode or bundled with the app.
+
+The broker caches the 15-minute token only in memory, deducts mint latency, and
+refreshes one minute before expiry. The Simulator sends an empty `POST /token`
+with `X-NextStop-Simulator-Auth: 1`; the response is the usual access-token JSON.
+The Simulator permits 95 seconds for refresh because IAP/SSH minting has a
+90-second timeout.
+
+For an explicit transition before the stable command is installed, the old
+compose minter is available only through:
+
+```bash
+NEXTSTOP_SIMULATOR_AUTH_MODE=staging \
+NEXTSTOP_SIMULATOR_AUTH_LEGACY_COMMAND=true \
 ios/start-simulator-auth-broker.sh
 ```
 
-The broker binds only to `127.0.0.1:9482`. It uses `gcloud compute ssh` with
-`--tunnel-through-iap` to invoke the VM's non-HTTP development-token mint command,
-implemented as the isolated `simulator-token-mint` service. That one-shot container
-receives only the token signing key, has no network, uses a read-only filesystem,
-drops Linux capabilities, and does not persist stdout through a container logging
-driver. The broker caches the resulting 15-minute token in memory and refreshes it
-one minute before expiry. The Simulator sends an empty `POST /token` with
-`X-NextStop-Simulator-Auth: 1`; the broker returns the normal access-token JSON
-shape. The developer never copies a bearer or signing key into Xcode, a file, or
-the app.
-
-The defaults may be overridden before starting the broker with
-`NEXTSTOP_GCP_PROJECT`, `NEXTSTOP_GCP_ZONE`, `NEXTSTOP_GCP_INSTANCE`, and
-`NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT`. A Debug Simulator may override
-`NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL`, but the app accepts only an `http`
-URL on `127.0.0.1` or `::1` whose path is exactly `/token`; user info, query, and
-fragment are rejected. Staging is the default broker mode.
-The Debug Simulator client allows the broker up to 95 seconds to complete a
-credential refresh because the staging SSH mint itself can take up to 90 seconds.
+This compatibility mode retains the historical `nextstop-tech-staging` project,
+`nextstop-backend` VM, and port 9482. That existing service is now production;
+the legacy mode name does not select the new staging project. Use the
+`NextStopApp` scheme without `NEXTSTOP_BACKEND_ENVIRONMENT`, and explicitly set
+`NEXTSTOP_API_BASE_URL` to the origin still served by that old deployment plus
+`NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL=http://127.0.0.1:9482/token`.
+The API override accepts only the known staging/production origins or HTTP
+loopback; use the actual pre-cutover origin. Remove these compatibility settings
+when adopting a named preset. An explicit broker override must be HTTP loopback
+(`127.0.0.1` or `::1`) with exactly `/token`, and without user info, query, or
+fragment. Do not combine legacy mode with a named preset.
 
 ### Debug Simulator search against a local backend
 
-For deliberate local backend development, set the Xcode scheme environment
-variable `NEXTSTOP_API_BASE_URL` to `http://127.0.0.1:3000`. Build the backend,
+For deliberate local backend development, use the `NextStopApp` Debug scheme,
+remove any `NEXTSTOP_BACKEND_ENVIRONMENT` variable, and set
+`NEXTSTOP_API_BASE_URL=http://127.0.0.1:3000`. The app pairs this with the local
+broker on port 9482. Build the backend,
 apply migrations, and then start the populated search API with a local signing
 key of at least 32 non-whitespace bytes:
 
@@ -353,26 +459,9 @@ legacy bearer, or a manually synchronized Xcode secret. Only staging/production
 require distinct restricted database credentials; staging uses the separate
 `nextstop_api`, `nextstop_auth`, and `nextstop_worker` roles.
 
-To exercise App Attest from a physical device against a local deployment, expose
-a trusted TLS reverse proxy and route only `/v1/auth/app-attest/*` to a separately
-started auth process on port `3001`; keep candidate search on port `3000`. In
-another terminal, supply the exact external App ID prefix rather than the literal
-placeholder:
-
-```bash
-cd backend
-AUTH_DATABASE_URL=postgresql://127.0.0.1/nextstop \
-SEARCH_ACCESS_TOKEN_SIGNING_KEY=local-development-signing-key-00000000000 \
-APP_ATTEST_APP_ID='<exact App ID prefix>.de.nextstop.app' \
-APP_ATTEST_ALLOW_DEVELOPMENT=true \
-APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS=1 \
-HOST=127.0.0.1 \
-PORT=3001 \
-npm run start:auth
-```
-
-Do not expose port `3001` directly. The TLS proxy is the single client-facing
-origin for both services.
+Physical-device builds cannot target a local deployment. Exercise auth transport
+and verifier behavior through the automated tests; use production-signed
+Release/TestFlight builds for actual-device App Attest verification.
 
 No charging or restaurant rows need to be entered manually. `GET /health` reports process
 liveness immediately; candidate search honestly returns `503` until the first
@@ -380,11 +469,10 @@ background projection has published. The first real import downloads roughly
 80 MB of charging source data before decompression; the independent first OSM
 import is much larger and can take considerably longer.
 
-If Xcode and a development backend run on different Macs, set
-`NEXTSTOP_API_BASE_URL` to that backend's reachable base URL and start the server
-with an explicitly appropriate `HOST`. Use this only on a trusted local network;
-the token broker must still be loopback-local to the Simulator Mac. The checked-in
-Debug and Release configurations always use the TLS-protected staging service.
+If the development backend runs on another Mac, forward its port to the
+Simulator Mac's loopback and keep the API override on `127.0.0.1` or `::1`.
+Arbitrary remote hosts are rejected. The token broker must also remain local to
+the Simulator Mac. Never use local example signing keys for a hosted environment.
 
 Tap “Suche starten” for a profile. The app calculates
 the MapKit route and then starts the charging-park search automatically as one

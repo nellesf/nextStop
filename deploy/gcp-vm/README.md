@@ -1,233 +1,204 @@
-# Google Cloud single-VM staging deployment
+# Staging and production releases
 
-Status: Implemented for the owner-approved private TestFlight staging environment.
+The owner selected one VM per environment, each with its own local
+PostgreSQL/PostGIS, API, auth process and ingestion worker. Production keeps the
+existing VM, database, credentials and public origin. Staging receives a separate
+VM and database for testing. This adds environment isolation and safer releases;
+it does not change the existing outage or failover model.
 
-This deployment intentionally keeps the modular monolith on one Compute Engine
-VM. PostgreSQL/PostGIS, a read-only search API process, an isolated App Attest
-authentication process, one DML-only ingestion worker, and a release-scoped
-owner/migrator run on the same VM from one artifact. It is not the production
-high-availability topology.
+Status: tooling is prepared and tested with mocked host/cloud commands. The new
+staging environment and release workflows have **not yet been activated**. No
+load balancer, managed database, additional production node or live-data transfer
+is part of this implementation. See [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
 
-## Fixed resources
+| Environment | Project | VM | Public domain |
+| --- | --- | --- | --- |
+| Production (existing) | `nextstop-tech-staging` | `nextstop-backend` | `api.nextstop.tech` |
+| Staging (new) | `nextstop-tech-testing` | `nextstop-backend` | `api-staging.nextstop.tech` |
 
-- Project: `nextstop-tech-staging`
-- Region/zone: `europe-west3` / `europe-west3-a`
-- VM: `nextstop-backend`, `e2-standard-2`, Ubuntu 24.04 LTS
-- Boot disk: 30 GB balanced persistent disk
-- Data disk: 150 GB balanced persistent disk, retained when the VM is deleted
-- Endpoint: `https://api.nextstop.tech`
-- Monthly budget: EUR 100 across the complete project, excluding credits from
-  spend calculation, with alerts at 50%, 80%, 100%, and forecasted 100%
+The legacy production project ID intentionally stays unchanged; its display name
+is `NextStop Production`. Both VMs use
+zone `europe-west3-a` and Compose project `gcp-vm`. PostgreSQL stays on the private
+Docker network. SSH uses Google IAP; Nginx terminates HTTPS on each VM.
 
-The VM has no Google Cloud service account. PostgreSQL is reachable only from the
-private Docker network, the backend listens only on VM loopback, and Nginx exposes
-ports 80/443. SSH is allowed only through Google IAP.
+## Release contract
 
-The owner explicitly declined scheduled backups for this staging deployment. A
-disk failure therefore requires rebuilding public source projections. Local iOS
-profiles and destination history are not stored by this backend.
+CI builds one image outside the serving VM and selects an immutable
+`repository@sha256:digest`. [Environment files](../environments/) bind the target,
+registry and domain. The normal deployment cannot override that mapping.
+Production promotion uses the identical digest that passed staging tests.
 
-The billing budget is an alert, not an automatic spending cap. Default billing
-recipients receive its notifications; no automatic shutdown is configured.
+On one host, under one release lock, the runner:
 
-## Provision and deploy
+1. Pulls the pinned image. Production requires a successful recent backup receipt
+   for this exact VM, project and image before migration. An existing database
+   container is reused with `--no-recreate`; releases never upgrade or restart it.
+2. Applies only reviewed additive migrations with `--expand-only`, serialized
+   execution, a 500 ms lock timeout and finite statement budgets. Role
+   initialization runs in one transaction using the existing credentials.
+3. Starts candidate API and auth processes in the inactive slot. Both `/ready`
+   responses must identify the expected digest. An authenticated synthetic search
+   must return candidates and a snapshot token.
+4. Validates and gracefully reloads Nginx, then checks both services and search
+   through local HTTPS and the public domain. Existing requests have 65 seconds
+   to drain; the prior API/auth remain running for rollback.
+5. Stops the old worker and waits for its container to exit before starting the
+   replacement. Worker replacement occurs only after serving gates pass.
 
-Authenticate with Google Cloud CLI, then run from the repository root:
+The API is not stopped to build or validate a candidate. HTTP processes have a
+30-second shutdown grace; Compose allows 45 seconds. The two temporary API slots
+share the same VM and database and do not provide protection against a VM or
+database failure.
 
-```bash
-deploy/gcp-vm/provision.sh
-deploy/gcp-vm/deploy.sh
-```
+Failure restores the prior Nginx configuration and any replaced worker. If a
+failed candidate overwrote the inactive rollback slot, its previous image is
+recreated and verified. The mode-0600 state/journal at
+`/var/lib/nextstop/releases/state.json` is cleared only after recovery succeeds.
+Application rollback never reverses DDL or restores a database over current data.
 
-The provisioning command is idempotent and prints the reserved IPv4 address. Add
-an IONOS `A` record for `api.nextstop.tech` pointing to that address. After DNS
-resolves publicly, enable TLS on the VM:
+## Host configuration and first activation
 
-```bash
-gcloud compute ssh nextstop-backend \
-  --project=nextstop-tech-staging \
-  --zone=europe-west3-a \
-  --tunnel-through-iap \
-  --command='sudo /opt/nextstop/current/deploy/gcp-vm/enable-tls.sh CERTIFICATE_EMAIL'
-```
-
-Certbot renews the certificate automatically. The checked-in Nginx configuration
-does not record route request bodies or client access logs. Backend output contains
-only ingestion event names, outcomes or failure classes, and timestamps.
-
-On every release, the installer preserves the existing `POSTGRES_PASSWORD` and
-generates missing `API_DATABASE_PASSWORD`, `AUTH_DATABASE_PASSWORD`, and
-`WORKER_DATABASE_PASSWORD` values in `/etc/nextstop/backend.env`. It also generates
-the independent `SNAPSHOT_SIGNING_KEY`, `SEARCH_ACCESS_TOKEN_SIGNING_KEY`, and
-transitional `SEARCH_API_BEARER_TOKEN` when absent. The one-shot migrator applies
-pending migrations with the legacy `nextstop_app` owner. A second one-shot service
-then creates or updates the restricted roles and grants before the search API,
-authentication service, and worker start.
-
-`nextstop_api` remains read-only and cannot access authentication tables.
-`nextstop_auth` uses a separate four-connection pool and can select, insert,
-update, and delete only `nextstop.app_attest_keys` and
-`nextstop.app_attest_challenges`; it cannot read search projections or create
-schema objects. `nextstop_worker` cannot access the App Attest tables. The
-migrator remains the only schema owner.
-
-The `backend` container listens on VM loopback port `3000` and holds only the
-read-only projection connection. The separate `auth-backend` container listens on
-VM loopback port `3001` and holds only the `nextstop_auth` connection. Nginx sends
-exactly `/v1/auth/app-attest/*` to `3001`, sends health and candidate search to
-`3000`, and exposes neither container port directly to the internet.
-
-The App Attest migration and role initialization are in-place. They do not
-recreate the database, select a new active version, invalidate either active
-projection, or require a charging/restaurant projection rebuild. The worker's
-normal refresh schedule continues independently after restart.
-
-## App Attest activation and staged rollout
-
-The public authentication contract is:
-
-- `POST /v1/auth/app-attest/challenge`: bind 32 random client-data bytes to one
-  key and `attestation` or `assertion` purpose; consume within three minutes;
-- `POST /v1/auth/app-attest/attest`: register a verified physical-device key and
-  return a 15-minute search bearer;
-- `POST /v1/auth/app-attest/assert`: advance the registered key's assertion
-  counter and return another 15-minute search bearer;
-- `POST /v1/charging-parks/search`: accept that short-lived bearer in
-  `Authorization`; and
-- `GET /health`: remain public.
-
-The exact JSON schemas, size limits, and error responses are in
-[`docs/api/openapi.yaml`](../../docs/api/openapi.yaml).
-
-The public gateway shares a `12 requests/minute/client IP` limit with burst four
-across all three App Attest paths. Independently, the isolated auth process caps
-challenge creation at 120/minute globally, proof exchanges at 60/minute globally,
-and cryptographic proof work at two concurrent operations. Rate and capacity
-rejections return `429` with `Retry-After: 60`.
-
-Authentication activation is currently blocked on an external Apple Developer
-value. Enable App Attest for `de.nextstop.app`, refresh the provisioning profiles,
-and obtain the exact App ID prefix. Do not assume it equals the Team ID. Then edit
-the mode-`0600` environment file through IAP:
-
-```bash
-sudoedit /etc/nextstop/backend.env
-```
-
-Set these values without committing or printing their secrets:
+Provision root-owned `/etc/nextstop/release.env` for public settings and preserve
+`/etc/nextstop/backend.env` with mode 0600 for secrets. Files are parsed without
+shell evaluation. The installer does not generate or rotate credentials.
+Example for the existing production VM:
 
 ```text
-APP_ATTEST_APP_ID=<exact App ID prefix>.de.nextstop.app
-APP_ATTEST_ALLOW_DEVELOPMENT=true
-APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS=1
-ALLOW_LEGACY_STAGING_BEARER=true
+NEXTSTOP_ENVIRONMENT=production
+DOMAIN=api.nextstop.tech
+PROJECT_ID=nextstop-tech-staging
+DATABASE_INSTANCE=nextstop-backend
+DATABASE_MODE=local
+DATABASE_HOST=database
+DATABASE_PORT=5432
+DATABASE_OWNER=nextstop_app
+COMPOSE_PROJECT_NAME=gcp-vm
 ```
 
-`APP_ATTEST_ALLOW_DEVELOPMENT=true` is only for the bounded
-development-provisioned physical-device test. It permits Apple's current sandbox
-AAGUID as well as the legacy development AAGUID used by supported older iOS
-versions. TestFlight/App Store uses production attestations. Once the App Attest
-TestFlight build has passed, set `APP_ATTEST_ALLOW_DEVELOPMENT=false` and
-`ALLOW_LEGACY_STAGING_BEARER=false`, then redeploy. The legacy flag is the only
-switch that permits the old `SEARCH_API_BEARER_TOKEN`; it exists solely so already
-installed private staging builds survive this transition. New builds contain no
-shared bearer, and rotating either server signing key never requires an app
-rebuild. Disabling the development environment rejects both new development
-attestations and assertions from development keys that were registered earlier;
-production keys remain valid.
+Staging uses `NEXTSTOP_ENVIRONMENT=staging`, project `nextstop-tech-testing` and
+its own domain. Keep `COMPOSE_PROJECT_NAME=gcp-vm` to preserve the existing
+production database and provider-cache volumes. Legacy API/auth ports 3000/3001
+stay serving while the initial slot is checked. New slots bind only loopback
+3100/3101 and 3200/3201. Unknown existing proxy configurations fail closed.
+`compose.yaml` remains only for explicit legacy compatibility; new releases use
+`compose.release.yaml`. Never run `compose down` as a release step.
 
-`APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` is a comma-separated allowlist without
-whitespace (at most 32 unique values, each 1–64 characters from
-`A-Z`, `a-z`, `0-9`, `.`, `_`, or `-`). The installer initializes it to the
-current `CFBundleVersion` `1`; add a new build number before distributing that
-build and retain supported older values during rollout. For iOS 27 proofs, Apple
-validation category and bundle version must occur as a pair. Development keys
-accept category `3`, while production keys accept category `2` (TestFlight) or
-`4` (App Store); the bundle version must also be allowlisted. The auth service
-checks both values on every proof but does not require equality with the initial
-attestation, so legitimate allowlisted updates can retain their key. Missing
-extensions are accepted only as the legacy pre-iOS-27 proof shape; partial or
-unknown extensions fail closed.
+The host requires the existing owner, API, auth, support and worker passwords,
+plus snapshot/search signing keys and valid App Attest configuration. Container
+credentials stay scoped to their service. Each environment has independent
+credentials, signing keys, auth records, support records and caches. Staging must
+not copy production authentication or private report data. Signing-key/password
+rotation needs a separate overlapping-version plan.
 
-Until `APP_ATTEST_APP_ID` is configured, the three App Attest endpoints return
-`503` and signed-token search remains available only to the Debug Simulator broker
-described below. The explicitly enabled legacy bearer may continue serving old
-private builds during that interval.
+The existing production legacy bearer compatibility flag stays operator-managed
+under ADR 0015; separating environments does not revoke installed clients.
+Production continues to reject development App Attest. New staging starts with
+both compatibility flags false and never receives the production legacy key.
 
-## Debug Simulator broker
+A fresh staging database needs a separate isolated full-schema bootstrap and
+initial published charging and food imports. The rolling `--expand-only` path
+deliberately refuses legacy/unclassified migrations. Search and auth readiness
+must pass before exposing that instance; do not weaken the gates for an empty or
+unconfigured database.
 
-Apple App Attest is unavailable in the iOS Simulator. On the developer Mac,
-authenticate `gcloud` with an identity authorized for IAP/SSH and keep this helper
-running:
+For the initial public-data seed, run `python3 deploy/gcp/seed-staging.py` from a
+trusted operator machine. It accepts only the configured existing production and
+new staging VMs, creates independent staging secrets, and refuses to overwrite an
+existing staging schema. The source inventory must exactly match the reviewed
+public/private table list; unknown tables fail closed. Auth keys, auth challenges
+and support-report rows are excluded before export. SHA-256 verifies transfers;
+the restore is transactional, then private-table emptiness, active public counts
+and planner statistics are checked. Only PostgreSQL starts. Temporary dump copies
+are removed after successful validation; failures retain them for verified
+recovery. Production services remain running throughout the snapshot.
+
+Production keeps its existing certificate and DNS. Provision staging DNS and its
+matching certificate before activating its first release. Run the environment-
+aware `enable-tls.sh CERTIFICATE_EMAIL` from installed deployment tooling. It uses
+ACME and restores the previous proxy configuration on failure. Certificate renewal
+reloads Nginx gracefully.
+
+No serving VM service-account change is required. The deployer obtains a
+short-lived registry access token and sends it only through SSH stdin to
+`docker login --password-stdin`. Docker uses a mode-0700 root-owned directory
+under `/run/nextstop-registry-<UUID>`, removed after success or failure. The token
+never appears in command arguments or deployment logs. If host connectivity
+prevents cleanup, remove that exact temporary directory through IAP before the
+next release. Manual rollback uses retained local images.
+
+## Backup, deploy and rollback
+
+Before production migration, the backup helper creates a PostgreSQL custom-format
+`pg_dump`, validates its archive structure using matching `pg_restore`, uploads it
+to the designated GCS bucket and verifies the object checksum and generation.
+The receipt must bind `environment`, exact `image`, `project`, VM `instance`,
+`status=SUCCESSFUL`, `completedAt` within one hour and immutable
+`backupId=gs://bucket/object#generation`. This is a release backup requirement;
+periodic backup policy and recovery drills remain separate operational work.
+
+After provisioning and initial validation, protected workflows test/build/stage an
+image and explicitly promote its identical digest. Manual equivalents are:
 
 ```bash
-gcloud auth login
-ios/start-simulator-auth-broker.sh
+deploy/gcp-vm/deploy.sh --environment staging --image "$RELEASE_IMAGE"
+python3 deploy/gcp/backup.py --image "$RELEASE_IMAGE" --output "$BACKUP_RECEIPT"
+deploy/gcp-vm/deploy.sh --environment production --image "$RELEASE_IMAGE" \
+  --backup-receipt "$BACKUP_RECEIPT"
 ```
 
-The helper binds only to `127.0.0.1:9482`, reaches `nextstop-backend` through
-`gcloud compute ssh --tunnel-through-iap`, and invokes the dedicated one-shot
-`simulator-token-mint` service inside the existing deployment. That service receives
-only `SEARCH_ACCESS_TOKEN_SIGNING_KEY`, has no container network, uses a read-only
-filesystem, drops Linux capabilities, and disables persistent container logging. It
-serves the resulting 15-minute credential only to the Debug Simulator's guarded
-`POST /token` request, caches it in memory, and refreshes one minute before expiry.
-No static token, signing key, or manual secret is placed in Xcode or the iOS process.
-Release builds do not compile this fallback. Local broker mode is documented in
-[`docs/development.md`](../../docs/development.md).
+`--skip-public-probe` is reserved for explicit initial DNS/bootstrap work. It still
+requires private candidate and local HTTPS gates; verify the public endpoint
+before directing users to that host. Routine releases do not use this exception.
 
-## Operations
+On the host, revert explicitly to its retained prior release with:
 
 ```bash
-gcloud compute ssh nextstop-backend \
-  --project=nextstop-tech-staging \
-  --zone=europe-west3-a \
-  --tunnel-through-iap
-
-cd /opt/nextstop/current
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml ps
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml logs --tail=200 backend auth-backend worker
-
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml exec -T database \
-  psql -U nextstop_app -d nextstop -c \
-  'SELECT status, charging_point_count, park_count, published_at FROM nextstop.projection_versions ORDER BY built_at DESC LIMIT 3;'
-
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml exec -T database \
-  psql -U nextstop_app -d nextstop -c \
-  'SELECT status, poi_count, quarantine_count, published_at FROM nextstop.food_poi_projection_versions ORDER BY built_at DESC LIMIT 3;'
+sudo /opt/nextstop/current/deploy/gcp-vm/rollback.sh production
+# Use staging on the staging VM.
 ```
 
-`GET /health` confirms process liveness. A food-filtered search remains retryable
-until the first Germany and Switzerland OSM import has published successfully.
+Rollback checks retained API/auth readiness and an authenticated search before
+proxy activation. A failed rollback restores the previously active state. Keep
+images and `/opt/nextstop/releases` tooling referenced by active, previous or
+pending state. A host/IAP failure can require operator recovery; the journal and
+cached images remain available for a retry.
 
-To verify the effective database boundaries without printing credentials:
+## Simulator broker and operations
+
+The stable private broker command on each VM is:
 
 ```bash
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml exec -T backend node -e \
-  "import('pg').then(async({Client})=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();console.log((await c.query('select current_user')).rows,(await c.query('show statement_timeout')).rows);await c.end()})"
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml exec -T auth-backend node -e \
-  "import('pg').then(async({Client})=>{const c=new Client({connectionString:process.env.AUTH_DATABASE_URL});await c.connect();console.log((await c.query('select current_user')).rows,(await c.query('show statement_timeout')).rows);await c.end()})"
-sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env \
-  -f deploy/gcp-vm/compose.yaml exec -T worker node -e \
-  "import('pg').then(async({Client})=>{const c=new Client({connectionString:process.env.DATABASE_URL});await c.connect();console.log((await c.query('select current_user')).rows);await c.end()})"
+sudo /usr/local/sbin/nextstop-mint-simulator-token
 ```
 
-## Voluntary support reports
+It runs a networkless, read-only, capability-free one-shot container with only the
+search signing key. Short-lived token JSON is returned through private IAP and
+never logged. The ingestion worker does not receive that key. The broker remains
+usable during a release and resolves the active immutable image from state.
+The iOS broker presets bind each endpoint to the correct environment; see
+[development instructions](../../docs/development.md).
 
-The installer generates `SUPPORT_DATABASE_PASSWORD` and grants the dedicated
-`nextstop_support` role access only to `nextstop.user_error_reports`. The API uses
-`SUPPORT_DATABASE_URL` separately from its read-only search pool. HTTPS permits
-only POST and DELETE on the exact `/v1/error-reports` path with a 128 KiB body limit
-and an independent rate limit. Report retention runs on startup and every
-15 minutes, independently of submissions. Deployed and verified with a synthetic
-report, identical retry and withdrawal on 2026-09-13. Before a public iPhone
-release, complete the real controller/privacy configuration. The owner-approved
-placeholder exception is limited to synthetic tests distributed with Apple's
-**TestFlight Internal Only** option. Follow the
-[report deployment and administration runbook](../../docs/operations/user-error-reports.md).
+`/health` is liveness. `/ready` and `/ready/auth` verify the corresponding service
+and report its release digest. Nginx records only allowlisted error metadata and
+generated request IDs, with bounded rotation. Never print `docker compose config`,
+container environments, tokens, credentials, precise routes or private reports
+into logs. Inspect aggregate state and bounded redacted service logs instead.
+
+Database roles remain separate: projection reads, auth DML, support-report DML,
+worker DML and release-scoped owner migrations. Readiness uses a fixed migration-
+presence helper, not registry-table privileges. Authentication schemas remain in
+[OpenAPI](../../docs/api/openapi.yaml). Public report distribution retains the
+independent [privacy and operations gates](../../docs/operations/user-error-reports.md).
+
+## Verification
+
+```bash
+PYTHONDONTWRITEBYTECODE=1 python3 -m unittest discover -s deploy/releases -p 'test_*.py' -v
+bash -n deploy/gcp-vm/*.sh deploy/releases/*.sh
+cd backend && npm run lint && npm run typecheck
+```
+
+Tests fake Docker, HTTP and gcloud. They cover candidate/migration/proxy/public/
+worker failures, interrupted recovery, rollback preservation and transient
+registry credential cleanup. They do not claim a real deployment has run.
+Exercise a real staging release and rollback before enabling promotion.

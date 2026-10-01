@@ -61,7 +61,9 @@ final class NextStopAppDelegate: NSObject, UIApplicationDelegate {
     let accessTokenProvider = baseURL.map {
       SearchAccessTokenProviderFactory.make(baseURL: $0, session: session)
     }
-    let receipts = UserErrorReportReceiptStore()
+    let receipts = UserErrorReportReceiptStore(
+      backendURL: baseURL ?? BackendEnvironmentConfiguration.productionURL
+    )
     errorReportReceipts = receipts
     errorReportSender = HTTPUserErrorReportService(
       baseURL: baseURL,

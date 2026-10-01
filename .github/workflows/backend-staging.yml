@@ -1,0 +1,74 @@
+name: Backend staging release
+
+on:
+  workflow_run:
+    workflows: [Backend]
+    types: [completed]
+    branches: [main]
+
+permissions:
+  contents: read
+
+concurrency:
+  group: nextstop-staging-release
+  cancel-in-progress: false
+
+jobs:
+  release:
+    if: >-
+      github.event.workflow_run.conclusion == 'success' &&
+      github.event.workflow_run.event == 'push' &&
+      github.event.workflow_run.head_repository.full_name == 'nellesf/nextStop' &&
+      github.event.workflow_run.head_branch == 'main'
+    environment: staging
+    runs-on: ubuntu-latest
+    timeout-minutes: 45
+    permissions:
+      contents: read
+      deployments: write
+      id-token: write
+    env:
+      GH_TOKEN: ${{ github.token }}
+      RELEASE_COMMIT: ${{ github.event.workflow_run.head_sha }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          ref: ${{ github.event.workflow_run.head_sha }}
+          fetch-depth: 0
+          persist-credentials: false
+      - name: Verify trusted main commit
+        run: |
+          [[ "$RELEASE_COMMIT" =~ ^[0-9a-f]{40}$ ]]
+          git merge-base --is-ancestor "$RELEASE_COMMIT" origin/main
+      - uses: google-github-actions/auth@v3
+        with:
+          workload_identity_provider: ${{ vars.NEXTSTOP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.NEXTSTOP_BUILD_SERVICE_ACCOUNT }}
+      - uses: google-github-actions/setup-gcloud@v3
+      - name: Build immutable image once
+        id: image
+        run: python3 deploy/gcp/build-artifact.py --commit "$RELEASE_COMMIT" --github-output "$GITHUB_OUTPUT"
+      - uses: google-github-actions/auth@v3
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
+        with:
+          workload_identity_provider: ${{ vars.NEXTSTOP_WORKLOAD_IDENTITY_PROVIDER }}
+          service_account: ${{ vars.NEXTSTOP_DEPLOY_SERVICE_ACCOUNT }}
+      - name: Record the selected release
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
+        id: deployment
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
+        run: |
+          id=$(python3 deploy/gcp/record-deployment.py start --environment staging --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE")
+          echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: Deploy and verify staging
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
+        run: bash deploy/gcp-vm/deploy.sh --environment staging --image "$RELEASE_IMAGE"
+      - name: Record outcome
+        if: always() && steps.deployment.outputs.id != ''
+        env:
+          DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
+          RELEASE_OUTCOME: ${{ job.status == 'success' && 'success' || 'failure' }}
+        run: python3 deploy/gcp/record-deployment.py status --id "$DEPLOYMENT_ID" --state "$RELEASE_OUTCOME"

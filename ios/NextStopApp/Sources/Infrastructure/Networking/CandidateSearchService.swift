@@ -1,6 +1,65 @@
 import Foundation
 import NextStopCore
 
+enum BackendEnvironmentConfiguration {
+  static let productionURL = URL(string: "https://api.nextstop.tech")!
+
+  static func baseURL(
+    bundle: Bundle = .main,
+    environment: [String: String] = ProcessInfo.processInfo.environment
+  ) -> URL? {
+    #if DEBUG && targetEnvironment(simulator)
+      if let preset = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] {
+        guard let configured = simulatorPresets[preset] else { return nil }
+        if let override = environment["NEXTSTOP_API_BASE_URL"],
+          URL(string: override) != configured.api { return nil }
+        return configured.api
+      }
+      let value = environment["NEXTSTOP_API_BASE_URL"]
+        ?? (bundle.object(forInfoDictionaryKey: "NextStopAPIBaseURL") as? String)
+        ?? productionURL.absoluteString
+      guard let url = URL(string: value), url.user == nil, url.password == nil,
+        url.query == nil, url.fragment == nil, url.path.isEmpty || url.path == "/"
+      else { return nil }
+      if simulatorPresets.values.contains(where: { $0.api == url }) { return url }
+      guard url.scheme == "http", url.host == "127.0.0.1" || url.host == "::1" else { return nil }
+      return url
+    #else
+      // Physical devices and every distributed build are always production.
+      // Neither launch variables nor an accidentally changed plist can redirect them.
+      return productionURL
+    #endif
+  }
+
+  #if DEBUG && targetEnvironment(simulator)
+    static let simulatorPresets: [String: (api: URL, broker: URL)] = [
+      "staging": (
+        URL(string: "https://api-staging.nextstop.tech")!,
+        URL(string: "http://127.0.0.1:8765/token")!
+      ),
+      "production": (productionURL, URL(string: "http://127.0.0.1:8766/token")!),
+    ]
+
+    static func brokerURL(
+      for baseURL: URL,
+      environment: [String: String] = ProcessInfo.processInfo.environment
+    ) -> URL? {
+      if let preset = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] {
+        guard let configured = simulatorPresets[preset], configured.api == baseURL else { return nil }
+        if let override = environment["NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL"],
+          URL(string: override) != configured.broker { return nil }
+        return configured.broker
+      }
+      if let override = environment["NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL"] {
+        return SimulatorSearchAccessTokenProvider.validatedLoopbackURL(URL(string: override))
+      }
+      if let preset = simulatorPresets.values.first(where: { $0.api == baseURL }) { return preset.broker }
+      guard baseURL.scheme == "http", baseURL.host == "127.0.0.1" || baseURL.host == "::1" else { return nil }
+      return URL(string: "http://127.0.0.1:9482/token")
+    }
+  #endif
+}
+
 struct BackendCandidate: Identifiable, Hashable, Sendable {
   var id: UUID { park.id }
 
@@ -392,17 +451,7 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
   }
 
   static func configuredBaseURL(bundle: Bundle = .main) -> URL? {
-    if let override = ProcessInfo.processInfo.environment["NEXTSTOP_API_BASE_URL"],
-      !override.isEmpty
-    {
-      return URL(string: override)
-    }
-    guard let value = bundle.object(forInfoDictionaryKey: "NextStopAPIBaseURL") as? String,
-      !value.isEmpty
-    else {
-      return nil
-    }
-    return URL(string: value)
+    BackendEnvironmentConfiguration.baseURL(bundle: bundle)
   }
 
   static func validatedAccessToken(_ value: String) -> String? {

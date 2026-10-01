@@ -59,6 +59,16 @@ jobs:
         working-directory: backend
         run: npm run build
 
+      - name: Validate rolling migration policy
+        working-directory: backend
+        run: npm run check:migrations
+
+      - name: Release failure and promotion checks
+        run: |
+          python3 -m unittest discover -s deploy/releases -p 'test_*.py'
+          python3 -m unittest discover -s deploy/gcp -p 'test_*.py'
+          node --test ios/SimulatorAuthBroker/configuration.test.mjs
+
       - name: Unit tests
         working-directory: backend
         run: npm test

@@ -1,0 +1,21 @@
+{
+  "name": "production",
+  "project": "nextstop-tech-staging",
+  "region": "europe-west3",
+  "domain": "api.nextstop.tech",
+  "registryProject": "nextstop-tech-staging",
+  "registry": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend",
+  "database": {
+    "mode": "local",
+    "instance": "nextstop-backend",
+    "version": "POSTGRES_17"
+  },
+  "target": {
+    "instance": "nextstop-backend",
+    "zone": "europe-west3-a"
+  },
+  "machineType": "e2-standard-2",
+  "bootDiskGb": 30,
+  "dataDiskGb": 150,
+  "backupBucket": "nextstop-tech-staging-release-backups"
+}

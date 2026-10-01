@@ -9,6 +9,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.build.json",
     "db:migrate": "tsx src/persistence/migrate.ts",
+    "check:migrations": "node --import tsx src/persistence/check-migrations.ts",
     "import:bnetza": "tsx src/jobs/import-bundesnetzagentur.ts",
     "refresh:providers": "tsx src/jobs/refresh-providers.ts",
     "refresh:osm": "tsx src/jobs/refresh-food-pois.ts",

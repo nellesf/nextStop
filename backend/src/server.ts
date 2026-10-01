@@ -12,6 +12,8 @@ import { createDatabasePool } from "./persistence/database.js";
 import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
 import { UserErrorReports, userErrorReportLimits } from "./application/user-error-reports.js";
 import { PostgresUserErrorReportRepository } from "./persistence/postgres-user-error-reports.js";
+import { SearchReadiness } from "./persistence/runtime-readiness.js";
+import { installHTTPShutdown } from "./runtime/graceful-shutdown.js";
 
 function parsePort(value: string | undefined): number {
   if (value === undefined) {
@@ -42,9 +44,6 @@ const candidateSearch =
   pool === undefined || signingKey === undefined
     ? undefined
     : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey));
-if (pool !== undefined) {
-  await pool.query("SELECT id FROM nextstop.projection_versions LIMIT 0");
-}
 
 const accessTokenSigningKey = process.env.SEARCH_ACCESS_TOKEN_SIGNING_KEY;
 const accessTokenCodec =
@@ -66,6 +65,10 @@ const searchAuthenticator =
   searchAuthenticators.length === 0
     ? new RejectingSearchAuthenticator()
     : new CompositeSearchAuthenticator(searchAuthenticators);
+const readinessPool = databaseURL === undefined ? undefined : createDatabasePool(databaseURL, {
+  applicationName: "nextstop-api-readiness", maxConnections: 1,
+  connectionTimeoutMilliseconds: 1_000, queryTimeoutMilliseconds: 1_500, statementTimeoutMilliseconds: 1_000,
+});
 
 const supportDatabaseURL = process.env.SUPPORT_DATABASE_URL;
 const supportPool = supportDatabaseURL === undefined ? undefined : createDatabasePool(supportDatabaseURL, {
@@ -86,16 +89,21 @@ const purgeTimer = reportRepository === undefined ? undefined : setInterval(() =
 purgeTimer?.unref();
 
 const app = createApp({
+  ...(process.env.RELEASE_IMAGE_DIGEST === undefined ? {} : { release: process.env.RELEASE_IMAGE_DIGEST }),
   ...(candidateSearch === undefined ? {} : { candidateSearch }),
   searchAuthenticator,
   diagnostics: { sink: writeRequestDiagnostic },
   ...(reportRepository === undefined ? {} : { userErrorReports: new UserErrorReports(reportRepository) }),
   ...(accessTokenCodec === undefined ? {} : { reportAuthenticator: new AccessTokenAuthenticator(accessTokenCodec) }),
+  ...(readinessPool === undefined ? {} : {
+    readiness: new SearchReadiness(readinessPool, candidateSearch !== undefined && searchAuthenticators.length > 0),
+  }),
 });
 
 app.addHook("onClose", async () => {
   if (purgeTimer !== undefined) clearInterval(purgeTimer);
   await supportPool?.end();
+  await readinessPool?.end();
 });
 
 if (pool !== undefined) {
@@ -104,6 +112,7 @@ if (pool !== undefined) {
   });
 }
 
+installHTTPShutdown(app);
 await app.listen({
   host: process.env.HOST ?? "127.0.0.1",
   port: parsePort(process.env.PORT),

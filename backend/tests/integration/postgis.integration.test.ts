@@ -9,6 +9,7 @@ import test from "node:test";
 import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
+import { verifyRuntimeOperations } from "./runtime-operations-regression.js";
 
 import { assertProjectionBuildRegression } from "./projection-build-regression.js";
 
@@ -75,6 +76,9 @@ void test(
     context.after(async () => pool.end());
     await pool.query("DROP SCHEMA IF EXISTS nextstop CASCADE");
     await applyMigrations(pool);
+    await context.test("readiness and serialized migration protect release handoffs", async () => {
+      await verifyRuntimeOperations(pool);
+    });
     await context.test("derived search retention preserves active snapshots and audit evidence", async () => {
       await verifyProjectionRetention(pool);
     });

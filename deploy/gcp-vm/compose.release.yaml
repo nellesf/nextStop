@@ -1,0 +1,125 @@
+# Deployment uses a prebuilt digest. No service builds code on a serving host.
+x-logging: &logging
+  driver: json-file
+  options: {max-size: 10m, max-file: "5"}
+x-runtime: &runtime
+  image: ${BACKEND_IMAGE}
+  restart: unless-stopped
+  init: true
+  stop_grace_period: 45s
+  logging: *logging
+x-api-environment: &api-environment
+  DATABASE_URL: ${API_DATABASE_URL:-}
+  SUPPORT_DATABASE_URL: ${SUPPORT_DATABASE_URL:-}
+  SNAPSHOT_SIGNING_KEY: ${SNAPSHOT_SIGNING_KEY:-}
+  SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:-}
+  ALLOW_LEGACY_STAGING_BEARER: ${ALLOW_LEGACY_STAGING_BEARER:-false}
+  SEARCH_API_BEARER_TOKEN: ${SEARCH_API_BEARER_TOKEN:-}
+  RELEASE_IMAGE_DIGEST: ${RELEASE_IMAGE_DIGEST:-}
+  HOST: 0.0.0.0
+  PORT: "3000"
+x-auth-environment: &auth-environment
+  AUTH_DATABASE_URL: ${AUTH_DATABASE_URL:-}
+  SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:-}
+  APP_ATTEST_APP_ID: ${APP_ATTEST_APP_ID:-}
+  APP_ATTEST_ALLOW_DEVELOPMENT: ${APP_ATTEST_ALLOW_DEVELOPMENT:-false}
+  APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS: ${APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS:-}
+  RELEASE_IMAGE_DIGEST: ${RELEASE_IMAGE_DIGEST:-}
+  HOST: 0.0.0.0
+  PORT: "3001"
+services:
+  database:
+    profiles: [local-db]
+    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    restart: unless-stopped
+    command: [postgres, -c, log_parameter_max_length_on_error=0, -c, log_statement=none]
+    environment:
+      POSTGRES_DB: nextstop
+      POSTGRES_USER: nextstop_app
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-}
+    healthcheck:
+      test: [CMD-SHELL, pg_isready -U nextstop_app -d nextstop]
+      interval: 5s
+      timeout: 3s
+      retries: 24
+    volumes: [postgres-data:/var/lib/postgresql/data]
+    shm_size: 256mb
+    logging: *logging
+  api-blue:
+    <<: *runtime
+    environment: *api-environment
+    ports: [127.0.0.1:3100:3000]
+  auth-blue:
+    <<: *runtime
+    command: [node, dist/src/auth-server.js]
+    environment: *auth-environment
+    ports: [127.0.0.1:3101:3001]
+  api-green:
+    <<: *runtime
+    environment: *api-environment
+    ports: [127.0.0.1:3200:3000]
+  auth-green:
+    <<: *runtime
+    command: [node, dist/src/auth-server.js]
+    environment: *auth-environment
+    ports: [127.0.0.1:3201:3001]
+  migrator:
+    <<: *runtime
+    profiles: [release-tools]
+    restart: "no"
+    command: [node, dist/src/persistence/migrate.js, --expand-only]
+    environment:
+      DATABASE_URL: ${MIGRATOR_DATABASE_URL:-}
+      PGOPTIONS: -c lock_timeout=500ms -c statement_timeout=60000
+  database-role-initializer:
+    profiles: [release-tools]
+    image: ${POSTGIS_IMAGE:-postgis/postgis:17-3.5}
+    restart: "no"
+    environment:
+      PGHOST: ${DATABASE_HOST:-database}
+      PGPORT: ${DATABASE_PORT:-5432}
+      PGUSER: ${DATABASE_OWNER:-nextstop_app}
+      PGDATABASE: nextstop
+      PGPASSWORD: ${POSTGRES_PASSWORD:-}
+      PGOPTIONS: -c lock_timeout=500ms -c statement_timeout=60000
+      API_DATABASE_PASSWORD: ${API_DATABASE_PASSWORD:-}
+      AUTH_DATABASE_PASSWORD: ${AUTH_DATABASE_PASSWORD:-}
+      SUPPORT_DATABASE_PASSWORD: ${SUPPORT_DATABASE_PASSWORD:-}
+      WORKER_DATABASE_PASSWORD: ${WORKER_DATABASE_PASSWORD:-}
+    entrypoint: [psql, --no-psqlrc, --no-password, --single-transaction, --set=ON_ERROR_STOP=1, --file=/opt/nextstop/database-roles.sql]
+    volumes: [./database-roles.sql:/opt/nextstop/database-roles.sql:ro]
+    logging: *logging
+  cache-initializer:
+    <<: *runtime
+    profiles: [release-tools]
+    restart: "no"
+    user: root
+    command: [node, -e, "const f=require('fs');for(const p of ['/var/lib/nextstop/osm-cache','/var/lib/nextstop/provider-cache']){f.mkdirSync(p,{recursive:true});f.chownSync(p,1000,1000)}"]
+    volumes: [osm-cache:/var/lib/nextstop/osm-cache, provider-cache:/var/lib/nextstop/provider-cache]
+  worker:
+    <<: *runtime
+    command: [node, dist/src/worker.js]
+    environment:
+      DATABASE_URL: ${WORKER_DATABASE_URL:-}
+      OSM_INGESTION_ENABLED: ${OSM_INGESTION_ENABLED:-true}
+      OSM_GEOFABRIK_PBF_URLS: https://download.geofabrik.de/europe/germany-latest.osm.pbf,https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
+      OSM_CACHE_DIRECTORY: /var/lib/nextstop/osm-cache
+      PROVIDER_CACHE_DIRECTORY: /var/lib/nextstop/provider-cache
+      NODE_OPTIONS: --max-old-space-size=4608
+    volumes: [osm-cache:/var/lib/nextstop/osm-cache, provider-cache:/var/lib/nextstop/provider-cache]
+  simulator-token-mint:
+    <<: *runtime
+    profiles: [release-tools]
+    restart: "no"
+    network_mode: none
+    read_only: true
+    cap_drop: [ALL]
+    security_opt: [no-new-privileges:true]
+    command: [node, dist/src/jobs/mint-development-access-token.js]
+    environment:
+      SEARCH_ACCESS_TOKEN_SIGNING_KEY: ${SEARCH_ACCESS_TOKEN_SIGNING_KEY:-}
+    logging: {driver: none}
+volumes:
+  postgres-data:
+  osm-cache:
+  provider-cache:

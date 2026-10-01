@@ -96,7 +96,12 @@ storage limits. This is easy to change but should be product-owned.
   execution and distribution.
 - App Attest must be enabled for `de.nextstop.app`; deployment requires the exact
   App ID prefix (which must not be assumed to equal the Team ID), refreshed
-  provisioning, and physical-device development/TestFlight verification.
-- A full Xcode installation must be selected locally before iOS builds.
-- A production EU/EEA hosting vendor, managed PostGIS service, and operational
-  secret manager still require owner selection before deployment.
+  provisioning, and production-signed Release/TestFlight device verification.
+- Full Xcode 27.0 is now selected locally; targeted environment/authentication and
+  receipt tests passed on 2026-10-01. Provisioned device/CarPlay checks remain
+  separate.
+- The owner selected the two-VM Google Cloud scope in ADR 0018: existing local
+  PostGIS stays in production and isolated staging uses a new project. Complete
+  staging provisioning, TLS, immutable registry, protected CI identities and the
+  production GCS backup/isolated-restore gates before enabling releases. A managed
+  database or redundant topology is not part of this phase.

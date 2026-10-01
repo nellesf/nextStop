@@ -5,6 +5,64 @@ import XCTest
 
 @MainActor
 final class UserErrorReportReceiptStoreTests: XCTestCase {
+  func testBackendReceiptIsolationAndLegacyProductionMigration() throws {
+    let fixture = try ReceiptStoreFixture()
+    defer { fixture.remove() }
+    let oldReceipt = try fixture.store().reserve(fixture.request())
+    let stagingURL = URL(string: "https://api-staging.nextstop.tech")!
+    let staging = UserErrorReportReceiptStore(
+      backendURL: stagingURL, storageDirectory: fixture.directory, clock: { fixture.now }
+    )
+    XCTAssertTrue(staging.receipts.isEmpty)
+    XCTAssertTrue(FileManager.default.fileExists(atPath: fixture.fileURL.path))
+    let stagingReceipt = try staging.reserve(fixture.request())
+    let production = UserErrorReportReceiptStore(
+      backendURL: BackendEnvironmentConfiguration.productionURL,
+      storageDirectory: fixture.directory, clock: { fixture.now }
+    )
+    XCTAssertEqual(production.receipts, [oldReceipt])
+    XCTAssertFalse(FileManager.default.fileExists(atPath: fixture.fileURL.path))
+    XCTAssertEqual(UserErrorReportReceiptStore(
+      backendURL: stagingURL, storageDirectory: fixture.directory, clock: { fixture.now }
+    ).receipts, [stagingReceipt])
+    try production.remove(reportID: oldReceipt.reportID)
+    XCTAssertEqual(staging.receipts, [stagingReceipt])
+  }
+
+  func testFailedLegacyMigrationRetainsTheOriginalWithdrawalCapability() throws {
+    let fixture = try ReceiptStoreFixture()
+    defer { fixture.remove() }
+    let original = try fixture.store().reserve(fixture.request())
+    let production = UserErrorReportReceiptStore(
+      storageDirectory: fixture.directory, clock: { fixture.now },
+      write: { _, _ in throw CocoaError(.fileWriteOutOfSpace) }
+    )
+    XCTAssertFalse(production.persistenceAvailable)
+    XCTAssertThrowsError(try production.reserve(fixture.request()))
+    XCTAssertEqual(fixture.store().receipts, [original])
+  }
+
+  func testReceiptNamespaceUsesCanonicalBackendOrigin() throws {
+    let fixture = try ReceiptStoreFixture()
+    defer { fixture.remove() }
+    XCTAssertEqual(
+      UserErrorReportReceiptStore.scopedFileURL(
+        backendURL: URL(string: "https://API.NEXTSTOP.TECH:443")!, directory: fixture.directory
+      ),
+      UserErrorReportReceiptStore.scopedFileURL(
+        backendURL: BackendEnvironmentConfiguration.productionURL, directory: fixture.directory
+      )
+    )
+    XCTAssertNotEqual(
+      UserErrorReportReceiptStore.scopedFileURL(
+        backendURL: URL(string: "https://api-staging.nextstop.tech")!, directory: fixture.directory
+      ),
+      UserErrorReportReceiptStore.scopedFileURL(
+        backendURL: BackendEnvironmentConfiguration.productionURL, directory: fixture.directory
+      )
+    )
+  }
+
   func testStorePersistsOnlyRandomCapabilityAndRetentionDates() throws {
     let fixture = try ReceiptStoreFixture()
     defer { fixture.remove() }

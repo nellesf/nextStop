@@ -47,7 +47,7 @@ PostGIS static/live snapshots atomically, and serves exact 5 km route-corridor
 candidates through signed stable snapshots. Supported physical devices use Apple
 App Attest to obtain short-lived search access tokens; Debug Simulator builds use
 a loopback Mac broker authenticated through Google Cloud IAP and contain no shared
-staging secret. A
+backend secret. A
 separate daily OSM projection imports supported chains from cached Geofabrik PBF
 extracts and enforces the exact 500 m restaurant predicate.
 
@@ -198,19 +198,33 @@ requires Apple's managed capability and matching provisioning.
 ## Build and test status
 
 The checked-in `ios/NextStop.xcodeproj` opens the iPhone app and its local
-`NextStopCore` package directly. On 2026-08-15, the Xcode 26 CI suite compiled and
-tested the iPhone app, CarPlay adapter, local destination persistence, and App
-Intent metadata successfully; the Swift core and backend/PostGIS workflows were
-also green. This machine has Node.js 24 LTS for backend checks but no active full
-Xcode installation, so interactive MapKit, signing, and provisioned CarPlay checks
-still run on the separate Xcode Mac. See
-[`docs/development.md`](docs/development.md).
+`NextStopCore` package directly. On 2026-10-01, Xcode 27.0 on this Mac passed the
+targeted environment/authentication and report-receipt tests in Staging Debug
+(28 tests) and Release (23 tests); the Simulator broker suite passed eight tests.
+The Xcode 26 CI workflow continues to cover the wider app, CarPlay presenter, and
+UI suites. Real-device App Attest and provisioned CarPlay still require their
+separate acceptance checks.
+
+Choose `NextStop-Staging` for the staging Simulator API or
+`NextStop-ProductionTest` for the production Simulator API, with the matching Mac
+broker. `NextStop-Release`, all physical-device builds, and every archive/TestFlight
+build use `https://api.nextstop.tech`; staging is Simulator-only. All schemes keep
+the same bundle ID and signing configuration. The original `NextStopApp` scheme
+remains the production default for existing workflows. See the exact commands and
+backend-scoped receipt migration in
+[`docs/development.md`](docs/development.md#backend-environments-and-distribution).
+
+Production retains the existing `nextstop-tech-staging` project, VM, and database.
+The separate `nextstop-tech-testing` project is staging for tests and release
+verification; this initial split does not move the production database or add
+production redundancy.
 
 ## Current next step
 
-Enable App Attest for `de.nextstop.app`, provide the exact App ID prefix to staging,
-and verify one development-signed physical-device exchange plus one production
-TestFlight exchange. Separately obtain Apple's managed EV-charging CarPlay
-entitlement and matching provisioning. German authority records currently have no
+Complete the environment rollout, configure the exact App ID prefix for
+production App Attest, and verify a production-signed Release/TestFlight device
+exchange. Production continues to reject development attestations. Separately
+obtain Apple's managed EV-charging CarPlay entitlement and matching provisioning.
+German authority records currently have no
 official nationwide live state; Swiss `ich-tanke-strom` results do and German
 results remain explicitly unknown.

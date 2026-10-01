@@ -57,6 +57,7 @@ targets:
         NSAppTransportSecurity:
           NSAllowsLocalNetworking: true
         NextStopAPIBaseURL: $(NEXTSTOP_API_BASE_URL)
+        NextStopAppAttestEnvironment: $(NEXTSTOP_APP_ATTEST_ENVIRONMENT)
         UIApplicationSceneManifest:
           UIApplicationSupportsMultipleScenes: true
           UISceneConfigurations:
@@ -137,6 +138,91 @@ schemes:
         NextStopAppUITests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: NextStopAppTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopCarPlayTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopAppUITests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  NextStop-Staging:
+    build:
+      targets:
+        NextStopApp: all
+        NextStopAppTests: [test]
+        NextStopAppUITests: [test]
+    run:
+      config: Debug
+      environmentVariables:
+        NEXTSTOP_BACKEND_ENVIRONMENT: staging
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: NextStopAppTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopCarPlayTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopAppUITests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  NextStop-ProductionTest:
+    build:
+      targets:
+        NextStopApp: all
+        NextStopAppTests: [test]
+        NextStopAppUITests: [test]
+    run:
+      config: Debug
+      environmentVariables:
+        NEXTSTOP_BACKEND_ENVIRONMENT: production
+    test:
+      config: Debug
+      gatherCoverageData: true
+      targets:
+        - name: NextStopAppTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopCarPlayTests
+          parallelizable: false
+          randomExecutionOrder: false
+        - name: NextStopAppUITests
+          parallelizable: false
+          randomExecutionOrder: false
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release
+  NextStop-Release:
+    build:
+      targets:
+        NextStopApp: all
+        NextStopAppTests: [test]
+        NextStopAppUITests: [test]
+    run:
+      config: Release
     test:
       config: Debug
       gatherCoverageData: true

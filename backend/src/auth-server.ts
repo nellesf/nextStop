@@ -5,6 +5,8 @@ import { AppAttestAuthenticationService } from "./application/app-attest-authent
 import { createDatabasePool } from "./persistence/database.js";
 import { PostgresAppAttestAuthenticationRepository } from "./persistence/postgres-app-attest-authentication.js";
 import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
+import { AuthenticationReadiness } from "./persistence/runtime-readiness.js";
+import { installHTTPShutdown } from "./runtime/graceful-shutdown.js";
 
 const appAttestAppId = nonemptyEnvironmentValue("APP_ATTEST_APP_ID");
 const authDatabaseURL = nonemptyEnvironmentValue("AUTH_DATABASE_URL");
@@ -45,20 +47,27 @@ const appAttestAuthentication =
         }),
         accessTokenCodec,
       );
-if (authPool !== undefined) {
-  await authPool.query("SELECT key_id_hash FROM nextstop.app_attest_keys LIMIT 0");
-}
+const readinessPool = authDatabaseURL === undefined ? undefined : createDatabasePool(authDatabaseURL, {
+  applicationName: "nextstop-auth-readiness", maxConnections: 1,
+  connectionTimeoutMilliseconds: 1_000, queryTimeoutMilliseconds: 1_500, statementTimeoutMilliseconds: 1_000,
+});
 
 const app = createAuthApp({
+  ...(process.env.RELEASE_IMAGE_DIGEST === undefined ? {} : { release: process.env.RELEASE_IMAGE_DIGEST }),
   ...(appAttestAuthentication === undefined ? {} : { appAttestAuthentication }),
   diagnostics: { sink: writeRequestDiagnostic },
+  ...(readinessPool === undefined ? {} : {
+    readiness: new AuthenticationReadiness(readinessPool, appAttestAuthentication !== undefined),
+  }),
 });
+app.addHook("onClose", async () => { await readinessPool?.end(); });
 if (authPool !== undefined) {
   app.addHook("onClose", async () => {
     await authPool.end();
   });
 }
 
+installHTTPShutdown(app);
 await app.listen({
   host: process.env.HOST ?? "127.0.0.1",
   port: parsePort(process.env.PORT),

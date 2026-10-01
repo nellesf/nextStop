@@ -2,7 +2,6 @@
   import Foundation
 
   actor SimulatorSearchAccessTokenProvider: SearchAccessTokenProviding {
-    static let defaultBrokerURL = URL(string: "http://127.0.0.1:9482/token")!
     // The staging broker allows its remote credential mint up to 90 seconds.
     static let brokerRequestTimeout: TimeInterval = 95
     private static let maximumResponseBytes = 16 * 1_024
@@ -109,17 +108,6 @@
         expiresAt: now().addingTimeInterval(TimeInterval(dto.expiresInSeconds))
       )
       return token
-    }
-
-    static func configuredBrokerURL() -> URL? {
-      guard
-        let override = ProcessInfo.processInfo.environment[
-          "NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL"
-        ], !override.isEmpty
-      else {
-        return defaultBrokerURL
-      }
-      return URL(string: override)
     }
 
     static func validatedLoopbackURL(_ value: URL?) -> URL? {

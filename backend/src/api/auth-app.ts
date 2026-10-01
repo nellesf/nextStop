@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { installReadiness, type ReadinessChecking } from "./readiness.js";
 
 import Fastify, { type FastifyInstance, type FastifyReply } from "fastify";
 
@@ -24,6 +25,8 @@ import {
 } from "./request-diagnostics.js";
 
 interface AuthAppDependencies {
+  readonly readiness?: ReadinessChecking;
+  readonly release?: string;
   readonly appAttestAuthentication?: AppAttestAuthenticating;
   readonly makeErrorId?: () => string;
   readonly maximumConcurrentAuthentications?: number;
@@ -126,6 +129,7 @@ export function createAuthApp(dependencies: AuthAppDependencies = {}): FastifyIn
   });
 
   app.get("/health", () => ({ status: "ok" }));
+  installReadiness(app, dependencies.readiness, dependencies.release);
 
   app.post<{ Body: { readonly keyId: string; readonly purpose: AppAttestPurpose } }>(
     "/v1/auth/app-attest/challenge",

@@ -6,6 +6,60 @@ import XCTest
 
 @MainActor
 final class AuthenticationTransportTests: XCTestCase {
+  func testDeviceAndDistributionBackendGuard() {
+    let requestedStaging = [
+      "NEXTSTOP_BACKEND_ENVIRONMENT": "staging",
+      "NEXTSTOP_API_BASE_URL": "https://api-staging.nextstop.tech",
+    ]
+    #if DEBUG && targetEnvironment(simulator)
+      XCTAssertEqual(
+        BackendEnvironmentConfiguration.baseURL(environment: requestedStaging)?.host,
+        "api-staging.nextstop.tech"
+      )
+    #else
+      XCTAssertEqual(
+        BackendEnvironmentConfiguration.baseURL(environment: requestedStaging),
+        BackendEnvironmentConfiguration.productionURL
+      )
+    #endif
+  }
+
+  func testAppAttestEnvironmentComesFromTheEntitlementBuildSetting() {
+    let environment = Bundle.main.object(forInfoDictionaryKey: "NextStopAppAttestEnvironment") as? String
+    XCTAssertNotNil(environment.flatMap(AppAttestEnvironment.init(rawValue:)))
+  }
+
+  #if DEBUG && targetEnvironment(simulator)
+    func testSimulatorPresetsPairAPIAndTokenBrokerWithoutCrossEnvironmentOverrides() throws {
+      for (preset, api, port) in [
+        ("staging", "https://api-staging.nextstop.tech", 8765),
+        ("production", "https://api.nextstop.tech", 8766),
+      ] {
+        let environment = ["NEXTSTOP_BACKEND_ENVIRONMENT": preset]
+        let url = try XCTUnwrap(BackendEnvironmentConfiguration.baseURL(environment: environment))
+        XCTAssertEqual(url.absoluteString, api)
+        XCTAssertEqual(BackendEnvironmentConfiguration.brokerURL(for: url, environment: environment)?.port, port)
+        XCTAssertNil(BackendEnvironmentConfiguration.brokerURL(for: url, environment: [
+          "NEXTSTOP_BACKEND_ENVIRONMENT": preset,
+          "NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL": "http://127.0.0.1:9999/token",
+        ]))
+      }
+      XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: [
+        "NEXTSTOP_BACKEND_ENVIRONMENT": "staging", "NEXTSTOP_API_BASE_URL": "https://api.nextstop.tech",
+      ]))
+      XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: ["NEXTSTOP_BACKEND_ENVIRONMENT": "typo"]))
+    }
+
+    func testSimulatorLocalOverrideCannotRedirectToAnUnknownRemoteHost() {
+      XCTAssertEqual(BackendEnvironmentConfiguration.baseURL(environment: [
+        "NEXTSTOP_API_BASE_URL": "http://127.0.0.1:3000",
+      ])?.port, 3000)
+      for value in ["https://untrusted.example", "https://user:password@api.nextstop.tech", "https://api.nextstop.tech/path"] {
+        XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: ["NEXTSTOP_API_BASE_URL": value]))
+      }
+    }
+  #endif
+
   override func tearDown() {
     TestHTTPURLProtocol.handler = nil
     super.tearDown()
@@ -309,8 +363,9 @@ final class AuthenticationTransportTests: XCTestCase {
       ])
       TestHTTPURLProtocol.handler = { request in try sequence.response(for: request) }
       let provider = SearchAccessTokenProviderFactory.make(
-        baseURL: URL(string: "https://api.nextstop.test")!,
+        baseURL: BackendEnvironmentConfiguration.productionURL,
         session: makeTestSession(),
+        launchEnvironment: [:],
         service: UnsupportedAppAttestServiceStub()
       )
 
@@ -319,7 +374,7 @@ final class AuthenticationTransportTests: XCTestCase {
       XCTAssertTrue(token.hasPrefix("simulator-factory-token-"))
       XCTAssertEqual(sequence.recordedRequests.count, 1)
       XCTAssertEqual(
-        sequence.recordedRequests.first?.url?.absoluteString, "http://127.0.0.1:9482/token")
+        sequence.recordedRequests.first?.url?.absoluteString, "http://127.0.0.1:8766/token")
     }
 
     func testSimulatorBrokerCachesNormallyAndForceRefreshesAfterUnauthorized() async throws {

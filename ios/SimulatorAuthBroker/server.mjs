@@ -5,6 +5,7 @@ import { createServer } from "node:http";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
+import { brokerConfiguration } from "./configuration.mjs";
 
 import {
   expiryFromMintStart,
@@ -13,26 +14,8 @@ import {
 
 const execFileAsync = promisify(execFile);
 const host = "127.0.0.1";
-const port = validatedPort(process.env.NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT ?? "9482");
-const mode = validatedMode(process.env.NEXTSTOP_SIMULATOR_AUTH_MODE ?? "staging");
+const { name, port, mode, project, zone, instance, remoteMintCommand } = brokerConfiguration();
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
-const project = validatedIdentifier(
-  process.env.NEXTSTOP_GCP_PROJECT ?? "nextstop-tech-staging",
-  "NEXTSTOP_GCP_PROJECT",
-);
-const zone = validatedIdentifier(
-  process.env.NEXTSTOP_GCP_ZONE ?? "europe-west3-a",
-  "NEXTSTOP_GCP_ZONE",
-);
-const instance = validatedIdentifier(
-  process.env.NEXTSTOP_GCP_INSTANCE ?? "nextstop-backend",
-  "NEXTSTOP_GCP_INSTANCE",
-);
-const remoteMintCommand =
-  "cd /opt/nextstop/current && " +
-  "sudo docker compose --project-name gcp-vm " +
-  "--env-file /etc/nextstop/backend.env " +
-  "-f deploy/gcp-vm/compose.yaml run --rm --no-deps -T simulator-token-mint";
 
 let cachedToken;
 let refreshPromise;
@@ -54,7 +37,7 @@ async function accessToken() {
 async function mintToken() {
   const mintStartedAt = Date.now();
   const stdout =
-    mode === "staging" ? await mintStagingToken() : await mintLocalToken();
+    mode === "remote" ? await mintRemoteToken() : await mintLocalToken();
   const response = parseTokenResponse(stdout.trim());
   process.stdout.write("Refreshed the short-lived Simulator search credential.\n");
   return {
@@ -77,7 +60,7 @@ async function accessTokenResponse() {
   throw new Error("Unable to mint a Simulator credential with a usable lifetime.");
 }
 
-async function mintStagingToken() {
+async function mintRemoteToken() {
   const { stdout } = await execFileAsync(
     "gcloud",
     [
@@ -132,7 +115,7 @@ function parseTokenResponse(value) {
   try {
     decoded = JSON.parse(value);
   } catch {
-    throw new Error("The staging token command returned an invalid response.");
+    throw new Error("The token command returned an invalid response.");
   }
   if (
     !decoded ||
@@ -149,7 +132,7 @@ function parseTokenResponse(value) {
     decoded.expiresInSeconds < 60 ||
     decoded.expiresInSeconds > 900
   ) {
-    throw new Error("The staging token command returned an invalid response.");
+    throw new Error("The token command returned an invalid response.");
   }
   return decoded;
 }
@@ -206,7 +189,7 @@ try {
   await accessToken();
   server.listen(port, host, () => {
     process.stdout.write(
-      `nextStop Simulator authentication is ready at http://${host}:${port}.\n`,
+      `nextStop ${name} Simulator authentication is ready at http://${host}:${port}.\n`,
     );
     process.stdout.write("Keep this process running while using the Simulator.\n");
   });
@@ -221,30 +204,6 @@ for (const signal of ["SIGINT", "SIGTERM"]) {
   process.on(signal, () => {
     server.close(() => process.exit(0));
   });
-}
-
-function validatedPort(value) {
-  const parsed = Number(value);
-  if (!Number.isSafeInteger(parsed) || parsed < 1_024 || parsed > 65_535) {
-    throw new Error(
-      "NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT must be an integer from 1024 through 65535.",
-    );
-  }
-  return parsed;
-}
-
-function validatedMode(value) {
-  if (value !== "staging" && value !== "local") {
-    throw new Error("NEXTSTOP_SIMULATOR_AUTH_MODE must be staging or local.");
-  }
-  return value;
-}
-
-function validatedIdentifier(value, name) {
-  if (!/^[A-Za-z0-9][A-Za-z0-9._-]{0,62}$/u.test(value)) {
-    throw new Error(`${name} contains unsupported characters.`);
-  }
-  return value;
 }
 
 function isLoopbackHost(value) {
