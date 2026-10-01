@@ -32,16 +32,22 @@ campus/food searches. Private local copies and the disposable cluster were remov
 Production search returned HTTP 200 in all 21 accompanying one-minute samples.
 The full iOS CI runs for `6c33d4b` and the later `e106f2e` also passed without an
 app change.
-`NEXTSTOP_RELEASES_ENABLED` was briefly enabled for the first direct staging CI
-deployment. Run `36858146070`, attempt 2, failed early at 12:00 UTC before any SSH
-operation was observed. Automatic releases are disabled again (`false`). The
-cause was a stale builder account in gcloud configuration after switching to the
-deploy identity. A second SDK setup and identity guard are implemented and
-`actionlint` passed; live CI validation of the fix is still pending. The successful staging deployments were
-operator initiated, not CI deployments. Production still serves its legacy
-deployment; first adoption and the protected owner-review gate remain ahead of
-the first production release. See the verification record for these evidence
-limits and the remaining gates.
+The first direct staging CI deployment, run `36858146070` attempt 2, failed early
+at 12:00 UTC before any SSH operation was observed, so automatic releases were
+paused. Investigation confirmed a stale builder account in gcloud configuration
+after switching to the deploy identity. A second SDK setup and identity guard
+fixed that selection without expanding IAM. Staging CI run `36860547909` for
+`9ec36e8` then passed, with successful explicit deployment `6783984468`, public
+readiness identifying the new image, and the exact promotion binding verified.
+`NEXTSTOP_RELEASES_ENABLED=true` is now active. Backend and Swift Core CI passed
+for `9ec36e8`; its iOS run is still running, with app sources unchanged since the
+last complete green `e106f2e` run. The 12:22:22 UTC staging host audit passed:
+the new blue slot and retained green B are ready, one worker is running, and no
+pending journal or temporary deployment credentials/uploads remain. Production
+still serves its legacy deployment. Its exact-image
+[promotion run `36861316291`](https://github.com/nellesf/nextStop/actions/runs/36861316291)
+is **waiting for owner review**. See the verification record for the exact image
+and remaining gates.
 Both Simulator broker/API connections passed live smoke checks; the current
 production transition command is documented in [iOS development](../../docs/development.md#connected-debug-simulator-search).
 

@@ -9,13 +9,14 @@ credentials and DNS were unchanged. Staging uses its own database and keys,
 seeded only with public provider data. The real staging ingestion worker ran
 during the rehearsal; no idle worker substitute was used.
 
-Two trusted-main builds produced these immutable artifacts in
+The operator rehearsal and subsequent CI rollout used these trusted-main artifacts in
 `europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend`:
 
 | Label | Commit | Image digest | Successful explicit staging deployment |
 | --- | --- | --- | --- |
 | A | `621fabc007f5257cf6f82c75f20d5d4be7a55002` | `sha256:750322806ce4e2aaa378abffbb8d2d2ab12f6e7dc614d7001906c3652d211ff9` | `6782540724` |
 | B | `58c73458a8bde7763bf145d5e2923d6797e2b571` | `sha256:6cc43eb3f13ada9de2c7e9dcacba17e71fbbe4323a351d4405bd85e1f9087d49` | `6782615411` |
+| CI | `9ec36e860f1abc0c4f1872888eb83483d5249156` | `sha256:21083d7cc09f376c7fe90fb9eebf3b78a5ee83a19916d2fe79dd0060d8173a08` | `6783984468` |
 
 The backend application code is identical between A and B; their commits differ
 in deployment identity verification and documentation. Distinct images exercised
@@ -28,6 +29,16 @@ At the end of the operator rehearsal, green B was active and blue A retained. Bo
 were ready, all five application containers were running with zero restarts,
 and exactly one worker was running B. Nginx matched release state; no pending
 release journal or temporary registry credential directory remained.
+
+The later [staging CI run for `9ec36e8`](https://github.com/nellesf/nextStop/actions/runs/36860547909)
+completed successfully. Its explicit deployment record `6783984468` is successful,
+public readiness identifies the CI image above, and `verify-promotion.py` accepted
+the exact commit, image and successful staging deployment binding. The final
+host audit at 12:22:22 UTC passed: blue API/auth returned HTTP 200 readiness with
+the exact CI digest, retained green B was ready, exactly one worker was running,
+and checked containers had zero restarts. The database was healthy with 15
+migrations applied. Nginx matched saved state; no pending release journal,
+temporary registry credential directory or temporary upload remained.
 
 ## Live release and recovery checks
 
@@ -135,22 +146,25 @@ released their ports. This validates broker/API connectivity, not a complete
 Simulator UI session or real-device App Attest continuity. The production
 transition command is in [development.md](../development.md#connected-debug-simulator-search).
 
-CI identity/protection setup and real OIDC image builds passed. The successful
-deployments in this rehearsal used the authorized operator account. Automatic
+CI identity/protection setup and real OIDC image builds passed. The initial
+deployments in the recovery rehearsal used the authorized operator account. Automatic
 releases were briefly enabled for a direct staging CI attempt, but
 [run `36858146070`, attempt 2](https://github.com/nellesf/nextStop/actions/runs/36858146070/attempts/2)
-failed early at 12:00 UTC before any SSH operation was observed. This is not a
-successful GitHub deploy-service-account rollout. `NEXTSTOP_RELEASES_ENABLED`
-is `false` again. Investigation identified a stale gcloud `core/account`: after
+failed early at 12:00 UTC before any SSH operation was observed. Automatic releases
+were paused. Investigation of the SDK/account-selection code confirmed a stale
+gcloud `core/account`: after
 builder authentication and SDK setup, switching to deploy authentication without
 another SDK setup left OS Login profile lookup selecting the builder account
 while token authentication used the deploy identity. A second SDK setup and
-explicit identity guard are implemented, and `actionlint` passed. The upcoming
-live CI run must still validate that correction; no successful CI deployment is
-claimed yet. Production still serves its legacy deployment. A successful staging
-run under the CI deploy identity, first production adoption, protected owner review
-before the first production release and real-device App Attest continuity
-verification remain outstanding.
+explicit identity guard corrected the selection; `actionlint` passed. The later
+successful live staging CI run `36860547909` validated the correction under the
+deploy identity. No IAM expansion was required. `NEXTSTOP_RELEASES_ENABLED=true`
+is active. Production still serves its legacy deployment.
+[Production promotion run `36861316291`](https://github.com/nellesf/nextStop/actions/runs/36861316291)
+targets the exact `9ec36e860f1abc0c4f1872888eb83483d5249156` commit and CI image
+listed above and is **waiting for owner review**. Review has been requested;
+the run is not approved or deployed. First production adoption and real-device
+App Attest continuity verification remain outstanding.
 
 Backend and Swift Core CI passed for B. Its earlier
 [iOS CI run](https://github.com/nellesf/nextStop/actions/runs/36852498463)
@@ -163,4 +177,6 @@ environment and authentication guards, passed. The subsequent complete
 passed without an app change, closing the outstanding rerun check. The earlier
 UI failure did not reproduce; its precise cause was not isolated. The later full
 [iOS CI run for `e106f2e`](https://github.com/nellesf/nextStop/actions/runs/36857990355)
-also passed.
+also passed. Backend and Swift Core CI passed for `9ec36e8`; its iOS run is still
+running. The iOS app sources are unchanged since the last complete green
+`e106f2e` run, but the new iOS run is not yet recorded as successful.

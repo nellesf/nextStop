@@ -19,13 +19,18 @@ PostgreSQL 17.5/PostGIS 3.5.2 was restored into native PostgreSQL 17.11/PostGIS
 3.5.6, not an identical Linux environment. All 21 accompanying production search
 samples returned HTTP 200 at one-minute intervals.
 The first direct staging CI deployment, run `36858146070` attempt 2, failed early
-at 12:00 UTC before any SSH operation was observed. Automatic releases are
-**disabled again**. The stale gcloud builder-account selection was identified;
-a second SDK setup and identity guard are implemented, with `actionlint` passing.
-Their live CI validation remains pending. Production remains on
-its legacy deployment; first adoption and protected owner review still precede
-the first production release. The full iOS CI runs for `6c33d4b` and the later
-`e106f2e` passed without an app change. See the exact
+at 12:00 UTC before any SSH operation was observed, temporarily pausing automatic
+releases. The confirmed stale gcloud builder-account selection was corrected by
+a second SDK setup and identity guard, without broader IAM. Staging CI run
+`36860547909` for `9ec36e8` then passed; explicit deployment `6783984468`, public
+readiness and the exact promotion binding passed. Automatic releases are now
+**enabled**. The final staging host audit at 12:22:22 UTC passed, including ready
+active/retained slots, one worker, healthy database and clean release state.
+Production remains on its legacy deployment;
+[promotion run `36861316291`](https://github.com/nellesf/nextStop/actions/runs/36861316291)
+is **waiting for owner review** of the exact staged commit/image. Backend and Swift Core CI passed for `9ec36e8`; its iOS
+run is still running. The last complete green iOS run is `e106f2e`, and app sources
+are unchanged. See the exact
 [activation status](../gcp/README.md) and
 [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
 
