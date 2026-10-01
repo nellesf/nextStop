@@ -23,6 +23,7 @@ import uuid
 DOMAINS = {"staging": "api-staging.nextstop.tech", "production": "api.nextstop.tech"}
 PORTS = {"blue": (3100, 3101), "green": (3200, 3201), "legacy": (3000, 3001)}
 DIGEST = re.compile(r"[a-zA-Z0-9][a-zA-Z0-9./:_-]*@sha256:[0-9a-f]{64}\Z")
+LOCAL_IMAGE_ID = re.compile(r"sha256:[0-9a-f]{64}\Z")
 
 
 class ReleaseError(Exception):
@@ -138,6 +139,18 @@ class Release:
         if not isinstance(token, str) or len(token) > 2048:
             raise ReleaseError("Release token mint failed.")
         return token
+
+    def mint_active_token(self):
+        image = self.state.get("image") or self.state.get("workerImage")
+        # adopt_legacy records Docker's immutable local image ID. Keep token
+        # minting available after that first rollback without allowing local IDs
+        # for a new release, or selecting an image supplied by the caller.
+        adopted_legacy = (self.state.get("api") == {"slot": "legacy", "image": None}
+                          and self.state.get("image") is None)
+        if not isinstance(image, str) or not (
+                DIGEST.fullmatch(image) or (adopted_legacy and LOCAL_IMAGE_ID.fullmatch(image))):
+            raise ReleaseError("No active immutable release is configured.")
+        return self.compose("run", "--rm", "--no-deps", "-T", "simulator-token-mint", image=image)
 
     def request(self, url, body=None, token=None):
         headers = {"Content-Type": "application/json"}
@@ -299,7 +312,7 @@ class Release:
         if "127.0.0.1:3000" not in text or "127.0.0.1:3001" not in text:
             raise ReleaseError("Unknown existing Nginx config: explicit state adoption required.")
         # Do not recreate these containers. Their immutable local image IDs are
-        # recorded only for rollback; new releases always require a registry digest.
+        # recorded for rollback and its token tool; new releases require a registry digest.
         worker = self.compose("ps", "-q", "worker").strip()
         worker_image = self.command("docker", "inspect", "--format", "{{.Image}}", worker).strip() if worker else None
         self.save({"api": {"slot": "legacy", "image": None}, "nginxConfig": text,
@@ -420,11 +433,7 @@ def main():
             release.environment["BACKEND_IMAGE"] = active_image
             release.environment["RELEASE_IMAGE_DIGEST"] = active_image.partition("@")[2]
         if args.action == "mint-token":
-            image = release.state.get("image") or release.state.get("workerImage")
-            if not image or not DIGEST.fullmatch(image):
-                raise ReleaseError("No active immutable release is configured.")
-            release.environment["BACKEND_IMAGE"] = image
-            sys.stdout.write(release.compose("run", "--rm", "--no-deps", "-T", "simulator-token-mint"))
+            sys.stdout.write(release.mint_active_token())
         else:
             with (release.state_dir / "release.lock").open("w") as lock:
                 fcntl.flock(lock, fcntl.LOCK_EX | fcntl.LOCK_NB)

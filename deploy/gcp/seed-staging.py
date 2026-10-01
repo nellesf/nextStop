@@ -7,8 +7,10 @@ from a unique temporary dump on its data disk. No app/worker process is started.
 from __future__ import annotations
 
 import json
+import inspect
 import os
 from pathlib import Path
+import re
 import shlex
 import shutil
 import subprocess
@@ -37,6 +39,25 @@ PUBLIC_TABLES = frozenset({
 def validate_source_inventory(tables):
     if not isinstance(tables, list) or set(tables) != PUBLIC_TABLES | set(PRIVATE_TABLES):
         raise RuntimeError("Source tables differ from the reviewed public/private seed inventory.")
+
+
+def validate_archive_inventory(listing, allowed):
+    marker = " TABLE DATA nextstop "
+    names = {line.split(marker, 1)[1].rsplit(" ", 1)[0]
+             for line in listing.splitlines() if marker in line and not line.startswith(";")}
+    if names != set(allowed):
+        raise RuntimeError("Archive data tables differ from the reviewed public seed inventory.")
+
+
+def cleanup_script(directory, *, staging=False):
+    match = re.fullmatch(r"/srv/nextstop/\.public-seed-([0-9a-f]{32})", directory)
+    if match is None:
+        raise RuntimeError("Refusing cleanup outside an exact generated seed directory.")
+    files = [directory + "/public.dump"]
+    files += ([f"/tmp/nextstop-public-seed-{match[1]}.tar.gz"] if staging else [directory + "/archive.list"])
+    # Removing a child directory requires root on the /srv/nextstop parent.
+    # rmdir deliberately refuses unexpected content; never recursively delete.
+    return shlex.join(["sudo", "rm", "-f", "--", *files]) + " && " + shlex.join(["sudo", "rmdir", "--", directory])
 
 
 def command(arguments, *, timeout=3600):
@@ -128,6 +149,8 @@ sudo docker exec -i {CONTAINER} pg_restore --list < {directory}/public.dump > {d
 python3 - {directory} <<'PY'
 import hashlib,json,pathlib,sys
 root=pathlib.Path(sys.argv[1]);listing=(root/'archive.list').read_text()
+{inspect.getsource(validate_archive_inventory)}
+validate_archive_inventory(listing,{sorted(PUBLIC_TABLES)!r})
 for table in {PRIVATE_TABLES!r}:
     assert ' TABLE DATA nextstop '+table+' ' not in listing, 'Private table data in seed archive'
 digest=hashlib.sha256()
@@ -150,8 +173,20 @@ with path.open("rb") as source:
 assert path.stat().st_size=={expected['size']!r} and digest.hexdigest()=={expected['sha256']!r}
 base=["docker","exec","{CONTAINER}","psql","-XAt","-U","nextstop_app","-d","nextstop","-c"]
 assert subprocess.run(base+["SELECT to_regnamespace('nextstop') IS NULL"],capture_output=True,text=True,check=True).stdout.strip()=="t"
-with path.open("rb") as source:
-    subprocess.run(["docker","exec","-i","{CONTAINER}","pg_restore","-U","nextstop_app","-d","nextstop","--single-transaction","--exit-on-error","--no-owner","--no-privileges"],stdin=source,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True,timeout=3600)
+# Extensions live in public and are intentionally outside the application-only
+# archive. The UUID+geography GiST indexes require btree_gist as well as PostGIS.
+subprocess.run(base+["CREATE EXTENSION IF NOT EXISTS postgis WITH SCHEMA public; CREATE EXTENSION IF NOT EXISTS btree_gist WITH SCHEMA public"],capture_output=True,text=True,check=True)
+# pg_restore's schema filter excludes the CREATE SCHEMA archive entry. Create
+# only this verified-absent namespace; all objects/data restore in one transaction.
+subprocess.run(base+["CREATE SCHEMA nextstop AUTHORIZATION nextstop_app"],capture_output=True,text=True,check=True)
+try:
+    with path.open("rb") as source:
+        subprocess.run(["docker","exec","-i","{CONTAINER}","pg_restore","-U","nextstop_app","-d","nextstop","--schema=nextstop","--single-transaction","--exit-on-error","--no-owner","--no-privileges"],stdin=source,stdout=subprocess.DEVNULL,stderr=subprocess.DEVNULL,check=True,timeout=3600)
+except BaseException:
+    # No CASCADE: remove only the empty namespace we just created after rollback.
+    # An uncertain committed restore or concurrent objects must remain intact.
+    subprocess.run(base+["DROP SCHEMA nextstop"],capture_output=True,text=True,check=False)
+    raise
 counts={{}}
 for table in {PRIVATE_TABLES!r}:
     counts[table]=int(subprocess.run(base+["SELECT count(*) FROM nextstop."+table],capture_output=True,text=True,check=True).stdout)
@@ -212,8 +247,8 @@ def seed():
     counts=json.loads(remote_python(staging,restore_script(directory,dump),sudo=True,timeout=3660))
     event("staging-seed-verified",**counts)
     # Only generated dump copies are removed, and only after validated restore.
-    ssh(production,"rm -f -- "+directory+"/public.dump "+directory+"/archive.list && rmdir -- "+directory)
-    ssh(staging,"rm -f -- "+directory+"/public.dump "+remote_bundle+" && rmdir -- "+directory)
+    ssh(production,cleanup_script(directory))
+    ssh(staging,cleanup_script(directory,staging=True))
     shutil.rmtree(temporary)
     event("public-seed-completed",releaseDirectory=release_directory)
 

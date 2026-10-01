@@ -188,7 +188,7 @@ requires Apple's managed capability and matching provisioning.
 - [Backend and proxy request diagnostics](docs/operations/request-diagnostics.md)
 - [Testing strategy](docs/testing.md)
 - [Deployment architecture](docs/deployment.md)
-- [Google Cloud single-VM staging](deploy/gcp-vm/README.md)
+- [Google Cloud staging and production releases](deploy/gcp-vm/README.md)
 - [Known limitations](docs/known-limitations.md)
 - [OpenStreetMap food-POI import runbook](docs/operations/openstreetmap-food-poi-import.md)
 - [Charging refresh performance and recovery](docs/operations/charging-refresh.md)

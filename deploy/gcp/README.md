@@ -2,10 +2,21 @@
 
 Status on 2026-10-01: the owner approved the smaller two-VM implementation.
 Production remains on its existing VM/database in `nextstop-tech-staging` at
-`api.nextstop.tech`. New staging provisioning and DNS/TLS, backup, CI identity and
-release-gate activation are pending verification. Committed environment JSON
-records the selected target; it does not prove those operations have completed.
-Release workflows stay disabled until the activation checks below pass.
+`api.nextstop.tech`; its service, database, DNS and keys have not been replaced.
+The separate staging project, network and VM are provisioned, with independent
+database credentials and signing keys. Its reserved public address is
+`34.89.193.23`; the `api-staging.nextstop.tech` DNS record and TLS are pending.
+The public-data seed and `ANALYZE` completed: one active charging version with
+53,895 parks and one active food version with 3,353 POIs. App Attest keys,
+challenges and user error reports were verified empty. API/auth/worker services
+are not yet started.
+The private production release-backup bucket exists with enforced public-access
+prevention, uniform access and a 30-day object lifecycle. The combined monthly
+budget alert covers both projects at EUR 200 without automatic shutdown.
+CI IAM/GitHub protection changes await explicit owner authorization. Backup
+restoration, live release/rollback rehearsals and release-gate activation remain
+pending. Committed configuration is not proof of successful activation; release
+deployment stays disabled until the checks below pass.
 
 See [ADR 0018](../../docs/adr/0018-staging-production-releases.md), the
 [release runner](../gcp-vm/README.md), and
@@ -153,6 +164,92 @@ continuous point-in-time recovery. Dump contents and retention must preserve the
 report policy: submitted report payloads are excluded, and recovery must not
 restore withdrawn content. Never restore a database automatically during an
 application rollback.
+
+### Isolated restore verification
+
+`pg_restore --list` in `backup.py` proves that the archive catalogue is readable;
+it does not prove that table data, indexes, functions and grants can be restored.
+A production archive contains private App Attest state. Never use it as the
+ordinary staging seed, a CI artifact, or a database accessible to staging roles.
+Use a disposable, separately isolated PostgreSQL cluster with private storage,
+no public ingress, no worker and no production signing keys. Do not run the
+restore against a database in the ordinary staging or production cluster: the
+role initializer also changes cluster-wide roles. This is a manual verification
+gate, not an automatic deployment action or permission to create new resources.
+
+1. Select the exact `gs://...#generation` from the backup receipt. Download it
+   through the authorized operator into a 0700 temporary directory outside the
+   checkout, with archive mode 0600. Keep the generation suffix quoted. Verify
+   the downloaded object's checksum and size; retain only aggregate results in
+   the rehearsal record. Suppress archive contents and restore error details from
+   terminal/CI logs. Disable container logging on the disposable restore cluster.
+2. Use PostgreSQL 17 and matching PostGIS extension versions, with the isolated
+   database named `nextstop` and its owner `nextstop_app`. The application depends
+   on **both `postgis` and `btree_gist`** (migrations 0001 and 0007); the latter
+   supplies UUID GiST operator classes. Install both before restoring. A PostGIS
+   image can already contain `tiger`/`topology` schemas, so do not replay the full
+   archive blindly over its initialized database. Restore the application schema
+   explicitly. `pg_restore --schema=nextstop` does not restore its `CREATE SCHEMA`
+   entry or extension dependencies; create the verified-absent namespace first.
+
+For an already prepared, disposable restore container, the core restore is:
+
+```bash
+set -euo pipefail
+umask 077
+# Set these to the isolated container and privately downloaded archive.
+[[ "$restore_container" == nextstop-restore-check-* ]]
+[[ -f "$restore_archive" ]]
+docker exec "$restore_container" psql -X -U nextstop_app -d nextstop \
+  --set=ON_ERROR_STOP=1 --command='CREATE EXTENSION IF NOT EXISTS postgis;
+    CREATE EXTENSION IF NOT EXISTS btree_gist;
+    CREATE SCHEMA nextstop AUTHORIZATION nextstop_app;' >/dev/null 2>/dev/null
+docker exec -i "$restore_container" pg_restore -U nextstop_app -d nextstop \
+  --schema=nextstop --single-transaction --exit-on-error \
+  --no-owner --no-privileges < "$restore_archive" >/dev/null 2>/dev/null
+```
+
+An existing `nextstop` schema must fail this procedure. Do not add `--clean`,
+`DROP ... CASCADE`, or automatic retries that overwrite it. On failure, inspect
+only in the private environment and discard the disposable cluster before a new
+attempt. Restoring as `nextstop_app` is deliberate: `--no-owner` makes it the
+owner of restored tables and `SECURITY DEFINER` functions. Do not leave those
+functions owned by an unrelated temporary test role for a real recovery.
+
+3. Verify the restored migration registry against the selected application
+   version. If testing a candidate release, apply only its reviewed pending
+   additive migrations using the normal `--expand-only` migrator **after** the
+   restore. Never bootstrap all migrations before loading their archived rows.
+   Before readiness checks, run the checked-in
+   [`database-roles.sql`](../gcp-vm/database-roles.sql) with the `nextstop_app`
+   owner using `psql --single-transaction --set=ON_ERROR_STOP=1`. Supply fresh
+   rehearsal role passwords through a private environment file. Backups omit
+   ACLs/ownership and do not contain cluster role definitions; this initializer
+   restores the runtime boundaries and readiness-helper grants. It is safe only
+   inside the isolated cluster. Run `ANALYZE` after the data and indexes restore.
+4. Check extension versions, valid indexes, one complete active charging/food
+   projection and migration readiness. Verify function ownership and runtime role
+   access using boolean privilege checks. Run API/auth `/ready` and authenticated
+   synthetic food/campus searches on private test endpoints with fresh rehearsal
+   signing keys. Do not expose a public endpoint or exercise real App Attest keys.
+   Validate auth preservation with private counts/checks, never by printing hashes,
+   public keys, receipts, challenges or counters. `user_error_reports` must exist
+   with **zero rows**: `backup.py` excludes its entire table data, including
+   withdrawal tombstones. Reports therefore restore empty; document this recovery
+   consequence rather than importing an older report copy. Purge expired auth
+   records before any eventual recovery service is allowed to accept requests.
+5. Record only the immutable object reference, tool/extension versions, aggregate
+   validation outcomes and duration. Delete the downloaded archive, disposable
+   cluster/volume, temporary credentials and any private diagnostics afterward.
+   A rehearsal is not a production recovery: restoring auth state to an earlier
+   snapshot also predates later counter, challenge and revocation changes. Actual
+   recovery requires a separately controlled writer cutover and continuity checks;
+   application rollback continues using the current database.
+
+The schema-filter failure, missing UUID GiST dependency, successful filtered
+restore, function ownership, auth preservation and report exclusion were verified
+locally on 2026-10-01 using synthetic data with PostgreSQL 17/PostGIS. This does
+not certify a production archive or replace the isolated full-backup rehearsal.
 
 The candidate API and auth start beside the serving slot, pass private readiness
 and authenticated synthetic searches, then receive traffic through a graceful

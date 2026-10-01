@@ -6,10 +6,12 @@ existing VM, database, credentials and public origin. Staging receives a separat
 VM and database for testing. This adds environment isolation and safer releases;
 it does not change the existing outage or failover model.
 
-Status: tooling is prepared and tested with mocked host/cloud commands. The new
-staging environment and release workflows have **not yet been activated**. No
-load balancer, managed database, additional production node or live-data transfer
-is part of this implementation. See [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
+Status on 2026-10-01: the separate staging VM and database are provisioned;
+the public-data seed and database statistics are verified. DNS/TLS, application
+startup and live release rehearsals are pending. Release tooling has passed mocked host/cloud tests;
+automatic deployment is **not yet activated**. See the exact
+[activation status](../gcp/README.md) and
+[ADR 0018](../../docs/adr/0018-staging-production-releases.md).
 
 | Environment | Project | VM | Public domain |
 | --- | --- | --- | --- |

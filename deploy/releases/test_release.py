@@ -10,6 +10,7 @@ release = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(release)
 OLD = "registry.example/nextstop@sha256:" + "a" * 64
 NEW = "registry.example/nextstop@sha256:" + "b" * 64
+LEGACY = "sha256:" + "c" * 64
 ROOT = Path(__file__).resolve().parents[2]
 
 
@@ -203,10 +204,61 @@ class ReleaseTests(unittest.TestCase):
         self.assertFalse(any("migrator" in event[1] for event in self.commands(subject)))
 
     def test_mutable_image_rejected_before_any_command(self):
-        subject = self.make(["--image", "registry.example/nextstop:latest"])
-        with self.assertRaises(release.ReleaseError):
-            subject.deploy()
-        self.assertEqual(subject.events, [])
+        for image in ["registry.example/nextstop:latest", LEGACY]:
+            with self.subTest(image=image):
+                subject = self.make(["--image", image])
+                with self.assertRaises(release.ReleaseError):
+                    subject.deploy()
+                self.assertEqual(subject.events, [])
+
+    def test_token_mint_after_first_rollback_uses_adopted_local_image(self):
+        (self.state_directory / "state.json").unlink()
+        self.site.write_text("proxy_pass http://127.0.0.1:3000;\nproxy_pass http://127.0.0.1:3001;\n")
+        subject = self.make(["--skip-migrations"])
+        original_runner = subject.runner
+
+        def legacy_runner(command, environment, timeout):
+            output = original_runner(command, environment, timeout)
+            return LEGACY if "{{.Image}}" in command else output
+
+        subject.runner = legacy_runner
+        subject.deploy()
+        subject.rollback()
+        self.assertEqual(subject.state["api"], {"slot": "legacy", "image": None})
+        self.assertEqual(subject.state["workerImage"], LEGACY)
+        # A fresh broker invocation reads the persisted rollback state, even if
+        # another image argument is present. It only runs the isolated mint tool.
+        subject = self.make()
+        self.assertEqual(json.loads(subject.mint_active_token()), {"accessToken": "synthetic-token"})
+        commands = self.commands(subject)
+        self.assertEqual(len(commands), 1)
+        self.assertEqual(commands[0][2], LEGACY)
+        self.assertEqual(commands[0][1][-5:], ("run", "--rm", "--no-deps", "-T", "simulator-token-mint"))
+        self.assertEqual(len(subject.events), 1)
+
+    def test_token_mint_selects_recorded_registry_digest(self):
+        subject = self.make()
+        subject.mint_active_token()
+        self.assertEqual(self.commands(subject)[0][2], OLD)
+
+    def test_token_mint_rejects_local_id_outside_adopted_legacy_and_invalid_refs(self):
+        states = [
+            {"api": {"slot": "blue", "image": LEGACY}, "workerImage": LEGACY},
+            {"api": {"slot": "green", "image": None}, "workerImage": LEGACY},
+            {"api": {"slot": "legacy", "image": LEGACY}, "workerImage": LEGACY},
+            {"api": {"slot": "legacy", "image": None}, "image": LEGACY, "workerImage": LEGACY},
+            {"workerImage": LEGACY},
+        ]
+        states.extend({"api": {"slot": "legacy", "image": None}, "workerImage": image}
+                      for image in ["registry.example/nextstop:latest", "sha256:" + "c" * 63,
+                                    "sha256:" + "G" * 64, LEGACY + "\n", "", None])
+        for state in states:
+            with self.subTest(state=state):
+                subject = self.make()
+                subject.save(state)
+                with self.assertRaises(release.ReleaseError):
+                    subject.mint_active_token()
+                self.assertEqual(subject.events, [])
 
     def test_retained_image_override_sets_matching_readiness_identity(self):
         subject = self.make()
@@ -263,6 +315,7 @@ class ReleaseTests(unittest.TestCase):
         self.assertIn("stop_grace_period: 45s", compose)
         mint = compose.split("  simulator-token-mint:")[1].split("volumes:")[0]
         self.assertIn("network_mode: none", mint)
+        self.assertIn("read_only: true", mint)
         self.assertNotIn("DATABASE_URL", mint)
 
 
