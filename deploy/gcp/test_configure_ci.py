@@ -68,6 +68,54 @@ class ConfigureCITests(unittest.TestCase):
             "serviceAccount:nextstop-staging-deploy@nextstop-tech-testing.iam.gserviceaccount.com")
         self.assertFalse(any("roles/iam.serviceAccountUser" in str(call) for call in calls))
 
+    def test_production_backup_metadata_permission_is_bound_only_to_its_bucket(self):
+        config = setup.configuration("production")
+        calls = []
+
+        def cloud(*arguments):
+            calls.append(arguments)
+            if arguments[:2] == ("projects", "describe"):
+                return {"projectNumber": setup.PROJECT_NUMBERS["production"]}
+            if arguments[:3] == ("compute", "instances", "describe"):
+                return {"id": "456", "metadata": {"items": [{"key": "enable-oslogin", "value": "TRUE"}]}}
+            if arguments[:3] == ("storage", "buckets", "describe"):
+                return {"uniform_bucket_level_access": True, "public_access_prevention": "enforced"}
+            return []
+
+        with patch.object(setup, "gcloud", side_effect=cloud), patch.object(setup, "ensure_iap_ssh"), \
+                patch.object(setup, "github", return_value={"branch_policies": []}), \
+                patch.object(setup, "run"), patch("builtins.print"):
+            setup.configure_environment("production", config)
+        role = next(call for call in calls if call[:4] == ("iam", "roles", "create", setup.BACKUP_METADATA_ROLE))
+        self.assertIn("--permissions=storage.buckets.get", role)
+        self.assertIn("--project=nextstop-tech-staging", role)
+        bucket_grants = [call for call in calls if call[:3] == ("storage", "buckets", "add-iam-policy-binding")]
+        self.assertEqual(len(bucket_grants), 3)
+        for call in bucket_grants:
+            self.assertEqual(call[3], "gs://nextstop-tech-staging-release-backups")
+            self.assertIn("--member=serviceAccount:nextstop-production-deploy@nextstop-tech-staging.iam.gserviceaccount.com", call)
+        self.assertEqual({argument for call in bucket_grants for argument in call if argument.startswith("--role=")}, {
+            "--role=roles/storage.objectCreator", "--role=roles/storage.objectViewer",
+            "--role=projects/nextstop-tech-staging/roles/nextstopCiBackupMetadata"})
+        project_grants = [call for call in calls if call[:2] == ("projects", "add-iam-policy-binding")]
+        self.assertEqual(len(project_grants), 1)
+        self.assertIn("--role=projects/nextstop-tech-staging/roles/nextstopCiProjectMetadata", project_grants[0])
+
+    def test_backup_metadata_verification_rejects_additional_permission(self):
+        config = setup.configuration("production")
+        member = "serviceAccount:" + setup.identities("production", config)["deploy"]
+        roles = ["roles/storage.objectCreator", "roles/storage.objectViewer",
+                 "projects/nextstop-tech-staging/roles/nextstopCiBackupMetadata"]
+        with patch.object(setup, "gcloud", side_effect=[
+                {"includedPermissions": ["storage.buckets.get"]},
+                {"uniform_bucket_level_access": True, "public_access_prevention": "enforced"},
+                {"bindings": [{"role": role, "members": [member]} for role in roles]}]):
+            setup.verify_backup_access(config)
+        with patch.object(setup, "gcloud", return_value={
+                "includedPermissions": ["storage.buckets.get", "storage.buckets.update"]}), \
+                self.assertRaisesRegex(setup.SetupError, "Unexpected backup metadata"):
+            setup.verify_backup_access(config)
+
 
 if __name__ == "__main__":
     unittest.main()

@@ -7,8 +7,8 @@ VM and database for testing. This adds environment isolation and safer releases;
 it does not change the existing outage or failover model.
 
 Status on 2026-10-01: the separate staging VM and database are provisioned;
-the public-data seed and database statistics are verified. DNS/TLS, application
-startup and live release rehearsals are pending. Release tooling has passed mocked host/cloud tests;
+the public-data seed, database statistics and public DNS/TLS are verified.
+Application startup and live release rehearsals are pending. Release tooling has passed mocked host/cloud tests;
 automatic deployment is **not yet activated**. See the exact
 [activation status](../gcp/README.md) and
 [ADR 0018](../../docs/adr/0018-staging-production-releases.md).

@@ -5,7 +5,9 @@ Production remains on its existing VM/database in `nextstop-tech-staging` at
 `api.nextstop.tech`; its service, database, DNS and keys have not been replaced.
 The separate staging project, network and VM are provisioned, with independent
 database credentials and signing keys. Its reserved public address is
-`34.89.193.23`; the `api-staging.nextstop.tech` DNS record and TLS are pending.
+`34.89.193.23`; `api-staging.nextstop.tech` resolves to that address. HTTPS and
+the HTTP redirect are verified, with a valid Let's Encrypt certificate through
+2026-12-30 and automatic renewal enabled.
 The public-data seed and `ANALYZE` completed: one active charging version with
 53,895 parks and one active food version with 3,353 POIs. App Attest keys,
 challenges and user error reports were verified empty. API/auth/worker services
@@ -13,10 +15,14 @@ are not yet started.
 The private production release-backup bucket exists with enforced public-access
 prevention, uniform access and a 30-day object lifecycle. The combined monthly
 budget alert covers both projects at EUR 200 without automatic shutdown.
-CI IAM/GitHub protection changes await explicit owner authorization. Backup
-restoration, live release/rollback rehearsals and release-gate activation remain
-pending. Committed configuration is not proof of successful activation; release
-deployment stays disabled until the checks below pass.
+The owner explicitly approved CI IAM/GitHub protection setup. Its complete
+readback passed: three dedicated identities, restricted GitHub federation,
+VM-scoped deployment access, bucket-scoped backup access, immutable image tags,
+main-only GitHub environments and mandatory owner review for production.
+No long-lived service-account keys or VM runtime identities were added.
+`NEXTSTOP_RELEASES_ENABLED=false` is verified. Actual workflow authentication,
+backup restoration, live release/rollback rehearsals and release-gate activation
+remain pending. Release deployment stays disabled until the checks below pass.
 
 See [ADR 0018](../../docs/adr/0018-staging-production-releases.md), the
 [release runner](../gcp-vm/README.md), and
