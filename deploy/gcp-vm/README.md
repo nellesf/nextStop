@@ -31,14 +31,22 @@ in the backup phase before deployment. The
 [authorized retry `36963689673`](https://github.com/nellesf/nextStop/actions/runs/36963689673)
 passed with the same staged `9ec36e8` application and `sha256:21083d7…` image,
 using control commit `345e258`; explicit production deployment `6801142334`
-succeeded. The database container was unchanged and not restarted. Blue API/auth
-and exactly one worker run the approved image; legacy API/auth are retained for
+succeeded. The database container was unchanged and not restarted. That promotion
+activated blue API/auth and exactly one worker; legacy API/auth were retained for
 rollback. The final host audit, 20/20 accompanying search samples and one separate
 named-production-broker search passed. The full iOS run for `345e258` also passed
 with 268 tests passed and one skipped. See the
 [production verification record](../../docs/operations/production-release-verification-2026-10-02.md),
 [activation status](../gcp/README.md) and
 [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
+
+The later owner-approved production run
+[36970859420](https://github.com/nellesf/nextStop/actions/runs/36970859420) passed
+at 06:22:33 UTC with staged application `fbd2489` / `sha256:e93e7f3…`, removing
+manual per-build App Attest admission. Its explicit deployment is `6802390560`.
+The legacy compatibility credential remains enabled and is outside this change.
+The same day's verification record includes the fresh backup and staging storage
+recovery that preceded this release.
 
 | Environment | Project | VM | Public domain |
 | --- | --- | --- | --- |

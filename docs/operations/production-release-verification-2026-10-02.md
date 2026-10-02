@@ -1,6 +1,11 @@
 # Production release verification, 2026-10-02
 
-## Status and authorized artifact
+The latest production promotion is the permanent build-admission fix,
+`fbd2489` / `sha256:e93e7f3…`, approved by the owner and successfully deployed at
+06:22:33 UTC. Its evidence follows the earlier promotion and incident records in
+the final section below. The legacy compatibility credential remains unchanged.
+
+## First production promotion and authorized artifact
 
 **Production promotion passed.** The first owner-approved attempt failed safely
 in its backup phase. The authorized retry completed successfully with the same
@@ -303,3 +308,88 @@ At this checkpoint production still runs the configuration-only correction that
 allows build 19. The durable removal of manual build admission has passed staging
 and awaits the separate protected production review. A real TestFlight-device
 retry remains unconfirmed; synthetic serving checks do not establish that result.
+
+## Owner-approved permanent build-policy production release
+
+At approximately 06:03:35 UTC the operator applied the owner's explicit approval
+to the prepared production run
+[36970859420](https://github.com/nellesf/nextStop/actions/runs/36970859420).
+Its application is the staged `fbd2489` / `e93e7f3…` artifact above; release control
+comes from `0ccaa9b5c28e49f05ae7eca6a1b04074258815ac`. Registry, main ancestry and
+explicit staging deployment `6802170605` were reverified before approval.
+The workflow created explicit application deployment `6802390560`. The
+approval preserves the existing backup and rollout gates. It does not authorize
+disabling the legacy compatibility credential, which remains separately scoped.
+
+The backup phase started at 06:03:56. A read-only production baseline captured at
+06:04:58 found the active green API/auth slot and worker on `21083d7…`, a healthy
+database, eight running persistent services, zero Docker restart counters and no
+pending release journal. Local/public readiness passed. Development proofs were
+disabled and the legacy compatibility flag was enabled. The system and data
+filesystems had approximately 21.7 GB and 99.8 GB free respectively. One already
+stopped legacy cache-initializer helper was recorded separately from the running
+services; it was not a serving failure.
+
+A bounded search-continuity probe began at 06:04:50 using the documented named
+production Simulator broker and short-lived tokens, never the legacy shared
+credential. It runs the release gate's fixed synthetic search at intervals of at
+least one minute, without overlap or catch-up bursts, with a 20-second request
+timeout and a 45-minute maximum duration. Only sanitized time/status/latency
+aggregates are retained. It began after backup startup and therefore does not
+cover the complete backup period or prove real-device App Attest.
+
+The production backup gate passed at 06:18:24 and deployment began immediately
+afterward. The independent metadata audit at 06:18:53 found exactly one fresh
+archive since approval, completed at 06:18:16.733 with 2,644,443,357 bytes. Its
+generation and CRC32C/MD5 metadata were structurally valid, it was non-composite,
+and no temporary composite-upload components remained. The expected bucket's
+public-access prevention and uniform bucket-level access remained enforced.
+The successful workflow had compared source/download SHA-256 and size and checked
+the uploaded object before issuing its image-bound receipt. The independent
+metadata audit corroborates freshness and privacy; it does not itself bind the
+archive to an application image or replace that receipt. This archive was not
+downloaded again or subjected to a new restore rehearsal.
+
+The production deployment and explicit outcome both succeeded at 06:22:33.
+Workflow `36970859420` finished successfully; the public API and auth readiness
+endpoints independently returned HTTP 200 and the exact approved `e93e7f3…`
+digest. The owner was asked to retry the installed TestFlight app after activation;
+no app update is required for this backend-only policy change.
+
+The independent production postflight at 06:25:06, with the worker mount-set
+comparison completed at 06:26:19, passed:
+
+| Final production check | Verified result |
+| --- | --- |
+| Active API/auth | Blue, exact approved `e93e7f3…` image; local/public readiness passed |
+| Retained API/auth | Green `21083d7…`; container identities, images and start times unchanged |
+| Legacy API/auth | Unchanged |
+| Database | Identity, image, start time and mounts unchanged; healthy; no database restart |
+| Applied migration set | Same 15 migrations as the baseline |
+| Worker | Exactly one running worker, counted from the original container list; approved image; same named mounts |
+| New API/auth/worker | Docker restart counters zero |
+| App ID, signing key, private connection/configuration values | Compared privately and unchanged |
+| App Attest development / legacy compatibility flags | Disabled / enabled, unchanged |
+| Release state and temporary files | No pending journal, Nginx matches committed state, temporary release/registry files absent |
+| Storage | Docker root still on the data disk; 21,652,791,296 system bytes and 99,982,213,120 data bytes free |
+
+The private baseline was removed after successful comparison; only sanitized
+aggregate evidence remains. The audit did not change services, configuration or
+database content.
+
+| Final continuity-probe measurement | Result |
+| --- | --- |
+| First / last request start | 06:04:50.789 / 06:25:56.606 |
+| Successful searches | 22 / 22, HTTP 200 with valid candidates and snapshot |
+| Search / token failures | 0 / 0 |
+| Median / maximum latency | 692 ms / 3,113 ms |
+| Searches over five seconds | 0 |
+| Two additional samples after the completion signal | 06:24:56.596 and 06:25:56.606, both successful |
+
+The probe exited successfully, its owned broker stopped, loopback port 8766 was
+independently confirmed free, and the private temporary harness was removed.
+Tokens and search payloads were not persisted. This confirms successful sampled
+searches across the observed backup/rollout period and after completion; it does
+not establish continuous availability between samples, a load SLA, or physical
+TestFlight-device authentication. The owner's post-release device retry remains
+pending at the time this record was written.

@@ -49,14 +49,23 @@ promotion was approved by the owner. The first attempt, run `36861316291`, faile
 safely during backup before deployment; all 10 accompanying search samples passed.
 The [authorized retry `36963689673`](https://github.com/nellesf/nextStop/actions/runs/36963689673)
 then passed with the same staged `9ec36e8` application and `sha256:21083d7…` image,
-using control commit `345e258`. Production now serves blue API/auth with one
-worker; the existing database was not restarted and legacy API/auth are retained.
+using control commit `345e258`. That promotion activated blue API/auth with one
+worker; the existing database was not restarted and legacy API/auth were retained.
 The final host audit passed, all 20 retry search samples returned HTTP 200, and
 the named production Simulator broker completed a separate successful search.
 The full iOS run for `345e258` passed with 268 tests passed and one skipped.
 See the [production verification record](../../docs/operations/production-release-verification-2026-10-02.md)
 for the exact image, backup evidence, timeline and limits. The normal named
 production connection is documented in [iOS development](../../docs/development.md#connected-debug-simulator-search).
+
+The later owner-approved production run
+[36970859420](https://github.com/nellesf/nextStop/actions/runs/36970859420) passed
+at 06:22:33 UTC, promoting the exact staged `fbd2489` / `sha256:e93e7f3…` artifact
+with control commit `0ccaa9b` and explicit deployment `6802390560`. Manual App
+Attest build admission is removed; the existing legacy compatibility credential
+remains enabled. A fresh production backup passed before deployment. The
+verification record also documents the preceding staging-only Docker storage
+recovery and its retained original copy; no additional paid resource was needed.
 
 See [ADR 0018](../../docs/adr/0018-staging-production-releases.md), the
 [release runner](../gcp-vm/README.md), and
