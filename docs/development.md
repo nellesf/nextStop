@@ -327,17 +327,32 @@ still supports a bounded development verifier for isolated testing, but the app'
 physical-device guard does not route that app to staging or a local origin.
 Apple App Attest itself is unavailable in the iOS Simulator.
 
-Set `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` to the comma-separated, whitespace-free
-allowlist of shipped `CFBundleVersion` values (currently `1`). Add a new build
-number before distributing that build; keep still-supported older build numbers
-during the rollout. For iOS 27 proofs, Apple's validation category and bundle
+Build numbers are not an authentication allowlist. A new TestFlight or App Store
+build requires no backend build registration, configuration update, or App Store
+Connect webhook. For iOS 27 proofs, Apple's signed validation category and bundle
 version extensions must either both be present or both be absent. When present,
 every attestation and assertion is checked independently: category `3` is allowed
-only for a development key, categories `2` (TestFlight) and `4` (App Store) only
-for a production key, and the build must be in the server allowlist. Absence is
-the accepted legacy pre-iOS-27 proof shape. The assertion values need not equal
-the initial attestation values, so a legitimate allowlisted app update can keep
-using its existing key.
+only for a development key, and categories `2` (TestFlight) and `4` (App Store)
+only for a production key. The bundle version remains validated metadata: a
+string of 1–64 ASCII letters, digits, dots, underscores or hyphens, without
+exact-value membership checks.
+Absence is the accepted legacy pre-iOS-27 proof shape. The assertion values need
+not equal the initial attestation values, so an app update can keep using its
+existing key. Full App ID, signing environment, signature, challenge binding and
+replay-counter checks still apply.
+
+For each TestFlight release:
+
+1. Read the actual `CFBundleVersion` from the archive or TestFlight build details.
+   The project's `CURRENT_PROJECT_VERSION` default is not evidence of the
+   distributed build number.
+2. Run synthetic verifier coverage for malformed validation metadata, signing
+   environments and categories, and valid assertions from an existing key after
+   a build-number change.
+3. Before broader distribution, verify the actual production-signed TestFlight
+   build on a physical device: successful challenge/attestation, a later
+   challenge/assertion exchange, and authenticated candidate search. Readiness
+   checks and Simulator token-broker searches do not prove device App Attest.
 
 ### Connected Debug Simulator search
 

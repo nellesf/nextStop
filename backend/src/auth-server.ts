@@ -41,9 +41,6 @@ const appAttestAuthentication =
             "APP_ATTEST_ALLOW_DEVELOPMENT",
             false,
           ),
-          supportedBundleVersions: parseBundleVersionAllowlist(
-            requiredEnvironmentValue("APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS"),
-          ),
         }),
         accessTokenCodec,
       );
@@ -87,23 +84,6 @@ function parsePort(value: string | undefined): number {
 function nonemptyEnvironmentValue(name: string): string | undefined {
   const value = process.env[name];
   return value === undefined || value.length === 0 ? undefined : value;
-}
-
-function requiredEnvironmentValue(name: string): string {
-  const value = nonemptyEnvironmentValue(name);
-  if (value === undefined) {
-    throw new Error(`${name} must be configured.`);
-  }
-  return value;
-}
-
-function parseBundleVersionAllowlist(value: string): readonly string[] {
-  if (value.length > 2_079 || /\s/u.test(value)) {
-    throw new Error(
-      "APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS must be a comma-separated allowlist without whitespace.",
-    );
-  }
-  return value.split(",");
 }
 
 function parseBooleanEnvironmentValue(name: string, defaultValue: boolean): boolean {

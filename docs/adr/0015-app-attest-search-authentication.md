@@ -73,6 +73,28 @@ The backend uses the exact App ID prefix plus `de.nextstop.app`. The prefix is a
 external deployment value and must not be guessed from the Team ID. App Attest
 must be enabled for that App ID before the attested path is activated.
 
+## Build-version policy clarification, 2026-10-02
+
+The owner requested removal of the per-build admission list after a legitimate
+TestFlight update was rejected solely because build 19 had not been registered.
+An otherwise valid proof must not require a backend configuration change for
+each new app build. There is no build-registration webhook in this design.
+
+Keep `apple_bundle_version_01` inside the cryptographic verification and validate
+it as bounded metadata: a string of 1–64 ASCII letters, digits, dots, underscores
+or hyphens. Do not compare it with a list of known builds or with the initial
+attestation's version. Continue to reject malformed/incomplete extension pairs,
+unexpected distribution categories, wrong App IDs/environments, invalid
+certificates/signatures/challenges and replayed counters. Valid existing keys
+continue across app updates; legacy proofs without extensions remain supported.
+
+This deliberately gives up rejection based solely on an unknown or old build
+number. A future minimum-version policy, if needed for an incompatible API or a
+specific vulnerability, requires a separately reviewed rollout. Apple describes
+the extension values as inputs to risk assessment in
+[Secure your apps with App Attest](https://developer.apple.com/videos/play/wwdc2026/201/);
+this policy retains the authenticated metadata and the other integrity checks.
+
 ## Alternatives
 
 - Continue embedding the shared bearer: rejected because extraction bypasses the

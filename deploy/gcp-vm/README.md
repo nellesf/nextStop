@@ -124,6 +124,16 @@ under ADR 0015; separating environments does not revoke installed clients.
 Production continues to reject development App Attest. New staging starts with
 both compatibility flags false and never receives the production legacy key.
 
+Current authentication validates signed build-version metadata without a
+per-build admission list; new TestFlight/App Store builds need no configuration
+update. `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` is an optional Compose passthrough
+only for older retained images. Keep an existing host value while those images
+remain rollback targets. Before rolling back to an older verifier, include the
+actually distributed builds in its list; the new verifier ignores that setting.
+Readiness and synthetic search gates do not prove real-device App Attest: verify
+the production-signed TestFlight exchange on a physical device after a change to
+authentication. See [ADR 0015](../../docs/adr/0015-app-attest-search-authentication.md).
+
 A fresh staging database needs a separate isolated full-schema bootstrap and
 initial published charging and food imports. The rolling `--expand-only` path
 deliberately refuses legacy/unclassified migrations. Search and auth readiness

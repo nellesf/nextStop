@@ -61,7 +61,6 @@ const nodeVerifyAssertion = nodeVerifyAssertionUntyped as (input: {
 
 export interface HardenedAppAttestVerifierOptions {
   readonly allowDevelopmentEnvironment?: boolean;
-  readonly supportedBundleVersions?: readonly string[];
   readonly now?: () => Date;
   /** Test seam for the exact, pinned node-app-attest compatibility boundary. */
   readonly pinnedNodeAttestationVerifier?: PinnedNodeAppAttestVerifier;
@@ -72,7 +71,6 @@ export class HardenedAppAttestVerifier implements AppAttestCryptographicallyVeri
   private readonly bundleIdentifier: string;
   private readonly appIdHash: Buffer;
   private readonly allowDevelopmentEnvironment: boolean;
-  private readonly supportedBundleVersions: ReadonlySet<string>;
   private readonly now: () => Date;
   private readonly pinnedNodeAttestationVerifier: PinnedNodeAppAttestVerifier;
 
@@ -92,9 +90,6 @@ export class HardenedAppAttestVerifier implements AppAttestCryptographicallyVeri
     this.bundleIdentifier = bundleIdentifier;
     this.appIdHash = createHash("sha256").update(appId, "utf8").digest();
     this.allowDevelopmentEnvironment = options.allowDevelopmentEnvironment ?? false;
-    this.supportedBundleVersions = validatedBundleVersionAllowlist(
-      options.supportedBundleVersions ?? [],
-    );
     this.now = options.now ?? (() => new Date());
     this.pinnedNodeAttestationVerifier =
       options.pinnedNodeAttestationVerifier ?? nodeVerifyAttestation;
@@ -132,7 +127,6 @@ export class HardenedAppAttestVerifier implements AppAttestCryptographicallyVeri
     const extensions = parseAttestationRemainder(
       authData,
       validationCategoriesFor(environment),
-      this.supportedBundleVersions,
     );
     const leaf = this.validateCertificateChain(leafData, intermediateData);
 
@@ -220,7 +214,6 @@ export class HardenedAppAttestVerifier implements AppAttestCryptographicallyVeri
     parseAssertionRemainder(
       authenticatorData,
       validationCategoriesFor(input.key.environment),
-      this.supportedBundleVersions,
     );
     const nextSignCount = authenticatorData.readUInt32BE(33);
     validatePublicKey(input.key.publicKeyPEM);
@@ -340,7 +333,6 @@ interface ParsedExtensions {
 function parseAttestationRemainder(
   authData: Buffer,
   allowedValidationCategories: ReadonlySet<number>,
-  supportedBundleVersions: ReadonlySet<string>,
 ): ParsedExtensions {
   const values = decodeCBORSequence(authData.subarray(87));
   if (values.length < 1 || values.length > 2) {
@@ -364,14 +356,12 @@ function parseAttestationRemainder(
   return parseKnownExtensions(
     values[1],
     allowedValidationCategories,
-    supportedBundleVersions,
   );
 }
 
 function parseAssertionRemainder(
   authData: Buffer,
   allowedValidationCategories: ReadonlySet<number>,
-  supportedBundleVersions: ReadonlySet<string>,
 ): ParsedExtensions {
   const extensionFlagIsSet = ((authData[32] ?? 0) & extensionDataFlag) !== 0;
   if (authData.length === 37) {
@@ -389,14 +379,12 @@ function parseAssertionRemainder(
   return parseKnownExtensions(
     values[0],
     allowedValidationCategories,
-    supportedBundleVersions,
   );
 }
 
 function parseKnownExtensions(
   value: unknown,
   allowedValidationCategories: ReadonlySet<number>,
-  supportedBundleVersions: ReadonlySet<string>,
 ): ParsedExtensions {
   let entries: readonly (readonly [string, unknown])[];
   if (value instanceof Map) {
@@ -426,19 +414,18 @@ function parseKnownExtensions(
   }
   const encodedValidationCategory = extensions.get("apple_validation_category_01");
   const bundleVersion = extensions.get("apple_bundle_version_01");
+  // The signed version is bounded metadata, not a per-release authorization list.
   if (
     !isBufferOfLength(encodedValidationCategory, 4) ||
     typeof bundleVersion !== "string" ||
     bundleVersion.length < 1 ||
-    bundleVersion.length > 64
+    bundleVersion.length > 64 ||
+    /[^A-Za-z0-9._-]/u.test(bundleVersion)
   ) {
     throw new Error("Invalid App Attest extension values.");
   }
   const validationCategory = encodedValidationCategory.readUInt32LE(0);
-  if (
-    !allowedValidationCategories.has(validationCategory) ||
-    !supportedBundleVersions.has(bundleVersion)
-  ) {
+  if (!allowedValidationCategories.has(validationCategory)) {
     throw new Error("Unsupported App Attest extension values.");
   }
   return {
@@ -525,22 +512,6 @@ function validatePublicKey(publicKeyPEM: string): void {
   ) {
     throw new Error("App Attest key must use P-256.");
   }
-}
-
-function validatedBundleVersionAllowlist(values: readonly string[]): ReadonlySet<string> {
-  if (
-    values.length > 32 ||
-    values.some(
-      (value) =>
-        value.length < 1 ||
-        value.length > 64 ||
-        !/^[A-Za-z0-9._-]+$/u.test(value),
-    ) ||
-    new Set(values).size !== values.length
-  ) {
-    throw new Error("App Attest bundle-version allowlist is invalid.");
-  }
-  return new Set(values);
 }
 
 function validationCategoriesFor(

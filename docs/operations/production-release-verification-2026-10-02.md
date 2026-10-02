@@ -4,9 +4,12 @@
 
 **Production promotion passed.** The first owner-approved attempt failed safely
 in its backup phase. The authorized retry completed successfully with the same
-staged application image. Production now serves the blue API/auth slot with one
-replacement worker; the legacy API/auth containers remain available for rollback.
+staged application image. That promotion activated the blue API/auth slot with one
+replacement worker; the legacy API/auth containers were retained for rollback.
 The final host audit and named production Simulator broker smoke also passed.
+The later TestFlight incident below exposed a separate build-version admission
+failure. Its immediate configuration correction activated the green slot with
+the same image; synthetic promotion checks alone did not verify device access.
 
 The owner explicitly approved the following exact staged artifact at 03:57 UTC.
 All times in this record are UTC.
@@ -175,3 +178,45 @@ backup and deployment period. Gaps between samples remain unobserved. This is no
 a load/SLA guarantee, real-device attestation test, database recovery cutover or
 TLS-certificate fingerprint comparison. The existing single-VM outage and
 failover model is unchanged.
+
+## TestFlight build 19 and immediate configuration correction
+
+At 04:47:39 UTC a real-device challenge returned 200, followed by an assertion
+returning 401 in 17 ms. The owner confirmed TestFlight version `0.1.0 (19)`.
+Both the new and retained legacy auth processes had the same explicit build list
+`1,10`, which excludes that shipped build. The App ID, production-environment
+flag, signing key and auth database connection matched; the required auth grants
+were present. No database or resource error explained this exchange. Diagnostics
+intentionally retain no proof, key identifier or internal cryptographic reason.
+
+A local cryptographic HTTP reproduction confirmed that a valid assertion for
+an unlisted build returns 401, while adding that build permits the same existing
+key to authenticate. This was a missing release configuration step, not evidence
+that the environment split changed the app identity or keys.
+
+The operator used the installed release controller's existing `--skip-migrations`
+path to add only `19` to the host value, first on staging and then production.
+Both releases used the already approved `9ec36e8` / `sha256:21083d7…` image.
+The existing lock, candidate readiness, authenticated search, Nginx switching,
+public gates and drain were retained. There was no DDL or role initialization,
+and no backup receipt was fabricated or treated as covering another image.
+
+| Configuration correction | Verified result |
+| --- | --- |
+| Staging deployment `6801627463` | Success; blue serving, effective list `1,10,19` |
+| Production deployment `6801711757` | Success by 05:09 UTC; green serving, effective list `1,10,19` |
+| Database and prior serving containers | Identity, image and start time unchanged |
+| Other host configuration, signing key and App ID | Unchanged; development proofs still rejected |
+| Temporary registry credentials and original config backup | Removed after successful checks |
+
+The owner was then asked to repeat the search on the actual TestFlight device;
+this record does not substitute synthetic gates for that confirmation.
+
+The owner also requested a durable fix that removes manual build admission.
+The accompanying source change validates the signed version as bounded metadata
+without exact membership, while retaining all other App Attest checks; see
+[ADR 0015](../adr/0015-app-attest-search-authentication.md#build-version-policy-clarification-2026-10-02).
+Local validation passed 143 backend tests, lint, type checking, compilation and
+77 deployment-tool tests. Auth-server startup passed with both an absent version
+setting and the stale `1,10` setting. That source change is separate from the
+configuration-only correction above and needs its own staged production release.

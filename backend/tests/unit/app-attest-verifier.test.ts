@@ -9,9 +9,12 @@ import test from "node:test";
 
 import cbor from "cbor";
 
+import { createAuthApp } from "../../src/api/auth-app.js";
 import { HardenedAppAttestVerifier } from "../../src/api/app-attest-verifier.js";
 import {
+  AppAttestAuthenticationService,
   StaleAppAttestAssertionCounterError,
+  type AppAttestAuthenticationRepository,
   type AttestedKey,
 } from "../../src/application/app-attest-authentication.js";
 
@@ -110,7 +113,7 @@ void test("accepts Apple's current extension encoding without relying on the ED 
   });
   const extensions = cbor.encode(
     new Map<string, unknown>([
-      ["apple_bundle_version_01", "1"],
+      ["apple_bundle_version_01", "9999"],
       ["apple_validation_category_01", validationCategory(3)],
     ]),
   );
@@ -121,7 +124,6 @@ void test("accepts Apple's current extension encoding without relying on the ED 
     "V8H6LQ9448.io.uebelacker.AppAttestExample",
     {
       allowDevelopmentEnvironment: true,
-      supportedBundleVersions: ["1"],
       now: () => new Date("2024-03-01T00:00:00.000Z"),
       pinnedNodeAttestationVerifier: () => ({
         publicKey: baseline.publicKeyPEM,
@@ -136,7 +138,7 @@ void test("accepts Apple's current extension encoding without relying on the ED 
   });
 
   assert.equal(result.validationCategory, 3);
-  assert.equal(result.bundleVersion, "1");
+  assert.equal(result.bundleVersion, "9999");
 
   // Compact regression vector derived from Apple's 2026 validation guide.
   const appleAuthenticatorData = Buffer.from(
@@ -355,7 +357,7 @@ void test("disabling development rejects existing development keys but keeps pro
   );
 });
 
-void test("all iOS 27 assertion extensions and extra CBOR objects fail closed", () => {
+void test("unknown or incomplete iOS 27 assertion extensions and extra CBOR objects fail closed", () => {
   const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const publicKeyPEM = publicKey.export({ type: "spki", format: "pem" }).toString();
   const verifier = new HardenedAppAttestVerifier(appId);
@@ -427,12 +429,10 @@ void test("all iOS 27 assertion extensions and extra CBOR objects fail closed", 
   );
 });
 
-void test("iOS 27 extension pairs require the official category and bundle allowlist", () => {
+void test("iOS 27 extension pairs require the official category and bounded version metadata", () => {
   const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
   const publicKeyPEM = publicKey.export({ type: "spki", format: "pem" }).toString();
-  const verifier = new HardenedAppAttestVerifier(appId, {
-    supportedBundleVersions: ["1"],
-  });
+  const verifier = new HardenedAppAttestVerifier(appId);
   const allowedExtensions = cbor.encode(
     new Map<string, unknown>([
       ["apple_validation_category_01", validationCategory(4)],
@@ -500,26 +500,20 @@ void test("iOS 27 extension pairs require the official category and bundle allow
     /Unsupported App Attest extension values/u,
   );
 
-  const unsupportedBuild = cbor.encode(
-    new Map<string, unknown>([
+  for (const malformedBuild of ["", " ", "1\n", "1/2", "é", "1".repeat(65), 19, null]) {
+    const extensions = cbor.encode(new Map<string, unknown>([
       ["apple_validation_category_01", validationCategory(4)],
-      ["apple_bundle_version_01", "2"],
-    ]),
-  );
-  assert.throws(
-    () =>
-      verifier.verifyAssertion({
-        assertionObject: makeAssertion(
-          privateKey,
-          2,
-          appAttestAssertionFlags,
-          unsupportedBuild,
-        ),
+      ["apple_bundle_version_01", malformedBuild],
+    ]));
+    assert.throws(
+      () => verifier.verifyAssertion({
+        assertionObject: makeAssertion(privateKey, 2, appAttestAssertionFlags, extensions),
         clientData,
         key: makeKey(publicKeyPEM, 1),
       }),
-    /Unsupported App Attest extension values/u,
-  );
+      /Invalid App Attest extension values/u,
+    );
+  }
 
   const wrongEndianCategory = cbor.encode(
     new Map<string, unknown>([
@@ -604,6 +598,110 @@ void test("an invalid signature is rejected before a stale counter is classified
       !(error instanceof StaleAppAttestAssertionCounterError) &&
       error.message === "Invalid App Attest assertion signature.",
   );
+});
+
+void test("future signed TestFlight builds authenticate with existing keys while invalid proofs remain rejected", async (context) => {
+  const { privateKey, publicKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  const rawKeyId = Buffer.alloc(32, 7);
+  const keyId = rawKeyId.toString("base64");
+  const keyIdHash = createHash("sha256").update(rawKeyId).digest();
+  let storedKey: AttestedKey = {
+    ...makeKey(publicKey.export({ type: "spki", format: "pem" }).toString(), 0),
+    keyIdHash,
+    validationCategory: 2,
+    bundleVersion: "10",
+  };
+  const challenges = new Map<string, Parameters<AppAttestAuthenticationRepository["insertChallenge"]>[0]>();
+  let issuedTokens = 0;
+  const repository: AppAttestAuthenticationRepository = {
+    deleteExpiredChallenges: () => Promise.resolve(0),
+    deleteStaleKeys: () => Promise.resolve(0),
+    insertChallenge(input) {
+      challenges.set(input.challengeId, input);
+      return Promise.resolve();
+    },
+    consumeChallenge(input) {
+      const challenge = challenges.get(input.challengeId);
+      challenges.delete(input.challengeId);
+      return Promise.resolve(
+        challenge?.keyIdHash.equals(input.keyIdHash) &&
+        challenge.purpose === input.purpose && challenge.expiresAt > input.now
+          ? challenge.clientData : undefined,
+      );
+    },
+    insertKey: () => assert.fail("A supported app update must retain its existing attested key."),
+    findKey: (hash) => Promise.resolve(hash.equals(keyIdHash) ? storedKey : undefined),
+    advanceCounter(input) {
+      if (!input.keyIdHash.equals(keyIdHash) || input.previousSignCount !== storedKey.signCount ||
+          input.nextSignCount <= storedKey.signCount) return Promise.resolve(false);
+      storedKey = { ...storedKey, signCount: input.nextSignCount };
+      return Promise.resolve(true);
+    },
+  };
+  function configuredApp() {
+    const authentication = new AppAttestAuthenticationService(
+      repository,
+      new HardenedAppAttestVerifier(appId),
+      { issue() {
+        issuedTokens += 1;
+        return { accessToken: "synthetic-access-token", tokenType: "Bearer", expiresInSeconds: 900 };
+      } },
+      { now: () => new Date("2026-10-02T04:47:00.000Z"), makeClientData: () => clientData },
+    );
+    const app = createAuthApp({ appAttestAuthentication: authentication });
+    context.after(async () => app.close());
+    return app;
+  }
+  async function exchange(
+    app: ReturnType<typeof createAuthApp>, build: string, counter: number,
+    category = 2, signingKey = privateKey,
+  ) {
+    const challenge = await app.inject({
+      method: "POST", url: "/v1/auth/app-attest/challenge", payload: { keyId, purpose: "assertion" },
+    });
+    assert.equal(challenge.statusCode, 200);
+    const body = challenge.json<{ challengeId: string; clientData: string }>();
+    assert.equal(body.clientData, clientData.toString("base64url"));
+    const response = await app.inject({
+      method: "POST", url: "/v1/auth/app-attest/assert",
+      payload: {
+        keyId, challengeId: body.challengeId,
+        assertionObject: makeAssertion(signingKey, counter, appAttestAssertionFlags, cbor.encode(
+          new Map<string, unknown>([
+            ["apple_validation_category_01", validationCategory(category)],
+            ["apple_bundle_version_01", build],
+          ]),
+        )).toString("base64"),
+      },
+    });
+    assert.equal(challenges.size, 0, "Every accepted or rejected proof consumes its challenge.");
+    return response;
+  }
+
+  const app = configuredApp();
+  for (const [index, build] of ["19", "1", "10", "9999", "1.2.3"].entries()) {
+    const accepted = await exchange(app, build, index + 1);
+    assert.equal(accepted.statusCode, 200, `Signed build ${build} must authenticate without configuration.`);
+    assert.equal(accepted.json<{ tokenType: string }>().tokenType, "Bearer");
+    assert.equal(storedKey.signCount, index + 1);
+  }
+  assert.equal(issuedTokens, 5);
+  assert.equal(storedKey.bundleVersion, "10", "Initial attestation metadata remains an audit record.");
+
+  const { privateKey: forgedKey } = generateKeyPairSync("ec", { namedCurve: "prime256v1" });
+  for (const response of [
+    await exchange(app, "10000", 6, 2, forgedKey),
+    await exchange(app, "10000", 6, 3),
+    await exchange(app, "10000\n", 6),
+  ]) {
+    assert.equal(response.statusCode, 401);
+    assert.equal(response.json<{ type: string }>().type, "urn:nextstop:error:app-attest-rejected");
+  }
+  assert.equal(storedKey.signCount, 5);
+  assert.equal(issuedTokens, 5, "Invalid signatures, categories and version metadata cannot mint tokens.");
+  assert.equal((await exchange(app, "10000", 5)).statusCode, 409);
+  assert.equal(storedKey.signCount, 5);
+  assert.equal(issuedTokens, 5, "A newer build cannot bypass the assertion counter.");
 });
 
 function makeAssertion(

@@ -21,11 +21,15 @@ info:
     For iOS 27 proofs that carry Apple's validation extensions, validation
     category and bundle version must appear together and are checked on every
     attestation and assertion. Development keys accept category 3; production
-    keys accept TestFlight category 2 or App Store category 4. Bundle versions
-    must be in the server's `APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS` allowlist. A
-    proof without either extension is accepted as the legacy pre-iOS-27 shape;
-    partial or unknown extensions fail closed. Values are not required to equal
-    the initial attestation, so an allowlisted app update remains valid.
+    keys accept TestFlight category 2 or App Store category 4. The signed bundle
+    version is validated as a string of 1–64 ASCII letters, digits, dots,
+    underscores or hyphens; it is
+    metadata, not a per-build authentication allowlist. New build numbers need
+    no backend registration or synchronization webhook. A proof without either
+    extension is accepted as the legacy pre-iOS-27 shape; partial or unknown
+    extensions fail closed. Values need not equal the initial attestation, so
+    an app update can retain its existing key. Full App ID, environment,
+    signature, challenge binding and replay-counter checks remain required.
 servers:
   - url: https://api.nextstop.tech
 paths:
@@ -170,8 +174,10 @@ paths:
         endpoints share a 12-request-per-minute limit per client IP with a burst
         of four. The auth process additionally permits at most 60 proof exchanges
         globally per minute and two concurrent cryptographic proof verifications.
-        When Apple's iOS 27 validation extensions are present, both are required
-        and their category/build values must pass the current server allowlists.
+        When Apple's iOS 27 validation extensions are present, both are required.
+        The category must match the signing environment, and the signed bundle
+        version must be a string of 1–64 ASCII letters, digits, dots, underscores
+        or hyphens. No exact build-number allowlist is applied.
       security: []
       requestBody:
         required: true
@@ -205,8 +211,10 @@ paths:
         12-request-per-minute limit per client IP with a burst of four. The auth
         process additionally permits at most 60 proof exchanges globally per
         minute and two concurrent cryptographic proof verifications. Any iOS 27
-        validation-extension pair is checked afresh; it need not equal the pair
-        stored from initial attestation, which permits allowlisted app updates.
+        validation-extension pair is checked afresh for the signing environment
+        and bounded metadata shape. It need not equal the pair stored from initial
+        attestation; a changed build number does not require key re-registration
+        or backend configuration.
       security: []
       requestBody:
         required: true

@@ -24,6 +24,7 @@ from common import ROOT, configuration
 
 CONTAINER = "gcp-vm-database-1"
 PRIVATE_TABLES = ("app_attest_keys", "app_attest_challenges", "user_error_reports")
+# The optional version list is retained for older rollback/bootstrap images only.
 AUTH_FIELDS = ("APP_ATTEST_APP_ID", "APP_ATTEST_SUPPORTED_BUNDLE_VERSIONS")
 PUBLIC_TABLES = frozenset({
     "availability_observations", "availability_snapshots", "charging_campus_park_memberships",
@@ -212,7 +213,8 @@ def seed():
     if stage_free < 2*metadata["databaseBytes"]+10*1024**3:
         raise RuntimeError("Insufficient staging disk space for dump plus restored database.")
     auth=metadata["publicAuthConfig"]
-    if set(auth)!=set(AUTH_FIELDS) or any("\n" in value for value in auth.values()):
+    if ("APP_ATTEST_APP_ID" not in auth or not set(auth).issubset(AUTH_FIELDS)
+            or any("\n" in value for value in auth.values())):
         raise RuntimeError("Public App Attest metadata is incomplete.")
     operation=uuid.uuid4().hex
     directory=f"/srv/nextstop/.public-seed-{operation}"
