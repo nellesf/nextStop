@@ -1,8 +1,8 @@
 # Environment infrastructure and release control
 
-Status on 2026-10-01: the owner approved the smaller two-VM implementation.
+Status on 2026-10-02: the owner approved the smaller two-VM implementation.
 Production remains on its existing VM/database in `nextstop-tech-staging` at
-`api.nextstop.tech`; its service, database, DNS and keys have not been replaced.
+`api.nextstop.tech`; its database, DNS and keys have not been replaced.
 The separate staging project, network and VM are provisioned, with independent
 database credentials and signing keys. Its reserved public address is
 `34.89.193.23`; `api-staging.nextstop.tech` resolves to that address. HTTPS and
@@ -13,7 +13,7 @@ The public-data seed and `ANALYZE` completed: one active charging version with
 challenges and user error reports were verified empty before application startup.
 Staging API, auth and the real ingestion worker are now running. Two immutable
 images were deployed; a controlled activation rejection, rollback and forward
-recovery passed with 146 successful concurrent synthetic search samples.
+recovery passed with 146 successful synthetic search samples during the releases.
 See the [live verification record](../../docs/operations/staging-release-verification-2026-10-01.md)
 for exact images, timings, latency and the limits of that evidence.
 The private production release-backup bucket exists with enforced public-access
@@ -39,17 +39,24 @@ after switching to the deploy identity. A second SDK setup and identity guard
 fixed that selection without expanding IAM. Staging CI run `36860547909` for
 `9ec36e8` then passed, with successful explicit deployment `6783984468`, public
 readiness identifying the new image, and the exact promotion binding verified.
-`NEXTSTOP_RELEASES_ENABLED=true` is now active. Backend and Swift Core CI passed
-for `9ec36e8`; its iOS run is still running, with app sources unchanged since the
-last complete green `e106f2e` run. The 12:22:22 UTC staging host audit passed:
-the new blue slot and retained green B are ready, one worker is running, and no
-pending journal or temporary deployment credentials/uploads remain. Production
-still serves its legacy deployment. Its exact-image
-[promotion run `36861316291`](https://github.com/nellesf/nextStop/actions/runs/36861316291)
-is **waiting for owner review**. See the verification record for the exact image
-and remaining gates.
-Both Simulator broker/API connections passed live smoke checks; the current
-production transition command is documented in [iOS development](../../docs/development.md#connected-debug-simulator-search).
+`NEXTSTOP_RELEASES_ENABLED=true` is now active. At the 2026-10-01 staging audit,
+Backend and Swift Core CI had passed for `9ec36e8`; its iOS run was still running,
+with app sources unchanged since the last complete green `e106f2e` run. The
+12:22:22 UTC staging host audit passed:
+the new blue slot and retained green B were ready, one worker was running, and no
+pending journal or temporary deployment credentials/uploads remained. Production
+promotion was approved by the owner. The first attempt, run `36861316291`, failed
+safely during backup before deployment; all 10 accompanying search samples passed.
+The [authorized retry `36963689673`](https://github.com/nellesf/nextStop/actions/runs/36963689673)
+then passed with the same staged `9ec36e8` application and `sha256:21083d7…` image,
+using control commit `345e258`. Production now serves blue API/auth with one
+worker; the existing database was not restarted and legacy API/auth are retained.
+The final host audit passed, all 20 retry search samples returned HTTP 200, and
+the named production Simulator broker completed a separate successful search.
+The full iOS run for `345e258` passed with 268 tests passed and one skipped.
+See the [production verification record](../../docs/operations/production-release-verification-2026-10-02.md)
+for the exact image, backup evidence, timeline and limits. The normal named
+production connection is documented in [iOS development](../../docs/development.md#connected-debug-simulator-search).
 
 See [ADR 0018](../../docs/adr/0018-staging-production-releases.md), the
 [release runner](../gcp-vm/README.md), and

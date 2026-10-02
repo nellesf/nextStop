@@ -355,8 +355,7 @@ From the repository root, start the corresponding broker and keep it running:
 # Use with the NextStop-Staging scheme.
 NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh
 
-# After the first production release installs the stable helper:
-# use with NextStop-ProductionTest or the default NextStopApp scheme.
+# Use with NextStop-ProductionTest or the default NextStopApp scheme.
 NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh
 ```
 
@@ -391,12 +390,19 @@ with `X-NextStop-Simulator-Auth: 1`; the response is the usual access-token JSON
 The Simulator permits 95 seconds for refresh because IAP/SSH minting has a
 90-second timeout.
 
-**Temporary production setup, verified 2026-10-01:** staging already has the
-release installation and stable mint helper. Production still runs its existing
-legacy deployment; the named `production` broker command above becomes usable
-after its first release installation supplies that helper. Until then, run the
-existing production compose minter through the explicit compatibility mode on
-port 8766:
+**Production verified 2026-10-02:** the production release installed the stable
+helper. The named `production` recipe above minted a token and completed one
+synthetic public search with HTTP 200, valid candidates and a snapshot. Tokens
+stayed in memory; the temporary broker stopped and released port 8766. Use this
+named recipe with `NextStop-ProductionTest` or the default `NextStopApp` scheme,
+without API or broker URL overrides. This verifies broker/API connectivity, not a
+full Simulator UI session or real-device App Attest continuity. See the
+[production verification record](operations/production-release-verification-2026-10-02.md).
+
+**Historical compatibility option for hosts not yet adopted by the release
+runner:** before the stable helper is installed, the old production compose
+minter can use the explicit compatibility mode below on port 8766. This is no
+longer the normal setup for the current production host:
 
 ```bash
 env -u NEXTSTOP_BACKEND_ENVIRONMENT \
@@ -421,8 +427,8 @@ API. Each search returned HTTP 200 with a snapshot; tokens stayed in memory and
 both temporary brokers were stopped with their ports released. These checks
 verified the broker/API connection, not the full Simulator app interaction.
 
-For an explicit transition before the stable command is installed, the old
-compose minter also retains its original port 9482 recipe:
+For an unadopted host without the stable helper, the historical compose minter
+also retains its original port 9482 recipe:
 
 ```bash
 NEXTSTOP_SIMULATOR_AUTH_MODE=staging \

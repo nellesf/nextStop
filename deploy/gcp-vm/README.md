@@ -6,7 +6,7 @@ existing VM, database, credentials and public origin. Staging receives a separat
 VM and database for testing. This adds environment isolation and safer releases;
 it does not change the existing outage or failover model.
 
-Status on 2026-10-01: the separate staging VM and database are provisioned;
+Status on 2026-10-02: the separate staging VM and database are provisioned;
 the public-data seed, database statistics and public DNS/TLS are verified.
 Staging API/auth/worker startup, a controlled activation rejection and rollback
 in both directions passed live checks with 146 successful synthetic search
@@ -26,11 +26,17 @@ a second SDK setup and identity guard, without broader IAM. Staging CI run
 readiness and the exact promotion binding passed. Automatic releases are now
 **enabled**. The final staging host audit at 12:22:22 UTC passed, including ready
 active/retained slots, one worker, healthy database and clean release state.
-Production remains on its legacy deployment;
-[promotion run `36861316291`](https://github.com/nellesf/nextStop/actions/runs/36861316291)
-is **waiting for owner review** of the exact staged commit/image. Backend and Swift Core CI passed for `9ec36e8`; its iOS
-run is still running. The last complete green iOS run is `e106f2e`, and app sources
-are unchanged. See the exact
+The owner-approved first production attempt, run `36861316291`, failed safely
+in the backup phase before deployment. The
+[authorized retry `36963689673`](https://github.com/nellesf/nextStop/actions/runs/36963689673)
+passed with the same staged `9ec36e8` application and `sha256:21083d7…` image,
+using control commit `345e258`; explicit production deployment `6801142334`
+succeeded. The database container was unchanged and not restarted. Blue API/auth
+and exactly one worker run the approved image; legacy API/auth are retained for
+rollback. The final host audit, 20/20 accompanying search samples and one separate
+named-production-broker search passed. The full iOS run for `345e258` also passed
+with 268 tests passed and one skipped. See the
+[production verification record](../../docs/operations/production-release-verification-2026-10-02.md),
 [activation status](../gcp/README.md) and
 [ADR 0018](../../docs/adr/0018-staging-production-releases.md).
 

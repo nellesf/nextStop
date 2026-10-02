@@ -1,5 +1,9 @@
 # Staging release verification, 2026-10-01
 
+This is the historical staging and restore record for 2026-10-01. For the later
+owner approval and first production attempt, see the
+[production verification record for 2026-10-02](production-release-verification-2026-10-02.md).
+
 ## Scope and final state
 
 The release-switching tests used the separate `nextstop-tech-testing` project, its
@@ -159,12 +163,13 @@ while token authentication used the deploy identity. A second SDK setup and
 explicit identity guard corrected the selection; `actionlint` passed. The later
 successful live staging CI run `36860547909` validated the correction under the
 deploy identity. No IAM expansion was required. `NEXTSTOP_RELEASES_ENABLED=true`
-is active. Production still serves its legacy deployment.
+was active at the close of this record. Production still served its legacy deployment.
 [Production promotion run `36861316291`](https://github.com/nellesf/nextStop/actions/runs/36861316291)
 targets the exact `9ec36e860f1abc0c4f1872888eb83483d5249156` commit and CI image
-listed above and is **waiting for owner review**. Review has been requested;
-the run is not approved or deployed. First production adoption and real-device
-App Attest continuity verification remain outstanding.
+listed above and was **waiting for owner review** at the close of this record.
+Review had been requested; the run was not yet approved or deployed. First
+production adoption and real-device App Attest continuity verification remained
+outstanding at that point.
 
 Backend and Swift Core CI passed for B. Its earlier
 [iOS CI run](https://github.com/nellesf/nextStop/actions/runs/36852498463)
