@@ -201,6 +201,203 @@ final class SearchPolicyTests: XCTestCase {
     XCTAssertEqual(results.map(\.candidate.park.name), ["closer", "farther"])
   }
 
+  func testRankedResultsKeepSixthCandidateBeforeFinalPlaceConfirmation() throws {
+    let candidates = try (60...65).map {
+      try makeCandidate(name: "park-\($0)", drivingKilometers: $0)
+    }
+    let criteria = SearchConfiguration.defaultCriteria
+
+    let ranked = policy.rankedResults(from: candidates.reversed(), criteria: criteria)
+
+    XCTAssertEqual(
+      ranked.map(\.candidate.actualDrivingDistance.value),
+      [60, 61, 62, 63, 64, 65].map { $0 * 1_000 })
+    XCTAssertEqual(
+      policy.selectResults(from: candidates, criteria: criteria), Array(ranked.prefix(5)))
+    // An unmatched early candidate must not hide the sixth qualified result.
+    let confirmed = ranked.enumerated().compactMap { index, result in
+      policy.restrictToOperators(
+        result, operatorNames: index == 0 ? [] : ["Operator"], criteria: criteria)
+    }
+    XCTAssertEqual(confirmed.count, 5)
+    XCTAssertEqual(confirmed.last?.candidate.actualDrivingDistance, Meters(65_000))
+  }
+
+  func testNumbatFourAndEnBWTwoCannotMeetSixAfterEitherOperatorIsRemoved() throws {
+    let candidate = try makeCandidate(
+      name: "mixed-campus", drivingKilometers: 79, maximumPower: 300,
+      operatorCounts: ["numbat gmbh": 4, "EnBW": 2]
+    )
+    let criteria = RideCriteria(
+      distanceRange: .kilometers50To100, minimumChargingPoints: .six,
+      minimumPower: .threeHundred, foodChain: nil
+    )
+    let result = try XCTUnwrap(policy.rankedResults(from: [candidate], criteria: criteria).first)
+
+    XCTAssertNil(
+      policy.restrictToOperators(result, operatorNames: ["numbat gmbh"], criteria: criteria))
+    XCTAssertNil(policy.restrictToOperators(result, operatorNames: ["EnBW"], criteria: criteria))
+    XCTAssertEqual(
+      policy.restrictToOperators(
+        result, operatorNames: ["numbat gmbh", "EnBW"], criteria: criteria)?.chargingPointCount,
+      6
+    )
+  }
+
+  func testEnoughConfirmedEVSEsRetainOriginalParkAndActualDistance() throws {
+    let candidate = try makeCandidate(
+      name: "old mixed title", drivingKilometers: 79, maximumPower: 300,
+      operatorCounts: ["Confirmed": 6, "Missing": 4]
+    )
+    let criteria = RideCriteria(
+      distanceRange: .kilometers50To100, minimumChargingPoints: .six,
+      minimumPower: .threeHundred, foodChain: nil
+    )
+    let result = try XCTUnwrap(policy.rankedResults(from: [candidate], criteria: criteria).first)
+    let restricted = try XCTUnwrap(
+      policy.restrictToOperators(
+        result, operatorNames: ["Confirmed", "Not in this park"], criteria: criteria
+      ))
+
+    XCTAssertEqual(restricted.candidate, candidate)
+    XCTAssertEqual(restricted.candidate.park.chargingPointCount, 10)
+    XCTAssertEqual(restricted.candidate.actualDrivingDistance, Meters(79_000))
+    XCTAssertEqual(restricted.chargingPointCount, 6)
+    XCTAssertEqual(restricted.eligibleOperatorNames, ["Confirmed"])
+    XCTAssertEqual(restricted.operatorChargingPoints.map(\.name), ["Confirmed"])
+    XCTAssertEqual(restricted.displayName, "Confirmed")
+  }
+
+  func testRestaurantMembersMustMeetMinimumSeparatelyAfterOperatorRestriction() throws {
+    let food = try makeFoodPOI(
+      id: "restaurant", chain: .mcdonalds, meters: 100, openingStatus: .unknown)
+    let candidates = try [60, 61].map {
+      try makeCandidate(
+        name: "park-\($0)", drivingKilometers: $0,
+        operatorCounts: ["Confirmed": 2, "Missing": 2], foodPOIs: [food]
+      )
+    }
+    var criteria = SearchConfiguration.defaultCriteria
+    criteria.foodChain = .mcdonalds
+    let result = try XCTUnwrap(policy.rankedResults(from: candidates, criteria: criteria).first)
+
+    XCTAssertEqual(result.chargingPointCount, 8)
+    // Four retained EVSEs across two undersized fine parks must not rescue the restaurant.
+    XCTAssertNil(
+      policy.restrictToOperators(result, operatorNames: ["Confirmed"], criteria: criteria))
+  }
+
+  func testRestaurantReplacesRemovedRepresentativeWithActualNearestRetainedMember() throws {
+    let nearFood = try makeFoodPOI(
+      id: "restaurant", chain: .mcdonalds, meters: 100, openingStatus: .unknown)
+    let farFood = try makeFoodPOI(
+      id: "restaurant", chain: .mcdonalds, meters: 400, openingStatus: .unknown)
+    let near = try makeCandidate(
+      name: "near", drivingKilometers: 60,
+      operatorCounts: ["Confirmed": 2, "Missing": 4], foodPOIs: [nearFood]
+    )
+    let far = try makeCandidate(
+      name: "far", drivingKilometers: 70, operatorName: "Confirmed", foodPOIs: [farFood]
+    )
+    var criteria = SearchConfiguration.defaultCriteria
+    criteria.foodChain = .mcdonalds
+    let result = try XCTUnwrap(policy.rankedResults(from: [far, near], criteria: criteria).first)
+    let restricted = try XCTUnwrap(
+      policy.restrictToOperators(result, operatorNames: ["Confirmed"], criteria: criteria))
+
+    XCTAssertEqual(restricted.candidates, [far])
+    XCTAssertEqual(restricted.candidate.actualDrivingDistance, Meters(70_000))
+    XCTAssertEqual(restricted.matchingFoodPOI, farFood)
+    XCTAssertEqual(restricted.chargingPointCount, 4)
+    XCTAssertEqual(restricted.placeLookupCandidates, [near, far])
+    XCTAssertEqual(restricted.representativePark(for: "Confirmed"), near.park)
+  }
+
+  func testPartiallyRetainedAvailabilityIsUnknownWhileWholeMemberAvailabilitySurvives() throws {
+    let food = try makeFoodPOI(
+      id: "restaurant", chain: .mcdonalds, meters: 100, openingStatus: .unknown)
+    let partial = try makeCandidate(
+      name: "partial", drivingKilometers: 60,
+      availability: ParkAvailability(
+        knownAvailableCount: 4, knownUnavailableCount: 2, unknownCount: 0, totalCount: 6,
+        lastLiveObservationAt: Date(timeIntervalSince1970: 200)
+      ),
+      operatorCounts: ["Confirmed": 4, "Missing": 2], foodPOIs: [food]
+    )
+    let complete = try makeCandidate(
+      name: "complete", drivingKilometers: 70,
+      availability: ParkAvailability(
+        knownAvailableCount: 1, knownUnavailableCount: 2, unknownCount: 1, totalCount: 4,
+        lastLiveObservationAt: Date(timeIntervalSince1970: 100)
+      ),
+      operatorName: "Confirmed", foodPOIs: [food]
+    )
+    var criteria = SearchConfiguration.defaultCriteria
+    criteria.foodChain = .mcdonalds
+    let result = try XCTUnwrap(
+      policy.rankedResults(from: [complete, partial], criteria: criteria).first)
+    let restricted = try XCTUnwrap(
+      policy.restrictToOperators(result, operatorNames: ["Confirmed"], criteria: criteria))
+
+    XCTAssertEqual(
+      restricted.availability,
+      try ParkAvailability(
+        knownAvailableCount: 1, knownUnavailableCount: 2, unknownCount: 5, totalCount: 8,
+        lastLiveObservationAt: Date(timeIntervalSince1970: 100)
+      ))
+    XCTAssertEqual(restricted.chargingPointCount, restricted.availability.totalCount)
+    XCTAssertFalse(restricted.availability.isComplete)
+    let partialOnly = try XCTUnwrap(
+      policy.restrictToOperators(
+        RouteSearchResult(candidate: partial, matchingFoodPOI: food),
+        operatorNames: ["Confirmed"], criteria: criteria
+      ))
+    XCTAssertEqual(partialOnly.availability.unknownCount, 4)
+    XCTAssertNil(partialOnly.availability.lastLiveObservationAt)
+  }
+
+  func testRestrictionRetainsOriginalLookupEvidenceWithoutResurrectingOperators() throws {
+    let coordinate = try Coordinate(latitude: 52, longitude: 10)
+    let lookups = try ["Confirmed", "Missing"].map {
+      try ChargingLocationLookup(
+        id: UUID(), operatorName: $0, coordinate: coordinate, address: ChargingLocationAddress())
+    }
+    let candidate = try makeCandidate(
+      name: "mixed", drivingKilometers: 60, operatorCounts: ["Confirmed": 4, "Missing": 4],
+      locationLookups: lookups
+    )
+    let criteria = SearchConfiguration.defaultCriteria
+    let original = RouteSearchResult(candidate: candidate, matchingFoodPOI: nil)
+    let restricted = try XCTUnwrap(
+      policy.restrictToOperators(original, operatorNames: ["Confirmed"], criteria: criteria))
+    let repeated = try XCTUnwrap(
+      policy.restrictToOperators(
+        restricted, operatorNames: ["Confirmed", "Missing"], criteria: criteria
+      ))
+
+    XCTAssertEqual(repeated, restricted)
+    XCTAssertEqual(repeated.placeLookupCandidates, original.candidates)
+    XCTAssertEqual(repeated.locationLookups, lookups)
+    XCTAssertEqual(repeated.operatorChargingPoints.map(\.name), ["Confirmed"])
+    XCTAssertNil(
+      policy.restrictToOperators(restricted, operatorNames: ["Missing"], criteria: criteria))
+    XCTAssertEqual(
+      try JSONDecoder().decode(RouteSearchResult.self, from: JSONEncoder().encode(restricted)),
+      restricted)
+  }
+
+  func testUnrestrictedResultPreservesExistingDisplayAndCodableDefaults() throws {
+    let candidate = try makeCandidate(name: "existing title", drivingKilometers: 60)
+    let result = RouteSearchResult(candidate: candidate, matchingFoodPOI: nil)
+    let decoded = try JSONDecoder().decode(
+      RouteSearchResult.self, from: JSONEncoder().encode(result))
+
+    XCTAssertNil(decoded.eligibleOperatorNames)
+    XCTAssertEqual(decoded.displayName, candidate.park.name)
+    XCTAssertEqual(decoded.placeLookupCandidates, [candidate])
+    XCTAssertEqual(decoded.availability, candidate.park.availability)
+  }
+
   private func makeCandidate(
     name: String,
     drivingKilometers: Int,
@@ -209,8 +406,12 @@ final class SearchPolicyTests: XCTestCase {
     availability: ParkAvailability? = nil,
     maximumPower: Int = 100,
     operatorName: String = "Operator",
+    operatorCounts: [String: Int]? = nil,
+    locationLookups: [ChargingLocationLookup] = [],
     foodPOIs: [FoodPOI] = []
   ) throws -> EnrichedChargingParkCandidate {
+    let operators = operatorCounts ?? [operatorName: chargingPoints]
+    let chargingPoints = operators.values.reduce(0, +)
     let coordinate = try Coordinate(latitude: 52.0, longitude: 10.0)
     let resolvedAvailability: ParkAvailability
     if let availability {
@@ -236,16 +437,14 @@ final class SearchPolicyTests: XCTestCase {
       name: name,
       coordinate: coordinate,
       navigationCoordinate: coordinate,
-      operatorChargingPoints: [
-        try OperatorChargingPointSummary(
-          name: operatorName,
-          chargingPointCount: chargingPoints
-        )
-      ],
+      operatorChargingPoints: try operators.map {
+        try OperatorChargingPointSummary(name: $0.key, chargingPointCount: $0.value)
+      },
       chargingPointCount: chargingPoints,
       availability: resolvedAvailability,
       maximumPower: Kilowatts(maximumPower),
-      sourceReferences: [source]
+      sourceReferences: [source],
+      locationLookups: locationLookups
     )
     return EnrichedChargingParkCandidate(
       park: park,

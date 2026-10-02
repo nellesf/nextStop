@@ -9,6 +9,7 @@ enum RideCandidateSearchError: Error, Equatable {
   case candidateResponseInvalid
   case drivingDistancesUnavailable
   case foodSearchUnavailable
+  case applePlacesUnavailable
 }
 
 struct RideCandidateSearchOutcome: Equatable, Sendable {
@@ -46,26 +47,36 @@ protocol RideCandidateSearching: AnyObject {
 }
 
 @MainActor
+protocol ChargingResultChecking: AnyObject {
+  func beginSearch()
+  func confirmedOperatorNames(in result: RouteSearchResult) async throws -> Set<String>
+}
+
+@MainActor
 final class RideCandidateSearchCoordinator: RideCandidateSearching {
   private let pageSearcher: any CandidatePageSearching
   private let enricher: any CandidateEnriching
+  private let resultChecker: any ChargingResultChecking
   private let policy: ChargingParkSearchPolicy
   private let enrichmentBatchSize: Int
 
   init(
     pageSearcher: any CandidatePageSearching,
     enricher: any CandidateEnriching,
+    resultChecker: any ChargingResultChecking,
     policy: ChargingParkSearchPolicy = ChargingParkSearchPolicy(),
     enrichmentBatchSize: Int = 4
   ) {
     precondition((1...4).contains(enrichmentBatchSize))
     self.pageSearcher = pageSearcher
     self.enricher = enricher
+    self.resultChecker = resultChecker
     self.policy = policy
     self.enrichmentBatchSize = enrichmentBatchSize
   }
 
   func search(preparedRide: PreparedRideSearch) async throws -> RideCandidateSearchOutcome {
+    resultChecker.beginSearch()
     do {
       return try await searchOnce(preparedRide: preparedRide)
     } catch RideCandidateSearchError.candidateSnapshotExpired {
@@ -84,7 +95,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     var previousPageLastLowerBound: Meters?
     var searchCoverage: CandidateSearchCoverage?
     var searchAttributions: [DataAttribution]?
-    var restaurantIDsToComplete: Set<String>?
+    var checkedOperators: [RouteSearchResult: Set<String>] = [:]
 
     while true {
       let page: CandidateSearchPage
@@ -143,14 +154,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
       }
       for offset in stride(from: 0, to: candidatesToEnrich.count, by: enrichmentBatchSize) {
         let end = min(offset + enrichmentBatchSize, candidatesToEnrich.count)
-        let batch = Array(candidatesToEnrich[offset..<end]).filter { candidate in
-          guard let restaurantIDsToComplete else {
-            return true
-          }
-          return candidate.foodPOIs.contains {
-            restaurantIDsToComplete.contains($0.id)
-          }
-        }
+        let batch = Array(candidatesToEnrich[offset..<end])
         let outcome = try await enrichBatch(
           batch,
           origin: preparedRide.origin,
@@ -163,17 +167,15 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
           continue
         }
         let nextLowerBound = page.candidates[end].straightLineLowerBound
-        let batchResults = policy.selectResults(
-          from: enrichedCandidates,
-          criteria: request.criteria
-        )
-        if restaurantIDsToComplete == nil {
-          restaurantIDsToComplete = restaurantCompletionIDs(
-            results: batchResults,
-            nextLowerBound: nextLowerBound,
-            criteria: request.criteria
-          )
+        // Restaurant evidence is only complete after scanning its entire range.
+        guard request.criteria.foodChain == nil || nextLowerBound > upperDistance else {
+          continue
         }
+        let batchResults = try await checkedResults(
+          from: enrichedCandidates,
+          criteria: request.criteria,
+          checkedOperators: &checkedOperators
+        )
         if nextLowerBound > upperDistance
           || safeToStop(
             results: batchResults,
@@ -191,10 +193,17 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         }
       }
 
-      let selectedResults = policy.selectResults(
-        from: enrichedCandidates,
-        criteria: request.criteria
-      )
+      let reachedEnd =
+        page.nextCursor == nil
+        || page.candidates.last.map { $0.straightLineLowerBound > upperDistance } == true
+      let selectedResults =
+        request.criteria.foodChain != nil && !reachedEnd
+        ? []
+        : try await checkedResults(
+          from: enrichedCandidates,
+          criteria: request.criteria,
+          checkedOperators: &checkedOperators
+        )
       guard let nextCursor = page.nextCursor else {
         return try outcome(
           results: selectedResults,
@@ -211,13 +220,6 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
             attributions: searchAttributions,
-            criteria: request.criteria
-          )
-        }
-        if restaurantIDsToComplete == nil {
-          restaurantIDsToComplete = restaurantCompletionIDs(
-            results: selectedResults,
-            nextLowerBound: lastLowerBound,
             criteria: request.criteria
           )
         }
@@ -264,23 +266,49 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
       } == true
   }
 
-  private func restaurantCompletionIDs(
-    results: [RouteSearchResult],
-    nextLowerBound: Meters,
-    criteria: RideCriteria
-  ) -> Set<String>? {
-    guard criteria.foodChain != nil,
-      results.count == SearchConfiguration.maximumResultCount,
-      let fifthDistance = results.last?.candidate.actualDrivingDistance,
-      nextLowerBound > fifthDistance
-    else {
-      return nil
+  private func checkedResults(
+    from candidates: [EnrichedChargingParkCandidate],
+    criteria: RideCriteria,
+    checkedOperators: inout [RouteSearchResult: Set<String>]
+  ) async throws -> [RouteSearchResult] {
+    var accepted: [RouteSearchResult] = []
+    for result in policy.rankedResults(from: candidates, criteria: criteria) {
+      try Task.checkCancellation()
+      // Removing a member can only increase a group's representative distance.
+      if accepted.count == SearchConfiguration.maximumResultCount,
+        let fifth = accepted.last,
+        result.candidate.actualDrivingDistance > fifth.candidate.actualDrivingDistance
+      {
+        break
+      }
+      let operatorNames: Set<String>
+      if let cached = checkedOperators[result] {
+        operatorNames = cached
+      } else {
+        do {
+          operatorNames = try await resultChecker.confirmedOperatorNames(in: result)
+          try Task.checkCancellation()
+        } catch is CancellationError {
+          throw CancellationError()
+        } catch {
+          throw RideCandidateSearchError.applePlacesUnavailable
+        }
+        checkedOperators[result] = operatorNames
+      }
+      if let checked = policy.restrictToOperators(
+        result, operatorNames: operatorNames, criteria: criteria
+      ) {
+        accepted.append(checked)
+        accepted.sort {
+          if $0.candidate.actualDrivingDistance == $1.candidate.actualDrivingDistance {
+            return $0.id.uuidString < $1.id.uuidString
+          }
+          return $0.candidate.actualDrivingDistance < $1.candidate.actualDrivingDistance
+        }
+        accepted = Array(accepted.prefix(SearchConfiguration.maximumResultCount))
+      }
     }
-    let restaurantIDs = Set(results.compactMap { $0.matchingFoodPOI?.id })
-    guard restaurantIDs.count == SearchConfiguration.maximumResultCount else {
-      return nil
-    }
-    return restaurantIDs
+    return accepted
   }
 
   private func outcome(

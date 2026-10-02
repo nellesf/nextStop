@@ -9,21 +9,24 @@ restaurant and combines all qualifying nearby fine parks by charging operator.
 It does not provide turn-by-turn navigation.
 
 Phase 1 research and the Phase 2 architecture were approved on 2026-08-13; the
-charging-park clustering decision was amended on 2026-08-20.
+charging-park clustering decision was amended on 2026-08-20. On 2026-10-02, the
+owner approved counting and displaying only operators with an unambiguous Apple
+charger match, with the selected minimum EVSE count checked again before results.
 Implementation includes the portable, entitlement-independent Swift core, a
 localized SwiftUI profile editor with local SwiftData persistence, and the first
 ride flow: precise current location, a canonical MapKit route, privacy-scoped
 candidate search, exact per-candidate MapKit driving distances, versioned OSM
 restaurant checks, distance-only ranking, per-operator EVSE counts, and Apple Maps
-handoff. Each charging operator appears once per restaurant result with its
-combined EVSE count and one 48-point Apple Maps button; the restaurant has one too.
-A tap performs a bounded, conservative place match
-and opens the native Apple place by stable Place ID so Apple Maps can show its own
-current details and navigation action. A missing unambiguous match is reported
-instead of opening a guessed place. CarPlay offers an operator list with the same
-combined EVSE counts and bounded native-place matching. Its separate restaurant
-action also opens the native Apple place, just like iPhone; the user may start
-navigation from Apple Maps.
+handoff. Before final results, bounded sequential Apple charger matching confirms
+each operator. Only confirmed operators appear and contribute to the EVSE total;
+each campus or individual fine park must still meet the selected minimum count.
+Each remaining operator appears once per restaurant result with its combined EVSE
+count and one 48-point Apple Maps button. Handoff reuses the successful match and
+original lookup scope to open the native Apple place by stable Place ID. The
+restaurant has a separate button whose Apple lookup runs only on tap; OSM remains
+the restaurant search predicate. CarPlay uses the same confirmed operator list,
+counts and native-place handoff. Neither surface opens a guessed place; the user
+may start navigation from Apple Maps.
 The same application flow is connected to a template-native CarPlay scene with
 profile and saved-destination selection, a ride summary with immediate search or
 filter-edit actions and all four current criteria, ride-scoped fixed filter
@@ -78,18 +81,26 @@ it can receive reports.
 - The minimum-power filter is applied to individual EVSEs before candidate-wide
   deduplication, per-operator counts, minimum size, and informational availability
   are derived. Counts cover the whole campus without food and one fine park before
-  restaurant grouping with food.
+  restaurant grouping with food. Before final results, only operators confirmed by
+  the existing Apple charger matcher remain visible and count toward the EVSE
+  minimum, which is rechecked per campus or independently per fine park.
 - Availability remains informational and never filters a candidate.
 - A selected food chain must be within 500 m geodesic distance of the
   power-filtered fine-park navigation coordinate.
 - With a selected food chain, fine parks that match the same stable restaurant POI
   are presented as one result. Exact operator names are combined and their
-  qualifying EVSE counts are summed; the nearest member fine park by actual driving
-  distance determines result order and displayed driving distance.
+  qualifying EVSE counts are summed after Apple confirmation and the per-fine-park
+  minimum-count recheck. The nearest surviving fine park by actual driving
+  distance determines result order and displayed driving distance. Collect the
+  complete original restaurant group before matching; preserve that group's
+  power-qualified lookup evidence for matching, ride-local caching and handoff.
 - Opening hours are informational only.
 - Results are sorted only by actual MapKit driving distance from the current
   location and capped at five campuses without a food filter or five restaurants
-  with one. Filters are never relaxed automatically.
+  with one, after every eligibility filter; later candidates replace discarded
+  results. Filters are never relaxed automatically. Failed or throttled Apple
+  searches remain retryable errors, and cancellation never becomes a confirmed
+  no-match. Sequential Apple lookups add latency without a promised search SLA.
 - Candidate distance extraction accepts valid MapKit zero-distance responses even
   when their route line contains only one distinct point. Full route geometry is
   required for the destination corridor; candidate distances pass through the

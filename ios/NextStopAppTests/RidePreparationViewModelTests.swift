@@ -1,4 +1,6 @@
+import CoreLocation
 import Foundation
+import MapKit
 import NextStopCore
 import XCTest
 
@@ -1299,5 +1301,253 @@ private final class DirectionsRequestGateClock {
   func advance(by seconds: TimeInterval) {
     sleepDurations.append(seconds)
     now = now.addingTimeInterval(seconds)
+  }
+}
+
+@MainActor
+final class AppleChargingPlaceCheckTests: XCTestCase {
+  func testMapKitPlacemarkNotFoundCompletesBothEmptyPasses() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      throw NSError(domain: MKErrorDomain, code: Int(MKError.Code.placemarkNotFound.rawValue))
+    })
+
+    let result = try await fixture.check(using: resolver)
+    XCTAssertNil(result)
+    XCTAssertEqual(searches, 2)
+  }
+
+  func testMapKitTransientFailuresAndOtherDomainCodeFourRemainUnavailable() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    let errors = [
+      NSError(domain: MKErrorDomain, code: Int(MKError.Code.serverFailure.rawValue)),
+      NSError(domain: MKErrorDomain, code: Int(MKError.Code.loadingThrottled.rawValue)),
+      NSError(domain: NSURLErrorDomain, code: Int(MKError.Code.placemarkNotFound.rawValue)),
+    ]
+    for error in errors {
+      let resolver = MapKitApplePlaceResolver(performSearch: { _ in throw error })
+      do {
+        _ = try await fixture.check(using: resolver)
+        XCTFail("Only MapKit's placemark-not-found code confirms an empty pass")
+      } catch let error as ApplePlaceCheckError {
+        XCTAssertEqual(error, .unavailable)
+      }
+    }
+  }
+
+  func testCompleteEmptyPassesConfirmNoMatchWithoutNegativeCaching() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    let item = fixture.makeMapItem()
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      return searches <= 4 ? [] : [item]
+    })
+
+    let first = try await fixture.check(using: resolver)
+    XCTAssertNil(first)
+    XCTAssertEqual(searches, 2)
+    let second = try await fixture.check(using: resolver)
+    XCTAssertNil(second)
+    XCTAssertEqual(searches, 4)
+    let third = try await fixture.check(using: resolver)
+    XCTAssertTrue(third === item)
+    XCTAssertEqual(searches, 5)
+  }
+
+  func testEitherIncompletePassThrowsUnavailableInsteadOfNoMatch() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    for failingRequest in 1...2 {
+      var searches = 0
+      let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+        searches += 1
+        if searches == failingRequest {
+          throw URLError(.timedOut)
+        }
+        return []
+      })
+      do {
+        _ = try await fixture.check(using: resolver)
+        XCTFail("An incomplete lookup must not become a confirmed absence")
+      } catch let error as ApplePlaceCheckError {
+        XCTAssertEqual(error, .unavailable)
+      }
+      XCTAssertEqual(searches, 2)
+    }
+  }
+
+  func testSafePrimaryMatchSurvivesAnEarlierCenterFailure() async throws {
+    let fixture = try ApplePlaceCheckFixture(additionalCenter: true)
+    let item = fixture.makeMapItem()
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      if searches == 1 { throw URLError(.notConnectedToInternet) }
+      return [item]
+    })
+
+    let result = try await fixture.check(using: resolver)
+    XCTAssertTrue(result === item)
+    XCTAssertEqual(searches, 2)
+  }
+
+  func testChargingCheckCacheIsSharedWithHandoffAndResetBetweenSearches() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    let item = fixture.makeMapItem()
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      return [item]
+    })
+
+    let checked = try await fixture.check(using: resolver)
+    let handoff = await resolver.resolveChargingPlace(
+      park: fixture.park,
+      operatorName: fixture.operatorName,
+      relatedLocations: fixture.lookups,
+      resultGroup: fixture.group
+    )
+    XCTAssertTrue(checked === item)
+    XCTAssertTrue(handoff === item)
+    XCTAssertEqual(searches, 1)
+
+    resolver.resetChargingPlaceChecks()
+    let rechecked = try await fixture.check(using: resolver)
+    XCTAssertTrue(rechecked === item)
+    XCTAssertEqual(searches, 2)
+  }
+
+  func testTransportCancellationStopsWithoutTryingRemainingCenters() async throws {
+    let fixture = try ApplePlaceCheckFixture(additionalCenter: true)
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      throw CancellationError()
+    })
+
+    do {
+      _ = try await fixture.check(using: resolver)
+      XCTFail("Cancellation must propagate")
+    } catch is CancellationError {}
+    XCTAssertEqual(searches, 1)
+  }
+
+  func testCancellationAfterTransportReturnsCannotPublishOrCacheItsMatch() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    let item = fixture.makeMapItem()
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      if searches == 1 {
+        withUnsafeCurrentTask { $0?.cancel() }
+      }
+      return [item]
+    })
+    let cancelled = Task { _ = try await fixture.check(using: resolver) }
+    do {
+      _ = try await cancelled.value
+      XCTFail("A result returned after cancellation must not escape")
+    } catch is CancellationError {}
+
+    let retried = try await fixture.check(using: resolver)
+    XCTAssertTrue(retried === item)
+    XCTAssertEqual(searches, 2, "The cancelled result must not have entered the cache")
+  }
+
+  func testAlreadyCancelledCheckCannotReturnCachedMatch() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    let item = fixture.makeMapItem()
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      return [item]
+    })
+    _ = try await fixture.check(using: resolver)
+    let cancelled = Task {
+      withUnsafeCurrentTask { $0?.cancel() }
+      _ = try await fixture.check(using: resolver)
+    }
+    do {
+      _ = try await cancelled.value
+      XCTFail("Cached results do not override cancellation")
+    } catch is CancellationError {}
+    XCTAssertEqual(searches, 1)
+  }
+
+  func testCompatibilityResolverStillReturnsNilForUnavailableSearch() async throws {
+    let fixture = try ApplePlaceCheckFixture()
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      throw URLError(.notConnectedToInternet)
+    })
+    let result = await resolver.resolveChargingPlace(
+      park: fixture.park,
+      operatorName: fixture.operatorName,
+      relatedLocations: fixture.lookups,
+      resultGroup: fixture.group
+    )
+    XCTAssertNil(result)
+  }
+}
+
+@MainActor
+private struct ApplePlaceCheckFixture {
+  let operatorName = "Example Operator"
+  let park: ChargingPark
+  let lookups: [ChargingLocationLookup]
+  let group: AppleChargingPlaceResultGroup
+
+  init(additionalCenter: Bool = false) throws {
+    let coordinate = try Coordinate(latitude: 52, longitude: 10)
+    lookups = [
+      try ChargingLocationLookup(
+        id: UUID(), operatorName: operatorName, coordinate: coordinate,
+        address: ChargingLocationAddress()
+      )
+    ]
+    park = try ChargingPark(
+      id: UUID(), name: "Synthetic charging park", coordinate: coordinate,
+      navigationCoordinate: coordinate,
+      operatorChargingPoints: [
+        OperatorChargingPointSummary(name: operatorName, chargingPointCount: 4)
+      ],
+      chargingPointCount: 4,
+      availability: ParkAvailability(
+        knownAvailableCount: 0, knownUnavailableCount: 0, unknownCount: 4, totalCount: 4
+      ),
+      maximumPower: Kilowatts(300), sourceReferences: [], locationLookups: lookups
+    )
+    group = AppleChargingPlaceResultGroup(
+      id: "synthetic-campus", kind: .noFoodCampus, evidenceLocations: lookups,
+      searchCoordinates: additionalCenter ? [try Coordinate(latitude: 52.002, longitude: 10)] : [],
+      restaurantCoordinate: nil
+    )
+  }
+
+  func check(using resolver: any AppleChargingPlaceChecking) async throws -> MKMapItem? {
+    try await resolver.checkChargingPlace(
+      park: park, operatorName: operatorName, relatedLocations: lookups, resultGroup: group
+    )
+  }
+
+  func makeMapItem() -> MKMapItem {
+    let location = CLLocation(
+      latitude: park.coordinate.latitude, longitude: park.coordinate.longitude
+    )
+    let item: MKMapItem
+    if #available(iOS 26.0, *) {
+      item = MKMapItem(location: location, address: nil)
+    } else {
+      item = makeLegacyMapItem(location: location)
+    }
+    item.name = operatorName
+    item.pointOfInterestCategory = .evCharger
+    return item
+  }
+
+  @available(iOS, introduced: 18.0, obsoleted: 26.0)
+  private func makeLegacyMapItem(location: CLLocation) -> MKMapItem {
+    MKMapItem(placemark: MKPlacemark(coordinate: location.coordinate))
   }
 }

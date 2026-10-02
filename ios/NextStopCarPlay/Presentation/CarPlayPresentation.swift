@@ -278,7 +278,7 @@ struct CarPlayPresenter {
     ]
     .compactMap { $0 }
     .joined(separator: "\n")
-    let title = foodPOI?.name ?? park.name
+    let title = foodPOI?.name ?? routeResult.displayName
     let coordinate = foodPOI?.coordinate ?? park.navigationCoordinate
     return CarPlayResultPresentation(
       id: routeResult.id,

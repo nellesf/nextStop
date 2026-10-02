@@ -184,6 +184,33 @@ one. The broker suite passed all eight tests, covering paired presets, rejected
 cross-environment overrides, explicit compatibility modes, archive configuration,
 and bounded token-cache lifetime.
 
+### Apple charger eligibility regression checks
+
+On 2026-10-02, the portable Core suite passed all 37 tests. The Staging Debug
+scheme on the existing iOS 27 iPhone 18 Pro Simulator passed 225 app tests and
+53 CarPlay tests; one pre-existing app test was skipped. These suites include
+operator pruning and minimum-EVSE rechecks, replacement candidates after the
+original top five, complete restaurant groups, retryable Apple lookup failures,
+cancellation, and reuse of the checked native place after result pruning.
+
+The app/CarPlay check used:
+
+```bash
+xcodebuild \
+  -project ios/NextStop.xcodeproj \
+  -scheme NextStop-Staging \
+  -destination 'platform=iOS Simulator,id=54BA0ED5-91B0-4A52-8ABA-920362698E8A' \
+  -derivedDataPath /private/tmp/nextstop-apple-filter-derived \
+  -resultBundlePath /private/tmp/nextstop-apple-filter-tests-2.xcresult \
+  -only-testing:NextStopAppTests \
+  -only-testing:NextStopCarPlayTests \
+  CODE_SIGNING_ALLOWED=NO test
+```
+
+Apple search responses in these regression tests are synthetic. Passing tests do
+not establish current Apple catalog coverage, search latency, real-device handoff
+or TestFlight distribution. Use a fresh result bundle path for a repeat run.
+
 ### iPhone UI tests and screenshots
 
 For native CarPlay captures, display-resolution audits, or website screenshots,
