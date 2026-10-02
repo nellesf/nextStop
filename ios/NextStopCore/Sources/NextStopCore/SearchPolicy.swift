@@ -7,6 +7,17 @@ public struct ChargingParkSearchPolicy: Sendable {
     from candidates: [EnrichedChargingParkCandidate],
     criteria: RideCriteria
   ) -> [RouteSearchResult] {
+    Array(
+      rankedResults(from: candidates, criteria: criteria)
+        .prefix(SearchConfiguration.maximumResultCount)
+    )
+  }
+
+  /// All qualified results, before application-level place confirmation and the final limit.
+  public func rankedResults(
+    from candidates: [EnrichedChargingParkCandidate],
+    criteria: RideCriteria
+  ) -> [RouteSearchResult] {
     let matchingResults = candidates.compactMap { candidate in
       evaluate(candidate, criteria: criteria)
     }
@@ -18,8 +29,57 @@ public struct ChargingParkSearchPolicy: Sendable {
         }
         return lhs.candidate.actualDrivingDistance < rhs.candidate.actualDrivingDistance
       }
-      .prefix(SearchConfiguration.maximumResultCount)
-      .map { $0 }
+  }
+
+  /// Restricts an already qualified result without changing its park boundaries or route evidence.
+  /// The minimum applies to each original member, including members of a restaurant group.
+  public func restrictToOperators(
+    _ result: RouteSearchResult,
+    operatorNames: Set<String>,
+    criteria: RideCriteria
+  ) -> RouteSearchResult? {
+    let confirmedNames = operatorNames.intersection(result.operatorChargingPoints.map(\.name))
+    let retainedCandidates = result.candidates.filter { candidate in
+      candidate.park.operatorChargingPoints
+        .filter { confirmedNames.contains($0.name) }
+        .reduce(0) { $0 + $1.chargingPointCount }
+        >= criteria.minimumChargingPoints.rawValue
+    }.sorted { lhs, rhs in
+      if lhs.actualDrivingDistance == rhs.actualDrivingDistance {
+        return lhs.id.uuidString < rhs.id.uuidString
+      }
+      return lhs.actualDrivingDistance < rhs.actualDrivingDistance
+    }
+    guard let primary = retainedCandidates.first else {
+      return nil
+    }
+
+    let matchingFoodPOI: FoodPOI?
+    if let originalFoodPOI = result.matchingFoodPOI {
+      // The restaurant stays the same; its distance belongs to the new representative park.
+      guard
+        let primaryFoodPOI = primary.foodPOIs.first(where: {
+          $0.id == originalFoodPOI.id
+            && $0.chain == originalFoodPOI.chain
+            && $0.distanceFromPark <= SearchConfiguration.maximumFoodDistance
+        })
+      else {
+        return nil
+      }
+      matchingFoodPOI = primaryFoodPOI
+    } else {
+      matchingFoodPOI = nil
+    }
+    let retainedNames = confirmedNames.intersection(
+      retainedCandidates.flatMap(\.park.operatorChargingPoints).map(\.name)
+    )
+    return RouteSearchResult(
+      candidate: primary,
+      relatedCandidates: Array(retainedCandidates.dropFirst()),
+      matchingFoodPOI: matchingFoodPOI,
+      eligibleOperatorNames: retainedNames,
+      placeLookupCandidates: result.placeLookupCandidates
+    )
   }
 
   private func groupByRestaurant(

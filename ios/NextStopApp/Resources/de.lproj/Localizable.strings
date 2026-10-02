@@ -146,6 +146,7 @@
 "ride.search.error.authentication" = "Die App konnte für die Ladeparksuche nicht sicher bestätigt werden. Prüfe die Internetverbindung und versuche es erneut.";
 "ride.search.error.driving" = "Apple Maps konnte für die Kandidaten keine Fahrstrecken berechnen. Versuche es mit stabiler Internetverbindung erneut.";
 "ride.search.error.food" = "Die gewählte Restaurantkette konnte gerade nicht zuverlässig geprüft werden. Es wird nicht fälschlich „kein Treffer“ angezeigt.";
+"ride.search.error.apple_places" = "Die Ladepunkte konnten gerade nicht zuverlässig in Apple Karten geprüft werden. Versuche die Suche erneut.";
 "ride.search.error.preparing" = "Der Server lädt und prüft gerade die offiziellen Ladedaten. Versuche die Suche in Kürze erneut.";
 "ride.search.error.response" = "Der Server hat ungültige Ladedaten geliefert. Die Ergebnisse werden aus Sicherheitsgründen nicht angezeigt.";
 "ride.search.error.service" = "Die Ladeparksuche ist vorübergehend nicht erreichbar. Versuche es gleich erneut.";

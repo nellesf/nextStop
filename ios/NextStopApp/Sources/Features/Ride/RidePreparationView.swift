@@ -7,7 +7,7 @@ struct RidePreparationView: View {
   @Environment(\.openURL) private var openURL
   @StateObject private var viewModel: RidePreparationViewModel
   private let navigationLauncher: any AppleMapsLaunching
-  private let placeResolver: any ApplePlaceResolving
+  @State private var placeResolver: any ApplePlaceResolving
 
   @MainActor
   init(
@@ -52,9 +52,11 @@ struct RidePreparationView: View {
         gate: directionsRequestGate
       )
     )
+    let resolver = MapKitApplePlaceResolver(diagnostics: diagnostics)
     let candidateSearcher = RideCandidateSearchCoordinator(
       pageSearcher: candidatePageSearcher,
-      enricher: MapKitCandidateEnricher(distanceProvider: routePlanner)
+      enricher: MapKitCandidateEnricher(distanceProvider: routePlanner),
+      resultChecker: AppleChargingResultChecker(placeChecker: resolver)
     )
     _viewModel = StateObject(
       wrappedValue: RidePreparationViewModel(
@@ -65,7 +67,7 @@ struct RidePreparationView: View {
       )
     )
     navigationLauncher = AppleMapsLauncher(diagnostics: diagnostics)
-    placeResolver = MapKitApplePlaceResolver(diagnostics: diagnostics)
+    _placeResolver = State(initialValue: resolver)
   }
 
   @MainActor
@@ -85,7 +87,7 @@ struct RidePreparationView: View {
   ) {
     _viewModel = StateObject(wrappedValue: viewModel)
     self.navigationLauncher = navigationLauncher
-    self.placeResolver = placeResolver
+    _placeResolver = State(initialValue: placeResolver)
   }
 
   var body: some View {
@@ -431,7 +433,7 @@ struct RidePreparationView: View {
       HStack(alignment: .center, spacing: 10) {
         resultPositionBadge(position)
 
-        Label(result.candidate.park.name, systemImage: "bolt.car.fill")
+        Label(result.displayName, systemImage: "bolt.car.fill")
           .font(.headline.weight(.bold))
           .foregroundStyle(.primary)
           .frame(maxWidth: .infinity, alignment: .leading)
@@ -562,7 +564,7 @@ struct RidePreparationView: View {
       id: result.resultCardID,
       kind: result.matchingFoodPOI == nil ? .noFoodCampus : .restaurant,
       evidenceLocations: result.locationLookups,
-      searchCoordinates: result.candidates.map(\.park.navigationCoordinate),
+      searchCoordinates: result.placeLookupCandidates.map(\.park.navigationCoordinate),
       restaurantCoordinate: result.matchingFoodPOI?.coordinate
     )
 

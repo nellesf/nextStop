@@ -24,6 +24,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var mapsLauncher: (any CarPlayAppleMapsLaunching)?
   private weak var connectedScene: CPTemplateApplicationScene?
   private let placeSelectionContext = CarPlayPlaceSelectionContext()
+  private var chargingPlaceResolver = MapKitApplePlaceResolver()
   private var placeResolver: any CarPlayResultPlaceResolving = CarPlayResultPlaceResolver()
   private var resultsByID: [UUID: RouteSearchResult] = [:]
   private var dependencies: NextStopSceneDependencies?
@@ -46,7 +47,6 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     templateTransitionGate.reset()
     if searchService == nil, let dependencies {
       searchService = makeSearchService(using: dependencies)
-      configurePlaceResolver(using: dependencies)
     }
     showProfiles(animated: false)
   }
@@ -61,7 +61,6 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         )
       }
       searchService = makeSearchService(using: dependencies)
-      configurePlaceResolver(using: dependencies)
     }
   }
 
@@ -78,7 +77,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     mapsLauncher = nil
     connectedScene = nil
     placeSelectionContext.clear()
-    placeResolver = CarPlayResultPlaceResolver()
+    chargingPlaceResolver.resetChargingPlaceChecks()
+    placeResolver = CarPlayResultPlaceResolver(placeResolver: chargingPlaceResolver)
     resultsByID = [:]
     rideSummaryTemplate = nil
     criteriaTemplate = nil
@@ -101,7 +101,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     searchTask = nil
     cancelPlaceSelection()
     placeSelectionContext.clear()
-    placeResolver = CarPlayResultPlaceResolver()
+    chargingPlaceResolver.resetChargingPlaceChecks()
+    placeResolver = CarPlayResultPlaceResolver(placeResolver: chargingPlaceResolver)
     rideSummaryTemplate = nil
     criteriaTemplate = nil
     noResultsTemplate = nil
@@ -254,7 +255,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     recordRecent(profile.destination)
     cancelPlaceSelection()
     placeSelectionContext.clear()
-    placeResolver = CarPlayResultPlaceResolver()
+    chargingPlaceResolver.resetChargingPlaceChecks()
+    placeResolver = CarPlayResultPlaceResolver(placeResolver: chargingPlaceResolver)
     draftController.select(profile: profile)
     showRideSummary(handlerCompletion: handlerCompletion)
   }
@@ -270,7 +272,8 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     recordRecent(destination)
     cancelPlaceSelection()
     placeSelectionContext.clear()
-    placeResolver = CarPlayResultPlaceResolver()
+    chargingPlaceResolver.resetChargingPlaceChecks()
+    placeResolver = CarPlayResultPlaceResolver(placeResolver: chargingPlaceResolver)
     draftController.select(destination: destination)
     showRideSummary(handlerCompletion: handlerCompletion)
   }
@@ -614,17 +617,15 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
   }
 
-  private func configurePlaceResolver(using dependencies: NextStopSceneDependencies) {
-    placeResolver = CarPlayResultPlaceResolver(
-      placeResolver: MapKitApplePlaceResolver(diagnostics: dependencies.diagnostics)
-    )
-  }
-
   private func makeSearchService(
     using dependencies: NextStopSceneDependencies
   ) -> any CarPlayRideSearchExecuting {
+    let resolver = MapKitApplePlaceResolver(diagnostics: dependencies.diagnostics)
+    chargingPlaceResolver = resolver
+    placeResolver = CarPlayResultPlaceResolver(placeResolver: resolver)
     return CarPlayRideSearchService(
       candidatePageSearcher: dependencies.candidatePageSearcher,
+      placeChecker: resolver,
       diagnostics: dependencies.diagnostics
     )
   }
@@ -1387,6 +1388,8 @@ extension CarPlayRideSearchError {
       "ride.search.error.driving"
     case .foodSearchUnavailable:
       "ride.search.error.food"
+    case .applePlacesUnavailable:
+      "ride.search.error.apple_places"
     }
   }
 }

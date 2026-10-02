@@ -6,6 +6,89 @@ import XCTest
 
 @MainActor
 final class RideCandidateSearchCoordinatorTests: XCTestCase {
+  func testMissingAppleOperatorDoesNotConsumeAResultSlotOrStopPagination() async throws {
+    let candidates = try (1...7).map {
+      try makeBackendCandidate(index: $0, lowerBoundKilometers: $0 * 5)
+    }
+    let pages = CandidatePageSearcherStub(pages: [
+      CandidateSearchPage(
+        snapshotToken: "snapshot", nextCursor: "next",
+        candidates: Array(candidates.prefix(5)), coverage: coverage),
+      CandidateSearchPage(
+        snapshotToken: "snapshot", nextCursor: nil,
+        candidates: Array(candidates.suffix(2)), coverage: coverage),
+    ])
+    let checker = ChargingResultCheckerStub { result in
+      result.id == candidates[0].id ? [] : Set(result.operatorChargingPoints.map(\.name))
+    }
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: pages,
+      enricher: CandidateEnricherStub(
+        distances: Dictionary(
+          uniqueKeysWithValues:
+            candidates.enumerated().map { ($0.element.id, Meters(51_000 + $0.offset * 1_000)) })),
+      resultChecker: checker
+    )
+    let outcome = try await coordinator.search(
+      preparedRide: preparedRide(distanceRange: .kilometers50To100))
+    XCTAssertEqual(outcome.results.map(\.id), Array(candidates[1...5]).map(\.id))
+    XCTAssertEqual(pages.requests.count, 2)
+    XCTAssertEqual(checker.checkedResults.filter { $0.id == candidates[0].id }.count, 1)
+    XCTAssertFalse(checker.checkedResults.contains { $0.id == candidates[6].id })
+  }
+
+  func testAppleLookupFailureIsNotAnEmptyResultAndCancellationPropagates() async throws {
+    let candidate = try makeBackendCandidate(index: 1, lowerBoundKilometers: 40)
+    for error in [URLError(.notConnectedToInternet) as Error, CancellationError()] {
+      let coordinator = RideCandidateSearchCoordinator(
+        pageSearcher: CandidatePageSearcherStub(pages: [
+          CandidateSearchPage(
+            snapshotToken: "snapshot", nextCursor: nil,
+            candidates: [candidate], coverage: coverage)
+        ]),
+        enricher: CandidateEnricherStub(distances: [candidate.id: Meters(60_000)]),
+        resultChecker: ChargingResultCheckerStub { _ in throw error }
+      )
+      do {
+        _ = try await coordinator.search(
+          preparedRide: preparedRide(distanceRange: .kilometers50To100))
+        XCTFail("An incomplete Apple lookup must not become a no-match")
+      } catch is CancellationError {
+        XCTAssertTrue(error is CancellationError)
+      } catch let actual as RideCandidateSearchError {
+        XCTAssertFalse(error is CancellationError)
+        XCTAssertEqual(actual, .applePlacesUnavailable)
+      }
+    }
+  }
+
+  func testRestaurantAppleCheckWaitsForGroupEvidenceFromLaterPages() async throws {
+    let first = try makeBackendCandidate(index: 1, lowerBoundKilometers: 20, foodPOIID: "food")
+    let later = try makeBackendCandidate(index: 2, lowerBoundKilometers: 30, foodPOIID: "food")
+    let checker = ChargingResultCheckerStub { result in
+      result.candidates.count == 2 ? Set(result.operatorChargingPoints.map(\.name)) : []
+    }
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot", nextCursor: "next",
+          candidates: [first], coverage: coverage),
+        CandidateSearchPage(
+          snapshotToken: "snapshot", nextCursor: nil,
+          candidates: [later], coverage: coverage),
+      ]),
+      enricher: CandidateEnricherStub(distances: [
+        first.id: Meters(60_000), later.id: Meters(70_000),
+      ]),
+      resultChecker: checker
+    )
+    let outcome = try await coordinator.search(
+      preparedRide: preparedRide(
+        distanceRange: .kilometers50To100, foodChain: .mcdonalds))
+    XCTAssertEqual(checker.checkedResults.count, 1)
+    XCTAssertEqual(outcome.results.first?.chargingPointCount, 8)
+  }
+
   func testStopsEnrichmentAsSoonAsTheRemainingLowerBoundsCannotBeatTheTopFive() async throws {
     let lowerBounds = [10, 15, 20, 25, 30, 35, 40, 45] + Array(stride(from: 60, to: 84, by: 2))
     let candidates = try lowerBounds.enumerated().map { offset, lowerBound in
@@ -32,6 +115,7 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         )
       ]),
       enricher: enricher,
+      resultChecker: ChargingResultCheckerStub(),
       enrichmentBatchSize: 4
     )
 
@@ -67,6 +151,7 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
     let coordinator = RideCandidateSearchCoordinator(
       pageSearcher: pageSearcher,
       enricher: enricher,
+      resultChecker: ChargingResultCheckerStub(),
       enrichmentBatchSize: 2
     )
 
@@ -109,6 +194,7 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
         )
       ]),
       enricher: enricher,
+      resultChecker: ChargingResultCheckerStub(),
       enrichmentBatchSize: 4
     )
 
@@ -119,8 +205,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       )
     )
 
-    XCTAssertEqual(enricher.requestedIDs.count, 9)
-    XCTAssertFalse(enricher.requestedIDs.contains(candidates[9].id))
+    XCTAssertEqual(enricher.requestedIDs.count, 10)
+    XCTAssertTrue(enricher.requestedIDs.contains(candidates[9].id))
     XCTAssertEqual(outcome.results.count, 5)
     XCTAssertEqual(outcome.results.first?.matchingFoodPOI?.id, "restaurant-a")
     XCTAssertEqual(outcome.results.first?.candidates.count, 2)
@@ -148,7 +234,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       pageSearcher: pageSearcher,
       enricher: CandidateEnricherStub(
         distances: [first.id: Meters(60_000), second.id: Meters(70_000)]
-      )
+      ),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     let outcome = try await coordinator.search(
@@ -190,7 +277,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
           staleCandidate.id: Meters(60_000),
           freshCandidate.id: Meters(70_000),
         ]
-      )
+      ),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     let outcome = try await coordinator.search(
@@ -216,7 +304,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
           coverage: coverage
         )
       ]),
-      enricher: CandidateEnricherStub(distances: [:], failedIDs: [candidate.id])
+      enricher: CandidateEnricherStub(distances: [:], failedIDs: [candidate.id]),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     do {
@@ -255,7 +344,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
           )
         ),
         failedIDs: [try XCTUnwrap(candidates.last).id]
-      )
+      ),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     let outcome = try await coordinator.search(
@@ -288,7 +378,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       ]),
       enricher: CandidateEnricherStub(
         distances: [first.id: Meters(60_000), second.id: Meters(70_000)]
-      )
+      ),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     await assertInvalidResponse(from: coordinator)
@@ -314,7 +405,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       ]),
       enricher: CandidateEnricherStub(
         distances: [first.id: Meters(60_000), second.id: Meters(70_000)]
-      )
+      ),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     await assertInvalidResponse(from: coordinator)
@@ -330,7 +422,8 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
           coverage: coverage
         )
       ]),
-      enricher: CandidateEnricherStub(distances: [:])
+      enricher: CandidateEnricherStub(distances: [:]),
+      resultChecker: ChargingResultCheckerStub()
     )
 
     await assertInvalidResponse(from: coordinator)
@@ -439,6 +532,27 @@ final class RideCandidateSearchCoordinatorTests: XCTestCase {
       straightLineLowerBound: Meters(lowerBoundKilometers * 1_000),
       foodPOIs: foodPOIs
     )
+  }
+}
+
+@MainActor
+final class ChargingResultCheckerStub: ChargingResultChecking {
+  let check: (RouteSearchResult) throws -> Set<String>
+  private(set) var checkedResults: [RouteSearchResult] = []
+
+  init(
+    check: @escaping (RouteSearchResult) throws -> Set<String> = {
+      Set($0.operatorChargingPoints.map(\.name))
+    }
+  ) {
+    self.check = check
+  }
+
+  func beginSearch() { checkedResults = [] }
+
+  func confirmedOperatorNames(in result: RouteSearchResult) async throws -> Set<String> {
+    checkedResults.append(result)
+    return try check(result)
   }
 }
 

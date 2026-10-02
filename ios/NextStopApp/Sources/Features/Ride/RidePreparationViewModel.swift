@@ -56,6 +56,7 @@ enum RideCandidateSearchFailure: Equatable {
   case responseInvalid
   case drivingDistancesUnavailable
   case foodSearchUnavailable
+  case applePlacesUnavailable
 
   var localizationKey: String {
     switch self {
@@ -73,6 +74,8 @@ enum RideCandidateSearchFailure: Equatable {
       "ride.search.error.driving"
     case .foodSearchUnavailable:
       "ride.search.error.food"
+    case .applePlacesUnavailable:
+      "ride.search.error.apple_places"
     }
   }
 }
@@ -214,6 +217,8 @@ final class RidePreparationViewModel: ObservableObject {
       .drivingDistancesUnavailable
     case .foodSearchUnavailable:
       .foodSearchUnavailable
+    case .applePlacesUnavailable:
+      .applePlacesUnavailable
     }
   }
 }

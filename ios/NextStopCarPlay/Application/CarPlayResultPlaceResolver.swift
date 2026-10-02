@@ -28,7 +28,9 @@ final class CarPlayResultPlaceResolver: CarPlayResultPlaceResolving {
     -> MKMapItem
   {
     try Task.checkCancellation()
-    guard let park = result.representativePark(for: operatorName) else {
+    guard result.operatorChargingPoints.contains(where: { $0.name == operatorName }),
+      let park = result.representativePark(for: operatorName)
+    else {
       throw CarPlayPlaceResolutionError.operatorUnavailable
     }
 
@@ -48,7 +50,7 @@ final class CarPlayResultPlaceResolver: CarPlayResultPlaceResolving {
         ?? "park:\(result.id.uuidString)",
       kind: result.matchingFoodPOI == nil ? .noFoodCampus : .restaurant,
       evidenceLocations: result.locationLookups,
-      searchCoordinates: result.candidates.map(\.park.navigationCoordinate),
+      searchCoordinates: result.placeLookupCandidates.map(\.park.navigationCoordinate),
       restaurantCoordinate: result.matchingFoodPOI?.coordinate
     )
     let mapItem = await placeResolver.resolveChargingPlace(

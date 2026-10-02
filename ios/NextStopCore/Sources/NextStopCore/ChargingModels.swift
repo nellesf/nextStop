@@ -439,18 +439,37 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
   public let candidate: EnrichedChargingParkCandidate
   public let relatedCandidates: [EnrichedChargingParkCandidate]
   public let matchingFoodPOI: FoodPOI?
+  public let eligibleOperatorNames: Set<String>?
+  private let originalPlaceLookupCandidates: [EnrichedChargingParkCandidate]?
 
   public var candidates: [EnrichedChargingParkCandidate] {
     [candidate] + relatedCandidates
   }
 
+  /// The complete qualified group used to confirm native places, before operator restriction.
+  public var placeLookupCandidates: [EnrichedChargingParkCandidate] {
+    originalPlaceLookupCandidates ?? candidates
+  }
+
+  public var displayName: String {
+    guard eligibleOperatorNames != nil else {
+      return candidate.park.name
+    }
+    let names = operatorChargingPoints.map(\.name)
+    guard names.count > 2 else {
+      return names.joined(separator: " & ")
+    }
+    return "\(names[0]) + \(names.count - 1)"
+  }
+
   public var chargingPointCount: Int {
-    candidates.reduce(0) { $0 + $1.park.chargingPointCount }
+    operatorChargingPoints.reduce(0) { $0 + $1.chargingPointCount }
   }
 
   public var operatorChargingPoints: [RouteSearchOperatorSummary] {
     var counts: [String: Int] = [:]
     for summary in candidates.flatMap(\.park.operatorChargingPoints) {
+      guard eligibleOperatorNames?.contains(summary.name) ?? true else { continue }
       counts[summary.name, default: 0] += summary.chargingPointCount
     }
     return counts.map {
@@ -461,13 +480,28 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
 
   public var locationLookups: [ChargingLocationLookup] {
     var seenIDs = Set<UUID>()
-    return candidates.flatMap(\.park.locationLookups).filter {
+    return placeLookupCandidates.flatMap(\.park.locationLookups).filter {
       seenIDs.insert($0.id).inserted
     }
   }
 
   public var availability: ParkAvailability {
-    let parkAvailability = candidates.map(\.park.availability)
+    let parkAvailability = candidates.map { candidate in
+      let availability = candidate.park.availability
+      let retainedCount = candidate.park.operatorChargingPoints
+        .filter { eligibleOperatorNames?.contains($0.name) ?? true }
+        .reduce(0) { $0 + $1.chargingPointCount }
+      // The source has no per-operator live breakdown. Never attribute a removed operator's
+      // availability or observation time to the remaining EVSEs.
+      let completePark = retainedCount == candidate.park.chargingPointCount
+      return (
+        knownAvailableCount: completePark ? availability.knownAvailableCount : 0,
+        knownUnavailableCount: completePark ? availability.knownUnavailableCount : 0,
+        unknownCount: completePark ? availability.unknownCount : retainedCount,
+        totalCount: retainedCount,
+        lastLiveObservationAt: completePark ? availability.lastLiveObservationAt : nil
+      )
+    }
     return
       (try? ParkAvailability(
         knownAvailableCount: parkAvailability.reduce(0) { $0 + $1.knownAvailableCount },
@@ -479,7 +513,7 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
   }
 
   public func representativePark(for operatorName: String) -> ChargingPark? {
-    candidates.first {
+    placeLookupCandidates.first {
       $0.park.operatorChargingPoints.contains { $0.name == operatorName }
     }?.park
   }
@@ -487,7 +521,9 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
   public init(
     candidate: EnrichedChargingParkCandidate,
     relatedCandidates: [EnrichedChargingParkCandidate] = [],
-    matchingFoodPOI: FoodPOI?
+    matchingFoodPOI: FoodPOI?,
+    eligibleOperatorNames: Set<String>? = nil,
+    placeLookupCandidates: [EnrichedChargingParkCandidate]? = nil
   ) {
     self.candidate = candidate
     var seenIDs = Set([candidate.id])
@@ -501,6 +537,8 @@ public struct RouteSearchResult: Identifiable, Hashable, Codable, Sendable {
         return lhs.actualDrivingDistance < rhs.actualDrivingDistance
       }
     self.matchingFoodPOI = matchingFoodPOI
+    self.eligibleOperatorNames = eligibleOperatorNames
+    self.originalPlaceLookupCandidates = placeLookupCandidates
   }
 }
 

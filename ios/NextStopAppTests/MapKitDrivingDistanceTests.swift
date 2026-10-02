@@ -164,6 +164,7 @@ final class MapKitDrivingDistanceTests: XCTestCase {
           retryDelay: .zero
         )
       ),
+      resultChecker: ChargingResultCheckerStub(),
       enrichmentBatchSize: 1
     )
 

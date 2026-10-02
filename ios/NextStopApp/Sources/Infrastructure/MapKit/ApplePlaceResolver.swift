@@ -314,14 +314,73 @@ protocol ApplePlaceResolving {
   func resolveRestaurantPlace(_ foodPOI: FoodPOI) async -> MKMapItem?
 }
 
+enum ApplePlaceCheckError: Error, Equatable {
+  case unavailable
+}
+
 @MainActor
-final class MapKitApplePlaceResolver: ApplePlaceResolving {
+protocol AppleChargingPlaceChecking {
+  func resetChargingPlaceChecks()
+
+  func checkChargingPlace(
+    park: ChargingPark,
+    operatorName: String,
+    relatedLocations: [ChargingLocationLookup],
+    resultGroup: AppleChargingPlaceResultGroup
+  ) async throws -> MKMapItem?
+}
+
+extension AppleChargingPlaceChecking {
+  func resetChargingPlaceChecks() {}
+}
+
+@MainActor
+final class MapKitApplePlaceResolver: ApplePlaceResolving, AppleChargingPlaceChecking {
+  typealias Search = @MainActor (MKLocalSearch) async throws -> [MKMapItem]
+
   private let maximumRestaurantMatchDistance: CLLocationDistance = 125
   private var chargingPlaceCache: [String: MKMapItem] = [:]
   private let measurement: AppDiagnosticMeasurement
+  private let performSearch: Search
 
-  init(diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()) {
+  init(
+    diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics(),
+    performSearch: @escaping Search = { search in
+      let cancellation = ApplePlaceSearchCancellation(search: search)
+      let timeout = Task { @MainActor in
+        do {
+          try await Task.sleep(for: .seconds(20))
+          cancellation.timeOut()
+        } catch {}
+      }
+      defer { timeout.cancel() }
+      return try await withTaskCancellationHandler {
+        try Task.checkCancellation()
+        do {
+          let items = try await search.start().mapItems
+          try Task.checkCancellation()
+          guard !cancellation.timedOut else {
+            throw ApplePlaceCheckError.unavailable
+          }
+          return items
+        } catch {
+          try Task.checkCancellation()
+          if cancellation.timedOut {
+            throw ApplePlaceCheckError.unavailable
+          }
+          throw error
+        }
+      } onCancel: {
+        Task { @MainActor in cancellation.cancel() }
+      }
+    }
+  ) {
     measurement = AppDiagnosticMeasurement(recorder: diagnostics)
+    self.performSearch = performSearch
+  }
+
+  func resetChargingPlaceChecks() {
+    chargingPlaceCache.removeAll()
   }
 
   func resolveChargingPlace(
@@ -330,6 +389,21 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
     relatedLocations: [ChargingLocationLookup],
     resultGroup: AppleChargingPlaceResultGroup
   ) async -> MKMapItem? {
+    try? await checkChargingPlace(
+      park: park,
+      operatorName: operatorName,
+      relatedLocations: relatedLocations,
+      resultGroup: resultGroup
+    )
+  }
+
+  func checkChargingPlace(
+    park: ChargingPark,
+    operatorName: String,
+    relatedLocations: [ChargingLocationLookup],
+    resultGroup: AppleChargingPlaceResultGroup
+  ) async throws -> MKMapItem? {
+    try Task.checkCancellation()
     let lookups = lookupTargets(
       for: park,
       operatorName: operatorName,
@@ -361,7 +435,10 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
       let items: [MKMapItem]
       do {
         items = try await searchChargingItems(around: center)
+      } catch is CancellationError {
+        throw CancellationError()
       } catch {
+        try Task.checkCancellation()
         categoryPassComplete = false
         continue
       }
@@ -414,7 +491,10 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
             around: center,
             naturalLanguageQuery: query
           )
+        } catch is CancellationError {
+          throw CancellationError()
         } catch {
+          try Task.checkCancellation()
           naturalLanguagePassComplete = false
           continue
         }
@@ -473,6 +553,9 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
         in: categoryKnownCatalogAliasMatches + naturalLanguageKnownCatalogAliasMatches
       )
     else {
+      guard categoryPassComplete && naturalLanguagePassComplete else {
+        throw ApplePlaceCheckError.unavailable
+      }
       return nil
     }
     if let cacheKey {
@@ -513,9 +596,23 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   }
 
   private func searchItems(using search: MKLocalSearch) async throws -> [MKMapItem] {
-    try await measurement.perform(.placeLookup) {
-      try await search.start().mapItems
+    try Task.checkCancellation()
+    let items = try await measurement.perform(.placeLookup) {
+      do {
+        return try await performSearch(search)
+      } catch {
+        try Task.checkCancellation()
+        let mapError = error as NSError
+        if mapError.domain == MKErrorDomain,
+          mapError.code == MKError.Code.placemarkNotFound.rawValue
+        {
+          return []
+        }
+        throw error
+      }
     }
+    try Task.checkCancellation()
+    return items
   }
 
   private func chargingSearchCenters(
@@ -932,6 +1029,25 @@ final class MapKitApplePlaceResolver: ApplePlaceResolving {
   @available(iOS, introduced: 18.0, obsoleted: 26.0)
   private func legacyAddress(_ item: MKMapItem) -> String? {
     item.placemark.title
+  }
+}
+
+@MainActor
+private final class ApplePlaceSearchCancellation {
+  private let search: MKLocalSearch
+  private(set) var timedOut = false
+
+  init(search: MKLocalSearch) {
+    self.search = search
+  }
+
+  func cancel() {
+    search.cancel()
+  }
+
+  func timeOut() {
+    timedOut = true
+    search.cancel()
   }
 }
 

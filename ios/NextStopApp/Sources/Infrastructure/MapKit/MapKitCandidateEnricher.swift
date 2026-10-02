@@ -2,6 +2,56 @@ import Foundation
 import NextStopCore
 
 @MainActor
+final class AppleChargingResultChecker: ChargingResultChecking {
+  private let placeChecker: any AppleChargingPlaceChecking
+
+  init(placeChecker: any AppleChargingPlaceChecking) {
+    self.placeChecker = placeChecker
+  }
+
+  func beginSearch() {
+    placeChecker.resetChargingPlaceChecks()
+  }
+
+  func confirmedOperatorNames(in result: RouteSearchResult) async throws -> Set<String> {
+    let group = AppleChargingPlaceResultGroup(
+      id: result.matchingFoodPOI.map { "restaurant:\($0.id)" }
+        ?? "park:\(result.id.uuidString)",
+      kind: result.matchingFoodPOI == nil ? .noFoodCampus : .restaurant,
+      evidenceLocations: result.locationLookups,
+      searchCoordinates: result.placeLookupCandidates.map(\.park.navigationCoordinate),
+      restaurantCoordinate: result.matchingFoodPOI?.coordinate
+    )
+    var confirmed = Set<String>()
+    // Bound Apple request concurrency to one; do not fan out across operators.
+    for summary in result.operatorChargingPoints {
+      try Task.checkCancellation()
+      guard let park = result.representativePark(for: summary.name) else { continue }
+      let relatedLocations =
+        result.matchingFoodPOI != nil
+        ? AppleChargingPlaceLookupScope.restaurantGroupLocations(
+          candidateLocations: result.locationLookups,
+          operatorName: summary.name
+        )
+        : AppleChargingPlaceLookupScope.relatedLocations(
+          primaryLocations: park.locationLookups,
+          candidateLocations: result.locationLookups,
+          operatorName: summary.name
+        )
+      let item = try await placeChecker.checkChargingPlace(
+        park: park,
+        operatorName: summary.name,
+        relatedLocations: relatedLocations,
+        resultGroup: group
+      )
+      try Task.checkCancellation()
+      if item != nil { confirmed.insert(summary.name) }
+    }
+    return confirmed
+  }
+}
+
+@MainActor
 final class MapKitCandidateEnricher: CandidateEnriching {
   private let distanceProvider: any DrivingDistanceProviding
   private var cache: [CacheKey: Meters] = [:]

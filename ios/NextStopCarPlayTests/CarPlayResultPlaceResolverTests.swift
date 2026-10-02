@@ -7,6 +7,67 @@ import XCTest
 
 @MainActor
 final class CarPlayResultPlaceResolverTests: XCTestCase {
+  func testSearchConfirmationIsReusedAfterRestaurantRepresentativeIsRemoved() async throws {
+    let original = try makeResult(withRestaurant: true)
+    let food = try XCTUnwrap(original.matchingFoodPOI)
+    let candidates = original.candidates.map {
+      EnrichedChargingParkCandidate(
+        park: $0.park, distanceFromRoute: $0.distanceFromRoute,
+        actualDrivingDistance: $0.actualDrivingDistance, foodPOIs: [food])
+    }
+    let result = RouteSearchResult(
+      candidate: candidates[0],
+      relatedCandidates: Array(candidates.dropFirst()), matchingFoodPOI: food)
+    let coordinate = try XCTUnwrap(result.representativePark(for: "IONITY")).navigationCoordinate
+    let nativePlace: MKMapItem
+    if #available(iOS 26.0, *) {
+      nativePlace = MKMapItem(
+        location: CLLocation(
+          latitude: coordinate.latitude,
+          longitude: coordinate.longitude), address: nil)
+    } else {
+      nativePlace = legacyMapItem(coordinate)
+    }
+    nativePlace.name = "IONITY"
+    nativePlace.pointOfInterestCategory = .evCharger
+    var searches = 0
+    let resolver = MapKitApplePlaceResolver(performSearch: { _ in
+      searches += 1
+      return [nativePlace]
+    })
+    let checker = AppleChargingResultChecker(placeChecker: resolver)
+    checker.beginSearch()
+    let names = try await checker.confirmedOperatorNames(in: result)
+    XCTAssertEqual(names, ["IONITY"])
+    let filtered = try XCTUnwrap(
+      ChargingParkSearchPolicy().restrictToOperators(
+        result, operatorNames: names,
+        criteria: RideCriteria(
+          distanceRange: .kilometers50To100, minimumChargingPoints: .four,
+          minimumPower: .oneHundred, foodChain: .mcdonalds)))
+    XCTAssertNotEqual(filtered.id, result.id)
+    XCTAssertEqual(filtered.chargingPointCount, 12)
+    let checkedSearchCount = searches
+    let handoff = CarPlayResultPlaceResolver(placeResolver: resolver)
+    let opened = try await handoff.resolveOperator(named: "IONITY", in: filtered)
+    XCTAssertTrue(opened === nativePlace)
+    XCTAssertEqual(searches, checkedSearchCount, "Handoff must reuse the confirmed native place")
+    do {
+      _ = try await handoff.resolveOperator(named: "EnBW", in: filtered)
+      XCTFail("An excluded operator is not an available action")
+    } catch let error as CarPlayPlaceResolutionError {
+      XCTAssertEqual(error, .operatorUnavailable)
+    }
+  }
+
+  @available(iOS, introduced: 18.0, obsoleted: 26.0)
+  private func legacyMapItem(_ coordinate: Coordinate) -> MKMapItem {
+    MKMapItem(
+      placemark: MKPlacemark(
+        coordinate: CLLocationCoordinate2D(
+          latitude: coordinate.latitude, longitude: coordinate.longitude)))
+  }
+
   func testNoFoodResultUsesSelectedOperatorsRepresentativeParkAndAddressScope() async throws {
     let result = try makeResult()
     let nativePlace = MKMapItem()

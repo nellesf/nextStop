@@ -14,6 +14,7 @@ enum CarPlayRideSearchError: Error, Equatable {
   case responseInvalid
   case drivingDistancesUnavailable
   case foodSearchUnavailable
+  case applePlacesUnavailable
 }
 
 @MainActor
@@ -56,6 +57,7 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
 
   convenience init(
     candidatePageSearcher: any CandidatePageSearching,
+    placeChecker: any AppleChargingPlaceChecking,
     diagnostics: any AppDiagnosticRecording = NoopAppDiagnostics()
   ) {
     let routePlanner = RetryingRoutePlanner(
@@ -70,7 +72,8 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
       routePlanner: routePlanner,
       candidateSearcher: RideCandidateSearchCoordinator(
         pageSearcher: candidatePageSearcher,
-        enricher: MapKitCandidateEnricher(distanceProvider: routePlanner)
+        enricher: MapKitCandidateEnricher(distanceProvider: routePlanner),
+        resultChecker: AppleChargingResultChecker(placeChecker: placeChecker)
       )
     )
   }
@@ -154,6 +157,8 @@ final class CarPlayRideSearchService: CarPlayRideSearchExecuting {
       .drivingDistancesUnavailable
     case .foodSearchUnavailable:
       .foodSearchUnavailable
+    case .applePlacesUnavailable:
+      .applePlacesUnavailable
     }
   }
 }

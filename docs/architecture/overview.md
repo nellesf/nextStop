@@ -2,7 +2,9 @@
 
 Status: Accepted on 2026-08-13; clustering/search identity and Apple-place
 matching amended through 2026-08-21; CarPlay flow and native-place handoff amended on
-2026-09-07; voluntary support reporting amended on 2026-09-13 by ADR 0017.
+2026-09-07; voluntary support reporting amended on 2026-09-13 by ADR 0017;
+Apple-confirmed operator eligibility and minimum-EVSE rechecks approved by the
+owner on 2026-10-02 in ADR 0010.
 
 ## Goals
 
@@ -46,8 +48,11 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Domain value types and central option catalog.
 - Ride-scoped search draft copied from an optional profile.
 - Availability validation and informational presentation without filtering.
-- Candidate enrichment orchestration, exact-distance filtering, restaurant
-  grouping, operator aggregation, sorting, and five-result cap.
+- Candidate enrichment orchestration, exact-distance filtering, sequential Apple
+  charger confirmation through an application port, minimum-EVSE rechecks,
+  restaurant grouping, confirmed-operator aggregation, sorting and five-result cap.
+- Immutable original power-qualified lookup evidence kept separately from the
+  reduced displayed operators/counts and shared with match caching and handoff.
 - Error taxonomy independent of UIKit, SwiftUI, CarPlay, MapKit, and URLSession.
 
 ### iPhone application
@@ -76,25 +81,32 @@ PostgreSQL + PostGIS <---- authority charging feeds + OSM extracts via Geofabrik
 - Exports the detailed route polyline as a validated GeoJSON LineString.
 - Resolves actual automobile routes from current location to each candidate's
   power-filtered navigation coordinate.
-- Consumes the backend's validated restaurant match; it does not perform local POI
-  discovery for filtering. Selecting an operator or restaurant Maps action on
-  either iPhone or CarPlay performs a bounded Apple lookup for only that
-  already-selected item; this lookup never changes inclusion, counts, ranking,
-  or the canonical search route.
+- Consumes the backend's validated OSM restaurant match; Apple restaurant lookup
+  remains a tap-only handoff action and does not filter restaurants. During search,
+  sequential bounded Apple charger lookups confirm operators before final results.
+  Only confirmed operators remain visible and contribute to the EVSE minimum,
+  which is rechecked per campus or individual fine park. The canonical route and
+  exact-distance calculation remain unchanged.
 - When a food chain is selected, groups qualifying fine-park candidates by the
-  stable backend restaurant POI ID. One restaurant becomes one result, operator
-  EVSE counts are summed across its member fine parks, and each exact operator name
-  receives one Apple Maps button. Without food, the backend has already emitted
-  one campus-wide candidate per stable `ChargingCampusID`.
+  stable backend restaurant POI ID. Collect the complete original group before
+  matching; then discard fine parks below the minimum EVSE count after operator
+  confirmation. One restaurant becomes one result, confirmed operator counts are
+  summed across surviving fine parks, and each exact operator name receives one
+  Apple Maps button. The nearest surviving fine park determines its actual
+  distance. Without food, the backend has already emitted one campus-wide candidate
+  per stable `ChargingCampusID`.
 - Opens a conservatively matched native Apple charger or restaurant by stable Place
-  ID. If no unambiguous match exists, it leaves the backend result unchanged and
-  reports that Apple details are unavailable.
+  ID. A complete charger lookup with no unambiguous match removes that operator
+  before final results. Failed/throttled lookups return a retryable search error;
+  cancellation stops the search without publishing a partial result. Tap-time
+  restaurant or place-opening failures retain the current snapshot and report an
+  error without a guessed fallback.
 - Requires a matching operator name and Apple's `.evCharger` category for every
   native charger match. The operator-specific 60 m direct rule and 300 m
   exact-address rule remain primary. In one no-food campus, a unique stable Apple
   place may additionally use any qualifying campus location as spatial evidence.
-  In one concrete restaurant result, it may use any power-qualified location in a
-  member fine park assigned to that exact restaurant POI. The place must have the
+  In the complete original restaurant group, it may use any power-qualified
+  location in a member fine park assigned to that exact restaurant POI. The place must have the
   same postal code or normalized city, lie within 60 m of that evidence, and, in
   food mode, lie within 500 m geodesic distance of the exact grouping restaurant
   POI. Another operator's location is evidence only and never changes the
@@ -263,18 +275,32 @@ MapKit can truthfully provide:
 1. exact automobile distance from the current location to each candidate's same
    power-filtered navigation coordinate;
 2. final distance-range filter;
-3. when food is selected, grouping by stable restaurant POI ID and aggregation of
-   qualifying EVSE counts by exact operator name;
-4. final distance-only sort and five-result cap, using the nearest member fine
-   park's actual driving distance for a restaurant group and the single campus
-   candidate distance without food.
+3. complete original grouping by stable restaurant POI ID when food is selected,
+   retaining every eligible fine park before any charger lookup;
+4. sequential bounded Apple confirmation per exact operator, counting only
+   confirmed operators and rechecking minimum EVSEs per campus or individual fine
+   park; discard units below that minimum;
+5. restaurant regrouping from surviving fine parks, with confirmed counts summed
+   by exact operator name, then the final distance-only sort and five-result cap.
+   The nearest surviving fine park supplies a restaurant group's actual distance;
+   a campus keeps its original candidate distance. Later candidates replace
+   discarded results before the cap is applied.
 
-After the user selects an operator or restaurant Maps action on iPhone or CarPlay,
-Apple-place matching is presentation enrichment only. It combines the selected
-item's authority/OSM coordinate, normalized address when available, and name with a
-bounded MapKit search. The ride-local match is cached and the native place is opened through its
-Apple Place ID. Apple Place IDs identify only Apple records and are never treated
-as cross-source identities. For a restaurant result, one operator lookup considers
+Only no-food searches may stop once lower bounds prove five fully confirmed and
+count-qualified campuses. Food mode collects all candidates within the maximum
+distance and completes each original group before matching. The former early
+freezing of five restaurant IDs is removed: later candidates can change the
+surviving group, representative and final result order.
+
+Apple charger matching combines the original group's authority coordinates,
+normalized addresses and operator name with a bounded MapKit search. Keep the
+complete original power-qualified evidence, representative and member navigation
+centers even when display pruning removes an operator or fine park. Successful
+matches are cached only for the current search/ride under that original scope;
+handoff must not rebuild its request from the reduced visible result. Restaurant
+Apple matching still starts only on its Maps action. Open the native place through
+its Apple Place ID. Apple Place IDs identify only Apple records and are never
+treated as cross-source identities. For a restaurant result, one operator lookup considers
 all of that operator's authority locations in the group for the primary rules.
 Fallback evidence may come from any power-qualified location in a member fine park
 assigned to the exact grouping restaurant POI, although another operator's
@@ -283,11 +309,13 @@ be within 500 m geodesic distance of that restaurant POI. In a no-food campus, a
 qualifying campus location may provide evidence and no restaurant-distance
 condition applies. The Apple place must share the requested operator's postal code
 or normalized city, have a stable Place ID, and be the one ID resolved by the
-complete bounded-pass policy below. This does not alter operator identity, campus
-or restaurant-result membership, search results, or grouping.
+complete bounded-pass policy below. The matching rules do not alter operator
+identity, static backend membership or the OSM predicate. Their confirmed outcome
+now controls visible operators and final result eligibility on-device. No new
+operator alias, threshold or coordinate-only fallback is introduced.
 
 Charging-place lookup uses bounded centers with a 75 m minimum separation, not one
-request per raw evidence location. Both modes use the result's representative
+request per raw evidence location. Both modes use the original group's representative
 navigation coordinate and the requested operator's authority lookup coordinates.
 A restaurant group additionally uses each member fine park's deterministic
 navigation coordinate; no-food uses only the campus navigation coordinate plus
@@ -351,8 +379,13 @@ a new snapshot after explicit confirmation.
   broker after the developer authenticates through Google Cloud IAP. Its remote
   one-shot minter receives only the signing key and has no container network. One
   `401` triggers one bounded token refresh and search retry.
-- Apple-place match failure: keep the authority/OSM-backed result visible and
-  explain that no unambiguous native Apple place was found for that item.
+- Complete Apple charger lookup with no unambiguous match: omit that operator,
+  recheck the EVSE minimum per campus/fine park, and continue to later candidates.
+- Apple charger lookup failure, throttling or incomplete required pass: return a
+  retryable search error, never a confirmed no-match or partially filtered result.
+  Cancellation propagates and stops publication of results.
+- Restaurant Apple-place failure on tap: retain the OSM-backed result and explain
+  that no unambiguous native restaurant place was found.
 - Apple Maps launch failure: keep details visible and report that navigation could
   not be opened.
 
@@ -364,6 +397,10 @@ a new snapshot after explicit confirmation.
 - Stable final result: aim under 8 s for typical filters; show template-native
   progress and allow cancellation.
 
-These are engineering targets, not externally promised SLOs. Instrument aggregate
-latency without retaining route geometry or logging the installation-scoped App
-Attest credential, key hash, or access token.
+These are engineering targets, not externally promised SLOs. The 2026-10-02
+operator-confirmation rule adds sequential Apple lookups and requires complete
+food groups before matching; the earlier time targets need remeasurement and are
+not an SLA for this flow. Bound charger lookup concurrency to one and reuse only
+search/ride-local successful matches. Instrument aggregate latency without retaining
+route geometry or logging the installation-scoped App Attest credential, key hash,
+or access token.
