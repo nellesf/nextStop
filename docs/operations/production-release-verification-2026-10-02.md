@@ -220,3 +220,86 @@ Local validation passed 143 backend tests, lint, type checking, compilation and
 77 deployment-tool tests. Auth-server startup passed with both an absent version
 setting and the stale `1,10` setting. That source change is separate from the
 configuration-only correction above and needs its own staged production release.
+
+## Staging storage incident during the permanent fix
+
+The permanent policy change is commit
+`fbd248999625a6171e12986bba477b4e4c4a6ec4`, with immutable image digest
+`sha256:e93e7f3a622169b74507a3c3fe5712d6641ef600b6c99ae30ef5b22b285890f7`.
+Backend CI [36967749107](https://github.com/nellesf/nextStop/actions/runs/36967749107),
+Swift Core CI [36967749129](https://github.com/nellesf/nextStop/actions/runs/36967749129)
+and iOS CI [36967749127](https://github.com/nellesf/nextStop/actions/runs/36967749127)
+passed. The first staging attempt
+[36967899653](https://github.com/nellesf/nextStop/actions/runs/36967899653), explicit
+deployment `6801796660`, failed early in the host-release step at 05:16:11.
+No candidate containers or migration/role-initialization executions were observed;
+the existing serving containers remained healthy.
+
+At 05:20–05:22 the 30 GB system filesystem had only 27–104 MB free. The running
+Docker daemon used `/var/lib/docker`, occupying approximately 24.7 GB, including
+23.8 GB in the database volume. The separately provisioned data filesystem still
+had about 149 GB free. `daemon.json` already specified `/srv/nextstop/docker`,
+but that destination did not exist. The bootstrap installed Docker before writing
+the configuration, allowing the package installation to start the daemon with its
+default directory; `systemctl enable --now` did not reload the already running
+daemon. This capacity evidence is consistent with disk exhaustion causing the
+early release failure; the exact failed operation's private output was suppressed,
+so no specific `ENOSPC` error was captured as incident evidence.
+
+The operator moved only staging's existing Docker store under the release lock:
+
+| Storage recovery | Verified result |
+| --- | --- |
+| Services stopped | Worker, four API/auth processes, then database at 05:32:39–05:32:40 |
+| Quiescent copy verified | 2,282 entries / 24,536,846,631 bytes at 05:38:46 |
+| Copy comparison | File SHA-256, sizes, ownership/modes, modification times, links and special-file metadata matched |
+| Services recovered | Same six container identities/images; database on data filesystem; public readiness and synthetic search passed at 05:39:11 |
+| Original preserved | Second verified copy on the existing data disk; only the inactive system-disk copy removed |
+| Completed | 05:43:50; 24,787,165,184 system bytes free and 99,978,547,200 data bytes free |
+| Independent postflight | 05:44:28; healthy database, both ready slots, one worker, zero Docker restart-counter increments/OOM events, unchanged release state and matching Nginx |
+
+The database was deliberately stopped and restarted on staging during this move.
+No production service or database was restarted. Production's DockerRootDir
+already pointed to `/srv/nextstop/docker`; its system filesystem had about
+21.7 GB free.
+
+All staging named volumes and container logs now resolve to the data filesystem.
+The compatibility symlink `/var/lib/docker` preserves existing absolute paths.
+A Docker systemd mount dependency and pre-start mountpoint check prevent starting
+against an unavailable data disk. One original store copy remains on the data
+disk for deliberate later cleanup; it was not reused as live database state.
+The separate containerd image store remains on the system disk. No image prune,
+new disk, enlarged VM, copied production data or additional paid resource was
+needed.
+
+The bootstrap source now prepares the data-root and mount dependency before
+package installation and checks the actual running root before marking setup
+complete. It stops on conflicting existing storage/configuration instead of
+attempting an automatic migration. Seven isolated executable shell regression
+tests cover first package startup, wrong daemon root, unavailable mounts,
+existing storage/configuration and completed-host preservation. All 49 GCP
+deployment tests passed; the first-start test fails against the original script
+for the expected ordering error. Existing completed hosts are not automatically
+reconfigured by this source change.
+
+## Permanent build-policy fix: staging passed, production review pending
+
+Staging run `36967899653`, attempt 2, reused the exact `fbd2489` / `e93e7f3…`
+artifact. Deployment ran from 05:45:18 to 05:49:17 and passed, including the
+release controller's readiness, authenticated search and public serving gates.
+Explicit staging deployment `6802170605` succeeded. The registry commit/digest
+and successful staging-deployment promotion binding was independently verified.
+
+The independent host audit at 05:50:25 confirmed the green API/auth slot and
+single worker on `e93e7f3…`, with the previous blue API/auth identities and
+`21083d7…` image retained. The database container identity/image remained unchanged
+from the storage recovery and was healthy. Both local slots and public API/auth
+readiness passed with their expected digests. Nginx matched the committed release
+state, no pending journal remained, and volumes/logs remained on the data disk.
+The system filesystem had approximately 24.8 GB free; the original store copy
+remained preserved on the data disk.
+
+At this checkpoint production still runs the configuration-only correction that
+allows build 19. The durable removal of manual build admission has passed staging
+and awaits the separate protected production review. A real TestFlight-device
+retry remains unconfirmed; synthetic serving checks do not establish that result.

@@ -87,6 +87,16 @@ Application rollback never reverses DDL or restores a database over current data
 
 ## Host configuration and first activation
 
+On a fresh VM, `bootstrap-vm.sh` prepares Docker's data-root configuration and
+systemd mount dependency before installing Docker: package installation can
+start the daemon immediately. The completion marker is written only after the
+running daemon reports `/srv/nextstop/docker`. An incomplete bootstrap with an
+existing default Docker store or a different configuration stops for operator
+review; it does not move data or restart an existing database automatically.
+Changing `daemon.json` alone does not migrate existing volumes. Docker's separate
+containerd image store remains on the system disk and needs its own capacity
+checks; the data-root setting does not relocate it.
+
 Provision root-owned `/etc/nextstop/release.env` for public settings and preserve
 `/etc/nextstop/backend.env` with mode 0600 for secrets. Files are parsed without
 shell evaluation. The installer does not generate or rotate credentials.
