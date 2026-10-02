@@ -1,8 +1,10 @@
 """Exercise fail-closed promotion and exact-database backup verification."""
 import importlib.util
 import hashlib
+import json
 import shlex
 import subprocess
+import sys
 from types import SimpleNamespace
 import unittest
 from pathlib import Path
@@ -67,7 +69,15 @@ class ReleaseControlTests(unittest.TestCase):
 
         def command(arguments, **kwargs):
             nonlocal destination
-            if arguments[1:3] == ["compute", "scp"]:
+            if arguments[1:3] == ["compute", "ssh"] and arguments[-1] == "--command=true":
+                events.append("prepare")
+                self.assertEqual(arguments[3], "nextstop-backend")
+                self.assertIn("--project=nextstop-tech-staging", arguments)
+                self.assertIn("--tunnel-through-iap", arguments)
+                self.assertEqual(kwargs["timeout"], 90)
+                if failure == "prepare":
+                    raise RuntimeError("SSH preparation failed")
+            elif arguments[1:3] == ["compute", "scp"]:
                 events.append("download")
                 self.assertTrue(arguments[3].startswith("nextstop-backend:/srv/nextstop/.release-backup-"))
                 local = Path(arguments[4])
@@ -100,8 +110,65 @@ class ReleaseControlTests(unittest.TestCase):
             "environment": "production", "image": IMAGE, "project": "nextstop-tech-staging",
             "instance": "nextstop-backend", "status": "SUCCESSFUL", "completedAt": 1790812800})
         self.assertRegex(receipt["backupId"], r"^gs://nextstop-tech-staging-release-backups/production/nextstop-backend/1790812800-[0-9a-f]{32}\.dump#42$")
-        self.assertEqual(events, ["bucket", "dump", "download", "upload", "describe", "cleanup"])
+        self.assertEqual(events, ["bucket", "prepare", "dump", "download", "upload", "describe", "cleanup"])
         self.assertTrue(all(not path.parent.exists() for path in paths))
+
+    def test_ssh_preparation_failure_prevents_dump_and_temporary_state(self):
+        run, command, events, paths = self.backup_runner(failure="prepare")
+        with patch.object(backup.uuid, "uuid4") as operation, \
+             patch.object(backup.tempfile, "TemporaryDirectory") as temporary:
+            with self.assertRaisesRegex(RuntimeError, "SSH preparation failed"):
+                backup.create_backup(CONFIG, IMAGE, run=run, command=command)
+        self.assertEqual(events, ["bucket", "prepare"])
+        self.assertEqual(paths, [])
+        operation.assert_not_called()
+        temporary.assert_not_called()
+
+    def test_first_ssh_banner_is_suppressed_before_strict_dump_metadata_parsing(self):
+        run, command, events, _ = self.backup_runner()
+        real_subprocess = subprocess.run
+        banner = "Generating public/private rsa key pair.\nSynthetic private setup output\n+--[RSA 3072]--+\n|   .o+       |\n+----[SHA256]--+"
+        payload = b"PGDMP synthetic fixture with no production content"
+        metadata = {"size": len(payload), "sha256": hashlib.sha256(payload).hexdigest()}
+        calls = []
+
+        def local_cli(arguments, **kwargs):
+            self.assertEqual(arguments[1:3], ["compute", "ssh"])
+            preparing = arguments[-1] == "--command=true"
+            calls.append("prepare" if preparing else "dump")
+            if preparing:
+                self.assertEqual(kwargs["stdout"], subprocess.DEVNULL)
+                self.assertEqual(kwargs["stderr"], subprocess.DEVNULL)
+                program = "import sys; print(" + repr(banner) + "); print('synthetic setup stderr', file=sys.stderr)"
+            else:
+                self.assertEqual(calls, ["prepare", "dump"])
+                self.assertTrue(kwargs["capture_output"])
+                program = "print(" + repr(json.dumps(metadata)) + ")"
+            return real_subprocess([sys.executable, "-c", program], **kwargs)
+
+        def prepared_command(arguments, **kwargs):
+            command(arguments, **kwargs)
+            if arguments[-1] == "--command=true":
+                backup.run_command(arguments, **kwargs)
+
+        def strict_run(arguments, **kwargs):
+            expected = run(arguments, **kwargs)
+            if arguments[1:3] == ["compute", "ssh"]:
+                return backup.run_json(arguments, **kwargs)
+            return expected
+
+        with patch.object(backup.subprocess, "run", side_effect=local_cli):
+            receipt = backup.create_backup(CONFIG, IMAGE, run=strict_run, command=prepared_command,
+                                           now=lambda: 1790812800)
+        self.assertEqual(receipt["status"], "SUCCESSFUL")
+        self.assertEqual(calls, ["prepare", "dump"])
+        self.assertEqual(events[:3], ["bucket", "prepare", "dump"])
+
+    def test_json_metadata_remains_strict_if_unexpected_output_follows_preparation(self):
+        with patch.object(backup.subprocess, "run", return_value=SimpleNamespace(
+                returncode=0, stdout='unexpected banner\n{"size": 5, "sha256": "synthetic"}')):
+            with self.assertRaises(json.JSONDecodeError):
+                backup.run_json(["gcloud", "compute", "ssh"])
 
     def test_wrong_object_incomplete_checksum_stale_and_future_backups_rejected(self):
         for changes in [{"bucket": "staging"}, {"name": "wrong.dump"}, {"size": "1"},
@@ -138,7 +205,7 @@ class ReleaseControlTests(unittest.TestCase):
         with patch.object(backup.shutil, "disk_usage", return_value=SimpleNamespace(free=0)):
             with self.assertRaisesRegex(RuntimeError, "Insufficient"):
                 backup.create_backup(CONFIG, IMAGE, run=run, command=command)
-        self.assertEqual(events, ["bucket", "dump", "cleanup"])
+        self.assertEqual(events, ["bucket", "prepare", "dump", "cleanup"])
 
     def test_bucket_privacy_must_be_confirmed_before_creating_dump(self):
         run, command, events, _ = self.backup_runner(private_bucket=False)

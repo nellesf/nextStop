@@ -103,6 +103,10 @@ def create_backup(config: dict, image: str, *, run=run_json, command=run_command
             or access.get("publicAccessPrevention") != "enforced"
             or access.get("uniformBucketLevelAccess", {}).get("enabled") is not True):
         raise RuntimeError("The release backup bucket must enforce private uniform access.")
+    # A fresh gcloud SSH identity can print ssh-keygen output on stdout, even
+    # with --quiet. Complete that setup with suppressed output before the dump
+    # command whose stdout must remain strictly valid JSON.
+    command(ssh(config, "true"), timeout=90)
     operation = uuid.uuid4().hex
     directory = f"/srv/nextstop/.release-backup-{operation}"
     started = now()
