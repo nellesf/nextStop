@@ -1432,7 +1432,9 @@ void test(
         for (let index = 1; index <= 100; index += 1) {
           await insertProjectedPark(pool, oldProjectionId, {
             northMeters: 0,
-            eastMeters: index * 50,
+            // Keep all 100 fillers within the original 2.5 km extent so the
+            // multi-park campus remains the sole candidate on the final page.
+            eastMeters: index * 25,
             parkId: indexedUUID(8, index),
           });
         }
@@ -1448,6 +1450,22 @@ void test(
           },
           "2026-08-20T01:02:00.000Z",
         );
+
+        const ordering = await pool.query<{ furthestFiller: number; multiParkDistance: number }>(
+          `SELECT max(ceil(ST_Distance(navigation_coordinate,
+                    ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography)))
+                    FILTER (WHERE campus_id <> $2) AS "furthestFiller",
+                  max(ceil(ST_Distance(navigation_coordinate,
+                    ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography)))
+                    FILTER (WHERE campus_id = $2) AS "multiParkDistance"
+           FROM nextstop.charging_campus_power_projection
+           WHERE projection_id = $1 AND minimum_power_kw = 100`,
+          [oldProjectionId, multiParkCampus.id],
+        );
+        const distances = ordering.rows[0];
+        assert.ok(distances);
+        assert.ok(distances.furthestFiller < distances.multiParkDistance,
+          "Every filler must precede the multi-park campus under the real search distance ordering.");
 
         let availabilityNow = new Date("2026-08-20T02:00:00Z");
         const search = new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey),
