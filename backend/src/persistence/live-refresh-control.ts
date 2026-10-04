@@ -3,7 +3,7 @@ import type { Pool, PoolClient } from "pg";
 
 export interface LiveRefreshLease { readonly providerId: "ich_tanke_strom"; readonly owner: string }
 export interface LiveRefreshLeasing {
-  acquire(): Promise<{ readonly lease?: LiveRefreshLease; readonly pending: boolean }>;
+  acquire(): Promise<{ readonly lease?: LiveRefreshLease; readonly pending: boolean; readonly retryable?: boolean }>;
   finish(lease: LiveRefreshLease, success: boolean): Promise<void>;
 }
 
@@ -20,9 +20,11 @@ export class PostgresLiveRefreshControl implements LiveRefreshLeasing {
         AND live_refresh_control.next_allowed_at <= clock_timestamp()
       RETURNING lease_owner AS owner`, [owner]);
     if (result.rows[0]?.owner === owner) return { lease: { providerId: "ich_tanke_strom", owner }, pending: true };
-    const current = await this.pool.query<{ pending: boolean }>(`SELECT lease_until > clock_timestamp() AS pending
+    const current = await this.pool.query<{ pending: boolean; retryable: boolean }>(`SELECT lease_until > clock_timestamp() AS pending,
+        (COALESCE(lease_until > clock_timestamp(), false)
+          OR last_success_at IS NULL OR last_success_at < last_attempt_at) AS retryable
       FROM nextstop.live_refresh_control WHERE provider_id = 'ich_tanke_strom'`);
-    return { pending: current.rows[0]?.pending === true };
+    return { pending: current.rows[0]?.pending === true, retryable: current.rows[0]?.retryable === true };
   }
   async finish(lease: LiveRefreshLease, success: boolean): Promise<void> {
     await this.pool.query(`UPDATE nextstop.live_refresh_control SET lease_owner = NULL, lease_until = NULL,

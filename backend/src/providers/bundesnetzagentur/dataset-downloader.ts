@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { basename, join } from "node:path";
 
 import { conditionalHeaders, StaticFeedCache } from "../static-feed-cache.js";
+import { configuredObjectDownloadCache, ObjectStaticFeedCache, type ObjectDownloadCache } from "../object-download-cache.js";
 
 const officialPageURL =
   "https://www.bundesnetzagentur.de/DE/Fachthemen/ElektrizitaetundGas/E-Mobilitaet/Ladesaeulenkarte/start.html";
@@ -33,6 +34,7 @@ export interface BundesnetzagenturDownloadOptions {
   readonly pageURL?: string;
   readonly maximumDatasetBytes?: number;
   readonly cacheDirectory?: string;
+  readonly objectCache?: ObjectDownloadCache;
 }
 
 export async function downloadLatestBundesnetzagenturDataset(
@@ -58,7 +60,9 @@ export async function downloadLatestBundesnetzagenturDataset(
   const directory = await mkdtemp(join(tmpdir(), "nextstop-bnetza-"));
   const filePath = join(directory, basename(dataset.url.pathname));
   try {
-    const cache = new StaticFeedCache("bundesnetzagentur", options.cacheDirectory);
+    const objectCache = options.objectCache ?? configuredObjectDownloadCache("bundesnetzagentur");
+    const cache = objectCache === undefined ? new StaticFeedCache("bundesnetzagentur", options.cacheDirectory)
+      : new ObjectStaticFeedCache(objectCache, maximumDatasetBytes);
     const cached = await cache.readInto(dataset.url.href, filePath, maximumDatasetBytes);
     const response = await fetchWithTimeout(
       fetchImplementation,

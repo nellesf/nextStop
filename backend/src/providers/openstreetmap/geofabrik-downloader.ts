@@ -1,7 +1,10 @@
 import { createHash, randomUUID } from "node:crypto";
+import { Readable } from "node:stream";
 import { access, mkdir, open, readFile, rename, rm, writeFile } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { basename, isAbsolute, join, resolve } from "node:path";
+import { configuredObjectDownloadCache, type ObjectDownloadCache } from "../object-download-cache.js";
+import { conditionalHeaders } from "../static-feed-cache.js";
 
 const defaultDatasetURLs = [
   "https://download.geofabrik.de/europe/germany-latest.osm.pbf",
@@ -12,7 +15,8 @@ const requestTimeoutMilliseconds = 30 * 60 * 1_000;
 const userAgent = "nextStop-backend/0.1 (+https://github.com/nellesf/nextStop)";
 
 export interface GeofabrikDatasetArtifact {
-  readonly filePath: string;
+  readonly filePath?: string;
+  readonly openReadStream?: () => Readable;
   readonly sha256: string;
   readonly observedAt: string;
   readonly fetchedAt: string;
@@ -38,6 +42,7 @@ export interface GeofabrikDownloadOptions {
   readonly fetchImplementation?: typeof fetch;
   readonly maximumDatasetBytes?: number;
   readonly now?: () => Date;
+  readonly objectCache?: (slot: string) => ObjectDownloadCache;
 }
 
 export async function downloadConfiguredGeofabrikDatasets(
@@ -55,14 +60,47 @@ export async function downloadConfiguredGeofabrikDatasets(
   if (!isAbsolute(cacheDirectory)) {
     throw new Error("OSM cache directory must be absolute.");
   }
-  await mkdir(cacheDirectory, { recursive: true, mode: 0o700 });
-
   const artifacts: GeofabrikDatasetArtifact[] = [];
-  for (const rawURL of urls) {
-    const url = validateDatasetURL(rawURL);
-    artifacts.push(await downloadOne(url, cacheDirectory, options));
+  try {
+    for (const rawURL of urls) {
+      const url = validateDatasetURL(rawURL);
+      const slot = `osm-${createHash("sha256").update(url.href).digest("hex")}`;
+      const objectCache = options.objectCache?.(slot) ?? configuredObjectDownloadCache(slot);
+      if (objectCache === undefined) {
+        await mkdir(cacheDirectory, { recursive: true, mode: 0o700 });
+        artifacts.push(await downloadOne(url, cacheDirectory, options));
+      } else artifacts.push(await downloadObject(url, objectCache, options));
+    }
+    return artifacts;
+  } catch (error) {
+    await Promise.all(artifacts.map((artifact) => artifact.cleanup()));
+    throw error;
   }
-  return artifacts;
+}
+
+async function downloadObject(url: URL, cache: ObjectDownloadCache, options: GeofabrikDownloadOptions): Promise<GeofabrikDatasetArtifact> {
+  const maximum = options.maximumDatasetBytes ?? defaultMaximumDatasetBytes;
+  const cached = await cache.read(url.href, maximum);
+  const response = await (options.fetchImplementation ?? fetch)(url, {
+    headers: { accept: "application/octet-stream,*/*", "user-agent": userAgent, ...conditionalHeaders(cached) },
+    redirect: "follow", signal: AbortSignal.timeout(requestTimeoutMilliseconds),
+  });
+  validateDatasetResponseURL(response.url, url);
+  if (response.status === 304 && cached !== undefined) return cached;
+  if (!response.ok) throw new Error(`Geofabrik dataset returned HTTP ${response.status}.`);
+  requireContentType(response);
+  validateContentLength(response, maximum);
+  const fetchedAt = (options.now ?? (() => new Date()))().toISOString();
+  const lastModified = response.headers.get("last-modified") ?? undefined;
+  const observedAt = parseObservedAt(lastModified);
+  if (observedAt === undefined || Date.parse(observedAt) > Date.parse(fetchedAt) + 300_000) {
+    throw new Error("Geofabrik object download has no valid source timestamp.");
+  }
+  if (response.body === null) throw new Error("Geofabrik dataset response body is missing.");
+  return cache.write(Readable.from(response.body as AsyncIterable<Uint8Array>), {
+    sourceURL: url.href, observedAt, fetchedAt,
+    ...optionalValue("etag", response.headers.get("etag")), ...optionalValue("lastModified", lastModified),
+  }, maximum);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {

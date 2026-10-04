@@ -104,6 +104,14 @@ export async function verifyDemandLiveAvailability(pool: Pool, base: readonly No
   assert.equal((await control.acquire()).pending, true);
   await control.finish(successor.lease, false);
   const cooldown = await control.acquire(); assert.equal(cooldown.lease, undefined); assert.equal(cooldown.pending, false);
+  assert.equal(cooldown.retryable, true);
+  // A queued retry must survive a failed worker's cooldown, but a successful
+  // attempt's cooldown is an intentional no-op, not another provider request.
+  await pool.query("UPDATE nextstop.live_refresh_control SET next_allowed_at = now() - interval '1 second'");
+  const retry = await control.acquire(); assert.ok(retry.lease);
+  await control.finish(retry.lease, true);
+  const successfulCooldown = await control.acquire();
+  assert.equal(successfulCooldown.lease, undefined); assert.equal(successfulCooldown.retryable, false);
   // Invalid/stale provider data does not publish and remains an upstream failure.
   await assert.rejects(refreshSwissLiveAvailability(pool, { now: () => now, downloadSwissFeed: () => Promise.resolve({ kind: "live",
     payload: {}, sha256: "6".repeat(64), observedAt: "2026-10-04T09:00:00Z", fetchedAt: now.toISOString(), lastModified: "Sun, 04 Oct 2026 09:00:00 GMT" }) }), /stale/u);

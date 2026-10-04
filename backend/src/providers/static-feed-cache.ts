@@ -37,7 +37,7 @@ export class StaticFeedCache {
       const metadataPath = join(this.directory, "metadata.json");
       if ((await stat(metadataPath)).size > 16_384) return undefined;
       const metadata: unknown = JSON.parse(await readFile(metadataPath, "utf8"));
-      if (!isMetadata(metadata) || metadata.sourceURL !== sourceURL) return undefined;
+      if (!isStaticFeedCacheMetadata(metadata) || metadata.sourceURL !== sourceURL) return undefined;
       const bodyPath = join(this.directory, "body");
       const size = (await stat(bodyPath)).size;
       if (size === 0 || size > maximumBytes) return undefined;
@@ -86,7 +86,7 @@ export function conditionalHeaders(
   };
 }
 
-function isMetadata(value: unknown): value is StaticFeedCacheMetadata {
+export function isStaticFeedCacheMetadata(value: unknown): value is StaticFeedCacheMetadata {
   if (typeof value !== "object" || value === null) return false;
   return "sourceURL" in value && typeof value.sourceURL === "string" &&
     "sha256" in value && typeof value.sha256 === "string" && /^[0-9a-f]{64}$/u.test(value.sha256) &&

@@ -41,8 +41,15 @@ export function brokerConfiguration(environment = process.env) {
   if (legacyCommand === "true" && !legacy) {
     throw new Error("The old compose minter is permitted only in explicit legacy staging mode.");
   }
+  const hosting = environment.NEXTSTOP_STAGING_HOSTING ?? "cloud-run";
+  if (!["cloud-run", "vm"].includes(hosting) ||
+      (environment.NEXTSTOP_STAGING_HOSTING !== undefined && name !== "staging")) {
+    throw new Error("NEXTSTOP_STAGING_HOSTING is only valid for the named staging preset.");
+  }
+  const cloud = !legacy && name === "staging" && hosting === "cloud-run";
   return {
-    name, port, project, zone, instance, mode: name === "local" ? "local" : "remote",
+    name, port, project, zone, instance, mode: name === "local" ? "local" : cloud ? "cloud-run" : "remote",
+    ...(cloud ? { region: "europe-west1", service: "nextstop-broker" } : {}),
     remoteMintCommand: legacyCommand === "true"
       ? "cd /opt/nextstop/current && sudo docker compose --project-name gcp-vm --env-file /etc/nextstop/backend.env -f deploy/gcp-vm/compose.yaml run --rm --no-deps -T simulator-token-mint"
       : "sudo /usr/local/sbin/nextstop-mint-simulator-token",

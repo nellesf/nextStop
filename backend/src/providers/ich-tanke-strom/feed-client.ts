@@ -4,6 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 
 import { conditionalHeaders, StaticFeedCache } from "../static-feed-cache.js";
+import { configuredObjectDownloadCache, ObjectStaticFeedCache, type ObjectDownloadCache } from "../object-download-cache.js";
 
 const staticFeedURL =
   "https://data.geo.admin.ch/ch.bfe.ladestellen-elektromobilitaet/data/oicp/ch.bfe.ladestellen-elektromobilitaet.json";
@@ -35,6 +36,7 @@ export interface IchTankeStromFeedOptions {
   readonly now?: () => Date;
   readonly maximumBytes?: number;
   readonly cacheDirectory?: string;
+  readonly objectCache?: ObjectDownloadCache;
 }
 
 export async function downloadIchTankeStromFeed(
@@ -50,7 +52,9 @@ export async function downloadIchTankeStromFeed(
   const directory = await mkdtemp(join(tmpdir(), "nextstop-swiss-static-"));
   const filePath = join(directory, "feed.json");
   try {
-    const cache = new StaticFeedCache("ich-tanke-strom-static", options.cacheDirectory);
+    const objectCache = options.objectCache ?? configuredObjectDownloadCache("ich-tanke-strom-static");
+    const cache = objectCache === undefined ? new StaticFeedCache("ich-tanke-strom-static", options.cacheDirectory)
+      : new ObjectStaticFeedCache(objectCache, options.maximumBytes ?? maximumBytes.static);
     const cached = await cache.readInto(
       staticFeedURL, filePath, options.maximumBytes ?? maximumBytes.static,
     );

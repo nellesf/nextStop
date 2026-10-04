@@ -7,7 +7,7 @@ import { brokerConfiguration } from "./configuration.mjs";
 void test("named presets pair the intended cloud minter with a distinct fixed port", () => {
   assert.deepEqual(brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "staging" }), {
     name: "staging", port: 8765, project: "nextstop-tech-testing", zone: "europe-west3-a",
-    instance: "nextstop-backend", mode: "remote",
+    instance: "nextstop-backend", mode: "cloud-run", region: "europe-west1", service: "nextstop-broker",
     remoteMintCommand: "sudo /usr/local/sbin/nextstop-mint-simulator-token",
   });
   assert.deepEqual(brokerConfiguration({}), {
@@ -15,6 +15,12 @@ void test("named presets pair the intended cloud minter with a distinct fixed po
     instance: "nextstop-backend", mode: "remote",
     remoteMintCommand: "sudo /usr/local/sbin/nextstop-mint-simulator-token",
   });
+});
+
+void test("only named staging can explicitly retain the VM broker during migration", () => {
+  assert.equal(brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "staging", NEXTSTOP_STAGING_HOSTING: "vm" }).mode, "remote");
+  assert.throws(() => brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "production", NEXTSTOP_STAGING_HOSTING: "vm" }));
+  assert.throws(() => brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "staging", NEXTSTOP_STAGING_HOSTING: "invalid" }));
 });
 
 void test("named presets reject crossed credentials, ports and legacy modes", () => {

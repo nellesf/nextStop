@@ -6,6 +6,7 @@ import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 import { promisify } from "node:util";
 import { brokerConfiguration } from "./configuration.mjs";
+import { mintCloudRunToken } from "./cloud-run.mjs";
 
 import {
   expiryFromMintStart,
@@ -14,7 +15,8 @@ import {
 
 const execFileAsync = promisify(execFile);
 const host = "127.0.0.1";
-const { name, port, mode, project, zone, instance, remoteMintCommand } = brokerConfiguration();
+const configuration = brokerConfiguration();
+const { name, port, mode, project, zone, instance, remoteMintCommand } = configuration;
 const repositoryRoot = resolve(dirname(fileURLToPath(import.meta.url)), "../..");
 
 let cachedToken;
@@ -37,7 +39,8 @@ async function accessToken() {
 async function mintToken() {
   const mintStartedAt = Date.now();
   const stdout =
-    mode === "remote" ? await mintRemoteToken() : await mintLocalToken();
+    mode === "remote" ? await mintRemoteToken() : mode === "cloud-run"
+      ? await mintCloudRunToken(configuration) : await mintLocalToken();
   const response = parseTokenResponse(stdout.trim());
   process.stdout.write("Refreshed the short-lived Simulator search credential.\n");
   return {
