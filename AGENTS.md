@@ -15,6 +15,14 @@ The architecture and recommendations were approved by the owner on 2026-08-13.
 Implementation is authorized under the accepted ADRs. New changes to an accepted
 decision still require the explicit approval described at the end of this file.
 
+## Product backlog
+
+Track deferred feature requests in [`docs/backlog.md`](docs/backlog.md). A backlog
+entry does not authorize implementation or change an accepted product rule.
+When answering backlog status questions, read the backlog and check the current
+implementation and Git history. Update affected entries when work is implemented,
+retain completed entries, and record completion references and verification.
+
 ## Simulator screenshots
 
 Before capturing iPhone or CarPlay images, read

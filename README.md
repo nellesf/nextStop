@@ -180,6 +180,7 @@ requires Apple's managed capability and matching provisioning.
 
 ## Documentation map
 
+- [Product backlog and implementation status](docs/backlog.md)
 - [Local development](docs/development.md)
 - [Architecture](docs/architecture/overview.md)
 - [Requirements analysis](docs/architecture/requirements-analysis.md)
