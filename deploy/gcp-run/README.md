@@ -106,6 +106,19 @@ explicit operator setup. Never assume a `state: PAUSED` field in create JSON kee
 a new schedule dormant. Existing schedules must be paused before job definitions
 are replaced, then explicitly resumed after the verified release.
 
+For initial commissioning, run `python3 deploy/gcp-run/commission_schedulers.py
+--config /private/tmp/staging-config.json --expected-release REVIEWED_RELEASE_ID`
+to inspect the local plan; it makes no cloud calls. Add `--apply` only during UTC
+minutes10–49, away from the four minute-zero schedules. The helper creates only
+missing definitions, immediately pauses each new job, and verifies all four end
+in `PAUSED` with the exact schedule, invocation identity, body and retry policy.
+Existing jobs must already match and be paused; differences stop commissioning.
+Creation briefly enables a job because Scheduler has no atomic paused-create
+operation. SIGINT/SIGTERM finish the current bounded pause verification before
+aborting. If pause confirmation fails, stop and inspect the four jobs before
+retrying. This helper never resumes or executes a job; activation remains a
+separate operator action after the release gates pass.
+
 ## Local configuration and reviewed release
 
 Use the same immutable backend image for every service and job. Only the existing

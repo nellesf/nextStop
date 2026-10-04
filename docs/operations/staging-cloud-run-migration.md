@@ -15,8 +15,9 @@ The source VM still serves `api-staging.nextstop.tech`. Production is unchanged.
   `nextstop-tech-testing-database-backups` (7-day filtered backups, separately
   retained operator evidence). Public access, soft delete and versioning disabled.
 - Five private Cloud Run services and five job definitions created. Every service
-  has minimum zero / maximum one instance and request-based billing. No schedule
-  has been activated and the gateway has not been made public.
+  has minimum zero / maximum one instance and request-based billing. Four
+  schedules were created away from their due times, immediately paused and
+  verified without any execution. The gateway has not been made public.
 
 The backend artifact is tied to source commit
 `add51b336a6cec51f04d3f1e1eedb2037aac69bf`, image digest
@@ -47,20 +48,26 @@ The registry remains the existing repository in `europe-west3`.
 - Five synthetic source-VM searches returned identical static results. Their
   latencies were 2333, 326, 340, 328 and 330 ms (median 330 ms). No availability
   requests or provider refreshes were triggered by this comparison.
-- Monitoring observed zero active and zero idle API/live instances at 10:28 UTC.
-  Evidence for the other three services remains pending; unused warm containers
-  must not be mistaken for proof that every service has scaled to zero.
+- Monitoring observed zero active and zero idle instances for every service:
+  API at 10:29 UTC, live at 10:30, and auth/broker/gateway at 10:37. These are
+  explicit per-service zero measurements, not missing time-series points.
 - Domain ownership for `nextstop.tech` was confirmed with Google. The new mapping
   requires CNAME `api-staging` to `ghs.googlehosted.com.`. Existing DNS is unchanged;
   certificate issuance and cutover remain pending.
-- Backend and Swift Core CI passed for the artifact commit. The iOS UI suite
-  failed at `testDarkModeWithLargestAccessibilityTextKeepsReportControlsReachable`
-  because `info-error-report` was not reachable. No Swift app source changed in
-  this migration; this failure remains recorded and is not represented as a pass.
+- Backend, Swift Core and iOS CI passed for infrastructure commit `40cccf9`.
+  The earlier artifact-commit iOS run failed at
+  `testDarkModeWithLargestAccessibilityTextKeepsReportControlsReachable` because
+  `info-error-report` was not reachable; the subsequent run passed without a
+  Swift source change. This intermittent failure remains a recorded limitation.
 - Deployment IAM is restricted to the existing stage services/jobs/queue,
   runtime identities, SQL metadata and the acceptance-evidence object prefix.
-  It grants no direct secret payload or database-backup reads. Principal tests
-  and the eventual main-branch WIF workflow remain separate checks.
+  It grants no direct secret payload or database-backup reads. Fourteen actual
+  principal permission/contract checks passed, including SQL-list and backup-
+  prefix read denials plus self-OIDC/private-broker access. Probe markers and
+  temporary permissions were removed. The original cleanup misclassified a
+  canonicalized Google-account alias; a separate corrective receipt confirms
+  removal of the exact remaining probe binding and role. Actual scheduler
+  pause/resume by CI and the main-branch WIF workflow remain unexercised.
 
 ## Remaining acceptance work
 
