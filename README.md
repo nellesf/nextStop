@@ -116,6 +116,8 @@ loaded separately after results appear and never blocks or changes search. Its
 shared cache and worker lease replace idle live polling. Production keeps its
 existing schedule until separately released. This rollout retains the existing
 VM and disks; reduced background work alone does not reduce their fixed bill.
+The [staging verification record](docs/operations/staging-demand-ingestion-2026-10-04.md)
+documents the deployed image, search checks, cost baseline and validation limits.
 
 ```text
 iPhone + CarPlay
