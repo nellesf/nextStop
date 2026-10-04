@@ -400,7 +400,9 @@ environments. Release builds omit this fallback and fail closed when App Attest
 is unavailable.
 
 Install the Google Cloud CLI, authenticate the developer account with
-`gcloud auth login`, and ensure it has IAP/SSH access to the selected environment.
+`gcloud auth login`. Staging requires Cloud Run service metadata access and
+`run.invoker` on its private Simulator token service; production requires its
+existing IAP/SSH access.
 From the repository root, start the corresponding broker and keep it running:
 
 ```bash
@@ -411,9 +413,9 @@ NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh
 NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh
 ```
 
-| Preset | Loopback port | Google Cloud project | Minter VM | Zone |
+| Preset | Loopback port | Google Cloud project | Token service | Region / zone |
 | --- | --- | --- | --- | --- |
-| `staging` | 8765 | `nextstop-tech-testing` | `nextstop-backend` | `europe-west3-a` |
+| `staging` | 8765 | `nextstop-tech-testing` | Cloud Run `nextstop-broker` | `europe-west1` |
 | `production` (default) | 8766 | `nextstop-tech-staging` | `nextstop-backend` | `europe-west3-a` |
 
 The production project retains its historical `nextstop-tech-staging` ID and the
@@ -427,7 +429,15 @@ overrides that disagree with this table. A preset describes the intended target;
 its service and access permissions must have been provisioned before a connected
 search can succeed.
 
-The broker binds only to `127.0.0.1`. It uses `gcloud compute ssh` with
+The broker binds only to `127.0.0.1`. Staging describes the fixed Cloud Run broker,
+gets the developer's Google identity token, and invokes its IAM-protected
+`POST /token`. Credentials remain in memory; the backend signing key is never
+copied to the Mac. During the VM-to-Cloud-Run migration only, explicitly set
+`NEXTSTOP_STAGING_HOSTING=vm` with the named staging preset to use its old IAP
+minter while the new runtime is being verified. Remove this override after
+cutover. This option cannot redirect the production preset.
+
+The production broker uses `gcloud compute ssh` with
 `--tunnel-through-iap` to invoke
 `sudo /usr/local/sbin/nextstop-mint-simulator-token` without arguments. Release
 installation supplies this stable host command; it starts the selected immutable

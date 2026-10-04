@@ -67,6 +67,7 @@ jobs:
         run: |
           python3 -m unittest discover -s deploy/releases -p 'test_*.py'
           python3 -m unittest discover -s deploy/gcp -p 'test_*.py'
+          python3 -m unittest discover -s deploy/gcp-run -p 'test_*.py'
           node --test ios/SimulatorAuthBroker/configuration.test.mjs
 
       - name: Unit tests

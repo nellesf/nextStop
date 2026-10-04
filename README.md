@@ -114,8 +114,12 @@ Staging can opt into [monthly static imports and demand-driven Swiss
 availability](docs/adr/0019-demand-driven-staging-ingestion.md). Availability is
 loaded separately after results appear and never blocks or changes search. Its
 shared cache and worker lease replace idle live polling. Production keeps its
-existing schedule until separately released. This rollout retains the existing
-VM and disks; reduced background work alone does not reduce their fixed bill.
+existing schedule until separately released. The subsequent staging hosting
+decision uses [Cloud Run and small Cloud SQL](docs/adr/0020-cloud-run-cloud-sql-staging.md),
+with bounded jobs and private provider caches. Application instances can scale to
+zero; the database remains running. See the [deployment and cost model](deploy/gcp-run/README.md)
+for migration gates and estimates. Savings require retiring the old staging VM
+and disks after verification.
 The [staging verification record](docs/operations/staging-demand-ingestion-2026-10-04.md)
 documents the deployed image, search checks, cost baseline and validation limits.
 

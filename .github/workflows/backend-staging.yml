@@ -75,11 +75,28 @@ jobs:
         run: |
           id=$(python3 deploy/gcp/record-deployment.py start --environment staging --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE")
           echo "id=$id" >> "$GITHUB_OUTPUT"
-      - name: Deploy and verify staging
+      - name: Validate staging hosting selection
         if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
+        env:
+          STAGING_HOSTING: ${{ vars.NEXTSTOP_STAGING_HOSTING }}
+        run: |
+          case "$STAGING_HOSTING" in
+            ''|vm|cloud-run) ;;
+            *) echo "Unknown staging hosting selection." >&2; exit 1 ;;
+          esac
+      - name: Deploy and verify staging VM
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true' && vars.NEXTSTOP_STAGING_HOSTING != 'cloud-run'
         env:
           RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
         run: bash deploy/gcp-vm/deploy.sh --environment staging --image "$RELEASE_IMAGE"
+      - name: Deploy and verify staging Cloud Run
+        if: vars.NEXTSTOP_RELEASES_ENABLED == 'true' && vars.NEXTSTOP_STAGING_HOSTING == 'cloud-run'
+        env:
+          RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
+          PYTHONDONTWRITEBYTECODE: '1'
+        run: >-
+          python3 deploy/gcp-run/deploy.py --config deploy/environments/staging-cloud-run.json
+          --image "$RELEASE_IMAGE" --commit "$RELEASE_COMMIT"
       - name: Record outcome
         if: always() && steps.deployment.outputs.id != ''
         env:

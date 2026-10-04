@@ -8,6 +8,11 @@
 
 ## Decision
 
+The subsequent owner-approved hosting migration is recorded in
+[ADR 0020](0020-cloud-run-cloud-sql-staging.md). The VM-specific implementation
+below describes the first rollout; its monthly and demand-driven data policies
+continue on the new staging runtime.
+
 Enable the change only through staging configuration. Keep the existing VM,
 PostgreSQL/PostGIS, disks, domain, authentication and release isolation. Production
 retains its existing configuration. Any subsequent hosting migration has its own
