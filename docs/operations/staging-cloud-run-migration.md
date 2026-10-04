@@ -157,6 +157,20 @@ Existing stable service traffic was preserved when applying these definitions.
   log its precise exception, so the Cloud Run failure reason itself was not
   captured beyond the failed food outcome; the redirect rejection is independently
   reproducible from the deployed validator and observed response.
+- The authorized retry `nextstop-monthly-xg8qd` started at 13:22:41 UTC on the
+  corrected image. The ordinary job reserved attempt two; charging remained due
+  November 1. The German 4,853,352,453-byte and Swiss 547,603,457-byte PBF objects
+  and manifests were successfully cached at 13:25:41 and 13:26:03 UTC. Subsequent
+  processing reads generation-pinned cache streams, not repeated provider
+  downloads. Three concurrent synthetic searches with the McDonald's filter at
+  13:31 UTC returned the same 31 static candidates in 2,399/2,389/2,477 ms while
+  that processing continued. This is a small concurrent check, not a broad load
+  benchmark. Final food publication and capacity acceptance remain pending.
+  Some Cloud Run CPU distributions had a finite mean outside their reported
+  occupied histogram bounds. The revised read-only monitor preserves means and
+  other metrics, marks these histogram conflicts for review and reports their
+  derived upper bound as unknown. It does not shift bucket indices or claim an
+  exact continuous resource peak.
 - Monitoring observed zero active and zero idle instances for every service:
   API at 10:29 UTC, live at 10:30, and auth/broker/gateway at 10:37. These are
   explicit per-service zero measurements, not missing time-series points.
@@ -174,7 +188,8 @@ Existing stable service traffic was preserved when applying these definitions.
   `testDarkModeWithLargestAccessibilityTextKeepsReportControlsReachable` because
   `info-error-report` was not reachable; the subsequent run passed without a
   Swift source change. This intermittent failure remains a recorded limitation.
-  All three CI workflows also passed for commits `e5592de` and `42ac95d`.
+  All three CI workflows also passed for commits `e5592de`, `42ac95d` and
+  downloader artifact `3367b57`.
 - Deployment IAM is restricted to the existing stage services/jobs/queue,
   runtime identities, SQL metadata and the acceptance-evidence object prefix.
   It grants no direct secret payload or database-backup reads. Fourteen actual
@@ -306,8 +321,9 @@ report for October 1–3 was subsequently checked for the staging project alone,
 without credits: EUR 6.80 before tax over 72 hours, equivalent to EUR 68.94 net
 at 730 hours. This is a comparison rate, not a full monthly invoice.
 The dated list-price model in `deploy/gcp-run/cost-plan.json`, including hourly
-bounded cleanup, estimates EUR 42.04–59.13 net/month including 10% reserve, or
-EUR 50.02–70.36 with illustrative 19% VAT. New-runtime usage is not yet present in
+bounded cleanup and the actual 2 CPU/8 GiB daily due-check allocation, estimates
+EUR 42.09–59.18 net/month including 10% reserve, or EUR 50.09–70.43 with
+illustrative 19% VAT. New-runtime usage is not yet present in
 that billing period, so actual new charges are still unverified. A fresh Billing
 UI check at 13:18 UTC still showed usage only through October 3. Compare like tax
 bases. The source VM and target temporarily

@@ -354,9 +354,9 @@ python3 -m unittest discover -s deploy/gcp-run -p 'test_*.py'
 | --- | ---: |
 | g1-small,730h +50GiB SQL SSD | 29.964 |
 | Reference30GiB filtered GCS backups alone | 0.528 |
-| Full staging model before reserve | 38.21–53.75 |
-| Full model including10% reserve | 42.04–59.13 |
-| Illustration with19%VAT, including reserve | 50.02–70.36 |
+| Full staging model before reserve | 38.27–53.80 |
+| Full model including10% reserve | 42.09–59.18 |
+| Illustration with19%VAT, including reserve | 50.09–70.43 |
 | Verified pre-migration usage, normalized to730h, net | 68.94 |
 
 The hourly cleanup model replaces the former daily minimum of 0.5 vCPUh/0.25 GiBh
@@ -365,9 +365,15 @@ minimum billing, or 60 vCPUh/30 GiBh at every 300-second application deadline. A
 existing rates this adds exactly €0.692208–3.581424 net before reserve, or
 €0.7614288–3.9395664 with the 10% reserve. The existing maintenance allowance remains;
 startup/shutdown variation is covered by the reserve. No fifth Scheduler job is
-added. Compare the new €42.04–59.13 net model with the €68.94 net baseline. The
-illustrative VAT-inclusive high of €70.36 is not a like-for-like comparison with
+added. Compare the new €42.09–59.18 net model with the €68.94 net baseline. The
+illustrative VAT-inclusive high of €70.43 is not a like-for-like comparison with
 that tax-exclusive baseline.
+
+Daily due checks still allocate the monthly job's 2vCPU/8GiB when no import is
+due. Their separate 30×60-second billing allowance is 1vCPUh/4GiBh. Together with
+hourly purge and its unchanged high-scenario allowance, the combined quantities
+are 13–15vCPUh and 10–11GiBh. Correcting the former smaller due-check allocation
+adds €0.052272 net before reserve, or €0.0574992 with the 10% reserve.
 
 The earlier39–52€ estimate preceded the explicit daily backup and extra scheduler
 budget. This model includes those, request CPU for three separate services,

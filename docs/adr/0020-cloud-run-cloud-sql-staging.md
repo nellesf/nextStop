@@ -97,9 +97,11 @@ The dated EUR list-price model in `deploy/gcp-run/cost.py` uses approximately
 EUR 29.964/month for the database at 730 hours. Application execution, imports,
 backup execution/storage, cache, registry, four schedules, secrets and network
 are additional. Scenarios including a 10% reserve are approximately
-EUR 42.04–59.13 net per month (EUR 50.02–70.36 with illustrative 19% VAT).
+EUR 42.09–59.18 net per month (EUR 50.09–70.43 with illustrative 19% VAT).
 The hourly cleanup estimate covers 720 monthly invocations at 60–300 seconds each,
 replacing the earlier daily cleanup allowance; startup variation uses the reserve.
+Daily due checks retain the monthly job's 2vCPU/8GiB allocation, so their separate
+30×60-second allowance is 1vCPUh/4GiBh even when no import is due.
 These are estimates, not billing-export evidence or enforced spending caps.
 On 2026-10-04 the operator verified EUR 6.80 of pre-tax Google Cloud usage for the
 staging project over October 1–3, with no credits. The 72-hour sample normalizes to
