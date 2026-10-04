@@ -76,6 +76,11 @@ async function pruneBatch(
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '500ms'");
     await client.query("SET LOCAL statement_timeout = '2s'");
+    // FK cascades use parameterized equality lookups. A custom plan for a
+    // depleted version can choose the spatial GiST index once per deleted park;
+    // the generic plan favored efficient compound primary-key lookups in full-
+    // corpus checks. Scope it to cleanup, preserving normal search plans.
+    await client.query("SET LOCAL plan_cache_mode = 'force_generic_plan'");
     const lock = await client.query<{ readonly acquired: boolean }>(
       "SELECT pg_try_advisory_xact_lock($1) AS acquired", [publicationLock],
     );

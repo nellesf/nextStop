@@ -1,6 +1,7 @@
 """Synthetic only: no real provider, token, queue or database requests."""
 import copy
 from datetime import datetime, timezone
+import hashlib
 import json
 import subprocess
 import threading
@@ -91,6 +92,9 @@ class LiveGateTests(unittest.TestCase):
         self.assertTrue(report["liveTaskCompatibilityPassed"])
         self.assertEqual(report["release"], live.release_id(fixture.config))
         self.assertEqual(report["observedCompletedDispatches"], 1)
+        # A fast task can finish before the first list; do not invent identity evidence.
+        self.assertEqual(report["observedUniqueTaskNames"], 0)
+        self.assertFalse(report["expectedTaskSeen"])
         self.assertEqual(sum(url.endswith("/search") for url, *_ in fixture.calls), 2)
         self.assertEqual(sum(url.endswith("/availability") for url, *_ in fixture.calls), 4)
         self.assertEqual(fixture.ch_requests, 3)
@@ -119,7 +123,11 @@ class LiveGateTests(unittest.TestCase):
         self.assertEqual(fixture.ch_requests, 0)
 
     def test_multiple_dispatches_or_publications_and_wrong_task_fail_closed(self):
-        for fault in ("dispatches", "publications", "task"):
+        diagnostics = {"dispatches": "More than one completed dispatch was observed for the concurrent requests.",
+                       "in_flight": "More than one in-flight dispatch was observed for the concurrent requests.",
+                       "publications": "Concurrent requests caused multiple provider refreshes.",
+                       "task": "An unexpected task identity was observed for the concurrent requests."}
+        for fault, diagnostic in diagnostics.items():
             with self.subTest(fault=fault):
                 fixture = Fixture()
                 if fault == "publications": fixture.after["snapshots"]["publishedRecently"] = 2
@@ -127,10 +135,65 @@ class LiveGateTests(unittest.TestCase):
                     result = fixture.queue()
                     if fixture.queue_reads >= 3:
                         if fault == "dispatches": result["completedLastMinute"] = 2
+                        if fault == "in_flight": result["inFlight"] = 2
                         if fault == "task": result["names"] = {live.QUEUE_PATH + "/tasks/unrelated"}
                     return result
-                with self.assertRaises(live.VerificationError): fixture.run(queue=queue)
+                with self.assertRaises(live.VerificationError) as caught: fixture.run(queue=queue)
+                report = live.failure_report(caught.exception)
+                self.assertEqual(report["fixedDiagnostic"], diagnostic)
+                self.assertEqual(report["counters"]["observedProviderAttempts"], 1)
+                self.assertEqual(report["counters"]["unexpectedTaskNameCount"], int(fault == "task"))
+                self.assertNotIn("unrelated", json.dumps(report))
+                self.assertNotIn("tasks/", json.dumps(report))
+                self.assertTrue(all(type(value) in (bool, int) for value in report["counters"].values()))
                 self.assertEqual(fixture.ch_requests, 2)
+
+    def test_pending_estimate_can_exceed_one_but_must_settle_before_cache_reuse(self):
+        fixture = Fixture()
+        def queue():
+            result = fixture.queue()
+            if fixture.queue_reads == 3: result["estimatedPending"] = 2
+            return result
+        report = fixture.run(queue=queue)
+        self.assertTrue(report["liveTaskCompatibilityPassed"])
+        self.assertEqual(fixture.queue_reads, 5)
+        self.assertEqual(report["observedUniqueTaskNames"], 0)
+        self.assertFalse(report["expectedTaskSeen"])
+        self.assertEqual(fixture.ch_requests, 3)
+
+    def test_nonzero_pending_estimate_never_satisfies_first_or_final_completion(self):
+        for final in (False, True):
+            with self.subTest(final=final):
+                fixture = Fixture()
+                def queue():
+                    result = fixture.queue()
+                    if fixture.queue_reads >= (4 if final else 3): result["estimatedPending"] = 2
+                    return result
+                with self.assertRaises(live.VerificationError) as caught:
+                    fixture.run(queue=queue)
+                report = live.failure_report(caught.exception)
+                self.assertIn("Final cache read" if final else "three minutes", report["fixedDiagnostic"])
+                self.assertEqual(report["counters"]["estimatedPending"], 2)
+                self.assertEqual(report["counters"]["maximumEstimatedPending"], 2)
+                self.assertEqual(report["counters"]["observedUniqueTaskNames"], 0)
+                self.assertFalse(report["counters"]["expectedTaskSeen"])
+                self.assertEqual(fixture.ch_requests, 3 if final else 2)
+
+    def test_expected_task_identity_is_reported_only_if_it_was_actually_listed(self):
+        fixture = Fixture()
+        def queue():
+            result = fixture.queue()
+            if fixture.queue_reads == 3:
+                window = int(fixture.clock.now() // 60)
+                task = live.QUEUE_PATH + "/tasks/" + hashlib.sha256(
+                    ("ich_tanke_strom\0" + live.QUEUE_PATH + "\0" + str(window)).encode()).hexdigest()
+                result.update(names={task}, estimatedPending=2, completedLastMinute=0, inFlight=1)
+            return result
+        report = fixture.run(queue=queue)
+        self.assertTrue(report["liveTaskCompatibilityPassed"])
+        self.assertEqual(report["observedUniqueTaskNames"], 1)
+        self.assertTrue(report["expectedTaskSeen"])
+        self.assertNotIn("tasks/", json.dumps(report))
 
     def test_missing_success_or_publish_does_not_become_success_and_never_retriggers(self):
         for field in ("lastSuccess", "publishedRecently"):
@@ -246,6 +309,26 @@ class LiveGateTests(unittest.TestCase):
             report = live.failure_report(error)
             self.assertNotIn("private", json.dumps(report))
             self.assertEqual(report["fixedDiagnostic"], "Live task gate failed without exposing diagnostic payloads.")
+
+    def test_failure_counters_are_strictly_typed_and_untrusted_exception_attributes_are_ignored(self):
+        error = live.GateFailure("private task and token", {})
+        error.counters = {"estimatedPending": 2, "maximumEstimatedPending": 3, "expectedTaskSeen": False,
+                          "elapsedSeconds": 5, "privateToken": "private token", "inFlight": "private body",
+                          "completedLastMinute": True, "unexpectedTaskNameCount": -1,
+                          "newPublications": float("nan"), "observedUniqueTaskNames": 10**30,
+                          "observedProviderAttempts": ["private route"]}
+        report = live.failure_report(error)
+        self.assertEqual(report["counters"], {"estimatedPending": 2, "maximumEstimatedPending": 3,
+                                               "expectedTaskSeen": False, "elapsedSeconds": 5})
+        self.assertNotIn("private", json.dumps(report))
+        injected = live.VerificationError("private transport details")
+        injected.counters = {"estimatedPending": "private token"}
+        self.assertNotIn("counters", live.failure_report(injected))
+        fixture = Fixture()
+        def request(*_args, **_kwargs): raise injected
+        with self.assertRaises(live.VerificationError) as caught:
+            fixture.run(request=request)
+        self.assertNotIn("private", json.dumps(live.failure_report(caught.exception)))
 
 
 if __name__ == "__main__": unittest.main()

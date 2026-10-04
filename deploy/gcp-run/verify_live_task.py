@@ -62,11 +62,35 @@ SAFE_DIAGNOSTICS = frozenset({
     "Candidate readiness or image binding failed.",
     "Synthetic static search failed.",
     "Nonblocking availability request failed or exceeded its bound.",
-    "More than one task was observed for the concurrent requests.",
+    "An unexpected task identity was observed for the concurrent requests.",
+    "More than one completed dispatch was observed for the concurrent requests.",
+    "More than one in-flight dispatch was observed for the concurrent requests.",
     "Concurrent requests caused multiple provider refreshes.",
     "Fresh shared cache did not suppress another enqueue.",
     "Final cache read changed the completed live state.",
 })
+COUNTER_KEYS = frozenset({
+    "observedUniqueTaskNames", "unexpectedTaskNameCount", "estimatedPending", "maximumEstimatedPending",
+    "completedLastMinute", "maximumCompletedLastMinute", "inFlight", "maximumInFlight",
+    "observedProviderAttempts", "newPublications", "elapsedSeconds",
+})
+
+
+def safe_counters(values):
+    if type(values) is not dict:
+        return {}
+    return {key: value for key, value in values.items()
+            if (key in COUNTER_KEYS and type(value) is int and 0 <= value <= 1_000_000_000)
+            or (key == "expectedTaskSeen" and type(value) is bool)}
+
+
+class GateFailure(VerificationError):
+    def __init__(self, message, counters):
+        super().__init__(message if message in SAFE_DIAGNOSTICS
+                         else "Live task gate failed without exposing diagnostic payloads.")
+        self.counters = safe_counters(counters)
+
+
 SQL = """
 BEGIN READ ONLY;
 SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '500ms';
@@ -249,6 +273,36 @@ def verify(config, token_provider, database, queue, request=request_json, sleep=
            wall=time.time, monotonic=time.monotonic):
     """Two fixed searches, one DE availability, two concurrent CH requests, one final cache read."""
     validate(config)
+    started = monotonic()
+    counters = {"observedUniqueTaskNames": 0, "unexpectedTaskNameCount": 0, "expectedTaskSeen": False,
+                "observedProviderAttempts": 0, "newPublications": 0}
+    seen_names, attempts = set(), set()
+
+    def observe_queue(metadata, expected):
+        seen_names.update(metadata["names"])
+        counters.update(observedUniqueTaskNames=len(seen_names),
+                        unexpectedTaskNameCount=len(seen_names - {expected}), expectedTaskSeen=expected in seen_names)
+        for key, maximum in (("estimatedPending", "maximumEstimatedPending"),
+                             ("completedLastMinute", "maximumCompletedLastMinute"), ("inFlight", "maximumInFlight")):
+            counters[key] = metadata[key]
+            counters[maximum] = max(counters.get(maximum, 0), metadata[key])
+
+    def require_single_dispatch(metadata, expected):
+        if metadata["names"] - {expected}:
+            raise VerificationError("An unexpected task identity was observed for the concurrent requests.")
+        # tasksCount is an estimate, not evidence of multiple task identities.
+        # Keep it for diagnostics and require it to settle to zero at completion.
+        if metadata["completedLastMinute"] > 1:
+            raise VerificationError("More than one completed dispatch was observed for the concurrent requests.")
+        if metadata["inFlight"] > 1:
+            raise VerificationError("More than one in-flight dispatch was observed for the concurrent requests.")
+
+    def observe_database(current, original_control):
+        current_control = current["control"]
+        if current_control is not None and current_control["lastAttempt"] != (original_control or {}).get("lastAttempt"):
+            attempts.add(current_control["lastAttempt"])
+        counters.update(observedProviderAttempts=len(attempts), newPublications=current["snapshots"]["publishedRecently"])
+
     try:
         before = database()
         now = instant(before["now"])
@@ -309,15 +363,13 @@ def verify(config, token_provider, database, queue, request=request_json, sleep=
             pending = [future.result(timeout=25) for future in futures]
         if not any(pending) or int(wall() // 60) != window:
             raise VerificationError("Concurrent refresh was not accepted within one task window.")
-        attempts = set()
         while monotonic() - started < 180:
             metadata = queue()
             current = database()
-            if metadata["names"] - {task} or any(metadata[key] > 1 for key in ("estimatedPending", "completedLastMinute", "inFlight")):
-                raise VerificationError("More than one task was observed for the concurrent requests.")
+            observe_queue(metadata, task)
+            observe_database(current, control)
+            require_single_dispatch(metadata, task)
             current_control = current["control"]
-            if current_control is not None and current_control["lastAttempt"] != (control or {}).get("lastAttempt"):
-                attempts.add(current_control["lastAttempt"])
             if len(attempts) > 1 or current["snapshots"]["publishedRecently"] > 1:
                 raise VerificationError("Concurrent requests caused multiple provider refreshes.")
             if (current_control is not None and not current_control["leaseActive"] and len(attempts) == 1
@@ -327,35 +379,43 @@ def verify(config, token_provider, database, queue, request=request_json, sleep=
                     and current["snapshots"]["active"] == 1 and current["snapshots"]["records"] > 0
                     and instant(current["snapshots"]["publishedAt"]) >= instant(current_control["lastAttempt"])
                     and 0 <= instant(current["now"]) - instant(current["snapshots"]["observedAt"]) <= 60
-                    and metadata["completedLastMinute"] == 1 and metadata["inFlight"] == 0 and not metadata["names"]):
+                    and metadata["completedLastMinute"] == 1 and metadata["inFlight"] == 0
+                    and metadata["estimatedPending"] == 0 and not metadata["names"]):
                 if availability(selections[1]):
                     raise VerificationError("Fresh shared cache did not suppress another enqueue.")
                 sleep(3)
                 final_queue = queue()
                 after = database()
+                observe_queue(final_queue, task)
+                observe_database(after, control)
+                require_single_dispatch(final_queue, task)
                 if (not stable_database(current, after) or final_queue["names"] or final_queue["inFlight"] != 0
-                        or final_queue["completedLastMinute"] != 1):
+                        or final_queue["estimatedPending"] != 0 or final_queue["completedLastMinute"] != 1):
                     raise VerificationError("Final cache read changed the completed live state.")
                 return {"release": release_id(config), "image": config["backendImage"], "commit": config["commit"],
                         "verifiedAt": datetime.fromtimestamp(wall(), timezone.utc).isoformat(), "liveTaskCompatibilityPassed": True,
                         "searchRequests": 2, "availabilityRequests": 4, "concurrentSwissRequests": 2,
                         "observedCompletedDispatches": 1, "observedProviderAttempts": 1, "newPublications": 1,
+                        "observedUniqueTaskNames": len(seen_names), "expectedTaskSeen": task in seen_names,
                         "deTaskCount": 0, "leaseReleased": True, "freshCacheReused": True,
                         "lastAttemptAt": current_control["lastAttempt"], "lastSuccessAt": current_control["lastSuccess"],
                         "publishedAt": current["snapshots"]["publishedAt"], "providerObservedAt": current["snapshots"]["observedAt"]}
             sleep(5)
         raise VerificationError("Live task completion was not proven within three minutes; queued retries were left intact.")
-    except VerificationError:
-        raise
+    except VerificationError as error:
+        counters["elapsedSeconds"] = int(max(0, monotonic() - started))
+        raise GateFailure(str(error), counters) from None
     except Exception:
-        raise VerificationError("Live task gate failed without exposing diagnostic payloads.") from None
+        counters["elapsedSeconds"] = int(max(0, monotonic() - started))
+        raise GateFailure("Live task gate failed without exposing diagnostic payloads.", counters) from None
 
 
 def failure_report(error):
     message = str(error) if isinstance(error, VerificationError) else ""
     return {"status": "failed",
             "reason": "Live task gate did not pass; no success evidence written. Any accepted task remains under its bounded queue retry policy.",
-            "fixedDiagnostic": message if message in SAFE_DIAGNOSTICS else "Live task gate failed without exposing diagnostic payloads."}
+            "fixedDiagnostic": message if message in SAFE_DIAGNOSTICS else "Live task gate failed without exposing diagnostic payloads.",
+            **({"counters": safe_counters(error.counters)} if isinstance(error, GateFailure) else {})}
 
 
 def main():

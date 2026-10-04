@@ -19,12 +19,19 @@ The source VM still serves `api-staging.nextstop.tech`. Production is unchanged.
   schedules were created away from their due times, immediately paused and
   verified without any execution. The gateway has not been made public.
 
-The backend artifact is tied to source commit
+The initial backend artifact is tied to source commit
 `add51b336a6cec51f04d3f1e1eedb2037aac69bf`, image digest
 `sha256:52d298b27c19ba7de836d2073de31bcf821063c0d4d1598d17c46c06e717693a`,
 and release ID `1c907fe7c046`. Cloud Build completed successfully and the registry
 manifest, configuration, platform and OCI revision were independently checked.
 The registry remains the existing repository in `europe-west3`.
+
+The subsequent private candidate uses commit
+`e5592de9c96d4a2e144f32ee07a4a675d9273403`, digest
+`sha256:7451101ee4c03cac414e72ded5df6c2c6dd0971df8b72b77564c54f662c40806`,
+and release `a2939e6f73e9`. Only the IAM-private live service's stable traffic has
+advanced to this candidate during commissioning; the public staging domain still
+reaches the source VM. All four schedules remain paused.
 
 ## Performed checks
 
@@ -63,13 +70,39 @@ The registry remains the existing repository in `europe-west3`.
   The task published 15,240 observations but returned 503 approximately 30 seconds
   later. Code inspection and timing point to unbounded post-publication retention
   hitting the live SQL timeout; the exact database error code was not captured.
-  The queue was paused with the retry preserved. The branch correction moves
+  The queue was temporarily paused with the retry preserved. The correction moves
   Cloud Run retention to the bounded hourly cleanup job, leaving the VM default
-  unchanged. A successful real task retry and fresh coalescence gate remain pending.
-- A new Cloud Run filtered backup was started after capturing all 26 table counts
-  in one read-only repeatable-read transaction. Schedules and the live queue
-  remain paused while the backup comparison snapshot is held unchanged. Completion
-  and restoration of this new backup remain separate acceptance checks.
+  unchanged. After advancing the private live service, the retained task retried
+  successfully at 12:04 UTC: 15,240 observations published, lease released, queue
+  empty. The queue is running. A subsequent concurrent-request gate observed a
+  fresh successful publication but failed an ambiguous combined queue check.
+  The gate now distinguishes actual task identities, dispatches and estimated
+  queue size, retaining strict completion and cache-reuse checks. A fresh full
+  gate pass remains pending.
+- Five searches against the subsequent candidate returned the same static hash
+  and 50 candidates in 904, 389, 375, 386 and 419 ms; the four follow-up median was
+  388 ms. Readiness matched the immutable image. The two-source IP isolation and
+  forwarded-prefix resistance check also passed again. These were not isolated
+  cold-start measurements.
+- The filtered Cloud Run backup completed in about 24 minutes. Its
+  2,859,257,809-byte archive has SHA-256
+  `f3648bc3cb9b67096de725883e477c952e5268a80f700512ad7289d3e4dde18a`.
+  Generation-pinned download and hashes passed. Two private local restore runs
+  restored all data, matched the pre-backup counts for all 26 tables, verified
+  all 18 migrations, valid indexes, active versions and restricted grants.
+  Both stopped during post-restore statistics preparation before synthetic
+  searches. Full recovery acceptance remains pending diagnosis of that phase;
+  successful data restoration alone is not a completed recovery gate.
+- The first bounded cleanup deleted 64 expired live snapshots and 975,360
+  observations, then stopped during charging projection retention. A worker-role
+  probe reproduced the parent-delete timeout at 2 seconds. Rollback-only EXPLAIN
+  isolated a foreign-key cascade choosing the spatial GiST index for empty
+  version/park lookups. A transaction-local generic-plan setting used the compound
+  primary key in the comparison and reduced measured 250/1,000-row cleanup
+  batches to 36/60 ms. The branch applies this setting only within cleanup
+  transactions. Active versions are unchanged; a new complete job run is pending.
+- The real report-purge job succeeded against an empty report table. Deletion of
+  expired report rows is covered by synthetic tests, not by that empty live run.
 - Monitoring observed zero active and zero idle instances for every service:
   API at 10:29 UTC, live at 10:30, and auth/broker/gateway at 10:37. These are
   explicit per-service zero measurements, not missing time-series points.
