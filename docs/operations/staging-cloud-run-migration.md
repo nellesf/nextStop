@@ -1,10 +1,20 @@
 # Staging Cloud Run migration record
 
-Date: 2026-10-04. This is an in-progress operator record, not a cutover receipt.
-DNS still points `api-staging.nextstop.tech` to the source VM. The existing VM
-installation has been restored and verified after the final handoff was blocked
-on public-gateway approval. The prepared Cloud Run target remains private.
-Production is unchanged.
+Date: 2026-10-04, status through 18:16:54 UTC. All five stable Cloud Run services
+use security release `7db74d556e33`. Only the gateway is public; API, Auth, live
+and simulator broker remain IAM-private. A fresh writer handoff and Nginx bridge
+completed successfully. The source VM retains its database and Nginx, but all five
+old application containers are stopped. Cloud SQL is now the authoritative writer
+destination. Production is unchanged.
+
+DNS still points `api-staging.nextstop.tech` to the source VM. Its temporary bridge
+already reaches the new release: public-domain API/Auth readiness and an
+authenticated synthetic search passed at 18:12 UTC. The owner has been asked to
+replace the IONOS `api-staging` record with CNAME `ghs.googlehosted.com.`; the direct
+managed-domain certificate and post-DNS checks remain pending. All four existing
+schedules were enabled and read back at 18:16:54 UTC, without changing import due
+dates or the budget. No VM/disk/address retirement, CI activation or main merge has
+occurred; overlapping infrastructure costs continue.
 
 ## Isolated target
 
@@ -17,32 +27,175 @@ Production is unchanged.
 - Private buckets: `nextstop-tech-testing-download-cache` (90-day cache) and
   `nextstop-tech-testing-database-backups` (7-day filtered backups, separately
   retained operator evidence). Public access, soft delete and versioning disabled.
-- Five private Cloud Run services and five job definitions created. Every service
-  has minimum zero / maximum one instance and request-based billing. Four
-  schedules were created away from their due times, immediately paused and
-  verified without any execution. The gateway has not been made public.
+- Five Cloud Run services and five job definitions exist. Only `nextstop-gateway`
+  has a scoped `allUsers` / `roles/run.invoker` binding. The four internal services
+  reject anonymous invocation. Each service has configured minimum zero / maximum
+  one instance and request-based billing. Four schedules were created away from
+  their due times, immediately paused and verified without execution. They were
+  enabled at 18:16 UTC after the authoritative target, public bridge and
+  backup/release gates passed; this did not require the external DNS change.
 
-The initial backend artifact is tied to source commit
+## Security release and completed writer handoff, 2026-10-04
+
+The replacement staging candidate is application commit
+`923f811d26c637b87923c9dab688d9581422d971`, immutable image
+`europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:64d018644b0c57c9775c94aee641b23ed5a50dfb8b0e9102a98bd0ee076b2e8a`,
+release `7db74d556e33`. Cloud Build
+`0cf35319-6909-479e-be51-ce45ba4f3534` succeeded at 17:31:31 UTC.
+[Backend CI run 37220687771](https://github.com/nellesf/nextStop/actions/runs/37220687771)
+also passed, including the dependency/container security job and actual PostGIS
+integration tests. Production was not changed.
+
+The first security build, commit `09dcf33`, was blocked before push by real
+base-system/global-package findings. The replacement image updates the supported
+Alpine runtime and system packages, retains only the required PostgreSQL 17 client
+tools, and removes runtime npm/Yarn. It runs as the unprivileged Node user. Build-time
+checks execute dependency imports, compression, German timezone formatting and the
+three PostgreSQL client tools inside that final runtime image. This base-image
+change required fresh runtime evidence; prior acceptance hashes were not silently
+reused across the package/runtime change.
+
+The successful Cloud Build ran the prescribed source, dependency audit, image
+build/export, pre-push Trivy scan, push and digest-binding steps in order. Its
+Trivy 0.75.0 receipt reported zero findings in every reported severity at
+17:31:12 UTC. The policy includes unfixed vulnerabilities and blocks HIGH and
+CRITICAL findings without suppressions; npm audits separately block MODERATE or
+higher findings. A later registry read independently matched the published
+manifest digest, Linux/amd64 platform, OCI source revision and image config digest
+to that same scan receipt. The full Trivy workspace report was not retained by
+Cloud Build; evidence consists of the actual successful build definition/status,
+its logged digest-bound receipt and verified registry metadata. The separate CI
+image scan is additional evidence, not a substitute image identity. These are
+dated scanner results, not proof that all vulnerabilities are known or absent.
+
+Gateway admission now combines the existing per-IP buckets with per-process
+ceilings: API 120/minute (burst 20), Auth 60/minute (burst 10), Reports 12/minute
+(burst 3), and invalid requests 60/minute (burst 10). The configured gateway
+instance limit is one. Header, URL, body and in-memory IP-table bounds apply before
+upstream work; unknown paths and malformed requests consume the invalid-request
+budget. An exact, bodyless `/health` remains a constant, dependency-free 200 so
+public traffic cannot exhaust a shared bucket and force platform liveness
+restarts. `/ready` and `/ready/auth` consume their respective API/Auth budgets.
+The limits are local to each process and reset on restart; they do not constitute
+a WAF or a hard monetary spending cap. App Attest and application token checks
+remain in place, and the private simulator broker has no gateway route.
+
+Release preflight now rejects Cloud SQL security/cost-policy drift: connector
+access must be REQUIRED, authorized networks must be empty, TLS must require a
+trusted client certificate, and automatic storage growth must remain disabled.
+It requires the seven reviewed redaction flags exactly (`log_connections=off`,
+`log_disconnections=off`, `log_min_duration_statement=-1`,
+`log_min_error_statement=panic`, `log_parameter_max_length=0`,
+`log_parameter_max_length_on_error=0`, `log_statement=none`), rejects duplicate
+flag definitions, and permits sampled-statement logging only when unset/default
+or explicitly `-1`. The real candidate preflight passed these checks; no actual
+configuration drift was found.
+
+At this evidence snapshot, private candidate checks had passed for API/Auth
+readiness, authenticated synthetic search, two-source client-IP isolation and
+forwarded-prefix resistance, live-task single-flight/cache behavior, fresh search
+performance, registry/security binding, and the current SQL function permissions.
+A normal execution of the new monthly job succeeded with future due dates and
+unchanged aggregate import state: both sources remain due on November 1 at 02:00
+UTC, active projections are unchanged, and October's shared heavy-import budget
+remains 2/3. The current CI run separately exercised the budget's real PostGIS
+concurrency/restart/month-boundary checks. This proves the normal due-check path;
+it is not a new heavy provider import on the replacement image.
+
+The fresh isolated recovery exercise completed at 17:15:54 UTC. It verified the
+filtered archive, the 18-to-19 expand migration, restored counts/indexes, native
+SQL/data/grants and search queries, then removed its local cluster. Its exact
+migration, SQL, transfer, policy and search source pins still match this release.
+This is native PostgreSQL recovery evidence, not Node/OCI runtime recovery. New
+image runtime behavior is covered separately by the build, CI and live candidate
+checks above.
+
+A fresh 18:00 UTC Monitoring sample explicitly reported zero active and zero idle
+instances for each of the five new service revisions: all ten required
+measurements were present and zero. The final local acceptance validation passed
+all seven gate groups at approximately 18:01 UTC. Its candidate promotion receipt
+binds the exact release, immutable image and application commit above; the source
+and evidence hashes are recorded in the accompanying provenance file. No older
+runtime's idle result was substituted.
+
+The validated acceptance document was stored at
+`operations/evidence/10e0c04e537843aa8a41cfca0ffdbbaf3f4d76f71881c9d9f8e171c69ea742c0.json`,
+generation `1791136890425623`, in the private staging backup bucket; pinned
+readback passed. The final configuration uses that exact object generation and
+SHA-256. The local artifacts are `acceptance-evidence-security.json`,
+`promotion-receipt-security.json` and `acceptance-provenance-security.json` for
+release `7db74d556e33`. Candidate acceptance was completed before the subsequent
+guarded traffic
+promotion, public IAM change and writer handoff described below.
+
+The new runtime's filtered-backup job `nextstop-backup-v8p85` completed successfully
+at 18:06:09 UTC after 23 minutes 33 seconds. It created a 2,814,406,126-byte archive
+and a separate report-schema object, excluding report values. The job streamed its
+archive SHA-256 and the storage SDK validated CRC32C before publishing the
+receipt; a metadata read confirmed the generation and byte count. The schema
+SHA-256 was independently checked. The archive was not downloaded or independently
+rehashed in this check, and no restore of this new archive was performed. This
+runtime backup test and the completed native PostgreSQL recovery exercise have
+separate evidence scopes.
+
+All five stable services were promoted to release `7db74d556e33`. The five older
+gateway tags were removed before public exposure, because a service-level public
+invoker binding also applies to tagged revisions. A fresh source baseline and
+new handoff journals verified private state and key equality, froze the old write
+endpoints, drained requests and stopped the exact five source app containers.
+The source database and Nginx were preserved. Only then was the scoped public
+invoker binding applied to the gateway and the Nginx bridge activated. Bridge
+completion at 18:10:55 UTC confirmed exact-image API/Auth readiness and an
+authenticated synthetic search with all old app writers stopped.
+
+The 18:11 UTC public-boundary check confirmed that only the gateway was public:
+all four internal service origins rejected anonymous requests, a valid search
+without an application token returned 401, and all five removed gateway-tag URLs
+returned 403/404. At 18:12:18 UTC, API/Auth readiness and an authenticated synthetic
+search also passed through `api-staging.nextstop.tech` using its existing DNS and
+the VM bridge. This proves the bridge path, not the still-pending direct Google
+managed-domain certificate or client-IP separation after the CNAME change.
+
+All four existing schedules were resumed and verified ENABLED at 18:16:54 UTC:
+`nextstop-monthly`, `nextstop-cleanup`, `nextstop-report-purge` and `nextstop-backup`.
+No due-date or budget override occurred. The normal daily monthly-import trigger
+still checks the November 1 due dates and retains October's 2/3 attempt count;
+cleanup and report purge run hourly. Job invocations target the Cloud Run job API
+and do not depend on the IONOS DNS change. Hourly report retention therefore
+resumes while the public bridge accepts reports.
+
+The IONOS CNAME change has been requested from the owner. DNS/TLS propagation,
+public-domain two-source client-IP verification and VM retirement remain pending. The old applications must stay stopped: Cloud SQL is
+now authoritative, so routing back to the stale VM database is not a safe
+rollback. CI remains disabled for this transition and the branch has not been
+merged into main. Overlapping infrastructure charges have not ended.
+
+## Earlier candidate artifacts (historical)
+
+The initial backend artifact was tied to source commit
 `add51b336a6cec51f04d3f1e1eedb2037aac69bf`, image digest
 `sha256:52d298b27c19ba7de836d2073de31bcf821063c0d4d1598d17c46c06e717693a`,
 and release ID `1c907fe7c046`. Cloud Build completed successfully and the registry
 manifest, configuration, platform and OCI revision were independently checked.
 The registry remains the existing repository in `europe-west3`.
 
-The subsequent private candidate uses commit
+The subsequent private candidate used commit
 `e5592de9c96d4a2e144f32ee07a4a675d9273403`, digest
 `sha256:7451101ee4c03cac414e72ded5df6c2c6dd0971df8b72b77564c54f662c40806`,
-and release `a2939e6f73e9`. Only the IAM-private live service's stable traffic has
-advanced to this candidate during commissioning; the public staging domain still
-reaches the source VM. All four schedules remain paused.
+and release `a2939e6f73e9`. At that commissioning stage, only the IAM-private live
+service's stable traffic had advanced to the candidate; the public domain still
+reached the original VM application. The four schedules remained paused.
 
-The cleanup correction is deployed to private candidate definitions and jobs
+The cleanup correction was deployed to private candidate definitions and jobs
 from commit `42ac95d87a0475b744ce6f8e0a3a73e1f8ae206a`, digest
 `sha256:5517a80839c50bb3a806e65999fb8955b5034298b97bc858eda3042156e88697`,
 release `66307ff9d3a7`. Registry/OCI verification and candidate preflight passed.
 Existing stable service traffic was preserved when applying these definitions.
 
-## Performed checks
+## Earlier commissioning checks (historical)
+
+The following records retain the observations and limitations of their named
+artifacts. They do not override the current release and handoff state above.
 
 - The managed database accepted restricted-role bootstrap, including Cloud SQL's
   explicit administrator role grants. Runtime accounts have no inherited roles.
@@ -237,8 +390,9 @@ Existing stable service traffic was preserved when applying these definitions.
   histogram and delayed-billing limitations. The acceptance document was uploaded
   to the private evidence prefix and read back by exact generation and SHA-256.
   `deploy/environments/staging-cloud-run.json` pins the actual resources, numeric
-  secret versions and this evidence. All five stable Cloud Run services now use
-  release `3c4afa8ccb29`; the gateway remains private pending writer handoff.
+  secret versions and that evidence. At that stage, all five stable Cloud Run
+  services used release `3c4afa8ccb29`; the gateway was still private. The security
+  release and fresh acceptance above supersede that runtime and receipt.
 - Deployment IAM is restricted to the existing stage services/jobs/queue,
   runtime identities, SQL metadata and the acceptance-evidence object prefix.
   It grants no direct secret payload or database-backup reads. Fourteen actual
@@ -249,13 +403,16 @@ Existing stable service traffic was preserved when applying these definitions.
   removal of the exact remaining probe binding and role. Actual scheduler
   pause/resume by CI and the main-branch WIF workflow remain unexercised.
 
-## Remaining acceptance work
+## Remaining transition work
 
-The authorized food retry, monthly-budget checks, statistics correction,
-candidate checks and backup upgrade rehearsal succeeded. Finalize the evidence
-record and verify the final writer handoff. Only then
-switch DNS, check managed TLS and authenticated public searches, activate reviewed
-schedules and retire the obsolete paid VM resources after recovery verification.
+The authorized food import, statistics correction, new security acceptance,
+filtered-backup runtime test, traffic promotion and fresh writer handoff have
+completed. Switch the requested DNS record, verify the managed certificate and
+both readiness/search and two-source IP isolation on the direct public domain.
+The four reviewed schedules are already enabled after verified public-bridge and
+authoritative-target checks; their job API does not depend on that DNS change. Retire the obsolete VM resources only
+after the DNS bridge is no longer needed and the recovery prerequisites remain
+satisfied. Do not restart the old VM application writers.
 
 Provider source changes now invalidate the import-budget and database-performance
 acceptance fingerprints. Regression coverage checks modification, addition and
@@ -268,7 +425,11 @@ The production release control is unchanged. The feature branch has not been
 merged into main, and the new Cloud Run workflow must not be enabled before its
 configuration and actual acceptance evidence have been committed and reviewed.
 
-## Final writer handoff and pending DNS bridge
+## Earlier handoff interruption and temporary VM restoration (historical)
+
+This earlier attempt preceded the completed security-release handoff above. Its
+markers and temporary restored VM state were not reused to authorize that later
+transition.
 
 The source write freeze was installed. Its first operator check stopped before
 any app container was stopped; a read-only inspection confirmed the exact freeze
@@ -285,9 +446,9 @@ database and Nginx remained running. No private data export was needed.
 
 Automatic approval review then rejected granting `allUsers` the `roles/run.invoker`
 role on the staging gateway, requiring explicit owner approval for that exact
-public-access scope. No public binding was applied. The owner has been asked;
-bridge activation, DNS/TLS checks, schedule activation and VM retirement remain
-pending. The gate's application-level App Attest checks are not being disabled.
+public-access scope. No public binding was applied during that attempt, and the
+owner was asked for explicit approval. The later scoped gateway binding and fresh
+handoff are recorded above. Application-level App Attest checks remained enabled.
 
 While this permission remained pending, a separately reviewed restoration put
 the original VM installation back into service. It first rechecked that the
@@ -297,89 +458,96 @@ IDs, verified all four loopback readiness endpoints against their original image
 digests and ran a real synthetic search. Only then did it restore the exact
 original Nginx configuration and pass local TLS/API/Auth/search checks. The
 database, earlier handoff journals and new Cloud Run corpus were preserved; no
-IAM change or database copy occurred. Staging is available through the original
-VM again. All four target schedules remain paused, and no VM resources have been
-retired. Temporary overlapping infrastructure costs therefore still apply.
+IAM change or database copy occurred. Staging was temporarily available through
+the original VM application again. The four schedules remained paused and no VM
+resources were retired. The fresh security-release handoff later stopped those
+application writers again and replaced the original upstream with the bridge.
 
-The completed freeze receipt is historical and cannot authorize a later bridge:
-the source writers are running again. After explicit gateway approval, capture a
-fresh source/container baseline and repeat the private-state/key checks and final
-writer handoff with new journals. Wait for both write endpoints to actually
-return 503 after Nginx reload before the bounded drain and stop. Do not reset or
-reuse the previous one-time execution markers.
+That freeze receipt became historical when the source writers restarted. The
+completed security-release handoff therefore captured a fresh source/container
+baseline, repeated the private-state/key checks and used new journals. Its
+bounded checks waited for both write endpoints to return 503 after Nginx reload
+before draining and stopping the old writers; the earlier one-time execution
+markers were preserved.
 
-The remaining reviewed procedure applies only to the source VM
+## Completed handoff procedure and pending DNS transition
+
+Steps 1–3 below describe the completed guarded handoff and must not be rerun.
+The scheduler activation in step 5 is also complete; direct DNS/TLS verification,
+VM retirement and any later CI/main activation remain pending. This procedure applies only to the source VM
 `nextstop-backend` in `nextstop-tech-testing/europe-west3-a` and the reviewed Cloud
 Run/Cloud SQL target in the same project, region `europe-west1`. Production is
-unchanged. Keep the staging CI release override false and the four target
-schedules paused while completing the existing acceptance work above.
+unchanged. Keep the staging CI release override false. The four exact reviewed
+schedules have resumed after the authoritative target, public bridge and
+backup/release gates passed; the unrelated external DNS change is still pending.
 
-The source configuration exactly matched the repository HTTPS template rendered
-for the green slot. Both prepared freeze/bridge configurations passed `nginx -t`
-on that VM using temporary alternative main configurations. No serving file was
-changed and no reload occurred; all temporary test files were removed.
+Before either handoff, the original source configuration matched the repository
+HTTPS template rendered for the green slot. The prepared freeze/bridge
+configurations first passed `nginx -t` with temporary alternative main
+configurations, without changing serving configuration. The later guarded
+handoff activated the bridge, with readiness and authenticated search verified
+before requesting the DNS change.
 
-1. **Prepare the final routing change.** Review the entire proposed Nginx
-   configuration before touching the source. Reuse its current staging TLS
-   certificate, route allowlist, method/body limits, rate limits and redacted
-   diagnostics. The temporary upstream is the fixed public gateway origin
+1. **Routing preparation — completed.** The reviewed Nginx configuration reuses
+   the existing staging TLS certificate, route allowlist, method/body limits,
+   rate limits and redacted diagnostics. The temporary upstream is the fixed
+   public gateway origin
    `https://nextstop-gateway-353471052580.europe-west1.run.app`, never
-   `api-staging.nextstop.tech` itself. Set upstream Host and TLS SNI to that
-   `run.app` host and explicitly verify its certificate with the system CA.
-   Preserve the app Authorization header; remove caller-provided
-   `X-Forwarded-For`, `Forwarded`, `X-Real-IP` and
-   `X-Serverless-Authorization`. Disable request/response buffering and upstream
-   retries, and provide no fallback to the old application containers. No new
-   proxy product, permanent VM proxy or trusted-forwarded-header exception is
-   required.
+   `api-staging.nextstop.tech` itself. Upstream Host and TLS SNI use that
+   `run.app` host with certificate verification against the system CA.
+   Application Authorization is preserved; caller-provided `X-Forwarded-For`,
+   `Forwarded`, `X-Real-IP` and `X-Serverless-Authorization` are removed.
+   Request/response buffering and upstream retries are disabled, with no fallback
+   to the old applications. This is a temporary DNS bridge, not a permanent proxy
+   product or trusted-forwarded-header exception.
 
-2. **Freeze old writers and recheck private state.** Keep the target gateway
-   private during the final state transfer. Briefly block new source Auth/Report
-   requests, drain in-flight requests, then gracefully stop all source API/Auth
-   containers, including retained/legacy slots, and the worker. Leave the source
-   database and Nginx running; confirm the old application writer sessions have
-   ended. Recheck `app_attest_keys`, `app_attest_challenges` and
-   `user_error_reports` on both staging databases, recording only empty/nonempty
-   booleans. If all are empty, no private delta archive is needed. Preserve the
-   staging signing keys and verify equality without printing values. This is a
-   brief deliberate write freeze, not a proven uninterrupted Auth handoff.
+2. **Writer freeze and state verification — completed.** With the gateway still
+   private, the fresh handoff blocked new source Auth/Report requests, waited for
+   both freeze endpoints to return 503, drained in-flight work and stopped all
+   five source API/Auth/worker containers. The source database and Nginx remained
+   running. The original application writer sessions ended, both staging
+   databases' three private tables were empty, and signing keys/App ID matched
+   without printing values. No private delta archive or data copy was required.
+   This was a deliberate brief write freeze, not a claim of uninterrupted Auth.
 
-   If unexpected private rows exist, stop the zero-row shortcut. Transfer only
-   these three tables privately with both old and target writers quiescent,
-   preserving original counters, challenge consumption, report deletion state
-   and expiry timestamps. The checked-in `database-transfer.py --purpose handoff`
-   prepares a full-schema snapshot; it is not a delta importer for the already
-   populated target. Review that narrow transfer before executing it, and remove
-   its exact temporary copies within the existing four-hour handoff window.
-   Never upload report-containing handoff data as a durable backup.
+   A future nonempty private-state transfer requires a separately reviewed narrow
+   procedure preserving counters, consumed challenges, report deletion state and
+   expiry timestamps. The checked-in `database-transfer.py --purpose handoff`
+   creates a full-schema snapshot; it is not a delta importer for an already
+   populated target. Report-containing handoff data must not become a durable
+   backup and any exact temporary copies remain subject to the four-hour window.
 
-3. **Activate one writer destination.** After the final state check/transfer,
-   expose only the reviewed gateway, with API/Auth/live/broker still IAM-private.
-   Apply the reviewed Nginx bridge once, using `nginx -t` followed by a graceful
-   reload. Check readiness and an authenticated synthetic search through the old
-   endpoint before changing DNS. Clients with a cached old address then reach
-   the same Cloud SQL-backed services as new clients. They temporarily share the
-   VM's source-IP budget at the Cloud Run gateway; accept this bounded staging
-   limitation without trusting forged forwarded headers. Keep all old
-   application writers stopped. Once the target accepts writes, a rollback must
-   keep that authoritative database; routing back to the stale VM database is
-   not a safe rollback.
+3. **One writer destination — activated.** Only the reviewed gateway received the
+   scoped public invoker binding. API/Auth/live/broker remain IAM-private. The
+   bridge passed configuration validation, readiness/auth checks and an
+   authenticated synthetic search after reload. Public searches through the
+   existing staging domain also passed at 18:12 UTC. Clients retaining the old
+   address now reach the same Cloud SQL-backed services as the direct gateway.
+   They temporarily share the VM's source-IP budget at the gateway; the bridge
+   does not trust forged forwarded headers. All old application writers remain
+   stopped. Cloud SQL is authoritative: reverting routing to the stale VM
+   database would be an unsafe rollback.
 
-4. **Switch DNS and verify the public path.** Replace the staging DNS record
-   with the already requested CNAME `api-staging` to `ghs.googlehosted.com.`.
+4. **Switch DNS and verify the direct public path — pending.** The owner has
+   been asked to replace the IONOS staging record with CNAME `api-staging` to
+   `ghs.googlehosted.com.`. The current A record still reaches the VM bridge.
    Check the managed domain/certificate status and HTTPS readiness on
    `api-staging.nextstop.tech`, including the expected API/Auth release digest.
    Use the existing `verify.verify_public` helper for the broker-authenticated
-   synthetic search. This proves the public route and token path, not a real
-   device App Attest assertion. The Nginx bridge covers cached old DNS; it does
+   synthetic search, and repeat the two-source client-IP/forwarded-prefix probe
+   on the direct domain path. The existing 18:12 bridge-domain result is not that
+   post-DNS evidence. These checks prove routing/token behavior, not a real-device
+   App Attest assertion. The Nginx bridge covers cached old DNS; it does
    not establish readiness of the newly issued managed certificate. Retain it
    only through the observed DNS transition, rather than as ongoing hosting.
 
-5. **Resume schedules and retire paid VM resources.** After the reviewed
-   public and recovery checks pass, explicitly resume the four commissioned
-   schedules (`nextstop-monthly`, `nextstop-cleanup`, `nextstop-report-purge`,
-   `nextstop-backup`) with ordinary scoped Cloud Scheduler commands. The
-   commissioning helper intentionally leaves them paused, and `deploy.py`
+5. **Schedules enabled; VM retirement waits for DNS.** The authoritative target,
+   authenticated public bridge and backup/release gates passed. The four exact
+   commissioned schedules (`nextstop-monthly`, `nextstop-cleanup`,
+   `nextstop-report-purge`, `nextstop-backup`) were resumed and verified ENABLED
+   at 18:16:54 UTC. Their target job invocations do not depend on staging-domain
+   DNS. Hourly report purge is enabled while public report intake is available.
+   The commissioning helper initially left the schedules paused, and `deploy.py`
    restores only schedules that were enabled before its run. Preserve the
    measured monthly due dates/budget; do not force another import when enabling
    the daily due check. Once the DNS bridge is no longer required, retire the

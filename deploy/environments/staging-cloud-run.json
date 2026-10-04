@@ -2,8 +2,8 @@
   "environment": "staging",
   "project": "nextstop-tech-testing",
   "region": "europe-west1",
-  "backendImage": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:eeeead40a7e3558a563e345039c82f258503e864d17ec0796c67f100f4a75342",
-  "commit": "0a0d8c232b713cecacc96adb10c76d48ac566761",
+  "backendImage": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:64d018644b0c57c9775c94aee641b23ed5a50dfb8b0e9102a98bd0ee076b2e8a",
+  "commit": "923f811d26c637b87923c9dab688d9581422d971",
   "cloudSqlConnectionName": "nextstop-tech-testing:europe-west1:nextstop-staging",
   "cacheBucket": "nextstop-tech-testing-download-cache",
   "backupBucket": "nextstop-tech-testing-database-backups",
@@ -27,13 +27,18 @@
       },
       {
         "revisionName": "nextstop-api-3c4afa8ccb29",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-3c4afa8ccb29"
       },
       {
         "revisionName": "nextstop-api-66307ff9d3a7",
         "percent": 0,
         "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-api-7db74d556e33",
+        "percent": 100,
+        "tag": "r-7db74d556e33"
       },
       {
         "revisionName": "nextstop-api-a2939e6f73e9",
@@ -54,13 +59,18 @@
       },
       {
         "revisionName": "nextstop-auth-3c4afa8ccb29",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-3c4afa8ccb29"
       },
       {
         "revisionName": "nextstop-auth-66307ff9d3a7",
         "percent": 0,
         "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-auth-7db74d556e33",
+        "percent": 100,
+        "tag": "r-7db74d556e33"
       },
       {
         "revisionName": "nextstop-auth-a2939e6f73e9",
@@ -81,13 +91,18 @@
       },
       {
         "revisionName": "nextstop-broker-3c4afa8ccb29",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-3c4afa8ccb29"
       },
       {
         "revisionName": "nextstop-broker-66307ff9d3a7",
         "percent": 0,
         "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-broker-7db74d556e33",
+        "percent": 100,
+        "tag": "r-7db74d556e33"
       },
       {
         "revisionName": "nextstop-broker-a2939e6f73e9",
@@ -102,29 +117,9 @@
     ],
     "gateway": [
       {
-        "revisionName": "nextstop-gateway-1c907fe7c046",
-        "percent": 0,
-        "tag": "r-1c907fe7c046"
-      },
-      {
-        "revisionName": "nextstop-gateway-3c4afa8ccb29",
+        "revisionName": "nextstop-gateway-7db74d556e33",
         "percent": 100,
-        "tag": "r-3c4afa8ccb29"
-      },
-      {
-        "revisionName": "nextstop-gateway-66307ff9d3a7",
-        "percent": 0,
-        "tag": "r-66307ff9d3a7"
-      },
-      {
-        "revisionName": "nextstop-gateway-a2939e6f73e9",
-        "percent": 0,
-        "tag": "r-a2939e6f73e9"
-      },
-      {
-        "revisionName": "nextstop-gateway-e6e199e52f6f",
-        "percent": 0,
-        "tag": "r-e6e199e52f6f"
+        "tag": "r-7db74d556e33"
       }
     ],
     "live": [
@@ -135,13 +130,18 @@
       },
       {
         "revisionName": "nextstop-live-3c4afa8ccb29",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-3c4afa8ccb29"
       },
       {
         "revisionName": "nextstop-live-66307ff9d3a7",
         "percent": 0,
         "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-live-7db74d556e33",
+        "percent": 100,
+        "tag": "r-7db74d556e33"
       },
       {
         "revisionName": "nextstop-live-a2939e6f73e9",
@@ -156,8 +156,8 @@
     ]
   },
   "acceptanceEvidence": {
-    "object": "operations/evidence/0e9f5653bdb270ae2dab2004e7338671ac12552f1744925aed8414738fb78229.json",
-    "generation": "1791123921234352",
-    "sha256": "0e9f5653bdb270ae2dab2004e7338671ac12552f1744925aed8414738fb78229"
+    "object": "operations/evidence/10e0c04e537843aa8a41cfca0ffdbbaf3f4d76f71881c9d9f8e171c69ea742c0.json",
+    "generation": "1791136890425623",
+    "sha256": "10e0c04e537843aa8a41cfca0ffdbbaf3f4d76f71881c9d9f8e171c69ea742c0"
   }
 }
