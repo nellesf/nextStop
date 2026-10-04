@@ -24,6 +24,8 @@ export const migrationManifest: readonly MigrationManifestEntry[] = [
   { name: "0013_search_projection_retention.sql", sha256: "35db54686383e9d8fc173002ea1f99848a49f2366027cfb69549d958bef2f3eb", compatibility: "historical" },
   { name: "0014_static_projection_input_checks.sql", sha256: "62d047f2587e821aab915d3246366bfa2cfdc0c6ce792dbb6693d4eae6c13e84", compatibility: "historical" },
   { name: "0015_runtime_readiness.sql", sha256: "4eac9074003426a6974baeab2de307458e30b4feef66035d457b222fd79402b4", compatibility: "expand" },
+  { name: "0016_demand_live_refresh.sql", sha256: "508c8f37240f4a1810d50789caff45235ef0ee0477642dbe96cb5c5a9d33906c", compatibility: "expand" },
+  { name: "0017_monthly_ingestion_schedule.sql", sha256: "10f41f81f7e3d3180245fd6d1c55af0b1d23d7e0ebacd4dfc0991bf44a6808d5", compatibility: "expand" },
 ];
 
 export interface MigrationSource {

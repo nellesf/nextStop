@@ -5,7 +5,9 @@ import UIKit
 
 struct RidePreparationView: View {
   @Environment(\.openURL) private var openURL
+  @Environment(\.scenePhase) private var scenePhase
   @StateObject private var viewModel: RidePreparationViewModel
+  @StateObject private var availability: RideAvailabilityController
   private let navigationLauncher: any AppleMapsLaunching
   @State private var placeResolver: any ApplePlaceResolving
 
@@ -68,6 +70,10 @@ struct RidePreparationView: View {
     )
     navigationLauncher = AppleMapsLauncher(diagnostics: diagnostics)
     _placeResolver = State(initialValue: resolver)
+    _availability = StateObject(
+      wrappedValue: RideAvailabilityController(
+        fetcher: candidatePageSearcher as? any ChargingAvailabilityFetching
+      ))
   }
 
   @MainActor
@@ -88,6 +94,7 @@ struct RidePreparationView: View {
     _viewModel = StateObject(wrappedValue: viewModel)
     self.navigationLauncher = navigationLauncher
     _placeResolver = State(initialValue: placeResolver)
+    _availability = StateObject(wrappedValue: RideAvailabilityController(fetcher: nil))
   }
 
   var body: some View {
@@ -232,6 +239,8 @@ struct RidePreparationView: View {
 
   private func resultsContent(_ outcome: RideCandidateSearchOutcome) -> some View {
     let results = outcome.results
+    let refreshIdentity = RideAvailabilityRefreshIdentity(
+      outcome: outcome, isActive: scenePhase == .active)
     return VStack(alignment: .leading, spacing: 12) {
       coverageNotice(outcome.coverage)
 
@@ -258,6 +267,10 @@ struct RidePreparationView: View {
       .buttonStyle(.bordered)
       .tint(Color(.label))
     }
+    .task(id: refreshIdentity) {
+      await availability.refresh(outcome, isActive: refreshIdentity.isActive)
+    }
+    .onDisappear { availability.cancel() }
   }
 
   private func resultsHeader(count: Int) -> some View {
@@ -418,7 +431,10 @@ struct RidePreparationView: View {
         usesRestaurantGroupLookupScope: true
       )
 
-      availabilityContent(result.availability)
+      availabilityContent(
+        availability.availability(
+          for: result, onDemand: viewModel.availabilityContext != nil
+        ))
     }
   }
 
@@ -452,7 +468,10 @@ struct RidePreparationView: View {
         usesRestaurantGroupLookupScope: false
       )
 
-      availabilityContent(result.availability)
+      availabilityContent(
+        availability.availability(
+          for: result, onDemand: viewModel.availabilityContext != nil
+        ))
     }
   }
 

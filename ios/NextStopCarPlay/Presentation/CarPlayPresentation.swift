@@ -184,12 +184,15 @@ struct CarPlayPresenter {
 
   func results(
     _ outcome: RideCandidateSearchOutcome,
-    criteria: RideCriteria
+    criteria: RideCriteria,
+    availability: (RouteSearchResult) -> ParkAvailability = { $0.availability }
   ) -> CarPlayResultsPresentation {
     precondition(outcome.results.count <= SearchConfiguration.maximumResultCount)
     return CarPlayResultsPresentation(
       title: localizer.text("ride.results.screen.title"),
-      points: outcome.results.map { result($0, criteria: criteria) },
+      points: outcome.results.map {
+        result($0, criteria: criteria, availability: availability($0))
+      },
       coverageMessage: coverageMessage(outcome.coverage),
       attributionMessage: outcome.attributions.isEmpty
         ? nil
@@ -246,7 +249,8 @@ struct CarPlayPresenter {
 
   private func result(
     _ routeResult: RouteSearchResult,
-    criteria: RideCriteria
+    criteria: RideCriteria,
+    availability currentAvailability: ParkAvailability
   ) -> CarPlayResultPresentation {
     let candidate = routeResult.candidate
     let park = candidate.park
@@ -255,7 +259,7 @@ struct CarPlayPresenter {
       "carplay.result.driving_distance.format",
       Int64(roundedKilometers(candidate.actualDrivingDistance.value))
     )
-    let availability = availabilityText(routeResult.availability)
+    let availability = availabilityText(currentAvailability)
     let matchingChargingPoints = localizer.format(
       "ride.result.matching_charging_points.format",
       Int64(routeResult.chargingPointCount)

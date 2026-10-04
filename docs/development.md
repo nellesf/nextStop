@@ -268,6 +268,16 @@ destination lookup, location request, or navigation.
 
 ### Backend
 
+The opt-in staging policy is described in [ADR 0019](adr/0019-demand-driven-staging-ingestion.md).
+Set `INGESTION_SCHEDULE=monthly` and `DEMAND_LIVE_AVAILABILITY_ENABLED=true` only
+with the matching release and private worker configuration. Existing defaults
+remain daily/minute polling for production compatibility. Monthly due dates are
+persisted; an existing corpus is first due on the next month's first day at
+02:00 UTC. The private refresh endpoint requires `LIVE_REFRESH_TOKEN` on API and
+worker, and `LIVE_REFRESH_URL=http://worker:8091/refresh` on the API. Do not publish
+the worker port. Simulator builds receive the optional availability capability
+from staging; no app-wide environment switch or production rollout is implied.
+
 ```bash
 cd backend
 npm ci

@@ -20,6 +20,7 @@ export type DiagnosticService = "candidate_api" | "auth_api";
 export type DiagnosticRoute =
   | "health"
   | "charging_park_search"
+  | "charging_park_availability"
   | "user_error_report"
   | "app_attest_challenge"
   | "app_attest_attestation"
@@ -124,6 +125,8 @@ function diagnosticRoute(route: string | undefined): DiagnosticRoute {
   switch (route) {
     case "/health":
       return "health";
+    case "/v1/charging-parks/availability":
+      return "charging_park_availability";
     case "/v1/charging-parks/search":
       return "charging_park_search";
     case "/v1/error-reports":

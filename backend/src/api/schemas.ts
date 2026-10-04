@@ -332,6 +332,7 @@ export const searchResponseSchema = {
   required: ["snapshotToken", "candidates", "coverage", "generatedAt", "attributions"],
   properties: {
     snapshotToken: { type: "string" },
+    availabilityContext: { type: "string", maxLength: 1_024 },
     nextCursor: { type: ["string", "null"] },
     generatedAt: { type: "string", format: "date-time" },
     candidates: { type: "array", maxItems: 50, items: candidateSchema },
@@ -355,5 +356,34 @@ export const problemSchema = {
       maxLength: 128,
       pattern: "^[A-Za-z0-9_-]+$",
     },
+  },
+} as const;
+
+const availabilitySelectionSchema = {
+  type: "object", additionalProperties: false, required: ["id", "operatorNames"],
+  properties: {
+    id: { type: "string", format: "uuid" },
+    operatorNames: { type: "array", minItems: 1, maxItems: 20, uniqueItems: true,
+      items: { type: "string", minLength: 1, maxLength: 200 } },
+  },
+} as const;
+export const availabilityRequestSchema = {
+  type: "object", additionalProperties: false, required: ["context", "candidates"],
+  properties: {
+    context: { type: "string", minLength: 1, maxLength: 1_024 },
+    candidates: { type: "array", minItems: 1, maxItems: 50, items: availabilitySelectionSchema },
+  },
+} as const;
+export const availabilityResponseSchema = {
+  type: "object", additionalProperties: false,
+  required: ["context", "generatedAt", "expiresAt", "refreshPending", "candidates"],
+  properties: {
+    context: { type: "string" }, generatedAt: { type: "string", format: "date-time" },
+    expiresAt: { type: "string", format: "date-time" }, refreshPending: { type: "boolean" },
+    retryAfterSeconds: { type: "integer", minimum: 1, maximum: 60 },
+    candidates: { type: "array", maxItems: 50, items: {
+      ...availabilitySelectionSchema, required: ["id", "operatorNames", "availability"],
+      properties: { ...availabilitySelectionSchema.properties, availability: availabilitySchema },
+    } },
   },
 } as const;

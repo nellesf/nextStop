@@ -6,6 +6,7 @@ import {
 } from "./refresh-providers.js";
 import { refreshFoodPOIs } from "./refresh-food-pois.js";
 import { pruneRetiredChargingSearchProjections } from "../persistence/projection-retention.js";
+import { PostgresMonthlySchedule, runDueMonthlyImports } from "./monthly-ingestion.js";
 
 const staticSuccessIntervalMilliseconds = 24 * 60 * 60 * 1_000;
 const staticRetryIntervalMilliseconds = 15 * 60 * 1_000;
@@ -20,17 +21,24 @@ export interface IngestionLogger {
   warn(details: Readonly<Record<string, unknown>>, message: string): void;
 }
 
+export interface IngestionScheduleOptions {
+  readonly monthlyStaticRefresh?: boolean;
+  readonly demandLiveAvailability?: boolean;
+}
+
 export class ProviderIngestionCoordinator {
   private stopped = true;
   private staticTimer: NodeJS.Timeout | undefined;
   private liveTimer: NodeJS.Timeout | undefined;
   private foodTimer: NodeJS.Timeout | undefined;
   private retentionTimer: NodeJS.Timeout | undefined;
+  private monthlyTimer: NodeJS.Timeout | undefined;
 
   constructor(
     private readonly pool: Pool,
     private readonly logger: IngestionLogger,
     private readonly foodPOIIngestionEnabled = true,
+    private readonly options: IngestionScheduleOptions = {},
   ) {}
 
   start(): void {
@@ -38,12 +46,18 @@ export class ProviderIngestionCoordinator {
       return;
     }
     this.stopped = false;
-    this.staticTimer = setTimeout(() => void this.refreshStatic(), 0);
-    this.liveTimer = setTimeout(() => void this.refreshLive(), 0);
-    if (this.foodPOIIngestionEnabled) {
-      this.foodTimer = setTimeout(() => void this.refreshFood(), 0);
+    if (this.options.monthlyStaticRefresh === true) {
+      this.monthlyTimer = setTimeout(() => void this.refreshMonthly(), 0);
+    } else {
+      this.staticTimer = setTimeout(() => void this.refreshStatic(), 0);
+      if (this.foodPOIIngestionEnabled) {
+        this.foodTimer = setTimeout(() => void this.refreshFood(), 0);
+      }
     }
-    this.retentionTimer = setTimeout(() => void this.pruneSearchHistory(), retentionIntervalMilliseconds);
+    if (this.options.demandLiveAvailability !== true) {
+      this.liveTimer = setTimeout(() => void this.refreshLive(), 0);
+    }
+    this.retentionTimer = setTimeout(() => void this.pruneSearchHistory(), this.retentionDelay());
   }
 
   stop(): void {
@@ -60,6 +74,41 @@ export class ProviderIngestionCoordinator {
     if (this.retentionTimer !== undefined) {
       clearTimeout(this.retentionTimer);
     }
+    if (this.monthlyTimer !== undefined) clearTimeout(this.monthlyTimer);
+  }
+
+  private async refreshMonthly(): Promise<void> {
+    let delay = 60 * 60 * 1_000;
+    try {
+      delay = await runDueMonthlyImports({
+        schedule: new PostgresMonthlySchedule(this.pool),
+        foodEnabled: this.foodPOIIngestionEnabled,
+        stopped: () => this.stopped,
+        refresh: async (job) => {
+          if (job === "charging-static") {
+            const result = await refreshStaticProviders(this.pool, {
+              onProgress: (progress) => this.logger.info(
+                { event: "static-projection-stage", ...progress }, "Static charging projection build progress.",
+              ),
+            });
+            if (result.kind === "retained") throw new Error("A static source is unavailable.");
+          } else {
+            await refreshFoodPOIs(this.pool);
+          }
+        },
+        report: (job, outcome) => this.logger[outcome === "success" ? "info" : "warn"](
+          { event: "monthly-ingestion", job, outcome },
+          "Monthly ingestion completed; failed runs retain the previous projection and retry the next day.",
+        ),
+      });
+    } catch (error) {
+      this.logger.warn({ event: "monthly-schedule-failed", failure: failureCode(error) }, "Monthly schedule will retry.");
+    }
+    if (!this.stopped) this.monthlyTimer = setTimeout(() => void this.refreshMonthly(), delay);
+  }
+
+  private retentionDelay(): number {
+    return this.options.monthlyStaticRefresh === true ? 24 * 60 * 60 * 1_000 : retentionIntervalMilliseconds;
   }
 
   private async refreshStatic(): Promise<void> {
@@ -129,7 +178,8 @@ export class ProviderIngestionCoordinator {
 
   private async pruneSearchHistory(): Promise<void> {
     try {
-      const result = await pruneRetiredChargingSearchProjections(this.pool);
+      const result = await pruneRetiredChargingSearchProjections(this.pool, undefined,
+        this.options.monthlyStaticRefresh === true ? { batchSize: 1_000, maxBatches: 32 } : {});
       if (result.deletedRows > 0 || result.completedVersions > 0) {
         this.logger.info({ event: "search-projection-retention", ...result }, "Old derived search rows pruned in bounded batches.");
       }
@@ -137,7 +187,7 @@ export class ProviderIngestionCoordinator {
       this.logger.warn({ event: "search-projection-retention-failed", failure: failureCode(error) }, "Search projection retention will retry on its next bounded run.");
     }
     if (!this.stopped) {
-      this.retentionTimer = setTimeout(() => void this.pruneSearchHistory(), retentionIntervalMilliseconds);
+      this.retentionTimer = setTimeout(() => void this.pruneSearchHistory(), this.retentionDelay());
     }
   }
 }

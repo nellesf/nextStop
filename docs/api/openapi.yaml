@@ -33,6 +33,51 @@ info:
 servers:
   - url: https://api.nextstop.tech
 paths:
+  /v1/charging-parks/availability:
+    post:
+      operationId: refreshDisplayedCandidateAvailability
+      summary: Read optional live availability for confirmed displayed operators
+      description: |
+        Opt-in staging capability, advertised by availabilityContext in search.
+        This secondary request does not rerun search, filtering, grouping or ranking.
+        Send only surviving campus/fine-park IDs and their exact visible operator
+        names; do not send original Apple lookup evidence or route geometry.
+        The signed context binds the static projection, candidate mode and minimum
+        power for one hour and is identical across pages. Unknown operators,
+        pruned projections and expired contexts return 409. Up to 50 distinct
+        candidates and 20 distinct operator names per candidate fit one request;
+        larger displayed sets use sequential batches. Maximum body size is 128 KiB.
+        Authentication matches candidate search; concurrency is separately bounded
+        to two requests, and proxy ingress shares the 60/minute/IP search limit.
+        Cached data is returned immediately. Only selected Swiss EVSEs with data
+        older than 60 seconds can signal the private worker. The acknowledgement
+        has a one-second deadline; provider I/O never blocks search. A shared lease
+        and cooldown coalesce downloads across API instances. A caller can retry
+        refreshPending within a bounded display window. The app uses at most an
+        initial request plus three refresh attempts at least 10 seconds apart.
+        Values older than observedAt plus 300 seconds become unknown. Availability
+        failure leaves displayed charging results intact. Responses are not cached
+        by HTTP intermediaries; selected IDs and operators are not persisted as jobs.
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema: { $ref: '#/components/schemas/AvailabilityRequest' }
+      responses:
+        '200':
+          description: Current optional availability, scoped to the selected operators.
+          content:
+            application/json:
+              schema: { $ref: '#/components/schemas/AvailabilityResponse' }
+        '400': { description: Invalid or additional request fields. }
+        '401': { description: A valid search bearer is required. }
+        '404': { description: Demand availability is not enabled in this environment. }
+        '409': { description: Context expired or projection/operator selection is invalid. }
+        '413': { description: Request exceeds 128 KiB. }
+        '429': { description: Admission exhausted; Retry-After is supplied. }
+        '503': { description: Optional availability temporarily unavailable; retain search results. }
   /v1/error-reports:
     post:
       operationId: submitUserErrorReport
@@ -697,6 +742,10 @@ components:
       properties:
         snapshotToken:
           type: string
+        availabilityContext:
+          type: string
+          maxLength: 1024
+          description: Optional opaque one-hour capability for separate informational availability; identical across all pages.
         nextCursor:
           type: [string, 'null']
         generatedAt:
@@ -714,6 +763,58 @@ components:
           uniqueItems: true
           items:
             $ref: '#/components/schemas/DataAttribution'
+    AvailabilitySelection:
+      type: object
+      additionalProperties: false
+      required: [id, operatorNames]
+      properties:
+        id: { type: string, format: uuid }
+        operatorNames:
+          type: array
+          minItems: 1
+          maxItems: 20
+          uniqueItems: true
+          items: { type: string, minLength: 1, maxLength: 200 }
+    AvailabilityRequest:
+      type: object
+      additionalProperties: false
+      required: [context, candidates]
+      properties:
+        context: { type: string, minLength: 1, maxLength: 1024 }
+        candidates:
+          type: array
+          minItems: 1
+          maxItems: 50
+          items: { $ref: '#/components/schemas/AvailabilitySelection' }
+    AvailabilityResponse:
+      type: object
+      additionalProperties: false
+      required: [context, generatedAt, expiresAt, refreshPending, candidates]
+      properties:
+        context: { type: string }
+        generatedAt: { type: string, format: date-time }
+        expiresAt:
+          type: string
+          format: date-time
+          description: Context expiry only; never extends the freshness of a source observation.
+        refreshPending: { type: boolean }
+        retryAfterSeconds: { type: integer, minimum: 1, maximum: 60 }
+        candidates:
+          type: array
+          maxItems: 50
+          items:
+            type: object
+            additionalProperties: false
+            required: [id, operatorNames, availability]
+            properties:
+              id: { type: string, format: uuid }
+              operatorNames:
+                type: array
+                minItems: 1
+                maxItems: 20
+                uniqueItems: true
+                items: { type: string, minLength: 1, maxLength: 200 }
+              availability: { $ref: '#/components/schemas/ParkAvailability' }
     ChargingParkCandidate:
       type: object
       additionalProperties: false

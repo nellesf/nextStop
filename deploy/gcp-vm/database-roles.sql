@@ -149,6 +149,11 @@ GRANT SELECT, INSERT, UPDATE, DELETE ON TABLE
   nextstop.charging_campus_power_projection
 TO nextstop_worker;
 
+GRANT SELECT, INSERT, UPDATE ON TABLE
+  nextstop.live_refresh_control,
+  nextstop.monthly_ingestion_schedule
+TO nextstop_worker;
+
 GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_park_power_projection(uuid)
 TO nextstop_worker;
 GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_campus_power_projection(uuid)

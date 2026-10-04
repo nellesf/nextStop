@@ -110,6 +110,13 @@ it can receive reports.
 
 ## Architecture
 
+Staging can opt into [monthly static imports and demand-driven Swiss
+availability](docs/adr/0019-demand-driven-staging-ingestion.md). Availability is
+loaded separately after results appear and never blocks or changes search. Its
+shared cache and worker lease replace idle live polling. Production keeps its
+existing schedule until separately released. This rollout retains the existing
+VM and disks; reduced background work alone does not reduce their fixed bill.
+
 ```text
 iPhone + CarPlay
   SwiftUI configuration UI

@@ -1,4 +1,6 @@
 import { createApp } from "./api/app.js";
+import { AvailabilityContextCodec, CandidateAvailability, HTTPRefreshSignal } from "./application/candidate-availability.js";
+import { PostgresCandidateAvailability } from "./persistence/postgres-candidate-availability.js";
 import { AccessTokenAuthenticator, AccessTokenCodec } from "./api/access-token.js";
 import {
   BearerTokenAuthenticator,
@@ -40,10 +42,17 @@ const pool =
         queryTimeoutMilliseconds: 15_000,
         statementTimeoutMilliseconds: 15_000,
       });
+const demandLiveEnabled = parseBooleanEnvironmentValue("DEMAND_LIVE_AVAILABILITY_ENABLED", false);
+// Keep encoding existing demand snapshots after disabling the rollout flag;
+// only new searches and the optional refresh endpoint depend on that flag.
+const availabilityCodec = signingKey === undefined ? undefined : new AvailabilityContextCodec(signingKey);
+const refreshSignal = demandLiveEnabled ? new HTTPRefreshSignal(process.env.LIVE_REFRESH_URL ?? "http://worker:8091/refresh", process.env.LIVE_REFRESH_TOKEN ?? "") : undefined;
+const candidateAvailability = pool !== undefined && availabilityCodec !== undefined && refreshSignal !== undefined
+  ? new CandidateAvailability(availabilityCodec, new PostgresCandidateAvailability(pool), refreshSignal) : undefined;
 const candidateSearch =
   pool === undefined || signingKey === undefined
     ? undefined
-    : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey));
+    : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey), () => new Date(), availabilityCodec, demandLiveEnabled);
 
 const accessTokenSigningKey = process.env.SEARCH_ACCESS_TOKEN_SIGNING_KEY;
 const accessTokenCodec =
@@ -89,6 +98,7 @@ const purgeTimer = reportRepository === undefined ? undefined : setInterval(() =
 purgeTimer?.unref();
 
 const app = createApp({
+  ...(candidateAvailability === undefined ? {} : { candidateAvailability }),
   ...(process.env.RELEASE_IMAGE_DIGEST === undefined ? {} : { release: process.env.RELEASE_IMAGE_DIGEST }),
   ...(candidateSearch === undefined ? {} : { candidateSearch }),
   searchAuthenticator,

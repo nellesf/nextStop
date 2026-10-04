@@ -16,6 +16,9 @@ x-api-environment: &api-environment
   ALLOW_LEGACY_STAGING_BEARER: ${ALLOW_LEGACY_STAGING_BEARER:-false}
   SEARCH_API_BEARER_TOKEN: ${SEARCH_API_BEARER_TOKEN:-}
   RELEASE_IMAGE_DIGEST: ${RELEASE_IMAGE_DIGEST:-}
+  DEMAND_LIVE_AVAILABILITY_ENABLED: ${DEMAND_LIVE_AVAILABILITY_ENABLED:-false}
+  LIVE_REFRESH_URL: ${LIVE_REFRESH_URL:-}
+  LIVE_REFRESH_TOKEN: ${LIVE_REFRESH_TOKEN:-}
   HOST: 0.0.0.0
   PORT: "3000"
 x-auth-environment: &auth-environment
@@ -102,6 +105,9 @@ services:
     command: [node, dist/src/worker.js]
     environment:
       DATABASE_URL: ${WORKER_DATABASE_URL:-}
+      INGESTION_SCHEDULE: ${INGESTION_SCHEDULE:-daily}
+      DEMAND_LIVE_AVAILABILITY_ENABLED: ${DEMAND_LIVE_AVAILABILITY_ENABLED:-false}
+      LIVE_REFRESH_TOKEN: ${LIVE_REFRESH_TOKEN:-}
       OSM_INGESTION_ENABLED: ${OSM_INGESTION_ENABLED:-true}
       OSM_GEOFABRIK_PBF_URLS: https://download.geofabrik.de/europe/germany-latest.osm.pbf,https://download.geofabrik.de/europe/switzerland-latest.osm.pbf
       OSM_CACHE_DIRECTORY: /var/lib/nextstop/osm-cache

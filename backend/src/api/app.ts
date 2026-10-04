@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import type { CandidateAvailabilityReading } from "../application/candidate-availability.js";
+import { registerCandidateAvailability } from "./candidate-availability.js";
 import { installReadiness, type ReadinessChecking } from "./readiness.js";
 import type { UserErrorReports } from "../application/user-error-reports.js";
 import { registerUserErrorReports } from "./user-error-reports.js";
@@ -30,6 +32,7 @@ import {
 } from "./request-diagnostics.js";
 
 interface AppDependencies {
+  readonly candidateAvailability?: CandidateAvailabilityReading;
   readonly readiness?: ReadinessChecking;
   readonly release?: string;
   readonly candidateSearch?: CandidateSearching;
@@ -200,6 +203,9 @@ export function createApp(dependencies: AppDependencies = {}): FastifyInstance {
     },
   );
 
+  if (dependencies.candidateAvailability !== undefined) {
+    registerCandidateAvailability(app, dependencies.candidateAvailability, searchAuthenticator);
+  }
   return app;
 }
 

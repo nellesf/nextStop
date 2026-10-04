@@ -7,6 +7,34 @@ import XCTest
 
 @MainActor
 final class CarPlayPresentationTests: XCTestCase {
+  func testLiveOverlayChangesOnlyInformationalDetailText() throws {
+    let result = try makeResult(
+      id: "10000000-0000-4000-8000-000000000001", name: "Synthetic park",
+      drivingMeters: 80_000, knownAvailable: 0, unknown: 4)
+    let outcome = RideCandidateSearchOutcome(
+      results: [result],
+      coverage: CandidateSearchCoverage(
+        status: .complete, activeSourceIDs: [], unavailableSourceIDs: [],
+        projectionUpdatedAt: .distantPast),
+      availabilityContext: "context")
+    let presenter = CarPlayPresenter()
+    let before = presenter.results(outcome, criteria: SearchConfiguration.defaultCriteria)
+    let live = try ParkAvailability(
+      knownAvailableCount: 2, knownUnavailableCount: 1, unknownCount: 1, totalCount: 4)
+    let after = presenter.results(
+      outcome, criteria: SearchConfiguration.defaultCriteria, availability: { _ in live })
+    XCTAssertEqual(after.points.map(\.id), before.points.map(\.id))
+    XCTAssertEqual(after.points.map(\.coordinate), before.points.map(\.coordinate))
+    XCTAssertEqual(after.points.map(\.title), before.points.map(\.title))
+    XCTAssertEqual(after.points.map(\.subtitle), before.points.map(\.subtitle))
+    XCTAssertEqual(
+      after.points.map(\.operatorsActionTitle), before.points.map(\.operatorsActionTitle))
+    XCTAssertEqual(
+      after.points.map(\.restaurantActionTitle), before.points.map(\.restaurantActionTitle))
+    XCTAssertNotEqual(after.points.first?.detailSummary, before.points.first?.detailSummary)
+    XCTAssertEqual(outcome.results, [result])
+  }
+
   func testSearchStatusTemplateIsReusedAcrossRepeatedRetries() {
     let root = CPListTemplate(title: "Profile", sections: [])
     let summary = CPListTemplate(title: "Fahrt", sections: [])

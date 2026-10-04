@@ -1,6 +1,7 @@
 import { createHmac, timingSafeEqual } from "node:crypto";
 
 export interface SnapshotPayload {
+  readonly availabilityExpiresAt?: number;
   readonly kind: "snapshot";
   readonly version: 3;
   readonly projectionId: string;
@@ -49,7 +50,10 @@ export class SignedPaginationCodec {
       !isUUID(value.projectionId) ||
       !isOptionalUUID(value.foodProjectionId) ||
       !isSnapshotIds(value.availabilitySnapshotIds) ||
-      !isFingerprint(value.requestFingerprint)
+      !isFingerprint(value.requestFingerprint) ||
+      (value.availabilityExpiresAt !== undefined &&
+        (!Number.isSafeInteger(value.availabilityExpiresAt) || value.availabilityExpiresAt <= 0 ||
+          value.availabilitySnapshotIds.length !== 0))
     ) {
       throw new InvalidPaginationTokenError();
     }

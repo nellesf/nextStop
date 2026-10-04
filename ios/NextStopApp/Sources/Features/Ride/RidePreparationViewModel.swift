@@ -95,6 +95,11 @@ final class RidePreparationViewModel: ObservableObject {
   @Published private(set) var state: RidePreparationState = .idle
   @Published private(set) var candidateSearchState: RideCandidateSearchState = .idle
 
+  var availabilityContext: String? {
+    guard case .results(let outcome) = candidateSearchState else { return nil }
+    return outcome.availabilityContext
+  }
+
   private let locationProvider: any CurrentLocationProviding
   private let routePlanner: any RoutePlanning
   private let makeRequestID: () -> UUID

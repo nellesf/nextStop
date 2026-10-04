@@ -6,6 +6,43 @@ import XCTest
 
 @MainActor
 final class RideCandidateSearchCoordinatorTests: XCTestCase {
+  func testAvailabilityContextIsRetainedWithoutDoingLiveWorkDuringSearch() async throws {
+    let candidate = try makeBackendCandidate(index: 1, lowerBoundKilometers: 30)
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot", nextCursor: nil,
+          candidates: [candidate], coverage: coverage, availabilityContext: "live-context")
+      ]),
+      enricher: CandidateEnricherStub(distances: [candidate.id: Meters(60_000)]),
+      resultChecker: ChargingResultCheckerStub()
+    )
+    let outcome = try await coordinator.search(
+      preparedRide: preparedRide(distanceRange: .kilometers50To100))
+    XCTAssertEqual(outcome.availabilityContext, "live-context")
+    XCTAssertEqual(outcome.results.map(\.id), [candidate.id])
+  }
+
+  func testAvailabilityContextCannotChangeAcrossSnapshotPages() async throws {
+    let first = try makeBackendCandidate(index: 1, lowerBoundKilometers: 20)
+    let second = try makeBackendCandidate(index: 2, lowerBoundKilometers: 30)
+    let coordinator = RideCandidateSearchCoordinator(
+      pageSearcher: CandidatePageSearcherStub(pages: [
+        CandidateSearchPage(
+          snapshotToken: "snapshot", nextCursor: "next",
+          candidates: [first], coverage: coverage, availabilityContext: "first-context"),
+        CandidateSearchPage(
+          snapshotToken: "snapshot", nextCursor: nil,
+          candidates: [second], coverage: coverage, availabilityContext: "changed-context"),
+      ]),
+      enricher: CandidateEnricherStub(distances: [
+        first.id: Meters(60_000), second.id: Meters(70_000),
+      ]),
+      resultChecker: ChargingResultCheckerStub()
+    )
+    await assertInvalidResponse(from: coordinator)
+  }
+
   func testMissingAppleOperatorDoesNotConsumeAResultSlotOrStopPagination() async throws {
     let candidates = try (1...7).map {
       try makeBackendCandidate(index: $0, lowerBoundKilometers: $0 * 5)
