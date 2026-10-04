@@ -18,6 +18,7 @@ import subprocess
 import sys
 import threading
 import time
+from urllib.parse import quote
 import uuid
 
 from render import CONNECTION, PROJECT, QUEUE, REGION, ConfigurationError, origin, release_id, validate
@@ -25,6 +26,47 @@ from verify import VerificationError, identity_provider, request_json, write_rep
 
 QUEUE_PATH = f"projects/{PROJECT}/locations/{REGION}/queues/{QUEUE}"
 SOCKET = "/private/tmp/ns-sql/" + CONNECTION
+# Only these literal operational messages may reach CLI diagnostics. Transport
+# implementations (including injected VerificationError instances) are untrusted.
+SAFE_DIAGNOSTICS = frozenset({
+    "No eligible public fixture candidate was found.",
+    "Required control timestamp is missing.",
+    "Synthetic search lacks bounded demand availability candidates.",
+    "Availability contract failed.",
+    "Availability candidate identity changed.",
+    "Availability counts changed the static candidate contract.",
+    "Live task completion was not proven within three minutes; queued retries were left intact.",
+    "Invalid control timestamp.",
+    "Only the reviewed staging proxy/database/owner role is supported.",
+    "Staging database credentials or proxy port are unavailable.",
+    "Read-only Cloud metadata identity is unavailable.",
+    "Read-only Cloud metadata query failed.",
+    "Stable live task target is not the reviewed candidate release.",
+    "Live queue statistics are unavailable or the queue is not running.",
+    "Live queue is not isolated for the bounded gate.",
+    "Live queue metadata pagination exceeded its four-page bound.",
+    "Invalid or repeated live queue page token.",
+    "Unexpected task metadata.",
+    "Availability observations are not fresh.",
+    "Gate requires an idle queue, no lease/cooldown and a cold Swiss cache; no reset was attempted.",
+    "Private candidate token mint failed.",
+    "DE-only fixture unexpectedly requested live refresh.",
+    "Static searches or DE-only availability changed live state.",
+    "Concurrent refresh was not accepted within one task window.",
+    "Live task gate failed without exposing diagnostic payloads.",
+    "Release binding or create-only evidence destination failed.",
+    "Read-only live control query failed.",
+    "Unexpected live control database identity.",
+    "Live snapshot metadata is missing.",
+    "Invalid live queue statistics.",
+    "Candidate readiness or image binding failed.",
+    "Synthetic static search failed.",
+    "Nonblocking availability request failed or exceeded its bound.",
+    "More than one task was observed for the concurrent requests.",
+    "Concurrent requests caused multiple provider refreshes.",
+    "Fresh shared cache did not suppress another enqueue.",
+    "Final cache read changed the completed live state.",
+})
 SQL = """
 BEGIN READ ONLY;
 SET LOCAL statement_timeout = '5s'; SET LOCAL lock_timeout = '500ms';
@@ -132,15 +174,30 @@ class CloudMetadata:
             result[destination] = int(raw)
         # BASIC response with an explicit field mask cannot retrieve task bodies,
         # authorization headers, routes, or provider response contents.
-        listing = self.get("https://cloudtasks.googleapis.com/v2/" + QUEUE_PATH +
-                           "/tasks?responseView=BASIC&pageSize=10&fields=tasks(name),nextPageToken")
-        rows = listing.get("tasks", [])
-        if listing.get("nextPageToken") or not isinstance(rows, list) or len(rows) > 10:
-            raise VerificationError("Live queue is not isolated for the bounded gate.")
-        names = {row.get("name") for row in rows if isinstance(row, dict)}
-        if len(names) != len(rows) or any(not isinstance(name, str) or not name.startswith(QUEUE_PATH + "/tasks/") for name in names):
-            raise VerificationError("Unexpected task metadata.")
-        return {**result, "names": names}
+        base = ("https://cloudtasks.googleapis.com/v2/" + QUEUE_PATH +
+                "/tasks?responseView=BASIC&pageSize=10&fields=tasks(name),nextPageToken")
+        names, seen_tokens, token = set(), set(), ""
+        # ListTasks may return partial or empty pages with a continuation token.
+        # Only an empty token ends enumeration. A bounded scan is sufficient for
+        # this isolated one-task gate; a larger/unstable queue fails closed.
+        for _ in range(4):
+            listing = self.get(base + ("&pageToken=" + quote(token, safe="") if token else ""))
+            rows = listing.get("tasks", [])
+            if not isinstance(rows, list) or len(rows) > 10:
+                raise VerificationError("Live queue is not isolated for the bounded gate.")
+            page_names = {row.get("name") for row in rows if isinstance(row, dict)}
+            if len(page_names) != len(rows) or any(not isinstance(name, str) or not name.startswith(QUEUE_PATH + "/tasks/") for name in page_names):
+                raise VerificationError("Unexpected task metadata.")
+            names.update(page_names)
+            if len(names) > 10:
+                raise VerificationError("Live queue is not isolated for the bounded gate.")
+            token = listing.get("nextPageToken", "")
+            if not isinstance(token, str) or len(token) > 4096 or token in seen_tokens:
+                raise VerificationError("Invalid or repeated live queue page token.")
+            if not token:
+                return {**result, "names": names}
+            seen_tokens.add(token)
+        raise VerificationError("Live queue metadata pagination exceeded its four-page bound.")
 
 
 def quiet(queue):
@@ -294,6 +351,13 @@ def verify(config, token_provider, database, queue, request=request_json, sleep=
         raise VerificationError("Live task gate failed without exposing diagnostic payloads.") from None
 
 
+def failure_report(error):
+    message = str(error) if isinstance(error, VerificationError) else ""
+    return {"status": "failed",
+            "reason": "Live task gate did not pass; no success evidence written. Any accepted task remains under its bounded queue retry policy.",
+            "fixedDiagnostic": message if message in SAFE_DIAGNOSTICS else "Live task gate failed without exposing diagnostic payloads."}
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--config", type=Path, required=True)
@@ -312,8 +376,8 @@ def main():
         report = verify(config, identity_provider(args.impersonate_service_account), database, metadata)
         write_report(args.output, report)
         print(json.dumps(report, sort_keys=True))
-    except (VerificationError, ConfigurationError, OSError, ValueError, TypeError, subprocess.TimeoutExpired):
-        print('{"status":"failed","reason":"Live task gate did not pass; no success evidence written. Any accepted task remains under its bounded queue retry policy."}', file=sys.stderr)
+    except Exception as error:
+        print(json.dumps(failure_report(error), sort_keys=True), file=sys.stderr)
         raise SystemExit(1) from None
 
 

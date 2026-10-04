@@ -23,7 +23,7 @@ const controlPool = createDatabasePool(databaseURL, {
   queryTimeoutMilliseconds: 5_000, statementTimeoutMilliseconds: 3_000,
 });
 const controller = new CloudLiveRefresh(new PostgresLiveRefreshControl(controlPool),
-  (lease) => refreshSwissLiveAvailability(pool, { liveRefreshLease: lease }));
+  (lease) => refreshSwissLiveAvailability(pool, { liveRefreshLease: lease, inlineLiveRetention: false }));
 const app = createCloudLiveRefreshApp(controller, new GoogleTaskAuthenticator(configuration), () => {
   process.stderr.write('{"event":"live_task_refresh_failed"}\n');
 });

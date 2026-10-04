@@ -34,6 +34,10 @@ The registry remains the existing repository in `europe-west3`.
   without provider downloads. The 2,858,317,358-byte archive has SHA-256
   `473b326d8c104f586bd02a06c47311480ffcbe8fb733fd13a1368ce0b44daa8c`.
   Its table-data inventory was validated before the single-transaction restore.
+- The initial restore completed in 5352 seconds. All indexes are valid, the
+  charging and food active-version identities are preserved, and report rows
+  remain zero. The real migration job applied all 18 migrations and verified the
+  restricted object grants. Database size after restore was approximately 21.65 GiB.
 - Raw Cloud Run request logs were excluded before sending test requests. No user
   routes, report values, client addresses or credentials enter operator evidence.
 - All private services and job definitions reached platform Ready status. This
@@ -48,6 +52,24 @@ The registry remains the existing repository in `europe-west3`.
 - Five synthetic source-VM searches returned identical static results. Their
   latencies were 2333, 326, 340, 328 and 330 ms (median 330 ms). No availability
   requests or provider refreshes were triggered by this comparison.
+- Five corresponding Cloud Run searches returned the same static result hash and
+  50 candidates: 9391, 442, 459, 497 and 426 ms. The four follow-up requests had a
+  median of 450 ms, versus 329 ms for the source follow-ups. The first observation
+  is not a formally isolated cold-start measurement; initial database autovacuum
+  was still completing during these checks. Three direct candidate SQL probes
+  completed in 1770, 244 and 1112 ms with no temporary I/O. These search checks do
+  not establish full import capacity.
+- Two concurrent Swiss availability requests enqueued exactly one live task.
+  The task published 15,240 observations but returned 503 approximately 30 seconds
+  later. Code inspection and timing point to unbounded post-publication retention
+  hitting the live SQL timeout; the exact database error code was not captured.
+  The queue was paused with the retry preserved. The branch correction moves
+  Cloud Run retention to the bounded hourly cleanup job, leaving the VM default
+  unchanged. A successful real task retry and fresh coalescence gate remain pending.
+- A new Cloud Run filtered backup was started after capturing all 26 table counts
+  in one read-only repeatable-read transaction. Schedules and the live queue
+  remain paused while the backup comparison snapshot is held unchanged. Completion
+  and restoration of this new backup remain separate acceptance checks.
 - Monitoring observed zero active and zero idle instances for every service:
   API at 10:29 UTC, live at 10:30, and auth/broker/gateway at 10:37. These are
   explicit per-service zero measurements, not missing time-series points.
@@ -71,10 +93,10 @@ The registry remains the existing repository in `europe-west3`.
 
 ## Remaining acceptance work
 
-Complete and verify the database restore, additive migration and grants; measure
-full-corpus search/import capacity and cold starts; exercise live Tasks and job
-budgets; restore a new filtered backup; prove idle scale-to-zero using Monitoring;
-verify the restricted deployment identity and final writer handoff. Only then
+Measure full import capacity, disk peaks and isolated cold starts; deploy and
+exercise the corrected live Tasks, cleanup, purge and monthly job budgets; restore
+the new filtered backup; refresh artifact-bound checks and verify the final writer
+handoff. Only then
 switch DNS, check managed TLS and authenticated public searches, activate reviewed
 schedules and retire the obsolete paid VM resources after recovery verification.
 
@@ -86,10 +108,15 @@ configuration and actual acceptance evidence have been committed and reviewed.
 
 ## Cost evidence
 
-The user-provided baseline is approximately EUR 70/month, with unknown tax basis.
-The dated list-price model in `deploy/gcp-run/cost-plan.json` estimates EUR
-41.27–55.19 net/month including 10% reserve, or EUR 49.12–65.67 with illustrative
-19% VAT. This is a model, not measured billing. The source VM and target temporarily
+The user-provided baseline was approximately EUR 70/month. The Google Cloud Billing
+report for October 1–3 was subsequently checked for the staging project alone,
+without credits: EUR 6.80 before tax over 72 hours, equivalent to EUR 68.94 net
+at 730 hours. This is a comparison rate, not a full monthly invoice.
+The dated list-price model in `deploy/gcp-run/cost-plan.json`, including hourly
+bounded cleanup, estimates EUR 42.04–59.13 net/month including 10% reserve, or
+EUR 50.02–70.36 with illustrative 19% VAT. New-runtime usage is not yet present in
+that billing period, so actual new charges are still unverified. Compare like tax
+bases. The source VM and target temporarily
 overlap during migration. Stopping the VM alone would retain disk/address costs.
 Keep actual billing validation and the first full import as separate acceptance
 evidence; report a projected overrun before any unapproved resize or teardown.

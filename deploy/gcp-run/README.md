@@ -61,7 +61,7 @@ verified DNS/TLS and authenticated search before the old staging VM is retired.
 | Job | Identity | Schedule (UTC) | Limits |
 | --- | --- | --- | --- |
 | `nextstop-monthly` | `nextstop-run-worker` | Daily02:00 due check | 2vCPU/8GiB; 8h work plus30s shutdown; no platform retries |
-| `nextstop-cleanup` | `nextstop-run-worker` | Daily23:00 | 1vCPU/512MiB; 300s work plus30s shutdown; no retries |
+| `nextstop-cleanup` | `nextstop-run-worker` | Hourly | 1vCPU/512MiB; 300s work plus30s shutdown; no retries |
 | `nextstop-report-purge` | `nextstop-run-support` | Hourly | 1vCPU/512MiB; 120s work plus30s shutdown; no retries |
 | `nextstop-backup` | `nextstop-run-backup` | Daily03:00 | 1vCPU/512MiB; 3600s total; no retries |
 | `nextstop-migrate` | `nextstop-run-migrator` | Explicit release step only | 1vCPU/512MiB; 900s; no retries; expand-only migrations then verified object grants |
@@ -80,6 +80,15 @@ The private live queue permits one concurrent dispatch,0.1 dispatches/second and
 three attempts. Retries wait660seconds, beyond the10-minute database lease; a
 request does not wait for provider refresh. Availability stays informational and
 unknown on a provider/queue failure. Idle searches do not start periodic imports.
+
+Expired availability retention runs in the existing hourly cleanup job, outside
+the live task's publication/acknowledgement path. It visits at most 64 expired
+snapshot targets within 120 seconds, with bounded child-row deletions that can
+continue on a later run. The job then performs at most 32 batches of 1000 retired
+search rows. Active and building snapshots are retained. The hourly cadence can
+keep pace with up to 60 demand refreshes per hour only when measured deletion
+throughput is sufficient; 64 targets is a work bound, not a guaranteed completion
+count. Monitor backlog and elapsed time. No additional service or job is created.
 
 The backup job uses a separate read-only role, Cloud SQL socket and its own bucket.
 It streams a PG17 custom archive directly to GCS. The report table is excluded from
@@ -327,10 +336,14 @@ for that combination.
 
 ## Cost baseline and acceptance gates
 
-The user reported about€70/month for staging; its tax basis and exact billing
-composition have not been verified. The measured initial corpus was22.78GiB,
-provider cache0.883GiB. [cost-plan.json](cost-plan.json) records quantities, source
-URLs, EUR SKU IDs, supplemental USD conversion and assumptions. Recalculate with:
+The user reported about €70/month for staging. On 2026-10-04, the operator inspected
+Google Cloud Billing for `nextstop-tech-testing`: October 1–3 usage cost €6.80 before
+invoice tax, with no credits. Normalizing that 72-hour sample to 730 hours gives
+€68.94 net/month; it is a comparison rate, not a complete monthly invoice. The
+reported period precedes the Cloud SQL migration and does not measure the new
+runtime's costs. The initial corpus was 22.78 GiB, provider cache 0.883 GiB.
+[cost-plan.json](cost-plan.json) records that baseline, quantities, source URLs,
+EUR SKU IDs, supplemental USD conversion and assumptions. Recalculate with:
 
 ```bash
 python3 deploy/gcp-run/cost.py
@@ -341,9 +354,20 @@ python3 -m unittest discover -s deploy/gcp-run -p 'test_*.py'
 | --- | ---: |
 | g1-small,730h +50GiB SQL SSD | 29.964 |
 | Reference30GiB filtered GCS backups alone | 0.528 |
-| Full staging model before reserve | 37.52–50.17 |
-| Full model including10% reserve | 41.27–55.19 |
-| Illustration with19%VAT, including reserve | 49.12–65.67 |
+| Full staging model before reserve | 38.21–53.75 |
+| Full model including10% reserve | 42.04–59.13 |
+| Illustration with19%VAT, including reserve | 50.02–70.36 |
+| Verified pre-migration usage, normalized to730h, net | 68.94 |
+
+The hourly cleanup model replaces the former daily minimum of 0.5 vCPUh/0.25 GiBh
+per 30-day month. Its 720 monthly invocations use 12 vCPUh/6 GiBh at the 60-second
+minimum billing, or 60 vCPUh/30 GiBh at every 300-second application deadline. At the
+existing rates this adds exactly €0.692208–3.581424 net before reserve, or
+€0.7614288–3.9395664 with the 10% reserve. The existing maintenance allowance remains;
+startup/shutdown variation is covered by the reserve. No fifth Scheduler job is
+added. Compare the new €42.04–59.13 net model with the €68.94 net baseline. The
+illustrative VAT-inclusive high of €70.36 is not a like-for-like comparison with
+that tax-exclusive baseline.
 
 The earlier39–52€ estimate preceded the explicit daily backup and extra scheduler
 budget. This model includes those, request CPU for three separate services,
@@ -352,11 +376,12 @@ backup/cache storage,5GiB registry retention, logging, secrets, builds and
 10–50GiB internet egress. It assumes no free allowances or credits. Full SQL
 backups are not charged because that report-containing backup path is disabled.
 
-The model is below the reported baseline under these assumptions; it cannot
+The model is below the verified net comparison rate under these assumptions; it cannot
 guarantee a bill ceiling. Traffic, retries, storage growth, provider sizes and
 one-time overlap can differ. Billing data can lag24h or longer. Compare actual
 service charges after at least48h and after the first import; revisit the model
-at projected52€ net and obtain a decision before projected70€ net. Budget alerts
+at projected €52 net and obtain a decision before projected €68.94 net, the
+verified comparable baseline. Budget alerts
 are notifications, not hard shutdowns. Retaining the old staging VM/disks after
 acceptance would invalidate the intended steady-state saving.
 

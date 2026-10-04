@@ -53,8 +53,16 @@ remain authoritative. Failed attempts are retried at most three times, with
 backoff longer than the ten-minute lease. No routes, candidate IDs or user state
 are stored in tasks. No demand means no Swiss polling.
 
-Separate bounded jobs perform daily derived-data cleanup and at least hourly
-report expiration, including when the application has no traffic. Daily logical
+The existing cleanup job runs hourly and performs bounded expired availability
+retention before bounded derived-search retention. Expired-data deletion is
+outside the live handler's publication and acknowledgement path; it cannot turn
+an already published refresh into a failed task merely because cleanup is slow.
+The cleanup job visits at most 64 expired snapshot targets within 120 seconds, then
+at most 32 batches of 1000 retired search rows, within its 300-second application
+deadline. Large snapshots can continue across runs, so observed backlog and
+throughput remain acceptance checks. This changes no freshness threshold and
+adds no service or job. A separate job performs at least hourly report expiration,
+including when the application has no traffic. Daily logical
 backups exclude the entire report table using a role without report SELECT.
 A catalog-only DDL supplement restores the empty report table. Pin archive and
 supplement generations/hashes in a completion receipt; retain successful backups
@@ -88,10 +96,17 @@ new database, the old snapshot is not a lossless data rollback.
 The dated EUR list-price model in `deploy/gcp-run/cost.py` uses approximately
 EUR 29.964/month for the database at 730 hours. Application execution, imports,
 backup execution/storage, cache, registry, four schedules, secrets and network
-are additional. Conservative scenarios including a 10% reserve are approximately
-EUR 41–55 net per month (approximately EUR 49–66 with illustrative 19% VAT).
+are additional. Scenarios including a 10% reserve are approximately
+EUR 42.04–59.13 net per month (EUR 50.02–70.36 with illustrative 19% VAT).
+The hourly cleanup estimate covers 720 monthly invocations at 60–300 seconds each,
+replacing the earlier daily cleanup allowance; startup variation uses the reserve.
 These are estimates, not billing-export evidence or enforced spending caps.
-The owner's EUR 70 baseline has no confirmed tax basis. Migration overlap is
+On 2026-10-04 the operator verified EUR 6.80 of pre-tax Google Cloud usage for the
+staging project over October 1–3, with no credits. The 72-hour sample normalizes to
+EUR 68.94 net at 730 hours; this is a comparison rate, not a full monthly invoice.
+The period predates the Cloud SQL migration and does not establish actual costs
+of the new runtime. Compare net model costs with that net baseline, keeping the
+illustrative VAT-inclusive figures separate. Migration overlap is
 temporary and must be reported separately; remove obsolete paid resources only
 after successful migration and recovery verification. Reassess if measured usage,
 capacity needs or prices move the forecast above the owner's baseline.

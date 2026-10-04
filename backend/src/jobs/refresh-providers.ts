@@ -51,6 +51,7 @@ export interface ProviderRefreshDependencies {
   readonly now?: () => Date;
   readonly onProgress?: ProjectionBuildObserver;
   readonly liveRefreshLease?: LiveRefreshLease;
+  readonly inlineLiveRetention?: boolean;
 }
 
 export async function refreshStaticProviders(
@@ -170,12 +171,14 @@ export async function refreshSwissLiveAvailability(
       now().toISOString(),
       dependencies.liveRefreshLease,
     );
-    await writer.pruneBefore(
-      new Date(
-        now().getTime() -
-          ichTankeStromDescriptor.liveSnapshotRetentionHours * 60 * 60 * 1_000,
-      ).toISOString(),
-    );
+    if (dependencies.inlineLiveRetention !== false) {
+      await writer.pruneBefore(
+        new Date(
+          now().getTime() -
+            ichTankeStromDescriptor.liveSnapshotRetentionHours * 60 * 60 * 1_000,
+        ).toISOString(),
+      );
+    }
     return {
       kind: "published",
       snapshotId,

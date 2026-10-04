@@ -6,6 +6,7 @@ import subprocess
 import threading
 import unittest
 from unittest.mock import patch
+from urllib.parse import parse_qs, urlsplit
 
 from test_render import configuration
 import verify_live_task as live
@@ -189,6 +190,62 @@ class LiveGateTests(unittest.TestCase):
         self.assertIn("responseView=BASIC", calls[-1])
         self.assertIn("fields=tasks(name),nextPageToken", calls[-1])
         self.assertTrue(all(live.PROJECT in url for url in calls))
+
+    def paged_metadata(self, pages):
+        calls = []
+        remaining = iter(pages)
+        def request(url, method, headers, timeout=30):
+            calls.append(url)
+            self.assertEqual(method, "GET")
+            if "/tasks?" not in url:
+                return 200, {"state": "RUNNING", "stats": {}}, {}
+            query = parse_qs(urlsplit(url).query)
+            self.assertEqual(query["responseView"], ["BASIC"])
+            self.assertEqual(query["fields"], ["tasks(name),nextPageToken"])
+            self.assertEqual(urlsplit(url).hostname, "cloudtasks.googleapis.com")
+            return 200, next(remaining), {}
+        with patch.object(live.subprocess, "run", return_value=subprocess.CompletedProcess([], 0, "synthetic-private-token" * 3, "")):
+            metadata = live.CloudMetadata(configuration(), request=request)
+        return metadata, calls
+
+    def test_actual_partial_page_then_empty_terminal_page_is_one_task(self):
+        name = live.QUEUE_PATH + "/tasks/synthetic"
+        token = "opaque+/=&fields=private%20value"
+        metadata, calls = self.paged_metadata([{"tasks": [{"name": name}], "nextPageToken": token}, {}])
+        self.assertEqual(metadata()["names"], {name})
+        self.assertEqual(parse_qs(urlsplit(calls[-1]).query)["pageToken"], [token])
+        self.assertEqual(len(calls), 3)
+
+    def test_empty_intermediate_pages_and_reordered_duplicate_names_remain_bounded(self):
+        name = live.QUEUE_PATH + "/tasks/synthetic"
+        metadata, calls = self.paged_metadata([{"nextPageToken": "first"}, {"tasks": [{"name": name}], "nextPageToken": "second"},
+                                               {"tasks": [{"name": name}]}])
+        self.assertEqual(metadata()["names"], {name})
+        self.assertEqual(len(calls), 4)
+
+    def test_page_cycles_overlength_invalid_tokens_and_page_bound_fail_closed(self):
+        for pages in ([{"nextPageToken": "repeat"}, {"nextPageToken": "repeat"}],
+                      [{"nextPageToken": "x" * 4097}], [{"nextPageToken": 123}],
+                      [{"nextPageToken": str(index)} for index in range(4)]):
+            metadata, calls = self.paged_metadata(pages)
+            with self.assertRaises(live.VerificationError): metadata()
+            self.assertLessEqual(len(calls), 5)
+
+    def test_more_than_ten_unique_tasks_across_pages_still_fails_isolation(self):
+        metadata, _ = self.paged_metadata([
+            {"tasks": [{"name": live.QUEUE_PATH + "/tasks/" + str(index)} for index in range(10)], "nextPageToken": "next"},
+            {"tasks": [{"name": live.QUEUE_PATH + "/tasks/extra"}]}])
+        with self.assertRaisesRegex(live.VerificationError, "not isolated"):
+            metadata()
+
+    def test_only_allowlisted_fixed_diagnostics_are_exposed_not_injected_verification_errors(self):
+        message = "Live queue metadata pagination exceeded its four-page bound."
+        self.assertEqual(live.failure_report(live.VerificationError(message))["fixedDiagnostic"], message)
+        for error in (live.VerificationError("private task token and route"), RuntimeError("private auth payload"),
+                      live.VerificationError(message + " private token")):
+            report = live.failure_report(error)
+            self.assertNotIn("private", json.dumps(report))
+            self.assertEqual(report["fixedDiagnostic"], "Live task gate failed without exposing diagnostic payloads.")
 
 
 if __name__ == "__main__": unittest.main()

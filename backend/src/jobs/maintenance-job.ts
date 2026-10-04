@@ -1,6 +1,7 @@
 import { fileURLToPath } from "node:url";
 import { createDatabasePool } from "../persistence/database.js";
 import { PostgresUserErrorReportRepository } from "../persistence/postgres-user-error-reports.js";
+import { pruneExpiredAvailabilitySnapshots } from "../persistence/availability-retention.js";
 import { pruneRetiredChargingSearchProjections } from "../persistence/projection-retention.js";
 import { deploymentRuntime, type RuntimeEnvironment } from "../runtime/deployment-runtime.js";
 import { PostgresMonthlyImportBudget, runBudgetedMonthlyImports } from "./cloud-monthly-ingestion.js";
@@ -69,6 +70,8 @@ async function main(): Promise<void> {
         report: (job, outcome) => { process.stdout.write(`${JSON.stringify({ event: "monthly_import_result", job, outcome })}\n`); },
       }, new PostgresMonthlyImportBudget(pool)),
       cleanup: async () => {
+        const availability = await pruneExpiredAvailabilitySnapshots(pool);
+        if (availability.kind === "busy") throw new Error("AvailabilityCleanupBusy");
         const result = await pruneRetiredChargingSearchProjections(pool, undefined, { batchSize: 1_000, maxBatches: 32 });
         if (result.kind === "busy") throw new Error("ProjectionCleanupBusy");
       },

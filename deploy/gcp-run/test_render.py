@@ -116,6 +116,8 @@ class RenderTests(unittest.TestCase):
         secrets = [v["valueFrom"]["secretKeyRef"]["name"] for v in backup["containers"][0]["env"] if "valueFrom" in v]
         self.assertEqual(secrets, ["nextstop-staging-backup-database-url"])
         self.assertEqual(output["scheduler-report-purge"]["schedule"], "0 * * * *")
+        self.assertEqual(output["scheduler-cleanup"]["schedule"], "0 * * * *")
+        self.assertEqual(set(render.SCHEDULES), {"monthly", "cleanup", "report-purge", "backup"})
         self.assertNotIn("state", output["scheduler-report-purge"])  # output-only API field
         self.assertEqual(output["scheduler-backup"]["schedule"], "0 3 * * *")
 

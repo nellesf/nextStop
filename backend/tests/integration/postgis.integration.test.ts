@@ -1,4 +1,5 @@
 import assert from "node:assert/strict";
+import { verifyAvailabilityRetention } from "./availability-retention-regression.js";
 import { verifyDemandLiveAvailability } from "./demand-live-availability-regression.js";
 import { verifyMonthlyIngestion } from "./monthly-ingestion-regression.js";
 import { randomUUID } from "node:crypto";
@@ -82,6 +83,9 @@ void test(
     await context.test("monthly scheduling persists without restart rebuilds", async () => { await verifyMonthlyIngestion(pool); });
     await context.test("demand availability preserves exact operators, snapshots and cross-worker leases", async () => {
       await verifyDemandLiveAvailability(pool, swissStaticObservations());
+    });
+    await context.test("live publication is independent of bounded expired-snapshot cleanup", async () => {
+      await verifyAvailabilityRetention(pool);
     });
     await context.test("readiness and serialized migration protect release handoffs", async () => {
       await verifyRuntimeOperations(pool);

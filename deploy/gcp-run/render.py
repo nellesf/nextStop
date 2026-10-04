@@ -28,7 +28,7 @@ LOG_EXCLUSION = {
 JOB_MODES = {"monthly": "monthly-import", "cleanup": "cleanup", "report-purge": "report-purge"}
 JOBS = (*JOB_MODES, "backup", "migrate")
 JOB_SECONDS = {"monthly": 28_800, "cleanup": 300, "report-purge": 120, "backup": 3600, "migrate": 900}
-SCHEDULES = {"monthly": "0 2 * * *", "cleanup": "0 23 * * *", "report-purge": "0 * * * *", "backup": "0 3 * * *"}
+SCHEDULES = {"monthly": "0 2 * * *", "cleanup": "0 * * * *", "report-purge": "0 * * * *", "backup": "0 3 * * *"}
 
 
 class ConfigurationError(ValueError):
