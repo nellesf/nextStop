@@ -26,10 +26,10 @@ DEPLOY_ACCOUNT = "nextstop-staging-deploy@nextstop-tech-testing.iam.gserviceacco
 OPERATOR_GATES = {
     "clientIPIsolationPassed": ["backend/src/api/cloud-gateway.ts", "backend/src/gateway-server.ts", "backend/src/runtime/cloud-identity-tokens.ts"],
     "filteredBackupRestorePassed": ["backend/src/jobs/database-backup.ts", "backend/operations/*.sql", "backend/migrations/*.sql", "backend/src/persistence/database.ts", "deploy/gcp-run/database-*.sql"],
-    "jobsBudgetVerified": ["backend/src/jobs/*.ts", "backend/migrations/0018_monthly_import_budget.sql"],
+    "jobsBudgetVerified": ["backend/src/jobs/*.ts", "backend/src/providers/**/*.ts", "backend/migrations/0018_monthly_import_budget.sql"],
     "liveTaskCompatibilityPassed": ["backend/src/application/cloud-tasks-refresh-signal.ts", "backend/src/jobs/cloud-live-refresh.ts", "backend/src/live-refresh-server.ts", "backend/src/persistence/live-refresh-control.ts"],
     "idleScaleToZeroPassed": ["backend/src/server.ts", "backend/src/auth-server.ts", "backend/src/runtime/*.ts", "backend/src/jobs/*.ts"],
-    "databasePerformancePassed": ["backend/src/persistence/*.ts", "backend/migrations/*.sql", "backend/src/jobs/*.ts"],
+    "databasePerformancePassed": ["backend/src/persistence/*.ts", "backend/migrations/*.sql", "backend/src/jobs/*.ts", "backend/src/providers/**/*.ts"],
 }
 COMMON_SOURCES = ["backend/package.json", "backend/package-lock.json", "backend/Dockerfile", "deploy/gcp-run/render.py"]
 MAX_EVIDENCE_BYTES = 64 * 1024

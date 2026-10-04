@@ -67,6 +67,43 @@ class DeployTests(unittest.TestCase):
             with self.assertRaises(release.ReleaseError):
                 deploy.verify_acceptance(config, record, root, now)
 
+    def test_provider_changes_invalidate_budget_and_performance_evidence_only(self):
+        cases = [
+            ("modify", "backend/src/providers/object-download-cache.ts"),
+            ("modify", "backend/src/providers/openstreetmap/geofabrik-downloader.ts"),
+            ("add", "backend/src/providers/new-source/nested/normalizer.ts"),
+            ("delete", "backend/src/providers/openstreetmap/geofabrik-downloader.ts"),
+        ]
+        affected = {"jobsBudgetVerified", "databasePerformancePassed"}
+        now = datetime(2026, 10, 4, 2, tzinfo=timezone.utc)
+        for operation, relative in cases:
+            with self.subTest(operation=operation, path=relative), tempfile.TemporaryDirectory() as directory:
+                root = Path(directory)
+                source_fixture(root)
+                path = root / relative
+                path.parent.mkdir(parents=True, exist_ok=True)
+                if operation != "add":
+                    path.write_text("reviewed provider behavior")
+                config = configuration()
+                record = acceptance(config, root)
+                deploy.verify_acceptance(config, record, root, now)
+                if operation == "delete":
+                    path.unlink()
+                else:
+                    path.write_text("changed provider download or normalization behavior")
+                hashes = deploy.acceptance_hashes(config, root)
+                changed = {gate for gate, digest in hashes.items()
+                           if digest != record["checks"][gate]["sourceSha256"]}
+                self.assertEqual(changed, affected)
+                with self.assertRaises(release.ReleaseError):
+                    deploy.verify_acceptance(config, record, root, now)
+                # Renewing only the two affected checks preserves the independent
+                # IP, recovery, live-task and idle-scale acceptance records.
+                renewed = copy.deepcopy(record)
+                for gate in affected:
+                    renewed["checks"][gate]["sourceSha256"] = hashes[gate]
+                deploy.verify_acceptance(config, renewed, root, now)
+
     def test_evidence_hash_and_generation_cannot_be_omitted(self):
         config = configuration()
         config["acceptanceEvidence"]["generation"] = "latest"

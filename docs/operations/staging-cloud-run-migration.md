@@ -145,7 +145,15 @@ Existing stable service traffic was preserved when applying these definitions.
   cancels rejected responses. The Swiss canonical download still redirects to
   a dated file on the same Geofabrik host. 218 unit/broker tests, 17 targeted
   downloader/cache tests, lint, typecheck and build passed for this correction;
-  deployment and a successful food import remain pending. The failed job did not
+  the corrected artifact `3367b57` is deployed privately as release
+  `e6e199e52f6f` (digest `sha256:cacaa7e3735545d1bac39f94033084e249dc1e0bdb05f57ae9b0210c7f7d2a0a`).
+  All eleven definition steps and the candidate preflight passed. Five searches
+  returned the same 50-candidate static hash as the VM in 1,224/408/406/407/400 ms;
+  readiness, exact API/Auth digest and forwarded-prefix resistance also passed.
+  A successful food import remains pending. The owner explicitly authorized one
+  early food retry on October 4 after the correction; this exception does not
+  change the normal 24-hour retry policy or reset the monthly attempt budget.
+  The failed job did not
   log its precise exception, so the Cloud Run failure reason itself was not
   captured beyond the failed food outcome; the redirect rejection is independently
   reproducible from the deployed validator and observed response.
@@ -184,6 +192,11 @@ the monthly budget checks; refresh artifact-bound checks and verify the final wr
 handoff. Only then
 switch DNS, check managed TLS and authenticated public searches, activate reviewed
 schedules and retire the obsolete paid VM resources after recovery verification.
+
+Provider source changes now invalidate the import-budget and database-performance
+acceptance fingerprints. Regression coverage checks modification, addition and
+deletion of provider files while retaining unrelated IP, recovery, live-task and
+idle evidence. A changed downloader must not silently reuse an old import check.
 
 Staging's `NEXTSTOP_RELEASES_ENABLED` override is false while migration is active,
 preventing the old main-branch workflow from redeploying the VM during handoff.
@@ -295,7 +308,8 @@ at 730 hours. This is a comparison rate, not a full monthly invoice.
 The dated list-price model in `deploy/gcp-run/cost-plan.json`, including hourly
 bounded cleanup, estimates EUR 42.04–59.13 net/month including 10% reserve, or
 EUR 50.02–70.36 with illustrative 19% VAT. New-runtime usage is not yet present in
-that billing period, so actual new charges are still unverified. Compare like tax
+that billing period, so actual new charges are still unverified. A fresh Billing
+UI check at 13:18 UTC still showed usage only through October 3. Compare like tax
 bases. The source VM and target temporarily
 overlap during migration. Stopping the VM alone would retain disk/address costs.
 Keep actual billing validation and the first full import as separate acceptance
