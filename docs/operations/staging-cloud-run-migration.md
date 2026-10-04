@@ -1,9 +1,10 @@
 # Staging Cloud Run migration record
 
 Date: 2026-10-04. This is an in-progress operator record, not a cutover receipt.
-DNS still points `api-staging.nextstop.tech` to the source VM. During the final
-handoff, its old app processes are stopped and the target gateway remains private,
-so staging is temporarily unavailable. Production is unchanged.
+DNS still points `api-staging.nextstop.tech` to the source VM. The existing VM
+installation has been restored and verified after the final handoff was blocked
+on public-gateway approval. The prepared Cloud Run target remains private.
+Production is unchanged.
 
 ## Isolated target
 
@@ -287,6 +288,25 @@ role on the staging gateway, requiring explicit owner approval for that exact
 public-access scope. No public binding was applied. The owner has been asked;
 bridge activation, DNS/TLS checks, schedule activation and VM retirement remain
 pending. The gate's application-level App Attest checks are not being disabled.
+
+While this permission remained pending, a separately reviewed restoration put
+the original VM installation back into service. It first rechecked that the
+Cloud Run gateway still rejected anonymous access, both private data states were
+empty and signing keys matched. It restarted only the five retained container
+IDs, verified all four loopback readiness endpoints against their original image
+digests and ran a real synthetic search. Only then did it restore the exact
+original Nginx configuration and pass local TLS/API/Auth/search checks. The
+database, earlier handoff journals and new Cloud Run corpus were preserved; no
+IAM change or database copy occurred. Staging is available through the original
+VM again. All four target schedules remain paused, and no VM resources have been
+retired. Temporary overlapping infrastructure costs therefore still apply.
+
+The completed freeze receipt is historical and cannot authorize a later bridge:
+the source writers are running again. After explicit gateway approval, capture a
+fresh source/container baseline and repeat the private-state/key checks and final
+writer handoff with new journals. Wait for both write endpoints to actually
+return 503 after Nginx reload before the bounded drain and stop. Do not reset or
+reuse the previous one-time execution markers.
 
 The remaining reviewed procedure applies only to the source VM
 `nextstop-backend` in `nextstop-tech-testing/europe-west3-a` and the reviewed Cloud
