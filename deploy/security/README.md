@@ -74,3 +74,37 @@ Sources: [UUID advisory and patched versions](https://github.com/uuidjs/uuid/sec
 [official Trivy release](https://github.com/aquasecurity/trivy/releases/tag/v0.75.0),
 [Trivy JSON report schema](https://github.com/aquasecurity/trivy/blob/v0.75.0/pkg/types/report.go),
 [Trivy vulnerability filtering](https://trivy.dev/docs/dev/configuration/filtering/).
+
+## Runtime image repair after the first real scan
+
+The first image scan of commit `09dcf33` correctly blocked release: 84 OS
+findings (21 distinct CVEs) and eight Node package findings met the HIGH/CRITICAL
+threshold. All eight Node findings came from the base image's global npm, not
+`/app/node_modules`. The complete scan remains an artifact of Backend run
+`37220071385`; the image was not accepted for release.
+
+The runtime now uses the official `node:24-alpine3.24` variant, with current
+Alpine security packages and `postgresql17-client`. Both build and runtime stages
+use the same musl-based distribution. PostgreSQL's server is not installed. The
+three required versioned paths (`psql`, `pg_dump`, `pg_restore`) remain available
+and their actual binaries must report major version 17 during the image build.
+The final image removes global npm/npx and Yarn, which are not used by any
+runtime entrypoint; the build stage retains npm for the locked dependency build.
+No package inventory or advisory metadata is removed to hide findings.
+
+The final image executes imports of its Google clients, App Attest verifier, PostgreSQL driver,
+Fastify and provider parser libraries as UID1000, plus zlib round-trip and German
+Intl/time-zone smoke checks. This catches missing shared libraries and common
+musl/runtime regressions before push. The unchanged container security policy
+still decides release acceptance; changing the base alone is not scan evidence.
+
+Trixie was evaluated first. It fixes several Bookworm findings, but Debian's
+tracker still lists unfixed ncurses/ACL/systemd findings there. Some Bookworm
+findings are source-package/component mismatches (for example the MiniZip code
+in CVE-2023-45853 is not built into the installed zlib binary). These observations
+were not turned into blanket exclusions. Alpine reduces the installed runtime
+components and must pass the same actual scan.
+
+Sources: [official Node 24 Alpine image](https://github.com/nodejs/docker-node/blob/main/24/alpine3.24/Dockerfile),
+[Alpine 3.24 signed package index](https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz),
+[Debian MiniZip component clarification](https://security-tracker.debian.org/tracker/CVE-2023-45853).
