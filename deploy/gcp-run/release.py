@@ -23,6 +23,37 @@ class ReleaseError(RuntimeError):
     pass
 
 
+SQL_LOG_FLAGS = {
+    "log_connections": "off", "log_disconnections": "off",
+    "log_min_duration_statement": "-1", "log_min_error_statement": "panic",
+    "log_parameter_max_length": "0", "log_parameter_max_length_on_error": "0",
+    "log_statement": "none",
+}
+
+
+def verify_sql_security(settings):
+    ip = settings.get("ipConfiguration", {})
+    # A connector may use the instance's public IP. That does not authorize
+    # direct client networks; sslMode is the authoritative TLS policy field.
+    if (settings.get("connectorEnforcement") != "REQUIRED"
+            or not isinstance(ip, dict) or ip.get("authorizedNetworks", []) != []
+            or ip.get("sslMode") != "TRUSTED_CLIENT_CERTIFICATE_REQUIRED"):
+        raise ReleaseError("Database connector, authorized-network or TLS policy differs from the reviewed boundary.")
+    if settings.get("storageAutoResize") is not False:
+        raise ReleaseError("Automatic database storage growth differs from the approved fixed-storage cost policy.")
+    rows = settings.get("databaseFlags")
+    if (not isinstance(rows, list) or any(not isinstance(row, dict)
+            or not isinstance(row.get("name"), str) or not isinstance(row.get("value"), str) for row in rows)):
+        raise ReleaseError("Database logging policy metadata is missing or malformed.")
+    flags = {row["name"]: row["value"] for row in rows}
+    if len(flags) != len(rows) or any(flags.get(name) != value for name, value in SQL_LOG_FLAGS.items()):
+        raise ReleaseError("Database logging redaction differs from the reviewed privacy policy.")
+    # PostgreSQL's default disables sampled statements; reject an explicit
+    # override without requiring Cloud SQL to serialize the unset default.
+    if flags.get("log_min_duration_sample", "-1") != "-1":
+        raise ReleaseError("Database sampled-statement logging would expose request data.")
+
+
 def gcloud(*args):
     return ["gcloud", *args, "--project=" + PROJECT, "--quiet", "--verbosity=error"]
 
@@ -157,7 +188,7 @@ def preflight(config, queue_exists, candidates_applied=False):
     if candidates_applied:
         verify_candidates(config)
     sql = json_command(gcloud("sql", "instances", "describe", CONNECTION.rsplit(":", 1)[1],
-                              "--format=json(databaseVersion,region,settings.tier,settings.dataDiskSizeGb,settings.dataDiskType,settings.availabilityType,settings.backupConfiguration)"))
+                              "--format=json(databaseVersion,region,settings.tier,settings.dataDiskSizeGb,settings.dataDiskType,settings.availabilityType,settings.backupConfiguration,settings.connectorEnforcement,settings.ipConfiguration,settings.databaseFlags,settings.storageAutoResize)"))
     settings = sql.get("settings", {})
     if (sql.get("databaseVersion"), sql.get("region"), settings.get("tier"), str(settings.get("dataDiskSizeGb")), settings.get("dataDiskType"), settings.get("availabilityType")) != (
         "POSTGRES_17", REGION, "db-g1-small", "50", "PD_SSD", "ZONAL",
@@ -166,6 +197,7 @@ def preflight(config, queue_exists, candidates_applied=False):
     backup = settings.get("backupConfiguration", {})
     if backup.get("enabled") or backup.get("pointInTimeRecoveryEnabled"):
         raise ReleaseError("Managed full backups or PITR conflict with the filtered report-data backup policy.")
+    verify_sql_security(settings)
     sink = json_command(gcloud("logging", "sinks", "describe", "_Default", "--format=json(exclusions)"))
     if not any(row.get("name") == LOG_EXCLUSION["name"] and row.get("filter") == LOG_EXCLUSION["filter"]
                and not row.get("disabled", False) for row in sink.get("exclusions", [])):

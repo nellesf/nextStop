@@ -44,6 +44,24 @@ live ingress spoof/isolation test is a release gate; a unit test alone does not
 establish the platform's forwarding behavior. No raw request URLs, client IPs,
 tokens or payloads belong in application diagnostics.
 
+Admission also has per-process budgets shared across source IPs: API120/minute
+(burst20), auth60/minute (burst10), reports12/minute (burst3), and invalid
+requests60/minute (burst10). The exact bodyless `/health` request always returns
+its small constant response without database or upstream work. Public traffic
+must not exhaust a budget and cause platform liveness probes to restart healthy
+instances; malformed health requests still use the invalid-request budget.
+These limits run before body parsing; unsupported paths, methods and malformed
+URLs do not bypass admission. Headers are limited to16KiB/64fields and URLs to256
+characters. The IP table is bounded, and rejected requests do not extend an
+entry's retention. All limits are in memory and reset on instance restart; they
+are not a distributed attack shield or a guaranteed spending cap.
+
+Release preflight checks Cloud SQL connector enforcement, trusted-client TLS,
+absence of authorized client networks, fixed storage and the reviewed SQL log
+redaction flags. Before the first public gateway grant, remove obsolete gateway
+revision tags so that older gateway implementations are not exposed through
+their tag URLs. Retain the private API/auth revisions needed for recovery.
+
 Before granting public invocation or sending any test request, install the exact
 `logging-exclusion.json` filter on the `_Default` log sink. It excludes the raw
 Cloud Run request log for all five services. The release preflight checks that the

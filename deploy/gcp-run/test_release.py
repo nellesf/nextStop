@@ -32,7 +32,15 @@ def metadata(config, applied=False):
         "project": {"projectId": render.PROJECT, "projectNumber": render.PROJECT_NUMBER},
         "services": [{"metadata": {"name": "nextstop-" + name}, "status": {"traffic": rows}} for name, rows in traffic.items()],
         "sql": {"databaseVersion": "POSTGRES_17", "region": render.REGION,
-                "settings": {"tier": "db-g1-small", "dataDiskSizeGb": "50", "dataDiskType": "PD_SSD", "availabilityType": "ZONAL", "backupConfiguration": {"enabled": False, "pointInTimeRecoveryEnabled": False}}},
+                "settings": {"tier": "db-g1-small", "dataDiskSizeGb": "50", "dataDiskType": "PD_SSD", "availabilityType": "ZONAL", "backupConfiguration": {"enabled": False, "pointInTimeRecoveryEnabled": False},
+                             "connectorEnforcement": "REQUIRED", "storageAutoResize": False,
+                             "ipConfiguration": {"ipv4Enabled": True, "requireSsl": True,
+                                                 "sslMode": "TRUSTED_CLIENT_CERTIFICATE_REQUIRED", "serverCaMode": "GOOGLE_MANAGED_INTERNAL_CA"},
+                             "databaseFlags": [{"name": name, "value": value} for name, value in {
+                                 "log_connections": "off", "log_disconnections": "off", "log_min_duration_statement": "-1",
+                                 "log_min_error_statement": "panic", "log_parameter_max_length": "0",
+                                 "log_parameter_max_length_on_error": "0", "log_statement": "none",
+                             }.items()]}},
         "sink": {"exclusions": [copy.deepcopy(render.LOG_EXCLUSION)]},
         "queues": [{"name": "projects/p/locations/r/queues/" + render.QUEUE}] if applied else [],
         "schedules": [], "executions": [], "iam": {"bindings": []},
@@ -72,6 +80,59 @@ def respond(data):
 
 
 class ReleaseTests(unittest.TestCase):
+    def test_sql_security_accepts_actual_connector_schema_and_empty_network_serialization(self):
+        for explicit_empty in (False, True):
+            with self.subTest(explicit_empty=explicit_empty):
+                config = configuration()
+                data = metadata(config)
+                settings = data["sql"]["settings"]
+                if explicit_empty:
+                    settings["ipConfiguration"]["authorizedNetworks"] = []
+                    # Deprecated requireSsl need not accompany authoritative sslMode.
+                    del settings["ipConfiguration"]["requireSsl"]
+                    settings["databaseFlags"].append({"name": "log_min_duration_sample", "value": "-1"})
+                settings["databaseFlags"].append({"name": "max_connections", "value": "100"})
+                with patch.object(release, "json_command", side_effect=respond(data)) as call:
+                    release.preflight(config, False)
+                sql_command = next(args.args[0] for args in call.call_args_list if args.args[0][1:4] == ["sql", "instances", "describe"])
+                for field in ("connectorEnforcement", "ipConfiguration", "databaseFlags", "storageAutoResize"):
+                    self.assertIn("settings." + field, sql_command[5])
+
+    def test_sql_security_drift_blocks_before_following_control_plane_calls(self):
+        faults = ("connector", "missing_connector", "networks", "malformed_networks", "tls", "missing_tls",
+                  "storage", "missing_storage", "missing_flags", "duplicate_flags", "malformed_flags", "sampled_statements")
+        for fault in faults:
+            with self.subTest(fault=fault):
+                config = configuration()
+                data = metadata(config)
+                settings = data["sql"]["settings"]
+                if fault == "connector": settings["connectorEnforcement"] = "NOT_REQUIRED"
+                elif fault == "missing_connector": del settings["connectorEnforcement"]
+                elif fault == "networks": settings["ipConfiguration"]["authorizedNetworks"] = [{"value": "0.0.0.0/0"}]
+                elif fault == "malformed_networks": settings["ipConfiguration"]["authorizedNetworks"] = None
+                elif fault == "tls": settings["ipConfiguration"]["sslMode"] = "ENCRYPTED_ONLY"
+                elif fault == "missing_tls": del settings["ipConfiguration"]["sslMode"]
+                elif fault == "storage": settings["storageAutoResize"] = True
+                elif fault == "missing_storage": del settings["storageAutoResize"]
+                elif fault == "missing_flags": del settings["databaseFlags"]
+                elif fault == "duplicate_flags": settings["databaseFlags"].append(copy.deepcopy(settings["databaseFlags"][0]))
+                elif fault == "malformed_flags": settings["databaseFlags"][0]["value"] = False
+                else: settings["databaseFlags"].append({"name": "log_min_duration_sample", "value": "100"})
+                with patch.object(release, "json_command", side_effect=respond(data)) as call, self.assertRaises(release.ReleaseError):
+                    release.preflight(config, False)
+                self.assertEqual(call.call_args.args[0][1:4], ["sql", "instances", "describe"])
+
+    def test_each_missing_or_changed_redaction_flag_blocks_release(self):
+        for name in release.SQL_LOG_FLAGS:
+            for missing in (False, True):
+                with self.subTest(name=name, missing=missing):
+                    settings = metadata(configuration())["sql"]["settings"]
+                    row = next(row for row in settings["databaseFlags"] if row["name"] == name)
+                    if missing: settings["databaseFlags"].remove(row)
+                    else: row["value"] = "unsafe-value"
+                    with self.assertRaisesRegex(release.ReleaseError, "logging redaction"):
+                        release.verify_sql_security(settings)
+
     def test_plan_has_no_iam_dns_migration_execution_or_schedule_mutations(self):
         config = configuration()
         with patch.object(release.subprocess, "run", side_effect=AssertionError("No calls permitted")):

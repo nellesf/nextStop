@@ -3,6 +3,9 @@ name: Backend
 on:
   push:
   pull_request:
+  workflow_dispatch:
+  schedule:
+    - cron: '23 5 * * *'
 
 permissions:
   contents: read
@@ -13,6 +16,7 @@ concurrency:
 
 jobs:
   test:
+    if: github.event_name != 'schedule'
     name: Lint, build, and test backend
     runs-on: ubuntu-latest
     timeout-minutes: 15
@@ -68,6 +72,7 @@ jobs:
           python3 -m unittest discover -s deploy/releases -p 'test_*.py'
           python3 -m unittest discover -s deploy/gcp -p 'test_*.py'
           python3 -m unittest discover -s deploy/gcp-run -p 'test_*.py'
+          python3 -m unittest discover -s deploy/security -p 'test_*.py'
           node --test ios/SimulatorAuthBroker/configuration.test.mjs
 
       - name: Unit tests
@@ -79,3 +84,32 @@ jobs:
         env:
           TEST_DATABASE_URL: postgresql://nextstop_test:nextstop_test@127.0.0.1:5432/nextstop_test
         run: npm run test:integration
+
+  security:
+    name: Dependency and container security gate
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v7
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+          cache: npm
+          cache-dependency-path: backend/package-lock.json
+      - name: Audit runtime and build dependencies (moderate or higher blocks)
+        working-directory: backend
+        run: |
+          npm ci
+          node --test ../deploy/security/gaxios-uuid.test.cjs
+          npm audit --omit=dev --audit-level=moderate
+          npm audit --audit-level=moderate
+      - name: Build current runtime image
+        run: docker build --pull --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" --tag nextstop-security:$GITHUB_SHA backend
+      - name: Scan OS and libraries (high or critical blocks, including unfixed)
+        run: python3 deploy/security/scan-image.py --image nextstop-security:$GITHUB_SHA --commit "$GITHUB_SHA" --output security-results/image.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: container-security-${{ github.sha }}
+          path: security-results/
+          if-no-files-found: warn

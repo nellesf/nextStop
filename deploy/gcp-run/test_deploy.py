@@ -67,6 +67,20 @@ class DeployTests(unittest.TestCase):
             with self.assertRaises(release.ReleaseError):
                 deploy.verify_acceptance(config, record, root, now)
 
+    def test_admission_policy_change_requires_new_client_ip_evidence(self):
+        config = configuration()
+        with tempfile.TemporaryDirectory() as directory:
+            root = Path(directory)
+            source_fixture(root)
+            record = acceptance(config, root)
+            (root / "backend/src/api/gateway-admission.ts").write_text("changed admission policy")
+            hashes = deploy.acceptance_hashes(config, root)
+            self.assertEqual({gate for gate, digest in hashes.items()
+                              if digest != record["checks"][gate]["sourceSha256"]},
+                             {"clientIPIsolationPassed"})
+            with self.assertRaises(release.ReleaseError):
+                deploy.verify_acceptance(config, record, root)
+
     def test_provider_changes_invalidate_budget_and_performance_evidence_only(self):
         cases = [
             ("modify", "backend/src/providers/object-download-cache.ts"),

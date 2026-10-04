@@ -47,7 +47,14 @@ jobs:
       - uses: google-github-actions/setup-gcloud@v3
       - name: Build immutable image once
         id: image
-        run: python3 deploy/gcp/build-artifact.py --commit "$RELEASE_COMMIT" --github-output "$GITHUB_OUTPUT"
+        run: python3 deploy/gcp/build-artifact.py --commit "$RELEASE_COMMIT" --github-output "$GITHUB_OUTPUT" --security-output "$RUNNER_TEMP/release-security/image.json"
+      - name: Preserve exact release-image security report
+        uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: release-image-security-${{ github.event.workflow_run.head_sha }}
+          path: ${{ runner.temp }}/release-security/
+          if-no-files-found: warn
       - uses: google-github-actions/auth@v3
         if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'
         with:

@@ -24,7 +24,7 @@ import render
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_ACCOUNT = "nextstop-staging-deploy@nextstop-tech-testing.iam.gserviceaccount.com"
 OPERATOR_GATES = {
-    "clientIPIsolationPassed": ["backend/src/api/cloud-gateway.ts", "backend/src/gateway-server.ts", "backend/src/runtime/cloud-identity-tokens.ts"],
+    "clientIPIsolationPassed": ["backend/src/api/cloud-gateway.ts", "backend/src/api/gateway-admission.ts", "backend/src/gateway-server.ts", "backend/src/runtime/cloud-identity-tokens.ts"],
     "filteredBackupRestorePassed": ["backend/src/jobs/database-backup.ts", "backend/operations/*.sql", "backend/migrations/*.sql", "backend/src/persistence/database.ts", "deploy/gcp-run/database-*.sql"],
     "jobsBudgetVerified": ["backend/src/jobs/*.ts", "backend/src/providers/**/*.ts", "backend/migrations/0018_monthly_import_budget.sql"],
     "liveTaskCompatibilityPassed": ["backend/src/application/cloud-tasks-refresh-signal.ts", "backend/src/jobs/cloud-live-refresh.ts", "backend/src/live-refresh-server.ts", "backend/src/persistence/live-refresh-control.ts"],

@@ -114,3 +114,78 @@ void test("IAM-only simulator broker issues bounded simulator tokens and rejects
   for(let i=1;i<30;i++) assert.equal((await app.inject({ method: "POST", url: "/token" })).statusCode,200);
   assert.equal((await app.inject({ method: "POST", url: "/token" })).statusCode,429);
 });
+
+void test("gateway rejects distributed traffic at the shared ceiling without disabling liveness", async (t) => {
+  let now = 0, calls = 0;
+  const app = createCloudGateway({ origins, identityToken, now: () => now,
+    fetch: () => { calls += 1; return Promise.resolve(new Response("{}")); } });
+  t.after(() => app.close());
+  for (let i = 0; i < 20; i++) {
+    assert.equal((await app.inject({ method: "POST", url: "/v1/charging-parks/search", payload: {},
+      headers: { "x-forwarded-for": `192.0.2.${i}` } })).statusCode, 200);
+  }
+  for (const url of ["/v1/charging-parks/search", "/v1/charging-parks/availability", "/ready"]) {
+    assert.equal((await app.inject({ method: url === "/ready" ? "GET" : "POST", url,
+      headers: { "x-forwarded-for": "198.51.100.1" } })).statusCode, 429);
+  }
+  assert.equal((await app.inject({ method: "GET", url: "/health" })).statusCode, 200);
+  assert.equal(calls, 20);
+  now = 500;
+  assert.equal((await app.inject({ method: "GET", url: "/ready",
+    headers: { "x-forwarded-for": "198.51.100.1" } })).statusCode, 200);
+  assert.equal(calls, 21);
+});
+
+void test("saturating every public budget cannot fail liveness or cause upstream work", async (t) => {
+  let calls = 0, identityCalls = 0;
+  const app = createCloudGateway({ origins, identityToken: () => { identityCalls += 1; return identityToken(); }, now: () => 0,
+    fetch: () => { calls += 1; return Promise.resolve(new Response("{}")); } });
+  t.after(() => app.close());
+  for (const [url, count] of [["/v1/charging-parks/search",20], ["/v1/auth/app-attest/challenge",10],
+    ["/v1/error-reports",3], ["/token",10]] as const) {
+    for (let i = 0; i < count; i++) assert.equal((await app.inject({ method: "POST", url,
+      payload: "invalid-json", headers: { "content-type": "application/json", "x-forwarded-for": `192.0.2.${i}` } })).statusCode,
+    url === "/token" ? 404 : 200);
+    assert.equal((await app.inject({ method: "POST", url, payload: {},
+      headers: { "x-forwarded-for": "198.51.100.1" } })).statusCode, 429);
+  }
+  assert.equal(calls, 33); assert.equal(identityCalls, 33);
+  for (let i = 0; i < 100; i++) {
+    const reply = await app.inject({ method: "GET", url: "/health",
+      ...(i % 2 === 0 ? {} : { headers: { "x-forwarded-for": `203.0.113.${i}` } }) });
+    assert.equal(reply.statusCode, 200); assert.equal(reply.body, '{"status":"ok"}');
+  }
+  assert.equal((await app.inject({ method: "GET", url: "/health?x=1" })).statusCode, 429);
+  assert.equal((await app.inject({ method: "GET", url: "/health", payload: "x".repeat(1024 * 1024) })).statusCode, 429);
+  assert.equal(calls, 33); assert.equal(identityCalls, 33);
+});
+
+void test("unknown, wrong-method and malformed paths share admission before any body parsing", async (t) => {
+  let calls = 0;
+  const app = createCloudGateway({ origins, identityToken, now: () => 0,
+    fetch: () => { calls += 1; return Promise.resolve(new Response("{}")); } });
+  t.after(() => app.close());
+  for (const [url, method, expected] of [["/token", "POST", 404], ["/health", "POST", 404],
+    ["/health?x=1", "GET", 400], ["/bad%ZZ", "GET", 400], ["/v1/charging-parks/search?x=1", "POST", 400]] as const) {
+    const reply = await app.inject({ method, url, payload: "invalid-json",
+      headers: { "content-type": "application/json", "x-forwarded-for": "192.0.2.1" } });
+    assert.equal(reply.statusCode, expected); assert.doesNotMatch(reply.body, /invalid-json|bad%ZZ/u);
+  }
+  assert.equal((await app.inject({ method: "GET", url: "/bad%ZZ", headers: { "x-forwarded-for": "192.0.2.1" } })).statusCode, 429);
+  assert.equal((await app.inject({ method: "GET", url: "/health", headers: { "x-forwarded-for": "192.0.2.1" } })).statusCode, 200);
+  assert.equal(calls, 0);
+});
+
+void test("oversized headers and body-bearing health checks never contact upstreams", async (t) => {
+  let calls = 0;
+  const app = createCloudGateway({ origins, identityToken, now: () => 0,
+    fetch: () => { calls += 1; return Promise.resolve(new Response("{}")); } });
+  t.after(() => app.close());
+  for (const headers of [{ "x-padding": "x".repeat(16 * 1024) },
+    Object.fromEntries(Array.from({ length: 65 }, (_, i) => [`x-extra-${i}`, "x"]))]) {
+    assert.equal((await app.inject({ method: "POST", url: "/v1/charging-parks/search", headers, payload: "invalid-json" })).statusCode, 400);
+  }
+  assert.equal((await app.inject({ method: "GET", url: "/health", payload: "x".repeat(1024 * 1024) })).statusCode, 400);
+  assert.equal((await app.inject({ method: "GET", url: `/${"x".repeat(256)}` })).statusCode, 400);
+  assert.equal(calls, 0);
+});

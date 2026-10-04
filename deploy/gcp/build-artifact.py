@@ -8,6 +8,7 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import tempfile
 import sys
 import urllib.parse
 
@@ -109,7 +110,13 @@ def verify_revision(image: str, commit: str, run) -> None:
         raise BuildArtifactError("Immutable image revision does not match the tested commit.")
 
 
-def build_artifact(commit: str, config: dict, *, run=run_command, registry=None) -> str:
+def security_scan(image: str, commit: str, run, output: Path) -> None:
+    run([sys.executable, str(ROOT / "deploy/security/scan-image.py"), "--image", image,
+         "--commit", commit, "--output", str(output)], timeout=1200)
+
+
+def build_artifact(commit: str, config: dict, *, run=run_command, registry=None,
+                   security_output: Path | None = None) -> str:
     if not COMMIT_PATTERN.fullmatch(commit):
         raise BuildArtifactError("A complete Git commit is required.")
     host, repository, package = registry_resources(config)
@@ -122,8 +129,13 @@ def build_artifact(commit: str, config: dict, *, run=run_command, registry=None)
     run(["gcloud", "auth", "configure-docker", host, "--quiet"])
     if digest is None:
         tag = config["registry"] + ":" + commit
-        run(["docker", "build", "--label", "org.opencontainers.image.revision=" + commit,
+        run(["docker", "build", "--pull", "--label", "org.opencontainers.image.revision=" + commit,
              "--tag", tag, "backend"], timeout=1200)
+        if security_output is not None:
+            security_scan(tag, commit, run, security_output.with_suffix(".prepush.json"))
+        else:
+            with tempfile.TemporaryDirectory(prefix="nextstop-prepush-security-") as temporary:
+                security_scan(tag, commit, run, Path(temporary) / "scan.json")
         # Recheck before the first registry mutation, including after a long build.
         require_immutable_repository(registry, repository)
         run(["docker", "push", tag], timeout=600)
@@ -133,6 +145,12 @@ def build_artifact(commit: str, config: dict, *, run=run_command, registry=None)
     image = config["registry"] + "@" + digest
     validate_image(image, config)
     verify_revision(image, commit, run)
+    # This runs even for an existing immutable commit tag: advisory data changes.
+    if security_output is not None:
+        security_scan(image, commit, run, security_output)
+    else:
+        with tempfile.TemporaryDirectory(prefix="nextstop-release-security-") as temporary:
+            security_scan(image, commit, run, Path(temporary) / "scan.json")
     return image
 
 
@@ -140,9 +158,10 @@ def main() -> int:
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("--commit", required=True)
     parser.add_argument("--github-output", type=Path)
+    parser.add_argument("--security-output", type=Path, default=ROOT / "security-results/release-image.json")
     args = parser.parse_args()
     try:
-        image = build_artifact(args.commit, configuration("staging"))
+        image = build_artifact(args.commit, configuration("staging"), security_output=args.security_output)
         if args.github_output:
             with args.github_output.open("a") as output:
                 output.write("ref=" + image + "\n")

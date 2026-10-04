@@ -1,0 +1,55 @@
+# Submit with --no-source and a full _COMMIT. No push occurs before both security gates.
+# Capture the final bound JSON receipt in Cloud Build logs, alongside build.results.images.
+substitutions:
+  _REGISTRY: europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend
+  _COMMIT: REQUIRED_FULL_GIT_COMMIT
+steps:
+  - id: verify-source
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    env: ['GIT_TERMINAL_PROMPT=0']
+    args:
+      - -ceu
+      - |
+        [[ "${_COMMIT}" =~ ^[0-9a-f]{40}$$ ]]
+        git init .
+        git remote add origin https://github.com/nellesf/nextStop.git
+        git sparse-checkout init --cone
+        git sparse-checkout set backend deploy/security
+        git fetch --depth=1 --filter=blob:none origin "${_COMMIT}"
+        git checkout --detach "${_COMMIT}"
+        test "$$(git rev-parse HEAD)" = "${_COMMIT}"
+  - id: npm-security
+    name: node:24-bookworm-slim
+    dir: backend
+    entrypoint: bash
+    args: ['-ceu', 'npm ci; node --test ../deploy/security/gaxios-uuid.test.cjs; npm audit --omit=dev --audit-level=moderate; npm audit --audit-level=moderate']
+  - id: build
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '--pull', '--platform', 'linux/amd64', '--label', 'org.opencontainers.image.revision=${_COMMIT}', '--tag', '${_REGISTRY}:${_COMMIT}', 'backend']
+  - id: export
+    name: gcr.io/cloud-builders/docker
+    args: ['save', '--output', '/workspace/image.tar', '${_REGISTRY}:${_COMMIT}']
+  - id: image-security-before-push
+    name: python:3.13-slim-bookworm
+    entrypoint: python3
+    args: ['deploy/security/scan-image.py', '--archive', '/workspace/image.tar', '--commit', '${_COMMIT}', '--output', '/workspace/security-results/image.json']
+  - id: push
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGISTRY}:${_COMMIT}']
+  - id: inspect-pushed-image
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker image inspect '${_REGISTRY}:${_COMMIT}' > /workspace/security-results/inspection.json
+        docker image inspect --format '{{index .RepoDigests 0}}' '${_REGISTRY}:${_COMMIT}' > /workspace/security-results/image.ref
+  - id: bind-security-receipt-to-digest
+    name: python:3.13-slim-bookworm
+    entrypoint: bash
+    args: ['-ceu', 'python3 deploy/security/scan-image.py --bind-inspection /workspace/security-results/inspection.json --image "$$(cat /workspace/security-results/image.ref)" --output /workspace/security-results/image.json']
+images: ['${_REGISTRY}:${_COMMIT}']
+timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY

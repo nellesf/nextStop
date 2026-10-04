@@ -1,9 +1,13 @@
 import { isIP } from "node:net";
 import { randomUUID } from "node:crypto";
 import Fastify, { type FastifyInstance } from "fastify";
+import { GatewayAdmission, type GatewayAdmissionClass } from "./gateway-admission.js";
 
 type Backend = "api" | "auth";
-type AdmissionClass = "api" | "auth" | "reports";
+type AdmissionClass = Extract<GatewayAdmissionClass, "api" | "auth" | "reports">;
+const maximumHeaderBytes = 16 * 1024;
+const maximumHeaderFields = 64;
+const maximumURLLength = 256;
 interface GatewayRoute { readonly path: string; readonly targetPath?: string; readonly backend: Backend;
   readonly methods: readonly ("GET" | "POST" | "DELETE")[]; readonly limit: number; readonly admission: AdmissionClass }
 const routes: readonly GatewayRoute[] = [
@@ -36,33 +40,18 @@ export function gatewayOrigin(value: string): string {
 
 /** Direct Cloud Run ingress appends the peer address. Untrusted prefixes are never used. */
 export function gatewayClientAddress(forwarded: string | string[] | undefined, peer: string): string {
-  const last = typeof forwarded === "string" ? forwarded.split(",").at(-1)?.trim() : undefined;
+  const last = typeof forwarded === "string" ? forwarded.slice(forwarded.lastIndexOf(",") + 1).trim() : undefined;
   return last !== undefined && isIP(last) !== 0 ? last : peer;
 }
 
-class IngressAdmission {
-  private readonly entries = new Map<string, { tokens: number; at: number }>();
-  constructor(private readonly now: () => number) {}
-  allows(address: string, group: AdmissionClass): boolean {
-    const now = this.now();
-    const key = `${group}:${address}`;
-    const capacity = group === "reports" ? 3 : 5;
-    const refill = group === "api" ? 1 / 1000 : group === "auth" ? 12 / 60_000 : 6 / 60_000;
-    let entry = this.entries.get(key);
-    if (entry === undefined) {
-      if (this.entries.size >= 10_000) {
-        for (const [oldKey, old] of this.entries) if (now - old.at > 300_000) this.entries.delete(oldKey);
-        if (this.entries.size >= 10_000) return false;
-      }
-      entry = { tokens: capacity, at: now };
-      this.entries.set(key, entry);
-    }
-    entry.tokens = Math.min(capacity, entry.tokens + Math.max(0, now - entry.at) * refill);
-    entry.at = now;
-    if (entry.tokens < 1) return false;
-    entry.tokens -= 1;
-    return true;
+function boundedHeaders(headers: readonly string[]): boolean {
+  if (headers.length > maximumHeaderFields * 2) return false;
+  let bytes = 0;
+  for (const value of headers) {
+    bytes += Buffer.byteLength(value) + 2;
+    if (bytes > maximumHeaderBytes) return false;
   }
+  return true;
 }
 
 export function createCloudGateway(dependencies: GatewayDependencies): FastifyInstance {
@@ -77,14 +66,50 @@ export function createCloudGateway(dependencies: GatewayDependencies): FastifyIn
     }
   }
   const transport = dependencies.fetch ?? fetch;
-  const admission = new IngressAdmission(dependencies.now ?? Date.now);
-  const app = Fastify({ logger: false, bodyLimit: 512 * 1024, requestTimeout: 10_000 });
+  const admission = new GatewayAdmission(dependencies.now ?? Date.now);
+  const app = Fastify({ logger: false, bodyLimit: 512 * 1024, requestTimeout: 10_000,
+    http: { maxHeaderSize: maximumHeaderBytes, headersTimeout: 10_000 },
+    routerOptions: {
+      // All public routes reject query strings, so never parse attacker-supplied query objects.
+      querystringParser: () => ({}),
+      onBadUrl: (_path, request, response) => {
+        // Router-level malformed URLs bypass Fastify's normal onRequest hook.
+        const address = gatewayClientAddress(request.headers["x-forwarded-for"], request.socket.remoteAddress ?? "unknown");
+        const status = admission.allows(address, "invalid") ? 400 : 429;
+        response.writeHead(status, { "Content-Type": "application/problem+json", "Cache-Control": "no-store",
+          ...(status === 429 ? { "Retry-After": "5" } : {}) });
+        response.end(JSON.stringify(problem(status)));
+      },
+    },
+  });
   app.removeAllContentTypeParsers();
   app.addContentTypeParser("application/json", { parseAs: "buffer" }, (_request, body, done) => done(null, body));
-  app.addHook("onRequest", async (_request, reply) => {
+  app.addHook("onRequest", async (request, reply) => {
     reply.header("Cache-Control", "no-store").header("X-Content-Type-Options", "nosniff")
       .header("Referrer-Policy", "no-referrer").header("Strict-Transport-Security", "max-age=31536000")
       .header("X-Edge-Request-ID", randomUUID());
+    const route = routes.find((candidate) => candidate.path === request.routeOptions.url);
+    const health = request.routeOptions.url === "/health";
+    const exactPath = request.url === (health ? "/health" : route?.path);
+    const bodyless = health || route?.limit === 0;
+    const unexpectedBody = bodyless && (request.headers["transfer-encoding"] !== undefined ||
+      (request.headers["content-length"] !== undefined && request.headers["content-length"] !== "0"));
+    const invalid = !exactPath || unexpectedBody || request.headers["content-encoding"] !== undefined ||
+      request.url.length > maximumURLLength || !boundedHeaders(request.raw.rawHeaders);
+    // Public callers must not be able to exhaust Cloud Run's own liveness probe
+    // and force a restart (which would also reset every admission budget).
+    // Only this exact bodyless, bounded request does no DB/identity/upstream work.
+    if (health && !invalid) return;
+    const group = invalid ? "invalid" : route?.admission ?? "invalid";
+    const address = gatewayClientAddress(request.headers["x-forwarded-for"], request.ip);
+    if (!admission.allows(address, group)) {
+      return reply.status(429).header("Retry-After", group === "reports" ? "60" : "5").send(problem(429));
+    }
+    // Reject unknown/invalid routes before buffering or parsing their request body.
+    if (invalid) {
+      const status = route !== undefined || health || request.url.length > maximumURLLength ? 400 : 404;
+      return reply.status(status).send(problem(status));
+    }
   });
   app.setErrorHandler((error, _request, reply) => {
     const status = typeof error === "object" && error !== null && "statusCode" in error &&
@@ -95,15 +120,6 @@ export function createCloudGateway(dependencies: GatewayDependencies): FastifyIn
   app.get("/health", () => ({ status: "ok" }));
   let active = 0;
   for (const route of routes) app.route({ method: [...route.methods], url: route.path, bodyLimit: Math.max(1, route.limit),
-    onRequest: async (request, reply) => {
-      if (request.url !== route.path || request.headers["content-encoding"] !== undefined) {
-        return reply.status(400).send(problem(400));
-      }
-      const address = gatewayClientAddress(request.headers["x-forwarded-for"], request.ip);
-      if (!admission.allows(address, route.admission)) {
-        return reply.status(429).header("Retry-After", route.admission === "reports" ? "60" : "5").send(problem(429));
-      }
-    },
     handler: async (request, reply) => {
       if (active >= 32) return reply.status(429).header("Retry-After", "5").send(problem(429));
       active += 1;
