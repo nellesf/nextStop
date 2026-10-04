@@ -1,7 +1,9 @@
 # Staging Cloud Run migration record
 
 Date: 2026-10-04. This is an in-progress operator record, not a cutover receipt.
-The source VM still serves `api-staging.nextstop.tech`. Production is unchanged.
+DNS still points `api-staging.nextstop.tech` to the source VM. During the final
+handoff, its old app processes are stopped and the target gateway remains private,
+so staging is temporarily unavailable. Production is unchanged.
 
 ## Isolated target
 
@@ -191,7 +193,23 @@ Existing stable service traffic was preserved when applying these definitions.
   only EXECUTE on this function, not general MAINTAIN privileges. Real PostgreSQL
   regression tests cover stale estimates, both publication paths, restricted
   worker permissions and preservation of the old active version on failure.
-  Deployment and backup-to-new-schema recovery checks remain pending.
+  Commit `0a0d8c232b713cecacc96adb10c76d48ac566761` was built and verified as
+  digest `sha256:eeeead40a7e3558a563e345039c82f258503e864d17ec0796c67f100f4a75342`,
+  release `3c4afa8ccb29`. Migration job `nextstop-migrate-4tjzc` succeeded at
+  14:17:37 UTC, followed by all eleven candidate-definition steps. The real
+  restricted worker executed the function in Cloud SQL; the API role received
+  SQLSTATE 42501. The subsequent API-role query returned 31 rows in 140 ms with
+  8,351 buffer hits. Three concurrent candidate API searches returned the same
+  static result hash in 642/835/757 ms. Exact-image readiness, synthetic search,
+  forwarded-prefix resistance and the full candidate preflight passed.
+- A second full restore rehearsal verified the existing generation-pinned
+  migration-18 backup against its original 26-table count baseline, then applied
+  only migration 0019. All non-registry counts remained identical; the registry
+  changed explicitly from 18 to 19. Current grants, actual worker execution and
+  API denial passed, as did three API-role SQL searches (51/34/51 rows in
+  347/93/111 ms). The rehearsal took 305 seconds, including 269 seconds restoring
+  the archive, and removed its private local cluster. The same local-versus-Cloud
+  PostGIS version limitation applies. No new import or archive download was needed.
 - Monitoring observed zero active and zero idle instances for every service:
   API at 10:29 UTC, live at 10:30, and auth/broker/gateway at 10:37. These are
   explicit per-service zero measurements, not missing time-series points.
@@ -210,7 +228,16 @@ Existing stable service traffic was preserved when applying these definitions.
   `info-error-report` was not reachable; the subsequent run passed without a
   Swift source change. This intermittent failure remains a recorded limitation.
   All three CI workflows also passed for commits `e5592de`, `42ac95d` and
-  downloader artifact `3367b57`.
+  downloader artifact `3367b57`, and for statistics artifact `0a0d8c2`.
+- The six operator acceptance gates were reconciled against their actual source
+  and stable configuration scopes. IP isolation, live-task behavior and idle-zero
+  measurements retain their unchanged earlier scopes; recovery and database
+  performance use the new checks above. The receipt explicitly retains the CPU
+  histogram and delayed-billing limitations. The acceptance document was uploaded
+  to the private evidence prefix and read back by exact generation and SHA-256.
+  `deploy/environments/staging-cloud-run.json` pins the actual resources, numeric
+  secret versions and this evidence. All five stable Cloud Run services now use
+  release `3c4afa8ccb29`; the gateway remains private pending writer handoff.
 - Deployment IAM is restricted to the existing stage services/jobs/queue,
   runtime identities, SQL metadata and the acceptance-evidence object prefix.
   It grants no direct secret payload or database-backup reads. Fourteen actual
@@ -223,9 +250,9 @@ Existing stable service traffic was preserved when applying these definitions.
 
 ## Remaining acceptance work
 
-The authorized food retry and monthly-budget checks succeeded. Complete the
-statistics correction's deployment and recovery check, refresh artifact-bound
-checks and verify the final writer handoff. Only then
+The authorized food retry, monthly-budget checks, statistics correction,
+candidate checks and backup upgrade rehearsal succeeded. Finalize the evidence
+record and verify the final writer handoff. Only then
 switch DNS, check managed TLS and authenticated public searches, activate reviewed
 schedules and retire the obsolete paid VM resources after recovery verification.
 
@@ -240,9 +267,28 @@ The production release control is unchanged. The feature branch has not been
 merged into main, and the new Cloud Run workflow must not be enabled before its
 configuration and actual acceptance evidence have been committed and reviewed.
 
-## Pending final writer handoff and DNS bridge
+## Final writer handoff and pending DNS bridge
 
-This procedure is prepared, not executed. It applies only to the source VM
+The source write freeze was installed. Its first operator check stopped before
+any app container was stopped; a read-only inspection confirmed the exact freeze
+configuration, all five original running app containers, a healthy unchanged
+database and no remaining draining Nginx workers. Both frozen write endpoints
+then returned 503. The original probe's precise failure was not captured, so a
+reload timing race is a hypothesis, not an established root cause.
+
+A separately reviewed, journaled continuation accepted only that exact partial
+state. It stopped the five source app containers without reinstalling Nginx or
+resetting earlier markers. Both databases' three private tables were empty,
+source writer connections were zero, signing keys and App ID matched, and the
+database and Nginx remained running. No private data export was needed.
+
+Automatic approval review then rejected granting `allUsers` the `roles/run.invoker`
+role on the staging gateway, requiring explicit owner approval for that exact
+public-access scope. No public binding was applied. The owner has been asked;
+bridge activation, DNS/TLS checks, schedule activation and VM retirement remain
+pending. The gate's application-level App Attest checks are not being disabled.
+
+The remaining reviewed procedure applies only to the source VM
 `nextstop-backend` in `nextstop-tech-testing/europe-west3-a` and the reviewed Cloud
 Run/Cloud SQL target in the same project, region `europe-west1`. Production is
 unchanged. Keep the staging CI release override false and the four target

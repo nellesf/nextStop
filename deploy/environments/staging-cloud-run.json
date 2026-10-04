@@ -1,0 +1,163 @@
+{
+  "environment": "staging",
+  "project": "nextstop-tech-testing",
+  "region": "europe-west1",
+  "backendImage": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:eeeead40a7e3558a563e345039c82f258503e864d17ec0796c67f100f4a75342",
+  "commit": "0a0d8c232b713cecacc96adb10c76d48ac566761",
+  "cloudSqlConnectionName": "nextstop-tech-testing:europe-west1:nextstop-staging",
+  "cacheBucket": "nextstop-tech-testing-download-cache",
+  "backupBucket": "nextstop-tech-testing-database-backups",
+  "appAttestAppId": "MR3P73S995.de.nextstop.app",
+  "secretVersions": {
+    "api-database-url": "1",
+    "auth-database-url": "1",
+    "support-database-url": "1",
+    "worker-database-url": "1",
+    "migrator-database-url": "1",
+    "backup-database-url": "1",
+    "snapshot-signing-key": "1",
+    "access-token-signing-key": "1"
+  },
+  "retainedTraffic": {
+    "api": [
+      {
+        "revisionName": "nextstop-api-1c907fe7c046",
+        "percent": 0,
+        "tag": "r-1c907fe7c046"
+      },
+      {
+        "revisionName": "nextstop-api-3c4afa8ccb29",
+        "percent": 100,
+        "tag": "r-3c4afa8ccb29"
+      },
+      {
+        "revisionName": "nextstop-api-66307ff9d3a7",
+        "percent": 0,
+        "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-api-a2939e6f73e9",
+        "percent": 0,
+        "tag": "r-a2939e6f73e9"
+      },
+      {
+        "revisionName": "nextstop-api-e6e199e52f6f",
+        "percent": 0,
+        "tag": "r-e6e199e52f6f"
+      }
+    ],
+    "auth": [
+      {
+        "revisionName": "nextstop-auth-1c907fe7c046",
+        "percent": 0,
+        "tag": "r-1c907fe7c046"
+      },
+      {
+        "revisionName": "nextstop-auth-3c4afa8ccb29",
+        "percent": 100,
+        "tag": "r-3c4afa8ccb29"
+      },
+      {
+        "revisionName": "nextstop-auth-66307ff9d3a7",
+        "percent": 0,
+        "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-auth-a2939e6f73e9",
+        "percent": 0,
+        "tag": "r-a2939e6f73e9"
+      },
+      {
+        "revisionName": "nextstop-auth-e6e199e52f6f",
+        "percent": 0,
+        "tag": "r-e6e199e52f6f"
+      }
+    ],
+    "broker": [
+      {
+        "revisionName": "nextstop-broker-1c907fe7c046",
+        "percent": 0,
+        "tag": "r-1c907fe7c046"
+      },
+      {
+        "revisionName": "nextstop-broker-3c4afa8ccb29",
+        "percent": 100,
+        "tag": "r-3c4afa8ccb29"
+      },
+      {
+        "revisionName": "nextstop-broker-66307ff9d3a7",
+        "percent": 0,
+        "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-broker-a2939e6f73e9",
+        "percent": 0,
+        "tag": "r-a2939e6f73e9"
+      },
+      {
+        "revisionName": "nextstop-broker-e6e199e52f6f",
+        "percent": 0,
+        "tag": "r-e6e199e52f6f"
+      }
+    ],
+    "gateway": [
+      {
+        "revisionName": "nextstop-gateway-1c907fe7c046",
+        "percent": 0,
+        "tag": "r-1c907fe7c046"
+      },
+      {
+        "revisionName": "nextstop-gateway-3c4afa8ccb29",
+        "percent": 100,
+        "tag": "r-3c4afa8ccb29"
+      },
+      {
+        "revisionName": "nextstop-gateway-66307ff9d3a7",
+        "percent": 0,
+        "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-gateway-a2939e6f73e9",
+        "percent": 0,
+        "tag": "r-a2939e6f73e9"
+      },
+      {
+        "revisionName": "nextstop-gateway-e6e199e52f6f",
+        "percent": 0,
+        "tag": "r-e6e199e52f6f"
+      }
+    ],
+    "live": [
+      {
+        "revisionName": "nextstop-live-1c907fe7c046",
+        "percent": 0,
+        "tag": "r-1c907fe7c046"
+      },
+      {
+        "revisionName": "nextstop-live-3c4afa8ccb29",
+        "percent": 100,
+        "tag": "r-3c4afa8ccb29"
+      },
+      {
+        "revisionName": "nextstop-live-66307ff9d3a7",
+        "percent": 0,
+        "tag": "r-66307ff9d3a7"
+      },
+      {
+        "revisionName": "nextstop-live-a2939e6f73e9",
+        "percent": 0,
+        "tag": "r-a2939e6f73e9"
+      },
+      {
+        "revisionName": "nextstop-live-e6e199e52f6f",
+        "percent": 0,
+        "tag": "r-e6e199e52f6f"
+      }
+    ]
+  },
+  "acceptanceEvidence": {
+    "object": "operations/evidence/0e9f5653bdb270ae2dab2004e7338671ac12552f1744925aed8414738fb78229.json",
+    "generation": "1791123921234352",
+    "sha256": "0e9f5653bdb270ae2dab2004e7338671ac12552f1744925aed8414738fb78229"
+  }
+}
