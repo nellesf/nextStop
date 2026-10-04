@@ -12,6 +12,13 @@ const defaultDatasetURLs = [
 ] as const;
 const defaultMaximumDatasetBytes = 8 * 1_024 * 1_024 * 1_024;
 const requestTimeoutMilliseconds = 30 * 60 * 1_000;
+const maximumRedirects = 5;
+// Geofabrik redirects this exact public extract to GWDG; its mirror inventory
+// confirms the path: https://ftp5.gwdg.de/pub/misc/openstreetmap/download.geofabrik.de/
+const germanyMirror = {
+  source: "https://download.geofabrik.de/europe/germany-latest.osm.pbf",
+  target: "https://ftp5.gwdg.de/pub/misc/openstreetmap/download.geofabrik.de/germany-latest.osm.pbf",
+} as const;
 const userAgent = "nextStop-backend/0.1 (+https://github.com/nellesf/nextStop)";
 
 export interface GeofabrikDatasetArtifact {
@@ -81,26 +88,29 @@ export async function downloadConfiguredGeofabrikDatasets(
 async function downloadObject(url: URL, cache: ObjectDownloadCache, options: GeofabrikDownloadOptions): Promise<GeofabrikDatasetArtifact> {
   const maximum = options.maximumDatasetBytes ?? defaultMaximumDatasetBytes;
   const cached = await cache.read(url.href, maximum);
-  const response = await (options.fetchImplementation ?? fetch)(url, {
-    headers: { accept: "application/octet-stream,*/*", "user-agent": userAgent, ...conditionalHeaders(cached) },
-    redirect: "follow", signal: AbortSignal.timeout(requestTimeoutMilliseconds),
-  });
-  validateDatasetResponseURL(response.url, url);
-  if (response.status === 304 && cached !== undefined) return cached;
-  if (!response.ok) throw new Error(`Geofabrik dataset returned HTTP ${response.status}.`);
-  requireContentType(response);
-  validateContentLength(response, maximum);
-  const fetchedAt = (options.now ?? (() => new Date()))().toISOString();
-  const lastModified = response.headers.get("last-modified") ?? undefined;
-  const observedAt = parseObservedAt(lastModified);
-  if (observedAt === undefined || Date.parse(observedAt) > Date.parse(fetchedAt) + 300_000) {
-    throw new Error("Geofabrik object download has no valid source timestamp.");
+  const response = await fetchDataset(url, {
+    accept: "application/octet-stream,*/*", "user-agent": userAgent, ...conditionalHeaders(cached),
+  }, options.fetchImplementation ?? fetch);
+  try {
+    if (response.status === 304 && cached !== undefined) return cached;
+    if (!response.ok) throw new Error(`Geofabrik dataset returned HTTP ${response.status}.`);
+    requireContentType(response);
+    validateContentLength(response, maximum);
+    const fetchedAt = (options.now ?? (() => new Date()))().toISOString();
+    const lastModified = response.headers.get("last-modified") ?? undefined;
+    const observedAt = parseObservedAt(lastModified);
+    if (observedAt === undefined || Date.parse(observedAt) > Date.parse(fetchedAt) + 300_000) {
+      throw new Error("Geofabrik object download has no valid source timestamp.");
+    }
+    if (response.body === null) throw new Error("Geofabrik dataset response body is missing.");
+    return await cache.write(Readable.from(response.body as AsyncIterable<Uint8Array>), {
+      sourceURL: url.href, observedAt, fetchedAt,
+      ...optionalValue("etag", response.headers.get("etag")), ...optionalValue("lastModified", lastModified),
+    }, maximum);
+  } catch (error) {
+    await discardResponse(response);
+    throw error;
   }
-  if (response.body === null) throw new Error("Geofabrik dataset response body is missing.");
-  return cache.write(Readable.from(response.body as AsyncIterable<Uint8Array>), {
-    sourceURL: url.href, observedAt, fetchedAt,
-    ...optionalValue("etag", response.headers.get("etag")), ...optionalValue("lastModified", lastModified),
-  }, maximum);
 }
 
 function nonEmpty(value: string | undefined): string | undefined {
@@ -141,64 +151,94 @@ async function downloadOne(
   }
 
   const fetchImplementation = options.fetchImplementation ?? fetch;
-  let response = await fetchImplementation(url, {
-    headers,
-    redirect: "follow",
-    signal: AbortSignal.timeout(requestTimeoutMilliseconds),
-  });
-  if (response.status === 304 && hasCachedFile && cached !== undefined) {
-    return artifactFromCache(filePath, cached);
-  }
-  if (response.status === 304) {
-    response = await fetchImplementation(url, {
-      headers: {
+  let response = await fetchDataset(url, headers, fetchImplementation);
+  try {
+    if (response.status === 304 && hasCachedFile && cached !== undefined) {
+      return artifactFromCache(filePath, cached);
+    }
+    if (response.status === 304) {
+      await discardResponse(response);
+      response = await fetchDataset(url, {
         accept: "application/octet-stream,*/*",
         "user-agent": userAgent,
-      },
-      redirect: "follow",
-      signal: AbortSignal.timeout(requestTimeoutMilliseconds),
-    });
-  }
-  validateDatasetResponseURL(response.url, url);
-  if (!response.ok) {
-    throw new Error(`Geofabrik dataset returned HTTP ${response.status}.`);
-  }
-  requireContentType(response);
-  const maximumDatasetBytes = options.maximumDatasetBytes ?? defaultMaximumDatasetBytes;
-  validateContentLength(response, maximumDatasetBytes);
-
-  const temporaryPath = `${filePath}.part-${randomUUID()}`;
-  try {
-    const { sha256, size } = await writeLimitedBody(
-      response,
-      temporaryPath,
-      maximumDatasetBytes,
-    );
-    if (size === 0) {
-      throw new Error("Geofabrik dataset is empty.");
+      }, fetchImplementation);
     }
-    await rename(temporaryPath, filePath);
-    const fetchedAt = (options.now ?? (() => new Date()))().toISOString();
-    const lastModified = response.headers.get("last-modified") ?? undefined;
-    const observedAt = parseObservedAt(lastModified) ?? fetchedAt;
-    const metadata: CacheMetadata = {
-      version: 1,
-      sha256,
-      observedAt,
-      fetchedAt,
-      sourceURL: url.href,
-      ...optionalValue("etag", response.headers.get("etag")),
-      ...optionalValue("lastModified", lastModified),
-    };
-    await writeFile(metadataPath, `${JSON.stringify(metadata)}\n`, {
-      encoding: "utf8",
-      mode: 0o600,
-    });
-    return artifactFromCache(filePath, metadata);
+    if (!response.ok) {
+      throw new Error(`Geofabrik dataset returned HTTP ${response.status}.`);
+    }
+    requireContentType(response);
+    const maximumDatasetBytes = options.maximumDatasetBytes ?? defaultMaximumDatasetBytes;
+    validateContentLength(response, maximumDatasetBytes);
+
+    const temporaryPath = `${filePath}.part-${randomUUID()}`;
+    try {
+      const { sha256, size } = await writeLimitedBody(
+        response,
+        temporaryPath,
+        maximumDatasetBytes,
+      );
+      if (size === 0) {
+        throw new Error("Geofabrik dataset is empty.");
+      }
+      await rename(temporaryPath, filePath);
+      const fetchedAt = (options.now ?? (() => new Date()))().toISOString();
+      const lastModified = response.headers.get("last-modified") ?? undefined;
+      const observedAt = parseObservedAt(lastModified) ?? fetchedAt;
+      const metadata: CacheMetadata = {
+        version: 1,
+        sha256,
+        observedAt,
+        fetchedAt,
+        sourceURL: url.href,
+        ...optionalValue("etag", response.headers.get("etag")),
+        ...optionalValue("lastModified", lastModified),
+      };
+      await writeFile(metadataPath, `${JSON.stringify(metadata)}\n`, {
+        encoding: "utf8",
+        mode: 0o600,
+      });
+      return artifactFromCache(filePath, metadata);
+    } catch (error) {
+      await rm(temporaryPath, { force: true });
+      throw error;
+    }
   } catch (error) {
-    await rm(temporaryPath, { force: true });
+    await discardResponse(response);
     throw error;
   }
+}
+
+async function fetchDataset(
+  requestedURL: URL,
+  headers: Readonly<Record<string, string>>,
+  fetchImplementation: typeof fetch,
+): Promise<Response> {
+  const signal = AbortSignal.timeout(requestTimeoutMilliseconds);
+  const visited = new Set<string>();
+  let current = requestedURL;
+  for (let redirects = 0; ; redirects++) {
+    if (visited.has(current.href)) throw new Error("Geofabrik dataset redirect loop.");
+    visited.add(current.href);
+    const response = await fetchImplementation(current, { headers, redirect: "manual", signal });
+    try {
+      validateDatasetResponseURL(response.url, requestedURL);
+      if (![301, 302, 303, 307, 308].includes(response.status)) return response;
+      const location = response.headers.get("location");
+      if (location === null || redirects >= maximumRedirects) {
+        throw new Error("Geofabrik dataset redirect is missing or exceeds its limit.");
+      }
+      // Validate each Location before its request, including intermediate hops.
+      current = validateDatasetResponseURL(new URL(location, current).href, requestedURL);
+    } catch (error) {
+      await discardResponse(response);
+      throw error;
+    }
+    await discardResponse(response);
+  }
+}
+
+async function discardResponse(response: Response): Promise<void> {
+  try { await response.body?.cancel(); } catch { /* Best effort after abort or a consumed stream. */ }
 }
 
 function validateDatasetURL(value: string | URL): URL {
@@ -232,15 +272,16 @@ function validateDatasetResponseURL(value: string, requestedURL: URL): URL {
   );
   if (
     url.protocol !== "https:" ||
-    url.hostname !== requestedURL.hostname ||
     url.port.length > 0 ||
     url.username.length > 0 ||
     url.password.length > 0 ||
     url.search.length > 0 ||
     url.hash.length > 0 ||
-    !url.pathname.startsWith(requestedDirectory) ||
-    url.pathname.slice(requestedDirectory.length).includes("/") ||
-    !approvedFile.test(basename(url.pathname))
+    !(
+      (url.hostname === requestedURL.hostname && url.pathname.startsWith(requestedDirectory) &&
+        !url.pathname.slice(requestedDirectory.length).includes("/") && approvedFile.test(basename(url.pathname))) ||
+      (requestedURL.href === germanyMirror.source && url.href === germanyMirror.target)
+    )
   ) {
     throw new Error("Unexpected Geofabrik dataset redirect URL.");
   }
