@@ -85,6 +85,10 @@ class RestrictedBootstrapTests(unittest.TestCase):
             self.assertNotEqual(self.sql(role, "CREATE TABLE nextstop.denied(id int)", check=False).returncode, 0)
         self.sql("nextstop_worker", "BEGIN; CREATE TEMP TABLE proof(id int) ON COMMIT DROP; SELECT pg_try_advisory_lock(991337); SELECT pg_advisory_unlock(991337); SELECT nextstop.rebuild_charging_park_power_projection('00000000-0000-0000-0000-000000000001'); SELECT nextstop.rebuild_charging_campus_power_projection('00000000-0000-0000-0000-000000000001'); SELECT nextstop.refresh_charging_projection_statistics(); ROLLBACK")
         self.assertNotEqual(self.sql("nextstop_api", "SELECT nextstop.refresh_charging_projection_statistics()", check=False).returncode, 0)
+        self.sql("nextstop_worker", "SELECT nextstop.refresh_food_projection_statistics()")
+        self.assertEqual(self.sql("nextstop_worker", "SELECT has_table_privilege(current_user,'nextstop.food_poi_projection','MAINTAIN') OR has_table_privilege(current_user,'nextstop.charging_park_food_poi_matches','MAINTAIN')").stdout.strip(), "f")
+        for role in ("nextstop_api", "nextstop_auth", "nextstop_support", "nextstop_backup"):
+            self.assertNotEqual(self.sql(role, "SELECT nextstop.refresh_food_projection_statistics()", check=False).returncode, 0)
         self.assertNotEqual(self.sql("nextstop_worker", "SELECT * FROM nextstop.schema_migrations", check=False).returncode, 0)
         self.assertEqual(self.sql("nextstop_api", "SELECT nextstop.required_migrations_applied(ARRAY['0017_monthly_ingestion_schedule.sql'])").stdout.strip(), "t")
 

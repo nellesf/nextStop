@@ -11,6 +11,7 @@ import stat
 import subprocess
 
 PROJECT = "nextstop-tech-testing"
+SUPPORTED_MIGRATIONS = (17, 18, 19)
 BASE_TABLES = frozenset({
     "availability_observations", "availability_snapshots", "charging_campus_park_memberships",
     "charging_campus_power_projection", "charging_campus_projection", "charging_park_food_poi_matches",
@@ -30,9 +31,10 @@ def checked_connection(value):
 
 
 def expected_tables(purpose, migrations):
-    if purpose not in ("handoff", "backup") or migrations not in (17, 18):
+    if purpose not in ("handoff", "backup") or migrations not in SUPPORTED_MIGRATIONS:
         raise ValueError("Unreviewed snapshot purpose or schema version.")
-    return (BASE_TABLES | ({"monthly_import_budget"} if migrations == 18 else set())) - (
+    # Migration 0019 adds a statistics function, without changing the table inventory.
+    return (BASE_TABLES | ({"monthly_import_budget"} if migrations in (18, 19) else set())) - (
         {"user_error_reports"} if purpose == "backup" else set())
 
 
@@ -155,7 +157,7 @@ def main():
     parser.add_argument("operation", choices=["plan", "prepare"])
     parser.add_argument("--directory", required=True)
     parser.add_argument("--purpose", choices=["handoff", "backup"], required=True)
-    parser.add_argument("--source-migrations", type=int, choices=[17, 18], default=17)
+    parser.add_argument("--source-migrations", type=int, choices=SUPPORTED_MIGRATIONS, default=17)
     parser.add_argument("--connection-name")
     parser.add_argument("--pg-restore", default="pg_restore")
     args = parser.parse_args()

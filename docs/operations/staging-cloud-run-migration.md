@@ -150,7 +150,7 @@ Existing stable service traffic was preserved when applying these definitions.
   All eleven definition steps and the candidate preflight passed. Five searches
   returned the same 50-candidate static hash as the VM in 1,224/408/406/407/400 ms;
   readiness, exact API/Auth digest and forwarded-prefix resistance also passed.
-  A successful food import remains pending. The owner explicitly authorized one
+  The owner explicitly authorized one
   early food retry on October 4 after the correction; this exception does not
   change the normal 24-hour retry policy or reset the monthly attempt budget.
   The failed job did not
@@ -165,12 +165,33 @@ Existing stable service traffic was preserved when applying these definitions.
   downloads. Three concurrent synthetic searches with the McDonald's filter at
   13:31 UTC returned the same 31 static candidates in 2,399/2,389/2,477 ms while
   that processing continued. This is a small concurrent check, not a broad load
-  benchmark. Final food publication and capacity acceptance remain pending.
+  benchmark. Food publication succeeded at 13:53:37 UTC and the execution finished
+  successfully at 13:53:41 UTC, about 31 minutes after starting, without platform
+  retries. Both sources are next due November 1, and the monthly budget remains
+  two of three attempts. No further import or budget reset is needed.
   Some Cloud Run CPU distributions had a finite mean outside their reported
   occupied histogram bounds. The revised read-only monitor preserves means and
   other metrics, marks these histogram conflicts for review and reports their
   derived upper bound as unknown. It does not shift bucket indices or claim an
   exact continuous resource peak.
+- The completed retry's lagged monitoring showed sampled SQL maxima of 19.7%
+  CPU, 46.1% memory and 23.22 GiB disk. Worker memory reached a 468.4 MiB sample
+  mean; the highest consistent occupied memory bucket ended at 531.3 MiB. CPU
+  sample means reached 70.8%, with eight inconsistent histograms whose upper
+  bounds remain unknown. The job/time-window SQL samples include post-job search
+  checks; these are not execution-exclusive or continuous peak measurements.
+- Post-publication food searches exposed stale planner statistics: three warm
+  concurrent API requests took 3,774/5,803/3,763 ms. An exact API-role SQL probe
+  using runtime defaults took 1,971 ms and 1,067,449 buffer hits for 31 rows.
+  Refreshing only `food_poi_projection` and `charging_park_food_poi_matches`
+  reduced the same query to 99 ms and 8,351 hits; three concurrent API requests
+  then took 438/526/442 ms with unchanged results. Expand migration 0019 adds a
+  fixed, restricted statistics function. Both publishers invoke it after match
+  insertion inside their existing publication transaction. The worker receives
+  only EXECUTE on this function, not general MAINTAIN privileges. Real PostgreSQL
+  regression tests cover stale estimates, both publication paths, restricted
+  worker permissions and preservation of the old active version on failure.
+  Deployment and backup-to-new-schema recovery checks remain pending.
 - Monitoring observed zero active and zero idle instances for every service:
   API at 10:29 UTC, live at 10:30, and auth/broker/gateway at 10:37. These are
   explicit per-service zero measurements, not missing time-series points.
@@ -202,9 +223,9 @@ Existing stable service traffic was preserved when applying these definitions.
 
 ## Remaining acceptance work
 
-Complete the food import after the downloader correction, its capacity checks and
-the monthly budget checks; refresh artifact-bound checks and verify the final writer
-handoff. Only then
+The authorized food retry and monthly-budget checks succeeded. Complete the
+statistics correction's deployment and recovery check, refresh artifact-bound
+checks and verify the final writer handoff. Only then
 switch DNS, check managed TLS and authenticated public searches, activate reviewed
 schedules and retire the obsolete paid VM resources after recovery verification.
 

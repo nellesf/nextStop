@@ -160,6 +160,8 @@ GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_campus_power_projection(uuid
 TO nextstop_worker;
 GRANT EXECUTE ON FUNCTION nextstop.refresh_charging_projection_statistics()
 TO nextstop_worker;
+GRANT EXECUTE ON FUNCTION nextstop.refresh_food_projection_statistics()
+TO nextstop_worker;
 
 GRANT EXECUTE ON FUNCTION nextstop.required_migrations_applied(text[])
 TO nextstop_api, nextstop_auth;
@@ -242,6 +244,14 @@ BEGIN
        'nextstop_worker',
        'nextstop.rebuild_charging_campus_power_projection(uuid)',
        'EXECUTE'
+     ) OR NOT has_function_privilege(
+       'nextstop_worker',
+       'nextstop.refresh_food_projection_statistics()',
+       'EXECUTE'
+     ) OR EXISTS (
+       SELECT 1 FROM pg_roles
+       WHERE rolname IN ('nextstop_api', 'nextstop_auth', 'nextstop_support', 'nextstop_backup')
+         AND has_function_privilege(oid, 'nextstop.refresh_food_projection_statistics()', 'EXECUTE')
      ) THEN
     RAISE EXCEPTION 'nextstop_worker grants do not match the ingestion contract';
   END IF;

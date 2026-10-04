@@ -1,6 +1,7 @@
 import assert from "node:assert/strict";
 import { verifyAvailabilityRetention } from "./availability-retention-regression.js";
 import { verifyDemandLiveAvailability } from "./demand-live-availability-regression.js";
+import { verifyFoodProjectionStatistics } from "./food-projection-statistics-regression.js";
 import { verifyMonthlyIngestion } from "./monthly-ingestion-regression.js";
 import { randomUUID } from "node:crypto";
 import { UserErrorReports, UserErrorReportConflictError, UserErrorReportWithdrawnError, UserErrorReportCapacityError, UserErrorReportAuthorizationError, hashReportSecret } from "../../src/application/user-error-reports.js";
@@ -80,6 +81,9 @@ void test(
     context.after(async () => pool.end());
     await pool.query("DROP SCHEMA IF EXISTS nextstop CASCADE");
     await applyMigrations(pool);
+    await context.test("food and charging publication refresh food statistics with restricted privileges", async () => {
+      await verifyFoodProjectionStatistics(pool);
+    });
     await context.test("monthly scheduling persists without restart rebuilds", async () => { await verifyMonthlyIngestion(pool); });
     await context.test("demand availability preserves exact operators, snapshots and cross-worker leases", async () => {
       await verifyDemandLiveAvailability(pool, swissStaticObservations());

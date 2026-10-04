@@ -95,6 +95,8 @@ GRANT EXECUTE ON FUNCTION nextstop.rebuild_charging_campus_power_projection(uuid
 TO nextstop_worker;
 GRANT EXECUTE ON FUNCTION nextstop.refresh_charging_projection_statistics()
 TO nextstop_worker;
+GRANT EXECUTE ON FUNCTION nextstop.refresh_food_projection_statistics()
+TO nextstop_worker;
 
 GRANT EXECUTE ON FUNCTION nextstop.required_migrations_applied(text[])
 TO nextstop_api, nextstop_auth;
