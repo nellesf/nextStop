@@ -1,5 +1,144 @@
 # Staging Cloud Run migration record
 
+## Current DNS transition status, 2026-10-05
+
+The owner completed the IONOS change. At 07:26:45 UTC, all four authoritative
+IONOS nameservers plus Google and Cloudflare public resolvers returned exactly
+`api-staging.nextstop.tech CNAME ghs.googlehosted.com.` with a 3,600-second TTL.
+No restrictive CAA records were observed on the checked domain/alias path.
+The existing Cloud Run mapping still targets `nextstop-gateway` with automatic
+certificate management and returns that same required CNAME.
+
+At 07:28:23 UTC, the mapping still reported `CertificatePending`; an ordinary
+verified HTTPS connection to the custom domain failed with `SSLEOFError`.
+Its retry condition reported a 24-hour polling interval from a 05:41:14 UTC
+transition, which is not a guaranteed issuance deadline. Separate readiness and
+an authenticated synthetic search passed through the stable public `run.app`
+gateway for release `7db74d556e33`. This isolates the observed failure to the
+custom-domain path; it is not a successful post-DNS search or client-IP gate.
+Staging clients resolving the new DNS can be unavailable until the certificate
+is ready. Cached old DNS can still use the retained VM bridge.
+
+The DNS and gateway receipts are `dns-cutover-20261005.json` and
+`domain-and-gateway-20261005.json` in the private commissioning workspace. No
+mapping recreation, TLS-verification bypass, new infrastructure or source-resource
+retirement occurred. Google documents checking DNS/domain ownership and waiting
+at least 24 hours for this certificate-provisioning condition; its domain-mapping
+API exposes no explicit certificate retry action. See
+[Cloud Run troubleshooting](https://docs.cloud.google.com/run/docs/troubleshooting#custom-domain-stuck-while-provisioning-certificate).
+
+The final read at 08:21:37 UTC again confirmed the correct CNAME through Google
+and Cloudflare resolvers, while HTTPS remained unsuccessful and the mapping
+still reported `CertificatePending`. This is recorded in
+`domain-final-16eea07.json`; the cleanup release did not resolve the external
+certificate-provisioning gate.
+
+Keep the old applications stopped and Cloud SQL authoritative. Direct-domain
+certificate/readiness/search and two-source client-IP verification must pass
+before retiring the VM, disks or address. The two-source probe uses the VM as its
+second source, so it must run while that VM still exists and both sources resolve
+the new path. Preserve the bridge through the observed old DNS-cache transition.
+Production and the disabled staging CI release switch are unchanged.
+
+## Cleanup correction and verified release, 2026-10-05
+
+Status through 08:21:37 UTC: all five stable services now send 100% of traffic to
+release `88dc6b061c16`, and the four original schedules are ENABLED again after
+the bounded 08:03 UTC release pause. The latest custom-domain check, at 08:21:37 UTC,
+still reported `CertificatePending`; release success through the stable `run.app`
+origin does not establish custom-domain TLS readiness. Production, stopped source
+VM writers and the disabled staging CI release switch are unchanged.
+
+The first scheduled overnight checks exposed a real cleanup failure. The 05:00,
+06:00 and 07:00 UTC cleanup executions exited with code 1, while the scheduled
+backup, monthly due check and report-purge executions succeeded. The cleanup
+container used the expected image, 1 CPU / 512 MiB, a 300-second application
+budget and a 330-second platform timeout, with no automatic retry. Fixed logs
+reported `maintenance_job_failed`; they did not preserve the phase or SQLSTATE.
+The latest failed event was about 5.8 seconds after its container Started
+condition, not a 300-second job deadline or a demonstrated out-of-memory failure.
+
+A separately guarded, zero-row, rollback-only probe then reproduced the exact
+Node/Postgres path. The failed projection's stage-1 power table was empty, but
+transaction-wide `force_generic_plan` made the parameterized bounded DELETE
+scan the shared table of approximately 4.2 million rows. The original statement
+hit SQLSTATE `57014` after 2,019 ms. The proposed custom-plan bounded selection
+completed in 24 ms. All diagnostic transactions rolled back, leaving the target
+and active projection unchanged. A direct EXPLAIN utility had initially selected
+a misleading literal plan; the actual parameterized Node query supplied the
+conclusive reproduction.
+
+The correction first selects at most the existing batch limit of physical row
+identities with `force_custom_plan` and `FOR UPDATE`. For a nonempty selection it
+switches to `force_generic_plan` and deletes only those locked CTIDs, preserving
+the efficient foreign-key lookup behavior. An empty selection advances its
+existing retention stage without issuing a DELETE. A selected/deleted count
+mismatch rolls back. Publication locks, transaction boundaries, two-second
+statement and 500 ms lock limits, seven retention stages, grace period, batch
+caps and protection of active/rollback versions are unchanged.
+
+The candidate is commit `16eea076d082e92c402d378662349abffa537367`, immutable image
+`europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:a6dd78dc266bb2d001d7ce8f5919a1d85d40da79a8a0607aa6a079175560abe5`,
+release `88dc6b061c16`. Typecheck, lint, build and all 226 unit/broker tests passed.
+A fresh private, Unix-socket-only PostgreSQL 17.11 / PostGIS 3.5.6 cluster passed
+all 26 integration tests and was then stopped and removed. The added regression
+checks empty failed-stage progress, a real bounded deletion, mismatch rollback,
+transaction-local plan restoration and the existing active/rollback/audit and
+snapshot protections. [Backend CI run 37279944656](https://github.com/nellesf/nextStop/actions/runs/37279944656)
+and Cloud Build `f2acd3b7-95ba-43de-9c87-ebbad194a09e` also succeeded. Registry
+readback binds the candidate to the exact source revision and image digest.
+
+Candidate preflight passed at 08:03 UTC with unchanged sizing and stable traffic.
+API/Auth readiness, an authenticated synthetic search and forwarded-prefix
+resistance passed at 08:06:26 UTC. The one ordinary cleanup execution
+`nextstop-cleanup-nvqd6` succeeded from
+08:11:03.951 to 08:11:40.902 UTC: 36.950 seconds overall, including provisioning,
+and 6.127 seconds within the actual task start/completion window. The failed
+projection advanced from retention stage 1 to stage 3. Active charging/food
+projections, rollback versions, monthly budget and import schedules remained
+unchanged. All 22 authenticated synthetic search samples returned HTTP 200 with
+identical static results; the maximum warm latency was 560.2 ms. Two complete
+samples fell inside the actual task window, at 532.3 and 560.2 ms. This is bounded
+measured availability evidence, not a general latency guarantee.
+
+The initial local checker rejected an absent `lastTransitionTime` on the task's
+Started condition after that execution had already succeeded. A separately
+reviewed, read-only recovery used the actual `task.status.startTime`, corroborated
+by the execution Started condition, and the actual task completion time. It
+preserved the original failed receipt, execution/start journals and all original
+search samples. Recovery passed at 08:18:12 UTC without starting another job,
+retrying cleanup, making another search request or forcing an import.
+
+The local acceptance validator retained five unchanged source/config-bound gate
+proofs with their original observation times and added this fresh database
+performance proof. It did not represent those five historical observations as
+newly executed on the replacement image. Artifact security, candidate smoke,
+preflight and promotion remain separate checks. The resulting acceptance object
+is `operations/evidence/f1036d3965d8e7b6a22cfd926315003ffbcc6c74e0e8d8f8289fe940f314b8cd.json`,
+generation `1791188326551526`, with its content SHA-256 pinned in the final
+configuration.
+
+All five service promotions then passed. At 08:20:19 UTC, actual traffic metadata
+showed 100% on release `88dc6b061c16`; API/Auth readiness and an authenticated
+synthetic search passed through the stable, untagged public `run.app` origin.
+The four internal services remained IAM-private. At 08:20:25 UTC, all four
+original schedules were read back as ENABLED. No extra heavy import, cleanup
+retry, source VM retirement, CI activation or main merge occurred. Custom-domain
+TLS/search and the post-DNS two-source IP gate remain pending.
+
+The private evidence includes `cleanup-empty-target-plain-rollback-oct5.json`,
+`cleanup-draft-empty-rollback-oct5.json`, `release-preflight-16eea07.json` and
+`candidate-smoke-16eea07.json`, plus
+`cleanup-acceptance-16eea07/evidence-recovered.json`,
+`postpromotion-run-app-16eea07.json` and
+`release-schedulers-restored-16eea07.json`. Independent source metadata at 07:38 UTC matched
+the exact staging VM and its exclusively attached 30 GiB boot disk and 150 GiB
+`nextstop-data` disk; the reserved address also matched. Deletion protection is
+still enabled. No source resources were retired, and the custom-domain TLS,
+post-DNS search and two-source IP gates remain open.
+
+## Commissioning snapshot, 2026-10-04
+
 Date: 2026-10-04, status through 18:16:54 UTC. All five stable Cloud Run services
 use security release `7db74d556e33`. Only the gateway is public; API, Auth, live
 and simulator broker remain IAM-private. A fresh writer handoff and Nginx bridge
@@ -407,10 +546,11 @@ artifacts. They do not override the current release and handoff state above.
 
 The authorized food import, statistics correction, new security acceptance,
 filtered-backup runtime test, traffic promotion and fresh writer handoff have
-completed. Switch the requested DNS record, verify the managed certificate and
-both readiness/search and two-source IP isolation on the direct public domain.
-The four reviewed schedules are already enabled after verified public-bridge and
-authoritative-target checks; their job API does not depend on that DNS change. Retire the obsolete VM resources only
+completed. The owner has now changed DNS; managed certificate issuance and
+readiness/search plus two-source IP isolation on the direct public domain remain
+pending. The separately recorded cleanup correction and release are complete,
+and all four reviewed schedules are enabled again; their job API does not depend
+on that DNS change. Retire the obsolete VM resources only
 after the DNS bridge is no longer needed and the recovery prerequisites remain
 satisfied. Do not restart the old VM application writers.
 
@@ -473,13 +613,16 @@ markers were preserved.
 ## Completed handoff procedure and pending DNS transition
 
 Steps 1–3 below describe the completed guarded handoff and must not be rerun.
-The scheduler activation in step 5 is also complete; direct DNS/TLS verification,
+The October 4 scheduler activation in step 5 is complete; the temporary October 5
+release pause and verified resumption are recorded above. DNS has changed, but direct TLS verification,
 VM retirement and any later CI/main activation remain pending. This procedure applies only to the source VM
 `nextstop-backend` in `nextstop-tech-testing/europe-west3-a` and the reviewed Cloud
 Run/Cloud SQL target in the same project, region `europe-west1`. Production is
 unchanged. Keep the staging CI release override false. The four exact reviewed
-schedules have resumed after the authoritative target, public bridge and
-backup/release gates passed; the unrelated external DNS change is still pending.
+schedules resumed after the authoritative target, public bridge and backup/release
+gates passed on October 4; after the temporary cleanup-release pause, all four were
+verified ENABLED again at 08:20 UTC on October 5. The external DNS change is
+complete; certificate issuance remains pending.
 
 Before either handoff, the original source configuration matched the repository
 HTTPS template rendered for the green slot. The prepared freeze/bridge
@@ -528,9 +671,10 @@ before requesting the DNS change.
    stopped. Cloud SQL is authoritative: reverting routing to the stale VM
    database would be an unsafe rollback.
 
-4. **Switch DNS and verify the direct public path — pending.** The owner has
-   been asked to replace the IONOS staging record with CNAME `api-staging` to
-   `ghs.googlehosted.com.`. The current A record still reaches the VM bridge.
+4. **DNS changed; direct HTTPS verification pending.** The owner replaced the
+   IONOS staging record with CNAME `api-staging` to `ghs.googlehosted.com.` on
+   October 5. Authoritative and public DNS checks passed at 07:26 UTC; Google's
+   managed certificate remained pending at 07:28 UTC, as recorded above.
    Check the managed domain/certificate status and HTTPS readiness on
    `api-staging.nextstop.tech`, including the expected API/Auth release digest.
    Use the existing `verify.verify_public` helper for the broker-authenticated
@@ -541,7 +685,7 @@ before requesting the DNS change.
    not establish readiness of the newly issued managed certificate. Retain it
    only through the observed DNS transition, rather than as ongoing hosting.
 
-5. **Schedules enabled; VM retirement waits for DNS.** The authoritative target,
+5. **Schedules enabled; VM retirement waits for direct HTTPS.** The authoritative target,
    authenticated public bridge and backup/release gates passed. The four exact
    commissioned schedules (`nextstop-monthly`, `nextstop-cleanup`,
    `nextstop-report-purge`, `nextstop-backup`) were resumed and verified ENABLED

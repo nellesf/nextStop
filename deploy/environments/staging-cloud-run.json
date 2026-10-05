@@ -2,8 +2,8 @@
   "environment": "staging",
   "project": "nextstop-tech-testing",
   "region": "europe-west1",
-  "backendImage": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:64d018644b0c57c9775c94aee641b23ed5a50dfb8b0e9102a98bd0ee076b2e8a",
-  "commit": "923f811d26c637b87923c9dab688d9581422d971",
+  "backendImage": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend@sha256:a6dd78dc266bb2d001d7ce8f5919a1d85d40da79a8a0607aa6a079175560abe5",
+  "commit": "16eea076d082e92c402d378662349abffa537367",
   "cloudSqlConnectionName": "nextstop-tech-testing:europe-west1:nextstop-staging",
   "cacheBucket": "nextstop-tech-testing-download-cache",
   "backupBucket": "nextstop-tech-testing-database-backups",
@@ -37,8 +37,13 @@
       },
       {
         "revisionName": "nextstop-api-7db74d556e33",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-7db74d556e33"
+      },
+      {
+        "revisionName": "nextstop-api-88dc6b061c16",
+        "percent": 100,
+        "tag": "r-88dc6b061c16"
       },
       {
         "revisionName": "nextstop-api-a2939e6f73e9",
@@ -69,8 +74,13 @@
       },
       {
         "revisionName": "nextstop-auth-7db74d556e33",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-7db74d556e33"
+      },
+      {
+        "revisionName": "nextstop-auth-88dc6b061c16",
+        "percent": 100,
+        "tag": "r-88dc6b061c16"
       },
       {
         "revisionName": "nextstop-auth-a2939e6f73e9",
@@ -101,8 +111,13 @@
       },
       {
         "revisionName": "nextstop-broker-7db74d556e33",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-7db74d556e33"
+      },
+      {
+        "revisionName": "nextstop-broker-88dc6b061c16",
+        "percent": 100,
+        "tag": "r-88dc6b061c16"
       },
       {
         "revisionName": "nextstop-broker-a2939e6f73e9",
@@ -118,8 +133,13 @@
     "gateway": [
       {
         "revisionName": "nextstop-gateway-7db74d556e33",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-7db74d556e33"
+      },
+      {
+        "revisionName": "nextstop-gateway-88dc6b061c16",
+        "percent": 100,
+        "tag": "r-88dc6b061c16"
       }
     ],
     "live": [
@@ -140,8 +160,13 @@
       },
       {
         "revisionName": "nextstop-live-7db74d556e33",
-        "percent": 100,
+        "percent": 0,
         "tag": "r-7db74d556e33"
+      },
+      {
+        "revisionName": "nextstop-live-88dc6b061c16",
+        "percent": 100,
+        "tag": "r-88dc6b061c16"
       },
       {
         "revisionName": "nextstop-live-a2939e6f73e9",
@@ -156,8 +181,8 @@
     ]
   },
   "acceptanceEvidence": {
-    "object": "operations/evidence/10e0c04e537843aa8a41cfca0ffdbbaf3f4d76f71881c9d9f8e171c69ea742c0.json",
-    "generation": "1791136890425623",
-    "sha256": "10e0c04e537843aa8a41cfca0ffdbbaf3f4d76f71881c9d9f8e171c69ea742c0"
+    "object": "operations/evidence/f1036d3965d8e7b6a22cfd926315003ffbcc6c74e0e8d8f8289fe940f314b8cd.json",
+    "generation": "1791188326551526",
+    "sha256": "f1036d3965d8e7b6a22cfd926315003ffbcc6c74e0e8d8f8289fe940f314b8cd"
   }
 }
