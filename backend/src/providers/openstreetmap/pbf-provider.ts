@@ -1,4 +1,6 @@
-import { createOSMStream } from "osm-pbf-parser-node";
+import { OSMTransform, type OSMOptions } from "osm-pbf-parser-node";
+import { createReadStream } from "node:fs";
+import { pipeline } from "node:stream/promises";
 
 import type { GeofabrikDatasetArtifact } from "./geofabrik-downloader.js";
 import type { OpenStreetMapFoodChain } from "./descriptor.js";
@@ -227,7 +229,7 @@ async function readArtifact(
     way: [...relevantTagKeys],
     relation: [...relevantTagKeys],
   };
-  for await (const value of createOSMStream(artifact.filePath, {
+  for await (const value of readOSMEntities(artifact, {
     withTags: tagOptions,
     withInfo: false,
   })) {
@@ -275,7 +277,7 @@ async function readArtifact(
   );
   const relationWayReferences = new Map<number, readonly number[]>();
   if (relationWayIDs.size > 0) {
-    for await (const value of createOSMStream(artifact.filePath, {
+    for await (const value of readOSMEntities(artifact, {
       withTags: false,
       withInfo: false,
     })) {
@@ -298,7 +300,7 @@ async function readArtifact(
   }
   const nodeCoordinates = new Map<number, CoordinateTuple>();
   if (requiredNodeIDs.size > 0) {
-    for await (const value of createOSMStream(artifact.filePath, {
+    for await (const value of readOSMEntities(artifact, {
       withTags: false,
       withInfo: false,
     })) {
@@ -344,6 +346,23 @@ async function readArtifact(
     });
   }
   return { records, quarantines };
+}
+
+/** Reopens the same pinned object for each pass; pipeline propagates upstream integrity/transport failures. */
+export async function* readOSMEntities(artifact: GeofabrikDatasetArtifact, options: OSMOptions): AsyncGenerator<unknown> {
+  const source = artifact.openReadStream?.() ?? (artifact.filePath === undefined ? undefined : createReadStream(artifact.filePath));
+  if (source === undefined) throw new Error("OSM artifact has no readable source.");
+  const parser = new OSMTransform(options);
+  const transferred = pipeline(source, parser);
+  // Observe rejection immediately while the parser's async iterator is active.
+  void transferred.catch(() => {});
+  try {
+    for await (const chunk of parser as AsyncIterable<unknown>) {
+      if (!Array.isArray(chunk)) throw new Error("OSM parser returned an invalid batch.");
+      for (const entity of chunk as unknown[]) yield entity;
+    }
+    await transferred;
+  } finally { source.destroy(); parser.destroy(); await transferred.catch(() => {}); }
 }
 
 function geometryFor(

@@ -7,6 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
+        71E25BAAE91D4C239C1BA101 /* ChargingAvailabilityService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E25BAAE91D4C239C1BA102 /* ChargingAvailabilityService.swift */; };
+        71E25BAAE91D4C239C1BA103 /* RideAvailabilityController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E25BAAE91D4C239C1BA104 /* RideAvailabilityController.swift */; };
+        71E25BAAE91D4C239C1BA105 /* ChargingAvailabilityTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71E25BAAE91D4C239C1BA106 /* ChargingAvailabilityTests.swift */; };
 		050E23D3B93A3C8AAD075383 /* UserErrorReportServiceTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 406EB6483EECCF311A49216A /* UserErrorReportServiceTests.swift */; };
 		07A06DBA369465D30F84C301 /* NextStopAppDelegate.swift in Sources */ = {isa = PBXBuildFile; fileRef = 46DDA3E6D59A155AE8F8449D /* NextStopAppDelegate.swift */; };
 		0A56B0796B8DFF4F5E47D319 /* AppleMapsNavigationLauncher.swift in Sources */ = {isa = PBXBuildFile; fileRef = 781FE83B6F5761EE04D09918 /* AppleMapsNavigationLauncher.swift */; };
@@ -124,6 +127,9 @@
 /* End PBXContainerItemProxy section */
 
 /* Begin PBXFileReference section */
+        71E25BAAE91D4C239C1BA102 /* ChargingAvailabilityService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargingAvailabilityService.swift; sourceTree = "<group>"; };
+        71E25BAAE91D4C239C1BA104 /* RideAvailabilityController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RideAvailabilityController.swift; sourceTree = "<group>"; };
+        71E25BAAE91D4C239C1BA106 /* ChargingAvailabilityTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChargingAvailabilityTests.swift; sourceTree = "<group>"; };
 		052BC999E87B980D119B136E /* ApplePlaceResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ApplePlaceResolver.swift; sourceTree = "<group>"; };
 		074C4C58DD0F068D1D0D0E6B /* RoutePlanning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RoutePlanning.swift; sourceTree = "<group>"; };
 		0BEF798F5996E9487430E896 /* AppleMapsLauncherDiagnosticsTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppleMapsLauncherDiagnosticsTests.swift; sourceTree = "<group>"; };
@@ -299,6 +305,7 @@
 			isa = PBXGroup;
 			children = (
 				5A825E7AD85738EBD516CC46 /* RideCandidateSearchCoordinator.swift */,
+                71E25BAAE91D4C239C1BA104 /* RideAvailabilityController.swift */,
 				55B04819F20DF73D6E6CFD8B /* RideIntentRouter.swift */,
 				50F8127D1C6D8CA2A9AD873B /* RidePreparationView.swift */,
 				93FD9DB740858C65ADE3EEA1 /* RidePreparationViewModel.swift */,
@@ -392,6 +399,7 @@
 			children = (
 				3773F3C7E25F441EB00B5299 /* CandidateSearchRequestDTO.swift */,
 				6C69FF29913A65843A6233AD /* CandidateSearchService.swift */,
+                71E25BAAE91D4C239C1BA102 /* ChargingAvailabilityService.swift */,
 			);
 			path = Networking;
 			sourceTree = "<group>";
@@ -480,6 +488,7 @@
 				9438DF8BF63B2018172F6282 /* AuthenticationTransportTests.swift */,
 				B499BC0224ECEE443BBACFB7 /* CandidateSearchRequestDTOTests.swift */,
 				1158C9511978BADBE751CABE /* CandidateSearchResponseDTOTests.swift */,
+                71E25BAAE91D4C239C1BA106 /* ChargingAvailabilityTests.swift */,
 				501A6DDC797B61ACE6592514 /* CoreLocationProviderDiagnosticsTests.swift */,
 				51D867E9A45AFB7021AF93D0 /* DestinationRepositoryTests.swift */,
 				8FE9DD664DCBE882105B45FE /* HTTPCandidateSearchRecoveryTests.swift */,
@@ -741,6 +750,8 @@
 				6BD17C60665476B21A1D4A5A /* ApplePlaceResolver.swift in Sources */,
 				436A2733A0519F0D0053C624 /* CandidateSearchRequestDTO.swift in Sources */,
 				8B0639F296A99367B2022597 /* CandidateSearchService.swift in Sources */,
+                71E25BAAE91D4C239C1BA101 /* ChargingAvailabilityService.swift in Sources */,
+                71E25BAAE91D4C239C1BA103 /* RideAvailabilityController.swift in Sources */,
 				DBCF24C52F1F8595231851AC /* CarPlayAppleMapsLauncher.swift in Sources */,
 				7389907E5C7023E358518CDE /* CarPlayPresentation.swift in Sources */,
 				607BAC3847F580C18F2AA8C6 /* CarPlayResultPlaceResolver.swift in Sources */,
@@ -799,6 +810,7 @@
 				7316EC8DB9BFD27D29B41487 /* AuthenticationTransportTests.swift in Sources */,
 				27968D4F4586C36175993F4F /* CandidateSearchRequestDTOTests.swift in Sources */,
 				81741127CA7CFE1D5C9DA0C2 /* CandidateSearchResponseDTOTests.swift in Sources */,
+                71E25BAAE91D4C239C1BA105 /* ChargingAvailabilityTests.swift in Sources */,
 				F16B2FF4C2BA9B119549FA2E /* CoreLocationProviderDiagnosticsTests.swift in Sources */,
 				1EDC3BA1EEB9C7D21BF81C72 /* DestinationRepositoryTests.swift in Sources */,
 				BA225539A2EA27D338309494 /* HTTPCandidateSearchRecoveryTests.swift in Sources */,

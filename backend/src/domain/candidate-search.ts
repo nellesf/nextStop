@@ -32,6 +32,7 @@ export interface SearchRequest {
 }
 
 export interface SearchResponse {
+  readonly availabilityContext?: string;
   readonly snapshotToken: string;
   readonly nextCursor?: string | null;
   readonly generatedAt: string;

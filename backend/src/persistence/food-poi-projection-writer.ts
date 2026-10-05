@@ -224,4 +224,7 @@ async function rebuildFoodMatches(
       openStreetMapFoodPOIDescriptor.matchPrefilterDistanceMeters,
     ],
   );
+  // A fresh food or charging UUID must be visible to search plans before either
+  // publisher commits the new pair. An error preserves the previous active pair.
+  await client.query("SELECT nextstop.refresh_food_projection_statistics()");
 }

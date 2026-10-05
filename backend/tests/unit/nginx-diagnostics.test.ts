@@ -41,6 +41,7 @@ void test("nginx error records can interpolate only allowlisted metadata", async
   assert.deepEqual(routeMap.trim().split(/\s*;\s*/u).filter(Boolean), [
     "default unknown", "/health health", "/ready readiness", "/ready/auth auth_readiness",
     "/v1/charging-parks/search charging_park_search",
+    "/v1/charging-parks/availability charging_park_availability",
     "/v1/error-reports user_error_report",
     "/v1/auth/app-attest/challenge app_attest_challenge",
     "/v1/auth/app-attest/attest app_attest_attestation",

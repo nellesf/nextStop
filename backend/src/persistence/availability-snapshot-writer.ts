@@ -1,4 +1,5 @@
 import type { Pool, PoolClient } from "pg";
+import { assertLiveRefreshLease, type LiveRefreshLease } from "./live-refresh-control.js";
 
 import type { NormalizedAvailabilityObservation } from "../providers/ich-tanke-strom/live-provider.js";
 
@@ -96,6 +97,7 @@ export class AvailabilitySnapshotWriter {
     recordCount: number,
     quarantineCount: number,
     publishedAt: string,
+    lease?: LiveRefreshLease,
   ): Promise<void> {
     if (recordCount <= 0) {
       throw new Error("An availability snapshot must contain observations.");
@@ -103,6 +105,7 @@ export class AvailabilitySnapshotWriter {
     const client = await this.pool.connect();
     try {
       await client.query("BEGIN");
+      if (lease !== undefined) await assertLiveRefreshLease(client, lease);
       await client.query("SELECT pg_advisory_xact_lock(684237155161395696)");
       const snapshot = await client.query<{ readonly providerId: string }>(
         `SELECT provider_id AS "providerId"

@@ -8,7 +8,7 @@ import UIKit
 
 @MainActor
 final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDelegate,
-  NextStopSceneDependencyReceiving
+  NextStopSceneDependencyReceiving, CPInterfaceControllerDelegate
 {
   private var interfaceController: CPInterfaceController?
   private var dataContainer: ModelContainer?
@@ -19,6 +19,9 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private var searchTemplateStore = CarPlaySearchTemplateStore()
   private var templateTransitionGate = CarPlayTemplateTransitionGate()
   private var searchTask: Task<Void, Never>?
+  private var availabilityTask: Task<Void, Never>?
+  private var availability = RideAvailabilityController(fetcher: nil)
+  private weak var availabilityTemplate: CPPointOfInterestTemplate?
   private var placeTask: Task<Void, Never>?
   private var placeRequestID: UUID?
   private var mapsLauncher: (any CarPlayAppleMapsLaunching)?
@@ -39,6 +42,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     didConnect interfaceController: CPInterfaceController
   ) {
     self.interfaceController = interfaceController
+    interfaceController.delegate = self
     connectedScene = templateApplicationScene
     mapsLauncher = CarPlayAppleMapsLauncher(
       scene: templateApplicationScene,
@@ -73,6 +77,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     searchTask?.cancel()
     searchTask = nil
+    cancelAvailability()
     cancelPlaceSelection()
     mapsLauncher = nil
     connectedScene = nil
@@ -87,7 +92,15 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     searchTemplateStore.clear()
     templateTransitionGate.reset()
     searchService = nil
+    interfaceController.delegate = nil
     self.interfaceController = nil
+  }
+
+  func templateDidDisappear(_ aTemplate: CPTemplate, animated: Bool) {
+    guard let availabilityTemplate,
+      interfaceController?.templates.contains(where: { $0 === availabilityTemplate }) != true
+    else { return }
+    cancelAvailability()
   }
 
   private func showProfiles(animated: Bool, handlerCompletion: (() -> Void)? = nil) {
@@ -99,6 +112,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     searchTask?.cancel()
     searchTask = nil
+    cancelAvailability()
     cancelPlaceSelection()
     placeSelectionContext.clear()
     chargingPlaceResolver.resetChargingPlaceChecks()
@@ -514,6 +528,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
     searchTask?.cancel()
     cancelPlaceSelection()
+    cancelAvailability()
     placeSelectionContext.clear()
     noResultsTemplate = nil
     noResultsAttributions = []
@@ -620,6 +635,10 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
   private func makeSearchService(
     using dependencies: NextStopSceneDependencies
   ) -> any CarPlayRideSearchExecuting {
+    cancelAvailability()
+    availability = RideAvailabilityController(
+      fetcher: dependencies.candidatePageSearcher as? any ChargingAvailabilityFetching
+    )
     let resolver = MapKitApplePlaceResolver(diagnostics: dependencies.diagnostics)
     chargingPlaceResolver = resolver
     placeResolver = CarPlayResultPlaceResolver(placeResolver: resolver)
@@ -723,7 +742,9 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     guard let criteria = draftController.draft?.criteria else {
       return
     }
-    let presentation = presenter.results(outcome, criteria: criteria)
+    let presentation = presenter.results(outcome, criteria: criteria) {
+      availability.availability(for: $0, onDemand: outcome.availabilityContext != nil)
+    }
     resultsByID = Dictionary(
       uniqueKeysWithValues: outcome.results.map { ($0.id, $0) }
     )
@@ -790,6 +811,9 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         searchTemplateStore.clear(ifCurrent: searchTemplate)
         noResultsTemplate = nil
         let didShowResults = success && interfaceController.templates.last === template
+        if didShowResults {
+          refreshAvailability(outcome, in: template, criteria: criteria)
+        }
         if !didShowResults, interfaceController.templates.last === summary {
           showPresentationError(in: summary)
         }
@@ -808,6 +832,7 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
     }
 
     searchTask?.cancel()
+    cancelAvailability()
     interfaceController.pop(to: summary, animated: false) { [weak self] _, _ in
       guard let self,
         self.interfaceController === interfaceController,
@@ -819,6 +844,43 @@ final class NextStopCarPlaySceneDelegate: NSObject, CPTemplateApplicationSceneDe
         return
       }
       startSearch()
+    }
+  }
+
+  private func cancelAvailability() {
+    availabilityTask?.cancel()
+    availabilityTask = nil
+    availability.cancel()
+    availabilityTemplate = nil
+  }
+
+  private func refreshAvailability(
+    _ outcome: RideCandidateSearchOutcome,
+    in template: CPPointOfInterestTemplate,
+    criteria: RideCriteria
+  ) {
+    let controller = availability
+    availabilityTemplate = template
+    availabilityTask = Task {
+      await controller.refresh(outcome) { [weak self, weak template] in
+        guard let self, let template,
+          availability === controller,
+          interfaceController?.templates.contains(where: { $0 === template }) == true
+        else { return }
+        let updated = presenter.results(outcome, criteria: criteria) {
+          controller.availability(for: $0, onDemand: outcome.availabilityContext != nil)
+        }
+        let details = Dictionary(
+          uniqueKeysWithValues: updated.points.map { ($0.id, $0.detailSummary) })
+        // Reuse the same POIs/buttons/selection; do not rebuild navigation or replace a screen.
+        for point in template.pointsOfInterest {
+          guard let id = point.userInfo as? UUID, let detail = details[id] else { continue }
+          point.detailSummary = [detail, updated.coverageMessage, updated.attributionMessage]
+            .compactMap { $0 }.joined(separator: "\n")
+        }
+        template.setPointsOfInterest(
+          template.pointsOfInterest, selectedIndex: template.selectedIndex)
+      }
     }
   }
 

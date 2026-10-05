@@ -1,4 +1,8 @@
 import assert from "node:assert/strict";
+import { verifyAvailabilityRetention } from "./availability-retention-regression.js";
+import { verifyDemandLiveAvailability } from "./demand-live-availability-regression.js";
+import { verifyFoodProjectionStatistics } from "./food-projection-statistics-regression.js";
+import { verifyMonthlyIngestion } from "./monthly-ingestion-regression.js";
 import { randomUUID } from "node:crypto";
 import { UserErrorReports, UserErrorReportConflictError, UserErrorReportWithdrawnError, UserErrorReportCapacityError, UserErrorReportAuthorizationError, hashReportSecret } from "../../src/application/user-error-reports.js";
 import { createApp } from "../../src/api/app.js";
@@ -15,6 +19,7 @@ import { assertProjectionBuildRegression } from "./projection-build-regression.j
 
 import { PostGISCandidateSearch } from "../../src/application/postgis-candidate-search.js";
 import { SignedPaginationCodec } from "../../src/application/signed-pagination.js";
+import { AvailabilityContextCodec } from "../../src/application/candidate-availability.js";
 import { importStaticProjection } from "../../src/application/static-projection-importer.js";
 import { verifyProjectionRetention } from "./projection-retention-regression.js";
 import { verifyStaticInputReuse } from "./static-input-reuse-regression.js";
@@ -76,6 +81,16 @@ void test(
     context.after(async () => pool.end());
     await pool.query("DROP SCHEMA IF EXISTS nextstop CASCADE");
     await applyMigrations(pool);
+    await context.test("food and charging publication refresh food statistics with restricted privileges", async () => {
+      await verifyFoodProjectionStatistics(pool);
+    });
+    await context.test("monthly scheduling persists without restart rebuilds", async () => { await verifyMonthlyIngestion(pool); });
+    await context.test("demand availability preserves exact operators, snapshots and cross-worker leases", async () => {
+      await verifyDemandLiveAvailability(pool, swissStaticObservations());
+    });
+    await context.test("live publication is independent of bounded expired-snapshot cleanup", async () => {
+      await verifyAvailabilityRetention(pool);
+    });
     await context.test("readiness and serialized migration protect release handoffs", async () => {
       await verifyRuntimeOperations(pool);
     });
@@ -1395,7 +1410,7 @@ void test(
     });
 
     await context.test(
-      "keeps a multi-park campus whole across stable cursor pages",
+      "pins legacy and demand availability through rollout switches and stable campus pages",
       async () => {
         await resetDatabase(pool);
         const oldProjectionId = "85000000-0000-4000-8000-000000000001";
@@ -1416,37 +1431,72 @@ void test(
           sourceObservedAt: "2026-08-20T01:00:00.000Z",
           builtAt: "2026-08-20T01:01:00.000Z",
           coverageStatus: "complete",
-          activeSources: [bundesnetzagenturDescriptor.id],
+          activeSources: [bundesnetzagenturDescriptor.id, ichTankeStromDescriptor.id],
           unavailableSources: [],
         });
         await writer.writeObservations(oldProjectionId, observations);
         await writer.writeParks(oldProjectionId, parks);
         await writer.writeCampuses(oldProjectionId, campuses);
-        for (let index = 1; index <= 50; index += 1) {
+        for (let index = 1; index <= 100; index += 1) {
           await insertProjectedPark(pool, oldProjectionId, {
             northMeters: 0,
-            eastMeters: index * 50,
+            // Keep all 100 fillers within the original 2.5 km extent so the
+            // multi-park campus remains the sole candidate on the final page.
+            eastMeters: index * 25,
             parkId: indexedUUID(8, index),
           });
         }
         await writer.publish(
           oldProjectionId,
           {
-            locationCount: 53,
-            chargingPointCount: 208,
-            parkCount: 52,
-            campusCount: 51,
+            locationCount: 103,
+            chargingPointCount: 408,
+            parkCount: 102,
+            campusCount: 101,
             quarantineCount: 0,
             conflictCount: 0,
           },
           "2026-08-20T01:02:00.000Z",
         );
 
-        const search = candidateSearch(pool);
+        const ordering = await pool.query<{ furthestFiller: number; multiParkDistance: number }>(
+          `SELECT max(ceil(ST_Distance(navigation_coordinate,
+                    ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography)))
+                    FILTER (WHERE campus_id <> $2) AS "furthestFiller",
+                  max(ceil(ST_Distance(navigation_coordinate,
+                    ST_SetSRID(ST_MakePoint(10, 52), 4326)::geography)))
+                    FILTER (WHERE campus_id = $2) AS "multiParkDistance"
+           FROM nextstop.charging_campus_power_projection
+           WHERE projection_id = $1 AND minimum_power_kw = 100`,
+          [oldProjectionId, multiParkCampus.id],
+        );
+        const distances = ordering.rows[0];
+        assert.ok(distances);
+        assert.ok(distances.furthestFiller < distances.multiParkDistance,
+          "Every filler must precede the multi-park campus under the real search distance ordering.");
+
+        let availabilityNow = new Date("2026-08-20T02:00:00Z");
+        const search = new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey),
+          () => availabilityNow, new AvailabilityContextCodec(signingKey));
         const request = searchRequest([
           [10, 52],
           [10.2, 52],
         ]);
+        const snapshotId = randomUUID();
+        const snapshotWriter = new AvailabilitySnapshotWriter(pool);
+        const liveObservedAt = "2026-08-20T01:59:30.000Z";
+        await snapshotWriter.create({ id: snapshotId, providerId: ichTankeStromDescriptor.id,
+          sourceHash: "5".repeat(64), observedAt: liveObservedAt, fetchedAt: liveObservedAt });
+        const live = swissLiveObservations().map((observation) => ({ ...observation, observedAt: liveObservedAt }));
+        await snapshotWriter.write(snapshotId, live);
+        await snapshotWriter.publish(snapshotId, live.length, 0, liveObservedAt);
+        const pagination = new SignedPaginationCodec(signingKey);
+        const disabledSearch = new PostGISCandidateSearch(pool, pagination,
+          () => availabilityNow, new AvailabilityContextCodec(signingKey), false);
+        const legacyFirst = await disabledSearch.search(request);
+        assert.ok(legacyFirst.nextCursor);
+        assert.equal(legacyFirst.availabilityContext, undefined);
+        assert.deepEqual(pagination.decodeSnapshot(legacyFirst.snapshotToken).availabilitySnapshotIds, [snapshotId]);
         const firstPage = await search.search(request);
         assert.equal(firstPage.candidates.length, 50);
         assert.ok(firstPage.nextCursor);
@@ -1454,6 +1504,40 @@ void test(
           firstPage.candidates.some(({ id }) => id === multiParkCampus.id),
           false,
         );
+
+        assert.ok(firstPage.availabilityContext);
+        availabilityNow = new Date("2026-08-20T02:01:00Z");
+        // Activation while a legacy search is running preserves the original
+        // live snapshot and never introduces an availability context.
+        const legacyMiddle = await search.search({ ...request,
+          page: { snapshotToken: legacyFirst.snapshotToken, cursor: legacyFirst.nextCursor } });
+        assert.equal(legacyMiddle.candidates.length, 50);
+        assert.ok(legacyMiddle.nextCursor);
+        assert.equal(legacyMiddle.snapshotToken, legacyFirst.snapshotToken);
+        assert.equal(legacyMiddle.availabilityContext, undefined);
+        assert.deepEqual(pagination.decodeCursor(legacyMiddle.nextCursor).availabilitySnapshotIds, [snapshotId]);
+        const legacyLast = await search.search({ ...request,
+          page: { snapshotToken: legacyMiddle.snapshotToken, cursor: legacyMiddle.nextCursor } });
+        assert.equal(legacyLast.candidates.length, 1);
+        assert.equal(legacyLast.availabilityContext, undefined);
+        assert.equal(legacyLast.nextCursor, null);
+        // Disabling the flag keeps in-flight demand contexts stable, while
+        // the disabled server's new searches above remain legacy.
+        const demandMiddle = await disabledSearch.search({ ...request,
+          page: { snapshotToken: firstPage.snapshotToken, cursor: firstPage.nextCursor } });
+        assert.equal(demandMiddle.candidates.length, 50);
+        assert.ok(demandMiddle.nextCursor);
+        assert.equal(demandMiddle.availabilityContext, firstPage.availabilityContext);
+        assert.deepEqual(pagination.decodeCursor(demandMiddle.nextCursor).availabilitySnapshotIds, []);
+        const demandLast = await disabledSearch.search({ ...request,
+          page: { snapshotToken: demandMiddle.snapshotToken, cursor: demandMiddle.nextCursor } });
+        assert.equal(demandLast.candidates.length, 1);
+        assert.equal(demandLast.availabilityContext, firstPage.availabilityContext);
+        assert.equal(demandLast.nextCursor, null);
+        // A class without any context-signing capability fails explicitly;
+        // it never silently removes a previously returned context.
+        await assert.rejects(new PostGISCandidateSearch(pool, pagination, () => availabilityNow).search({ ...request,
+          page: { snapshotToken: firstPage.snapshotToken, cursor: firstPage.nextCursor } }), /pagination token/u);
 
         const newProjectionId = randomUUID();
         await pool.query("BEGIN");
@@ -1485,14 +1569,21 @@ void test(
             cursor: firstPage.nextCursor,
           },
         });
-        assert.equal(secondPage.candidates.length, 1);
-        assert.equal(secondPage.nextCursor, null);
+        assert.equal(secondPage.candidates.length, 50);
+        assert.ok(secondPage.nextCursor);
+        const thirdPage = await search.search({ ...request,
+          page: { snapshotToken: secondPage.snapshotToken, cursor: secondPage.nextCursor } });
+        assert.equal(thirdPage.candidates.length, 1);
+        assert.equal(thirdPage.nextCursor, null);
+        assert.equal(thirdPage.snapshotToken, firstPage.snapshotToken);
+        assert.equal(thirdPage.availabilityContext, firstPage.availabilityContext);
         assert.equal(secondPage.snapshotToken, firstPage.snapshotToken);
-        assert.equal(secondPage.candidates[0]?.id, multiParkCampus.id);
-        assert.equal(secondPage.candidates[0]?.chargingPoints, 7);
-        assert.equal(secondPage.candidates[0]?.locationLookups.length, 3);
+        assert.equal(secondPage.availabilityContext, firstPage.availabilityContext);
+        assert.equal(thirdPage.candidates[0]?.id, multiParkCampus.id);
+        assert.equal(thirdPage.candidates[0]?.chargingPoints, 7);
+        assert.equal(thirdPage.candidates[0]?.locationLookups.length, 3);
         assert.equal(
-          secondPage.candidates[0]?.operatorChargingPoints.reduce(
+          thirdPage.candidates[0]?.operatorChargingPoints.reduce(
             (sum, { chargingPoints }) => sum + chargingPoints,
             0,
           ),
@@ -1502,9 +1593,10 @@ void test(
         const allCandidateIds = [
           ...firstPage.candidates.map(({ id }) => id),
           ...secondPage.candidates.map(({ id }) => id),
+          ...thirdPage.candidates.map(({ id }) => id),
         ];
-        assert.equal(allCandidateIds.length, 51);
-        assert.equal(new Set(allCandidateIds).size, 51);
+        assert.equal(allCandidateIds.length, 101);
+        assert.equal(new Set(allCandidateIds).size, 101);
         assert.equal(
           allCandidateIds.filter((id) => id === multiParkCampus.id).length,
           1,

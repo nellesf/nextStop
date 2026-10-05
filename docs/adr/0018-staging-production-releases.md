@@ -22,6 +22,11 @@ or remove services in response to a budget alert.
 
 ## Decision
 
+[ADR 0020](0020-cloud-run-cloud-sql-staging.md) subsequently replaces staging
+hosting with Cloud Run and Cloud SQL. Production topology and the isolation,
+compatibility, immutable-artifact and explicit-promotion requirements below
+remain in effect.
+
 Run one `e2-standard-2` VM per environment in Frankfurt (`europe-west3-a`), each
 with its own local PostgreSQL/PostGIS database and persistent data/cache disk.
 Each VM runs separate API, App Attest auth, singleton ingestion-worker and

@@ -19,12 +19,12 @@ export async function drainHTTPApplication(app: Pick<FastifyInstance, "close">, 
   }
 }
 
-export function installHTTPShutdown(app: FastifyInstance): void {
+export function installHTTPShutdown(app: FastifyInstance, options: ShutdownOptions = {}): void {
   let stopping = false;
   const stop = (): void => {
     if (stopping) return;
     stopping = true;
-    void drainHTTPApplication(app).catch(() => {
+    void drainHTTPApplication(app, options).catch(() => {
       process.stderr.write('{"event":"http_shutdown_failed"}\n');
       process.exit(1);
     });

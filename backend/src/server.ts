@@ -1,4 +1,6 @@
 import { createApp } from "./api/app.js";
+import { AvailabilityContextCodec, CandidateAvailability } from "./application/candidate-availability.js";
+import { PostgresCandidateAvailability } from "./persistence/postgres-candidate-availability.js";
 import { AccessTokenAuthenticator, AccessTokenCodec } from "./api/access-token.js";
 import {
   BearerTokenAuthenticator,
@@ -10,10 +12,13 @@ import { PostGISCandidateSearch } from "./application/postgis-candidate-search.j
 import { SignedPaginationCodec } from "./application/signed-pagination.js";
 import { createDatabasePool } from "./persistence/database.js";
 import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
-import { UserErrorReports, userErrorReportLimits } from "./application/user-error-reports.js";
+import { UserErrorReports } from "./application/user-error-reports.js";
 import { PostgresUserErrorReportRepository } from "./persistence/postgres-user-error-reports.js";
 import { SearchReadiness } from "./persistence/runtime-readiness.js";
 import { installHTTPShutdown } from "./runtime/graceful-shutdown.js";
+import { deploymentRuntime, httpShutdownGraceMilliseconds } from "./runtime/deployment-runtime.js";
+import { startReportPurge } from "./runtime/report-purge.js";
+import { liveRefreshTransport } from "./runtime/live-refresh-transport.js";
 
 function parsePort(value: string | undefined): number {
   if (value === undefined) {
@@ -27,6 +32,7 @@ function parsePort(value: string | undefined): number {
   return parsed;
 }
 
+const runtime = deploymentRuntime();
 const databaseURL = process.env.DATABASE_URL;
 const signingKey = process.env.SNAPSHOT_SIGNING_KEY;
 if ((databaseURL === undefined) !== (signingKey === undefined)) {
@@ -40,10 +46,17 @@ const pool =
         queryTimeoutMilliseconds: 15_000,
         statementTimeoutMilliseconds: 15_000,
       });
+const demandLiveEnabled = parseBooleanEnvironmentValue("DEMAND_LIVE_AVAILABILITY_ENABLED", false);
+// Keep encoding existing demand snapshots after disabling the rollout flag;
+// only new searches and the optional refresh endpoint depend on that flag.
+const availabilityCodec = signingKey === undefined ? undefined : new AvailabilityContextCodec(signingKey);
+const refreshTransport = demandLiveEnabled ? await liveRefreshTransport(runtime) : undefined;
+const candidateAvailability = pool !== undefined && availabilityCodec !== undefined && refreshTransport !== undefined
+  ? new CandidateAvailability(availabilityCodec, new PostgresCandidateAvailability(pool), refreshTransport.signal) : undefined;
 const candidateSearch =
   pool === undefined || signingKey === undefined
     ? undefined
-    : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey));
+    : new PostGISCandidateSearch(pool, new SignedPaginationCodec(signingKey), () => new Date(), availabilityCodec, demandLiveEnabled);
 
 const accessTokenSigningKey = process.env.SEARCH_ACCESS_TOKEN_SIGNING_KEY;
 const accessTokenCodec =
@@ -76,19 +89,14 @@ const supportPool = supportDatabaseURL === undefined ? undefined : createDatabas
   queryTimeoutMilliseconds: 5_000, statementTimeoutMilliseconds: 5_000,
 });
 const reportRepository = supportPool === undefined ? undefined : new PostgresUserErrorReportRepository(supportPool);
-if (reportRepository !== undefined) await reportRepository.purge(new Date());
-// Purge independent of submissions; startup purges overdue data before serving requests.
-let purgeActive = false;
-const purgeTimer = reportRepository === undefined ? undefined : setInterval(() => {
-  if (purgeActive) return;
-  purgeActive = true;
-  void reportRepository.purge(new Date()).catch(() => {
+const stopReportPurge = await startReportPurge(reportRepository, runtime, {
+  failure: () => {
     process.stderr.write('{"event":"user_error_report_purge_failed"}\n');
-  }).finally(() => { purgeActive = false; });
-}, userErrorReportLimits.purgeIntervalMilliseconds);
-purgeTimer?.unref();
+  },
+});
 
 const app = createApp({
+  ...(candidateAvailability === undefined ? {} : { candidateAvailability }),
   ...(process.env.RELEASE_IMAGE_DIGEST === undefined ? {} : { release: process.env.RELEASE_IMAGE_DIGEST }),
   ...(candidateSearch === undefined ? {} : { candidateSearch }),
   searchAuthenticator,
@@ -101,7 +109,8 @@ const app = createApp({
 });
 
 app.addHook("onClose", async () => {
-  if (purgeTimer !== undefined) clearInterval(purgeTimer);
+  stopReportPurge();
+  await refreshTransport?.close();
   await supportPool?.end();
   await readinessPool?.end();
 });
@@ -112,9 +121,9 @@ if (pool !== undefined) {
   });
 }
 
-installHTTPShutdown(app);
+installHTTPShutdown(app, { graceMilliseconds: httpShutdownGraceMilliseconds(runtime) });
 await app.listen({
-  host: process.env.HOST ?? "127.0.0.1",
+  host: process.env.HOST ?? (runtime === "cloud-run" ? "0.0.0.0" : "127.0.0.1"),
   port: parsePort(process.env.PORT),
 });
 

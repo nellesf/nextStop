@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { availabilityLimits, type AvailabilityContextCodec } from "./candidate-availability.js";
 
 import type { Pool } from "pg";
 
@@ -81,7 +82,12 @@ export class PostGISCandidateSearch implements CandidateSearching {
     private readonly pool: Pool,
     private readonly pagination: SignedPaginationCodec,
     private readonly now: () => Date = () => new Date(),
+    private readonly availabilityContext?: AvailabilityContextCodec,
+    private readonly demandLiveAvailability = availabilityContext !== undefined,
   ) {
+    if (demandLiveAvailability && availabilityContext === undefined) {
+      throw new Error("Demand availability requires a context codec.");
+    }
     this.availabilitySnapshots = new AvailabilitySnapshotWriter(pool);
   }
 
@@ -100,10 +106,18 @@ export class PostGISCandidateSearch implements CandidateSearching {
       throw new NoProjectionAvailableError();
     }
     const foodProjectionId = await this.resolveFoodProjectionId(request, page.snapshot);
-    const availabilitySnapshots = await this.resolveAvailabilitySnapshots(
+    // Pin mode on the initial signed snapshot. A feature switch must never
+    // replace an in-flight search's live IDs or introduce/remove its context.
+    const demandLiveAvailability = page.snapshot === undefined
+      ? this.demandLiveAvailability
+      : page.snapshot.availabilityExpiresAt !== undefined;
+    if (demandLiveAvailability && this.availabilityContext === undefined) {
+      throw new InvalidPaginationTokenError();
+    }
+    const availabilitySnapshots = !demandLiveAvailability ? await this.resolveAvailabilitySnapshots(
       projection,
       page.snapshot,
-    );
+    ) : [];
     const availabilitySnapshotIds = availabilitySnapshots
       .map(({ id }) => id)
       .toSorted();
@@ -114,6 +128,7 @@ export class PostGISCandidateSearch implements CandidateSearching {
       foodProjectionId,
       availabilitySnapshotIds,
       requestFingerprint,
+      ...(!demandLiveAvailability ? {} : { availabilityExpiresAt: this.now().getTime() + availabilityLimits.contextLifetimeSeconds * 1_000 }),
     };
     const rows = await this.candidates(
       projection.id,
@@ -147,10 +162,15 @@ export class PostGISCandidateSearch implements CandidateSearching {
 
     return {
       snapshotToken: this.pagination.encode(snapshot),
+      ...(snapshot.availabilityExpiresAt === undefined || this.availabilityContext === undefined ? {} : { availabilityContext: this.availabilityContext.encode({
+        projectionId: projection.id, candidateKind: request.criteria.foodChain == null ? "campus" : "park",
+        minimumPowerKW: request.criteria.minimumPowerKW,
+        expiresAt: snapshot.availabilityExpiresAt,
+      }) }),
       nextCursor,
       generatedAt: this.now().toISOString(),
       candidates: visibleRows.map((row) => mapCandidate(row, availabilitySnapshots)),
-      coverage: mapCoverage(projection, availabilitySnapshots),
+      coverage: mapCoverage(projection, availabilitySnapshots, !demandLiveAvailability),
       attributions: request.criteria.foodChain == null
         ? []
         : [{
@@ -683,12 +703,13 @@ function mapCandidate(
 function mapCoverage(
   projection: ProjectionRow,
   availabilitySnapshots: readonly AvailabilitySnapshotRow[],
+  includeLiveCoverage = true,
 ): Coverage {
   const expectsSwissLive = projection.activeSources.includes(ichTankeStromDescriptor.id);
   const hasSwissLive = availabilitySnapshots.some(
     ({ providerId }) => providerId === ichTankeStromDescriptor.id,
   );
-  const liveUnavailable = expectsSwissLive && !hasSwissLive;
+  const liveUnavailable = includeLiveCoverage && expectsSwissLive && !hasSwissLive;
   const status =
     projection.coverageStatus === "stale"
       ? "stale"

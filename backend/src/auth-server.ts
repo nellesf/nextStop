@@ -7,7 +7,9 @@ import { PostgresAppAttestAuthenticationRepository } from "./persistence/postgre
 import { writeRequestDiagnostic } from "./api/request-diagnostics.js";
 import { AuthenticationReadiness } from "./persistence/runtime-readiness.js";
 import { installHTTPShutdown } from "./runtime/graceful-shutdown.js";
+import { deploymentRuntime, httpShutdownGraceMilliseconds } from "./runtime/deployment-runtime.js";
 
+const runtime = deploymentRuntime();
 const appAttestAppId = nonemptyEnvironmentValue("APP_ATTEST_APP_ID");
 const authDatabaseURL = nonemptyEnvironmentValue("AUTH_DATABASE_URL");
 const accessTokenSigningKey = nonemptyEnvironmentValue("SEARCH_ACCESS_TOKEN_SIGNING_KEY");
@@ -64,9 +66,9 @@ if (authPool !== undefined) {
   });
 }
 
-installHTTPShutdown(app);
+installHTTPShutdown(app, { graceMilliseconds: httpShutdownGraceMilliseconds(runtime) });
 await app.listen({
-  host: process.env.HOST ?? "127.0.0.1",
+  host: process.env.HOST ?? (runtime === "cloud-run" ? "0.0.0.0" : "127.0.0.1"),
   port: parsePort(process.env.PORT),
 });
 

@@ -56,10 +56,34 @@ class BuildArtifactTests(unittest.TestCase):
         run = self.runner()
         self.assertEqual(build.build_artifact(COMMIT, CONFIG, run=run, registry=registry), IMAGE)
         commands = [call.args[0] for call in run.call_args_list]
-        self.assertIn(["docker", "build", "--label", "org.opencontainers.image.revision=" + COMMIT,
+        self.assertIn(["docker", "build", "--pull", "--label", "org.opencontainers.image.revision=" + COMMIT,
                        "--tag", CONFIG["registry"] + ":" + COMMIT, "backend"], commands)
         self.assertIn(["docker", "push", CONFIG["registry"] + ":" + COMMIT], commands)
         self.assertIn(["docker", "pull", IMAGE], commands)
+
+    def test_security_gate_runs_for_reuse_and_fresh_and_failure_never_selects_release(self):
+        for fresh in (False, True):
+            with self.subTest(fresh=fresh):
+                registry, run = Mock(), self.runner()
+                registry.get.side_effect = [IMMUTABLE, None, IMMUTABLE, TAG] if fresh else [IMMUTABLE, TAG]
+                build.build_artifact(COMMIT, CONFIG, run=run, registry=registry)
+                commands = [call.args[0] for call in run.call_args_list]
+                scans = [c for c in commands if any('scan-image.py' in arg for arg in c)]
+                self.assertEqual(len(scans), 2 if fresh else 1)
+                self.assertIn(IMAGE, scans[-1])
+                if fresh:
+                    self.assertLess(commands.index(scans[0]), next(i for i,c in enumerate(commands) if 'push' in c))
+        registry, run = Mock(), self.runner()
+        registry.get.side_effect = [IMMUTABLE, None]
+        real_runner = run.side_effect
+        def fail_scan(arguments, **kwargs):
+            if any('scan-image.py' in arg for arg in arguments):
+                raise build.BuildArtifactError('scan failed')
+            return real_runner(arguments, **kwargs)
+        run.side_effect = fail_scan
+        with self.assertRaises(build.BuildArtifactError):
+            build.build_artifact(COMMIT, CONFIG, run=run, registry=registry)
+        self.assertFalse(any('push' in call.args[0] for call in run.call_args_list))
 
     def test_mutable_missing_or_wrong_repository_stops_before_docker(self):
         for repository in [{}, {**IMMUTABLE, "name": REPOSITORY + "-wrong"},

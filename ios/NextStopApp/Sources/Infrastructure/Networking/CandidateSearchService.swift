@@ -93,6 +93,7 @@ struct DataAttribution: Hashable, Sendable, Identifiable {
 
 struct CandidateSearchPage: Hashable, Sendable {
   let snapshotToken: String
+  let availabilityContext: String?
   let nextCursor: String?
   let candidates: [BackendCandidate]
   let coverage: CandidateSearchCoverage
@@ -103,9 +104,11 @@ struct CandidateSearchPage: Hashable, Sendable {
     nextCursor: String?,
     candidates: [BackendCandidate],
     coverage: CandidateSearchCoverage,
-    attributions: [DataAttribution] = []
+    attributions: [DataAttribution] = [],
+    availabilityContext: String? = nil
   ) {
     self.snapshotToken = snapshotToken
+    self.availabilityContext = availabilityContext
     self.nextCursor = nextCursor
     self.candidates = candidates
     self.coverage = coverage
@@ -143,7 +146,7 @@ protocol CandidatePageSearching: AnyObject {
 }
 
 @MainActor
-final class HTTPCandidateSearchService: CandidatePageSearching {
+final class HTTPCandidateSearchService: CandidatePageSearching, ChargingAvailabilityFetching {
   typealias Load = @MainActor (URLRequest) async throws -> (Data, URLResponse)
   typealias Now = @MainActor () -> Date
   typealias Sleep = @MainActor (TimeInterval) async throws -> Void
@@ -159,6 +162,7 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
   private let diagnostics: any AppDiagnosticRecording
   private let encoder: JSONEncoder
   private let decoder: JSONDecoder
+  private let availabilityService: HTTPChargingAvailabilityService
 
   init(
     baseURL: URL?,
@@ -174,11 +178,21 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
     self.baseURL = baseURL
     self.accessTokenProvider = accessTokenProvider
     self.load = load ?? { request in try await session.data(for: request) }
+    availabilityService = HTTPChargingAvailabilityService(
+      baseURL: baseURL, accessTokenProvider: accessTokenProvider,
+      load: load ?? { request in try await session.data(for: request) }
+    )
     self.now = now
     self.sleep = sleep
     self.diagnostics = diagnostics
     encoder = JSONEncoder()
     decoder = JSONDecoder()
+  }
+
+  func fetchAvailability(
+    context: String, candidates: [ChargingAvailabilitySelection]
+  ) async throws -> ChargingAvailabilityBatch {
+    try await availabilityService.fetchAvailability(context: context, candidates: candidates)
   }
 
   func search(request: RouteSearchRequest) async throws -> CandidateSearchPage {
@@ -495,6 +509,7 @@ final class HTTPCandidateSearchService: CandidatePageSearching {
 
 struct CandidateSearchResponseDTO: Decodable, Equatable {
   let snapshotToken: String
+  let availabilityContext: String?
   let nextCursor: String?
   let generatedAt: String
   let candidates: [CandidateDTO]
@@ -503,6 +518,7 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
 
   func domainPage() throws -> CandidateSearchPage {
     guard !snapshotToken.isEmpty,
+      availabilityContext.map({ !$0.isEmpty && $0.utf8.count <= 1_024 }) ?? true,
       parseServerDate(generatedAt) != nil
     else {
       throw CandidateSearchServiceError.invalidResponse
@@ -520,7 +536,8 @@ struct CandidateSearchResponseDTO: Decodable, Equatable {
       nextCursor: nextCursor,
       candidates: mappedCandidates,
       coverage: try coverage.domainCoverage(),
-      attributions: try attributions.map { try $0.domainAttribution() }
+      attributions: try attributions.map { try $0.domainAttribution() },
+      availabilityContext: availabilityContext
     )
   }
 

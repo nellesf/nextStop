@@ -360,6 +360,23 @@ progress or straight-line distance.
 
 ## Stable ride snapshot
 
+The opt-in staging flow in [ADR 0019](../adr/0019-demand-driven-staging-ingestion.md)
+adds a separate availability display overlay. After results appear, only their
+surviving candidate IDs and confirmed exact operator names are sent with a signed
+static-projection/power context. A shared provider cache and privately signaled
+worker supply fresh counts without rerunning search. The overlay expires and is
+cancelled with its source screen/search; it never changes result membership,
+ordering, selection or original Apple lookup evidence. The candidate database
+role remains read-only. The internal worker signal is the staging-only exception
+to the listenerless worker described above.
+
+[ADR 0020](../adr/0020-cloud-run-cloud-sql-staging.md) moves this opt-in staging
+runtime to separate IAM-protected Cloud Run services and small Cloud SQL. The
+secret-free public gateway pins private API/auth revisions. Cloud Tasks carries
+only the fixed Swiss provider identifier; the handler acknowledges after atomic
+publication. Scheduled bounded jobs replace idle timers, while the candidate
+database role remains read-only. Production keeps its existing VM topology.
+
 A search creates a local `RideSearchSnapshot` containing criteria, route identity,
 candidate snapshot token, exact-distance results, and food matches. The displayed
 five are not re-ranked by background availability changes. Manual refresh creates

@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import type { LiveRefreshLease } from "../persistence/live-refresh-control.js";
 import { fileURLToPath } from "node:url";
 
 import type { Pool } from "pg";
@@ -49,6 +50,8 @@ export interface ProviderRefreshDependencies {
   readonly downloadSwissFeed?: (kind: "static" | "live") => Promise<IchTankeStromFeed>;
   readonly now?: () => Date;
   readonly onProgress?: ProjectionBuildObserver;
+  readonly liveRefreshLease?: LiveRefreshLease;
+  readonly inlineLiveRetention?: boolean;
 }
 
 export async function refreshStaticProviders(
@@ -166,13 +169,16 @@ export async function refreshSwissLiveAvailability(
       parsed.observations.length,
       parsed.quarantines.length,
       now().toISOString(),
+      dependencies.liveRefreshLease,
     );
-    await writer.pruneBefore(
-      new Date(
-        now().getTime() -
-          ichTankeStromDescriptor.liveSnapshotRetentionHours * 60 * 60 * 1_000,
-      ).toISOString(),
-    );
+    if (dependencies.inlineLiveRetention !== false) {
+      await writer.pruneBefore(
+        new Date(
+          now().getTime() -
+            ichTankeStromDescriptor.liveSnapshotRetentionHours * 60 * 60 * 1_000,
+        ).toISOString(),
+      );
+    }
     return {
       kind: "published",
       snapshotId,

@@ -16,15 +16,18 @@ struct RideCandidateSearchOutcome: Equatable, Sendable {
   let results: [RouteSearchResult]
   let coverage: CandidateSearchCoverage
   let attributions: [DataAttribution]
+  let availabilityContext: String?
 
   init(
     results: [RouteSearchResult],
     coverage: CandidateSearchCoverage,
-    attributions: [DataAttribution] = []
+    attributions: [DataAttribution] = [],
+    availabilityContext: String? = nil
   ) {
     self.results = results
     self.coverage = coverage
     self.attributions = attributions
+    self.availabilityContext = availabilityContext
   }
 }
 
@@ -95,6 +98,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     var previousPageLastLowerBound: Meters?
     var searchCoverage: CandidateSearchCoverage?
     var searchAttributions: [DataAttribution]?
+    var availabilityContext: String?
+    var receivedFirstPage = false
     var checkedOperators: [RouteSearchResult: Set<String>] = [:]
 
     while true {
@@ -122,6 +127,14 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         page.snapshotToken != expectedSnapshot
       {
         throw RideCandidateSearchError.candidateResponseInvalid
+      }
+      if receivedFirstPage {
+        guard availabilityContext == page.availabilityContext else {
+          throw RideCandidateSearchError.candidateResponseInvalid
+        }
+      } else {
+        availabilityContext = page.availabilityContext
+        receivedFirstPage = true
       }
       if let searchCoverage {
         guard searchCoverage == page.coverage else {
@@ -188,6 +201,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
             attributions: searchAttributions,
+            availabilityContext: availabilityContext,
             criteria: request.criteria
           )
         }
@@ -210,6 +224,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
           routingFailureLowerBounds: routingFailureLowerBounds,
           coverage: searchCoverage,
           attributions: searchAttributions,
+          availabilityContext: availabilityContext,
           criteria: request.criteria
         )
       }
@@ -220,6 +235,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
             attributions: searchAttributions,
+            availabilityContext: availabilityContext,
             criteria: request.criteria
           )
         }
@@ -233,6 +249,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
             routingFailureLowerBounds: routingFailureLowerBounds,
             coverage: searchCoverage,
             attributions: searchAttributions,
+            availabilityContext: availabilityContext,
             criteria: request.criteria
           )
         }
@@ -316,6 +333,7 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
     routingFailureLowerBounds: [Meters],
     coverage: CandidateSearchCoverage?,
     attributions: [DataAttribution]?,
+    availabilityContext: String?,
     criteria: RideCriteria
   ) throws -> RideCandidateSearchOutcome {
     guard let coverage, let attributions else {
@@ -328,7 +346,8 @@ final class RideCandidateSearchCoordinator: RideCandidateSearching {
         criteria: criteria
       ),
       coverage: coverage,
-      attributions: attributions
+      attributions: attributions,
+      availabilityContext: availabilityContext
     )
   }
 

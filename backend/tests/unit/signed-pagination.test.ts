@@ -29,3 +29,12 @@ void test("rejects a modified signature", () => {
 void test("does not accept one token kind as another", () => {
   assert.throws(() => codec.decodeCursor(codec.encode(snapshot)), InvalidPaginationTokenError);
 });
+
+void test("demand snapshot mode requires an immutable positive expiry and no pinned live IDs", () => {
+  const demand = { ...snapshot, availabilitySnapshotIds: [], availabilityExpiresAt: 1_791_115_200_000 };
+  assert.deepEqual(codec.decodeSnapshot(codec.encode(demand)), demand);
+  for (const expiry of [0, -1, 1.5, Number.NaN, Number.POSITIVE_INFINITY]) {
+    assert.throws(() => codec.decodeSnapshot(codec.encode({ ...demand, availabilityExpiresAt: expiry })), InvalidPaginationTokenError);
+  }
+  assert.throws(() => codec.decodeSnapshot(codec.encode({ ...snapshot, availabilityExpiresAt: demand.availabilityExpiresAt })), InvalidPaginationTokenError);
+});

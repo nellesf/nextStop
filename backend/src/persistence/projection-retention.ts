@@ -76,6 +76,9 @@ async function pruneBatch(
     await client.query("BEGIN");
     await client.query("SET LOCAL lock_timeout = '500ms'");
     await client.query("SET LOCAL statement_timeout = '2s'");
+    // Selection needs the actual version and batch size: a generic plan can
+    // scan the entire shared table even when this version has no rows left.
+    await client.query("SET LOCAL plan_cache_mode = 'force_custom_plan'");
     const lock = await client.query<{ readonly acquired: boolean }>(
       "SELECT pg_try_advisory_xact_lock($1) AS acquired", [publicationLock],
     );
@@ -100,16 +103,25 @@ async function pruneBatch(
       [target.id, timestamp],
     );
     const [tableName, projectionColumn] = table;
-    const deleted = await client.query(
-      `DELETE FROM nextstop.${tableName}
-       WHERE ctid IN (
-         SELECT ctid FROM nextstop.${tableName}
-         WHERE ${projectionColumn} = $1
-         LIMIT $2
-       )`,
+    const selected = await client.query<{ ctid: string }>(
+      `SELECT ctid::text AS ctid FROM nextstop.${tableName}
+       WHERE ${projectionColumn} = $1
+       LIMIT $2 FOR UPDATE`,
       [target.id, batchSize],
     );
-    const deletedRows = deleted.rowCount ?? 0;
+    let deletedRows = 0;
+    if (selected.rows.length > 0) {
+      // Row locks keep these physical tuple identities stable until deletion.
+      // Generic FK plans avoid repeated spatial-index scans for depleted parks,
+      // while the outer DELETE now addresses only the already bounded tuples.
+      await client.query("SET LOCAL plan_cache_mode = 'force_generic_plan'");
+      const deleted = await client.query(
+        `DELETE FROM nextstop.${tableName} WHERE ctid = ANY($1::tid[])`,
+        [selected.rows.map(({ ctid }) => ctid)],
+      );
+      deletedRows = deleted.rowCount ?? 0;
+      if (deletedRows !== selected.rows.length) throw new Error("Projection retention batch changed while locked.");
+    }
     const stageComplete = deletedRows < batchSize;
     const completed = stageComplete && target.stage === searchTables.length - 1;
     if (stageComplete) {
