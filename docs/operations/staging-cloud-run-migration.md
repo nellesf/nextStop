@@ -1,6 +1,12 @@
 # Staging Cloud Run migration record
 
-## Direct-domain acceptance and stopped source VM, 2026-10-05
+## Direct-domain acceptance and completed source retirement, 2026-10-05
+
+At 11:25:43 UTC, absence was verified for the exact old staging VM, both source
+disks and its reserved IP address in `nextstop-tech-testing`. API/Auth readiness
+and an authenticated synthetic search passed again through the direct public
+domain after removal, on release `88dc6b061c16`. Cloud SQL remains authoritative;
+production was not changed. No new snapshot or job was created for retirement.
 
 At 10:39:06 UTC, verified HTTPS succeeded from both the operator's computer and
 the old staging VM through the direct Google domain path. Both sources resolved
@@ -37,27 +43,53 @@ this retirement check. The latest monthly check and report purge also succeeded.
 At 10:45:04 UTC, the exact source VM ID was verified in `TERMINATED` state.
 API/Auth readiness and an authenticated synthetic search still passed through
 the direct public domain on release `88dc6b061c16` after the VM stopped. The
-application therefore no longer depends on its Nginx bridge. The source VM
-remains present with deletion protection enabled; both disks and its reserved IP
-remain allocated. A fresh 10:48:42 UTC readback confirmed `TERMINATED`, deletion
-protection enabled, both disks still attached, and no deletion-start journal.
-Stopping ends active VM compute charges, while disk and
-reserved-address charges continue. This is a resource-state conclusion, not a
-verified new billing total.
+application therefore no longer depended on its Nginx bridge. A 10:48:42 UTC
+readback still showed `TERMINATED`, deletion protection enabled, both disks
+attached, and no deletion-start journal. At that intermediate point, active VM
+compute charges had stopped while disk/address charges continued.
 
-Automatic approval review rejected the permanent-deletion helper before
-execution because the owner's request authorized shutdown, not irreversible
-removal of the VM, both disks and reserved address. No deletion or deletion-
-protection change ran. Explicit owner approval for that exact permanent removal
-has been requested and remains pending. Cloud SQL is authoritative; do not restart
-the stale VM application writers as rollback. Production, the disabled staging
-release override and the separate main-merge boundary are unchanged.
+Automatic approval review initially rejected the permanent-deletion helper before
+execution because the owner's first request authorized shutdown, not irreversible
+removal of the VM, both disks and reserved address. No deletion or protection
+change ran during that rejected attempt. The owner subsequently explicitly
+approved that exact permanent removal. The guarded procedure rechecked identities
+and stopped state, removed the VM while retaining its disks, checked exclusive
+disk/address ownership, and then removed the two disks and released the address.
+The final absence checks and post-removal public search passed at 11:25:43 UTC.
+This ended the source VM/disk/address resource overlap; the actual new billing
+total remains unverified. The old VM is no longer a rollback destination.
+
+A fresh 11:24:18 UTC read verified the latest successful backup's receipt and exact
+archive/schema generations. The 2,807,737,577-byte archive matched its receipt;
+the schema object was 1,455 bytes. CRC32C metadata was present, objects were
+non-composite, and uniform bucket access plus enforced public-access prevention
+remained enabled. No archive/schema body was read, no archive hash independently
+recomputed, and no new restore performed. The prior isolated restore's evidence
+hash remained unchanged. Cloud SQL was `RUNNABLE` with the expected connector,
+TLS and capacity settings. All four schedules were ENABLED with their fixed
+Cloud Run job API targets and expected service identity, independent of the VM
+and custom-domain DNS.
+
+The owner authorized merging the branch into main while preserving the running
+production backend, and explicitly accepted the resulting internal TestFlight
+build. Review confirmed that the production workflow and environment configuration
+are unchanged: production promotion still requires a manual dispatch and reviewer
+approval. Backend, image-security, Swift Core and iOS CI passed for `a4e0b1f`;
+only this operational record changed afterward. The app remains compatible with
+the existing production search response: without the optional availability context,
+it makes no live-availability request and retains the existing displayed values.
+Xcode Cloud's enabled `Default` workflow starts on main changes and distributes
+its archive to the internal test group. No workflow configuration was saved;
+unsaved editor state was discarded with owner approval. Activating staging CI
+remains separate, and `NEXTSTOP_RELEASES_ENABLED` remains false.
 
 Private evidence: `retirement-public-domain-checks-20261005.json`,
 `retirement-public-ip-check-20261005.json`, `retirement-readiness-20261005.json`,
-`source-retirement-final-20261005T104052Z-30d59973.json` and
-`source-container-final-20261005T104258Z-fac30f0a.json` and
-`retirement-vm-stopped-20261005.json`. The following earlier
+`source-retirement-final-20261005T104052Z-30d59973.json`,
+`source-container-final-20261005T104258Z-fac30f0a.json`,
+`retirement-vm-stopped-20261005.json`,
+`retirement-readiness-refresh-20261005T112418Z-688b78d3.json` and
+`retirement-completed-20261005.json`. The following earlier
 DNS/TLS and release snapshots retain their original times and are superseded by
 this later direct-domain verification.
 
@@ -610,22 +642,24 @@ filtered-backup runtime test, traffic promotion and fresh writer handoff have
 completed. Direct-domain verified TLS, readiness/search and two-source IP
 isolation also passed on October 5. The separately recorded cleanup correction
 and release are complete, and all four reviewed schedules are enabled. Public
-operation also passed with the old VM stopped. Keep the source VM stopped and
-retain its protected disks/address while explicit owner approval for irreversible
-removal is pending. Preserve the recovery prerequisites and do not restart the
-old VM application writers. Investigate the separately observed
-09:00 cleanup failure without assuming that the later 10:00 success explains it.
+operation passed both with the old VM stopped and after its owner-approved
+removal together with both disks and reserved IP. Source retirement is complete;
+retain the filtered-backup and isolated-recovery evidence. Investigate the
+separately observed 09:00 cleanup failure without assuming that the later 10:00
+success explains it.
 
 Provider source changes now invalidate the import-budget and database-performance
 acceptance fingerprints. Regression coverage checks modification, addition and
 deletion of provider files while retaining unrelated IP, recovery, live-task and
 idle evidence. A changed downloader must not silently reuse an old import check.
 
-Staging's `NEXTSTOP_RELEASES_ENABLED` override is false while migration is active,
-preventing the old main-branch workflow from redeploying the VM during handoff.
-The production release control is unchanged. The feature branch has not been
-merged into main, and the new Cloud Run workflow must not be enabled before its
-configuration and actual acceptance evidence have been committed and reviewed.
+Staging's `NEXTSTOP_RELEASES_ENABLED` override remains false, preventing the old
+main-branch workflow from attempting to redeploy the retired VM. Production release
+control is unchanged. The owner authorized the main merge and its internal
+TestFlight build after the compatibility and automation review. The running
+production backend must remain unchanged; no production promotion is included.
+The new Cloud Run release workflow remains disabled until its separate activation
+prerequisites are completed.
 
 ## Earlier handoff interruption and temporary VM restoration (historical)
 
@@ -676,9 +710,9 @@ markers were preserved.
 
 Steps 1–3 below describe the completed guarded handoff and must not be rerun.
 The October 4 scheduler activation and October 5 release resumption are complete.
-Direct-domain TLS/search/IP checks and VM shutdown subsequently passed. Permanent
-VM/disk/address removal awaits explicit owner approval; later CI/main activation
-also remains separate. This procedure applies only to the source VM
+Direct-domain TLS/search/IP checks, VM shutdown, and explicitly owner-approved
+VM/disk/address removal subsequently passed. The main merge and internal
+TestFlight build were then authorized; later staging CI activation remains separate. This procedure applies only to the source VM
 `nextstop-backend` in `nextstop-tech-testing/europe-west3-a` and the reviewed Cloud
 Run/Cloud SQL target in the same project, region `europe-west1`. Production is
 unchanged. Keep the staging CI release override false. The four exact reviewed
@@ -727,12 +761,11 @@ before requesting the DNS change.
    scoped public invoker binding. API/Auth/live/broker remain IAM-private. The
    bridge passed configuration validation, readiness/auth checks and an
    authenticated synthetic search after reload. Public searches through the
-   existing staging domain also passed at 18:12 UTC. Clients retaining the old
-   address now reach the same Cloud SQL-backed services as the direct gateway.
-   They temporarily share the VM's source-IP budget at the gateway; the bridge
-   does not trust forged forwarded headers. All old application writers remain
-   stopped. Cloud SQL is authoritative: reverting routing to the stale VM
-   database would be an unsafe rollback.
+   existing staging domain also passed at 18:12 UTC. During the DNS transition,
+   clients retaining the old address reached the same Cloud SQL-backed services
+   through the bridge and temporarily shared the VM's source-IP budget. The
+   bridge never trusted forged forwarded headers. After direct-domain acceptance,
+   the source VM and disks were removed; Cloud SQL remains authoritative.
 
 4. **DNS and direct HTTPS verified.** The owner replaced the
    IONOS staging record with CNAME `api-staging` to `ghs.googlehosted.com.` on
@@ -741,15 +774,14 @@ before requesting the DNS change.
    both sources, public search and two-source IP checks passed at 10:39 UTC.
    The verification contract checks domain/certificate status and HTTPS readiness on
    `api-staging.nextstop.tech`, including the expected API/Auth release digest.
-   Use the existing `verify.verify_public` helper for the broker-authenticated
-   synthetic search, and repeat the two-source client-IP/forwarded-prefix probe
-   on the direct domain path. The existing 18:12 bridge-domain result is not that
-   post-DNS evidence. These checks prove routing/token behavior, not a real-device
-   App Attest assertion. The Nginx bridge covers cached old DNS; it does
-   not establish readiness of the newly issued managed certificate. Retain it
-   only through the observed DNS transition, rather than as ongoing hosting.
+   `verify.verify_public` supplied the broker-authenticated synthetic search;
+   the two-source client-IP/forwarded-prefix check ran on the direct domain before
+   the source VM was removed. The earlier 18:12 bridge-domain result was not used
+   as post-DNS evidence. These checks prove routing/token behavior, not a new
+   real-device App Attest assertion. The temporary bridge ended with the verified
+   source retirement.
 
-5. **Schedules enabled; VM stopped; deletion awaits approval.** The authoritative target,
+5. **Schedules enabled; source resources retired.** The authoritative target,
    authenticated public bridge and backup/release gates passed. The four exact
    commissioned schedules (`nextstop-monthly`, `nextstop-cleanup`,
    `nextstop-report-purge`, `nextstop-backup`) were resumed and verified ENABLED
@@ -758,21 +790,22 @@ before requesting the DNS change.
    The commissioning helper initially left the schedules paused, and `deploy.py`
    restores only schedules that were enabled before its run. Preserve the
    measured monthly due dates/budget; do not force another import when enabling
-   the daily due check. The stopped VM is no longer needed for the verified domain
-   path. Only after explicit approval for permanent removal, retire the exact
-   source VM, its boot disk, the separately retained `nextstop-data` disk
-   and the regional `nextstop-staging-ip` reservation, checking ownership and
-   attachments first. The VM was provisioned with deletion protection and the
-   data disk with `auto-delete=no`; stopping/deleting the VM alone is not proof
-   that its disk/address charges ended. Use the existing GCP CLI, without adding
-   a teardown framework or retaining report-bearing disk snapshots as backups.
+   the daily due check. After successful public checks with the VM stopped and
+   explicit owner approval for permanent removal, the exact source VM, 30 GiB
+   boot disk, 150 GiB `nextstop-data` disk and regional `nextstop-staging-ip`
+   reservation were removed. Final absence and direct-domain API/Auth/search
+   checks passed at 11:25:43 UTC on October 5. The procedure retained both disks
+   during VM deletion, then verified their detached ownership before removal;
+   it did not rely on automatic disk deletion. No replacement snapshot or job
+   was created, and production resources were untouched.
 
 6. **Keep CI separate from initial commissioning.** The branch may be deployed
-   manually under the staging migration authorization. Main has not been
-   authorized for merge. Before any later CI activation, commit the actual
-   `deploy/environments/staging-cloud-run.json` with numeric secret versions and
-   generation/hash-pinned real acceptance evidence, and obtain the separate
-   main-merge instruction. Only when main contains the reviewed Cloud Run path
+   manually under the staging migration authorization. The owner has now
+   authorized the main merge and its internal TestFlight build after review, while
+   preserving the running production backend. Before any later CI activation,
+   commit the actual `deploy/environments/staging-cloud-run.json` with numeric
+   secret versions and generation/hash-pinned real acceptance evidence. Only when
+   main contains the reviewed Cloud Run path
    may staging select `NEXTSTOP_STAGING_HOSTING=cloud-run` and re-enable
    `NEXTSTOP_RELEASES_ENABLED`. Enabling the old main workflow early could
    redeploy the VM. The first trusted-main WIF release still has to exercise the
@@ -790,7 +823,8 @@ EUR 42.09–59.18 net/month including 10% reserve, or EUR 50.09–70.43 with
 illustrative 19% VAT. New-runtime usage is not yet present in
 that billing period, so actual new charges are still unverified. A fresh Billing
 UI check at 13:18 UTC still showed usage only through October 3. Compare like tax
-bases. The source VM and target temporarily
-overlap during migration. Stopping the VM alone would retain disk/address costs.
-Keep actual billing validation and the first full import as separate acceptance
-evidence; report a projected overrun before any unapproved resize or teardown.
+bases. The temporary source VM/disk/address overlap ended with confirmed
+retirement at 11:25:43 UTC on October 5; stopping the VM alone had retained the
+disk/address costs. Actual new-runtime billing still needs separate verification.
+Keep billing and measured import evidence distinct; report a projected overrun
+before any unapproved resize or teardown.
