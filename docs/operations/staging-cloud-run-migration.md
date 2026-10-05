@@ -1,5 +1,59 @@
 # Staging Cloud Run migration record
 
+## Real Simulator app and Apple Maps acceptance, 2026-10-05
+
+A fresh iPhone Simulator build from `9d0844e` was tested against staging using
+Xcode build `27A266a` and iOS 27.0 (`24A434`). Its iOS sources are identical to
+main commit `c89c07d`. This was an ordinary app launch with
+`SIMCTL_CHILD_NEXTSTOP_BACKEND_ENVIRONMENT=staging` and the documented local
+Cloud Run authentication broker on port 8765. No `--ui-testing` launch argument
+or injected network responses were used. The build output was isolated in
+`/private/tmp/nextstop-staging-live-20261005-derived`.
+
+The app used the public simulated Munich location `48.137154, 11.576124`, a
+MapKit route to Rostock city, and a new local `Staging Rostock` profile with a
+50–100 km driving-distance window, at least 300 kW, at least six EVSEs and
+McDonald's. The result screen showed two parks: 64 km with ten EVSEs (four EWE
+and six EnBW), and 86 km with six IONITY EVSEs. A second ordinary search at
+12:02 UTC showed the same two results, distances and operator counts. The earlier
+Numbat result was not displayed in these runs. This observation is not an
+exhaustive catalog or operator-filter correctness proof.
+
+All three displayed operator actions opened native Apple Maps place cards:
+
+| Operator | Observed Apple Maps place | Displayed charging details |
+| --- | --- | --- |
+| EWE | EWE Go, Am Auer Bach 2, Ronnweg, 85084 Reichertshofen | Four CCS2, 300 kW |
+| EnBW | EnBW Elektromobilität, Logistikring 10, Ronnweg, 85084 Reichertshofen | Six CCS2, 300 kW |
+| IONITY | IONITY, 85120 Hepberg | Six CCS2, 350 kW |
+
+No navigation was started. PosterBoard retained PID 34898 from the 11:53:48 UTC
+startup observation through 12:02:27 UTC, including both searches and the Maps
+handoffs. This is a bounded process-stability observation, not a general UI
+reliability guarantee.
+
+Time-correlated staging API diagnostics recorded the following successful
+requests on `nextstop-api-88dc6b061c16`:
+
+| UTC timestamp | Request class | HTTP status | Server duration |
+| --- | --- | --- | --- |
+| 11:58:13.812 | Charging-park search | 200 | 924 ms |
+| 11:58:18.046 | Charging-park availability | 200 | 53 ms |
+| 12:02:10.728 | Charging-park search | 200 | 183 ms |
+| 12:02:12.024 | Charging-park availability | 200 | 45 ms |
+
+Across the complete 11:53:00–12:02:52 UTC observation window, both searches and
+all five availability requests returned HTTP 200 on that same revision. The
+diagnostic observer issued no synthetic requests. These metadata corroborate the
+test timing but do not independently identify a device or establish what triggered
+each availability request; diagnostic ingestion can also lag. The private records
+are `simulator-request-observation-20261005T115851Z-47305c03.json` and
+`simulator-request-observation-20261005T120253Z-9e740725.json`.
+
+This acceptance covers real MapKit interaction and ordinary Simulator app traffic
+to staging. It does not establish App Attest behavior on a physical device, and
+no production test or deployment was performed for this check.
+
 ## Direct-domain acceptance and completed source retirement, 2026-10-05
 
 At 11:25:43 UTC, absence was verified for the exact old staging VM, both source
