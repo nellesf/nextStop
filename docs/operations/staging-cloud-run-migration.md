@@ -1,6 +1,67 @@
 # Staging Cloud Run migration record
 
-## Current DNS transition status, 2026-10-05
+## Direct-domain acceptance and stopped source VM, 2026-10-05
+
+At 10:39:06 UTC, verified HTTPS succeeded from both the operator's computer and
+the old staging VM through the direct Google domain path. Both sources resolved
+away from the old VM and received a valid Google Trust Services certificate for
+`api-staging.nextstop.tech`, with normal chain and hostname verification. API/Auth
+readiness returned the expected `a6dd78dc…` image, and an authenticated synthetic
+search passed on release `88dc6b061c16`. At 10:39:52 UTC, the direct-domain
+client-IP isolation and forwarded-prefix resistance checks passed with nine
+bounded requests from the two independent sources. Google's mapping status still
+reported `CertificatePending`; these actual verified connections establish that
+the data path was ready despite that stale control-plane condition. More than
+three hours had elapsed since the verified DNS change with a 3,600-second TTL.
+
+Fresh source ownership metadata at 10:40 UTC matched only staging project
+`nextstop-tech-testing` (`353471052580`), VM `nextstop-backend` in
+`europe-west3-a`, its exclusively attached 30 GiB boot disk `nextstop-backend`,
+150 GiB disk `nextstop-data`, and reserved address `nextstop-staging-ip`
+(`34.89.193.23`). The bounded Compute inventory found no managed/unmanaged
+instance groups, templates, target instances, forwarding rules or snapshots.
+At 10:42:58 UTC, the five original API/Auth/worker containers were still stopped
+with exit code 0, unchanged IDs/images and no restarts; only the original database
+and Nginx remained running. The reviewed bridge configuration was unchanged.
+
+The independent readiness record confirmed no unfinished relevant jobs, valid
+source-bound acceptance, the successful overnight filtered backup and the earlier
+isolated restore. The restore evidence covers a prior filtered archive with
+native PostgreSQL; it is not a new restore of the overnight backup. The 09:00 UTC
+scheduled cleanup had failed with a nonzero exit, while the independent 10:00 UTC
+cleanup succeeded. That later failure's cause has not been investigated and is
+an operational follow-up; it is not assigned to the already reproduced empty-
+version plan regression without evidence. No cleanup rerun was initiated for
+this retirement check. The latest monthly check and report purge also succeeded.
+
+At 10:45:04 UTC, the exact source VM ID was verified in `TERMINATED` state.
+API/Auth readiness and an authenticated synthetic search still passed through
+the direct public domain on release `88dc6b061c16` after the VM stopped. The
+application therefore no longer depends on its Nginx bridge. The source VM
+remains present with deletion protection enabled; both disks and its reserved IP
+remain allocated. A fresh 10:48:42 UTC readback confirmed `TERMINATED`, deletion
+protection enabled, both disks still attached, and no deletion-start journal.
+Stopping ends active VM compute charges, while disk and
+reserved-address charges continue. This is a resource-state conclusion, not a
+verified new billing total.
+
+Automatic approval review rejected the permanent-deletion helper before
+execution because the owner's request authorized shutdown, not irreversible
+removal of the VM, both disks and reserved address. No deletion or deletion-
+protection change ran. Explicit owner approval for that exact permanent removal
+has been requested and remains pending. Cloud SQL is authoritative; do not restart
+the stale VM application writers as rollback. Production, the disabled staging
+release override and the separate main-merge boundary are unchanged.
+
+Private evidence: `retirement-public-domain-checks-20261005.json`,
+`retirement-public-ip-check-20261005.json`, `retirement-readiness-20261005.json`,
+`source-retirement-final-20261005T104052Z-30d59973.json` and
+`source-container-final-20261005T104258Z-fac30f0a.json` and
+`retirement-vm-stopped-20261005.json`. The following earlier
+DNS/TLS and release snapshots retain their original times and are superseded by
+this later direct-domain verification.
+
+## Earlier DNS transition snapshot, 2026-10-05
 
 The owner completed the IONOS change. At 07:26:45 UTC, all four authoritative
 IONOS nameservers plus Google and Cloudflare public resolvers returned exactly
@@ -546,13 +607,14 @@ artifacts. They do not override the current release and handoff state above.
 
 The authorized food import, statistics correction, new security acceptance,
 filtered-backup runtime test, traffic promotion and fresh writer handoff have
-completed. The owner has now changed DNS; managed certificate issuance and
-readiness/search plus two-source IP isolation on the direct public domain remain
-pending. The separately recorded cleanup correction and release are complete,
-and all four reviewed schedules are enabled again; their job API does not depend
-on that DNS change. Retire the obsolete VM resources only
-after the DNS bridge is no longer needed and the recovery prerequisites remain
-satisfied. Do not restart the old VM application writers.
+completed. Direct-domain verified TLS, readiness/search and two-source IP
+isolation also passed on October 5. The separately recorded cleanup correction
+and release are complete, and all four reviewed schedules are enabled. Public
+operation also passed with the old VM stopped. Keep the source VM stopped and
+retain its protected disks/address while explicit owner approval for irreversible
+removal is pending. Preserve the recovery prerequisites and do not restart the
+old VM application writers. Investigate the separately observed
+09:00 cleanup failure without assuming that the later 10:00 success explains it.
 
 Provider source changes now invalidate the import-budget and database-performance
 acceptance fingerprints. Regression coverage checks modification, addition and
@@ -610,19 +672,20 @@ bounded checks waited for both write endpoints to return 503 after Nginx reload
 before draining and stopping the old writers; the earlier one-time execution
 markers were preserved.
 
-## Completed handoff procedure and pending DNS transition
+## Recorded handoff procedure and resource-retirement guards
 
 Steps 1–3 below describe the completed guarded handoff and must not be rerun.
-The October 4 scheduler activation in step 5 is complete; the temporary October 5
-release pause and verified resumption are recorded above. DNS has changed, but direct TLS verification,
-VM retirement and any later CI/main activation remain pending. This procedure applies only to the source VM
+The October 4 scheduler activation and October 5 release resumption are complete.
+Direct-domain TLS/search/IP checks and VM shutdown subsequently passed. Permanent
+VM/disk/address removal awaits explicit owner approval; later CI/main activation
+also remains separate. This procedure applies only to the source VM
 `nextstop-backend` in `nextstop-tech-testing/europe-west3-a` and the reviewed Cloud
 Run/Cloud SQL target in the same project, region `europe-west1`. Production is
 unchanged. Keep the staging CI release override false. The four exact reviewed
 schedules resumed after the authoritative target, public bridge and backup/release
 gates passed on October 4; after the temporary cleanup-release pause, all four were
 verified ENABLED again at 08:20 UTC on October 5. The external DNS change is
-complete; certificate issuance remains pending.
+complete; actual direct-domain TLS passed despite the stale mapping condition.
 
 Before either handoff, the original source configuration matched the repository
 HTTPS template rendered for the green slot. The prepared freeze/bridge
@@ -671,11 +734,12 @@ before requesting the DNS change.
    stopped. Cloud SQL is authoritative: reverting routing to the stale VM
    database would be an unsafe rollback.
 
-4. **DNS changed; direct HTTPS verification pending.** The owner replaced the
+4. **DNS and direct HTTPS verified.** The owner replaced the
    IONOS staging record with CNAME `api-staging` to `ghs.googlehosted.com.` on
    October 5. Authoritative and public DNS checks passed at 07:26 UTC; Google's
-   managed certificate remained pending at 07:28 UTC, as recorded above.
-   Check the managed domain/certificate status and HTTPS readiness on
+   managed certificate initially remained pending at 07:28 UTC. Verified TLS from
+   both sources, public search and two-source IP checks passed at 10:39 UTC.
+   The verification contract checks domain/certificate status and HTTPS readiness on
    `api-staging.nextstop.tech`, including the expected API/Auth release digest.
    Use the existing `verify.verify_public` helper for the broker-authenticated
    synthetic search, and repeat the two-source client-IP/forwarded-prefix probe
@@ -685,7 +749,7 @@ before requesting the DNS change.
    not establish readiness of the newly issued managed certificate. Retain it
    only through the observed DNS transition, rather than as ongoing hosting.
 
-5. **Schedules enabled; VM retirement waits for direct HTTPS.** The authoritative target,
+5. **Schedules enabled; VM stopped; deletion awaits approval.** The authoritative target,
    authenticated public bridge and backup/release gates passed. The four exact
    commissioned schedules (`nextstop-monthly`, `nextstop-cleanup`,
    `nextstop-report-purge`, `nextstop-backup`) were resumed and verified ENABLED
@@ -694,8 +758,9 @@ before requesting the DNS change.
    The commissioning helper initially left the schedules paused, and `deploy.py`
    restores only schedules that were enabled before its run. Preserve the
    measured monthly due dates/budget; do not force another import when enabling
-   the daily due check. Once the DNS bridge is no longer required, retire the
-   exact source VM, its boot disk, the separately retained `nextstop-data` disk
+   the daily due check. The stopped VM is no longer needed for the verified domain
+   path. Only after explicit approval for permanent removal, retire the exact
+   source VM, its boot disk, the separately retained `nextstop-data` disk
    and the regional `nextstop-staging-ip` reservation, checking ownership and
    attachments first. The VM was provisioned with deletion protection and the
    data disk with `auto-delete=no`; stopping/deleting the VM alone is not proof
