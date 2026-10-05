@@ -27,6 +27,7 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
   const active = randomUUID();
   const failed = randomUUID();
   const building = randomUUID();
+  const emptyFailed = randomUUID();
   const ids = [oldest, recentlyRetired, rollbackFirst, rollbackSecond, active, failed, building];
   const foodId = randomUUID();
   const now = new Date("2030-01-31T00:00:00Z");
@@ -136,11 +137,79 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
       publisher.release();
     }
 
-    const first = await pruneRetiredChargingSearchProjections(pool, () => now, { batchSize: 1, maxBatches: 1 });
-    assert.equal(first.kind, "bounded");
-    assert.equal(first.batches, 1);
-    assert.ok(first.deletedRows <= 1);
-    assert.equal(first.completedVersions, 0);
+    // An empty failed version at the first large power table must advance,
+    // including when the reused session starts with a generic-plan preference.
+    await writer.create({
+      id: emptyFailed, sourceDatasetHash: "e".repeat(64),
+      sourceObservedAt: "2026-07-07T00:00:00Z", builtAt: "2020-01-01T00:00:00Z",
+      coverageStatus: "complete", activeSources: [bundesnetzagenturDescriptor.id], unavailableSources: [],
+    });
+    await writer.fail(emptyFailed, "SyntheticEmptyFailure");
+    await pool.query("UPDATE nextstop.projection_versions SET search_prune_stage = 1 WHERE id = $1", [emptyFailed]);
+    const session = await pool.connect();
+    try {
+      await session.query("SET plan_cache_mode = 'force_generic_plan'");
+      const sessionPool = { connect: () => Promise.resolve({ query: session.query.bind(session), release: () => {} }) } as unknown as Pool;
+      const empty = await pruneRetiredChargingSearchProjections(sessionPool, () => now, { batchSize: 1, maxBatches: 1 });
+      assert.deepEqual(empty, { kind: "bounded", deletedRows: 0, completedVersions: 0, batches: 1 });
+      assert.equal((await session.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode,
+        "force_generic_plan", "Transaction-local selection plans must not leak into pooled sessions.");
+    } finally {
+      await session.query("RESET plan_cache_mode");
+      session.release();
+    }
+    const emptyStage = await pool.query<{ stage: number; completed: Date | null }>(
+      `SELECT search_prune_stage AS stage, search_prune_completed_at AS completed
+       FROM nextstop.projection_versions WHERE id = $1`, [emptyFailed],
+    );
+    assert.deepEqual(emptyStage.rows, [{ stage: 2, completed: null }]);
+    const emptyFinished = await pruneRetiredChargingSearchProjections(pool, () => now, { batchSize: 1, maxBatches: 5 });
+    assert.deepEqual(emptyFinished, { kind: "bounded", deletedRows: 0, completedVersions: 1, batches: 5 });
+    await assertRetained(pool, [oldest, recentlyRetired, rollbackFirst, rollbackSecond, active, building]);
+
+    const beforeCount = (await pool.query<{ count: number }>(
+      "SELECT count(*)::int AS count FROM nextstop.charging_park_food_poi_matches WHERE charging_projection_id = $1", [oldest],
+    )).rows[0]?.count;
+    assert.ok(beforeCount !== undefined && beforeCount > 0);
+    const deletingSession = await pool.connect();
+    try {
+      await deletingSession.query("SET plan_cache_mode = 'force_custom_plan'");
+      let injectCountMismatch = true, selectedBatches = 0, deletedBatches = 0;
+      const checkingPool = { connect: () => Promise.resolve({
+        query: async (statement: string, values?: unknown[]) => {
+          if (statement.startsWith("SELECT ctid::text")) {
+            selectedBatches += 1;
+            assert.equal((await deletingSession.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode, "force_custom_plan");
+          }
+          const result = await deletingSession.query(statement, values);
+          if (statement.startsWith("DELETE FROM nextstop.")) {
+            deletedBatches += 1;
+            assert.ok(statement.includes("ctid = ANY($1::tid[])"));
+            assert.equal((await deletingSession.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode, "force_generic_plan");
+            assert.equal(result.rowCount, 1, "The selected batch must remain bounded to one locked row.");
+            if (injectCountMismatch) return { ...result, rowCount: 0 };
+          }
+          return result;
+        }, release: () => {},
+      }) } as unknown as Pool;
+      await assert.rejects(pruneRetiredChargingSearchProjections(checkingPool, () => now, { batchSize: 1, maxBatches: 1 }),
+        /Projection retention batch changed while locked/u);
+      assert.equal((await deletingSession.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode, "force_custom_plan");
+      assert.equal((await deletingSession.query<{ count: number }>(
+        "SELECT count(*)::int AS count FROM nextstop.charging_park_food_poi_matches WHERE charging_projection_id = $1", [oldest],
+      )).rows[0]?.count, beforeCount, "A mismatched batch must roll back its deletion.");
+      await assertRetained(pool, [oldest, recentlyRetired, rollbackFirst, rollbackSecond, active, building]);
+      injectCountMismatch = false;
+      const first = await pruneRetiredChargingSearchProjections(checkingPool, () => now, { batchSize: 1, maxBatches: 1 });
+      assert.deepEqual(first, { kind: "bounded", batches: 1, deletedRows: 1, completedVersions: 0 });
+      assert.equal(selectedBatches, 2);
+      assert.equal(deletedBatches, 2);
+      assert.equal((await deletingSession.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode, "force_custom_plan",
+        "The generic deletion plan must not leak after commit or rollback.");
+    } finally {
+      await deletingSession.query("RESET plan_cache_mode");
+      deletingSession.release();
+    }
     await assert.rejects(search.search(oldestContinuation), InvalidPaginationTokenError);
     assert.ok((await search.search(request)).candidates.length > 0);
     const marked = await pool.query<{ pruned: Date | null; completed: Date | null }>(
@@ -175,7 +244,7 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
     assert.equal(repeated.deletedRows, 0);
     await assertAuditRetained(pool, ids, observations.length, quarantines.length);
   } finally {
-    await pool.query("DELETE FROM nextstop.projection_versions WHERE id = ANY($1::uuid[])", [ids]);
+    await pool.query("DELETE FROM nextstop.projection_versions WHERE id = ANY($1::uuid[])", [[...ids, emptyFailed]]);
     await pool.query("DELETE FROM nextstop.food_poi_projection_versions WHERE id = $1", [foodId]);
   }
 }
