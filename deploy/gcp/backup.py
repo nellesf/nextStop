@@ -36,6 +36,17 @@ def archive_sha256(path: Path) -> str:
     return digest.hexdigest()
 
 
+def archive_checksums(path: Path) -> tuple[str, str]:
+    sha256 = hashlib.sha256()
+    # MD5 is the Cloud Storage transfer checksum, not an authenticity check.
+    md5 = hashlib.md5(usedforsecurity=False)
+    with path.open("rb") as source:
+        for chunk in iter(lambda: source.read(8 * 1024 * 1024), b""):
+            sha256.update(chunk)
+            md5.update(chunk)
+    return sha256.hexdigest(), base64.b64encode(md5.digest()).decode("ascii")
+
+
 def run_command(arguments: list[str], timeout: int = 180) -> None:
     # Large archives must not create temporary composite-upload components:
     # the backup identity intentionally has no object-deletion permission.
@@ -131,13 +142,15 @@ def create_backup(config: dict, image: str, *, run=run_json, command=run_command
                      f"--project={project}", f"--zone={config['target']['zone']}",
                      "--tunnel-through-iap", "--quiet"], timeout=1800)
             os.chmod(local, 0o600)
-            digest = archive_sha256(local)
+            digest, content_md5 = archive_checksums(local)
             if local.stat().st_size != archive["size"] or digest != archive["sha256"]:
                 raise RuntimeError("The downloaded archive does not match the validated source.")
-            # gcloud verifies upload checksums. A generation precondition prevents
-            # overwriting an existing object, including when retrying commands.
+            # Supply the checksum so GCS rejects corrupt data before finalizing
+            # the object; this identity cannot delete a corrupt uploaded object.
+            # The generation precondition also prevents overwrites on retries.
             command(["gcloud", "storage", "cp", str(local), destination,
-                     "--if-generation-match=0", f"--project={project}", "--quiet"], timeout=1800)
+                     f"--content-md5={content_md5}", "--if-generation-match=0",
+                     f"--project={project}", "--quiet"], timeout=1800)
             stored = run(["gcloud", "storage", "objects", "describe", destination,
                           "--raw", f"--project={project}", "--format=json", "--quiet"])
             if not isinstance(stored, dict):
@@ -150,7 +163,8 @@ def create_backup(config: dict, image: str, *, run=run_json, command=run_command
                 raise RuntimeError("Cloud Storage backup metadata is incomplete.") from None
             generation = str(stored.get("generation", ""))
             if (stored.get("bucket") != bucket or stored.get("name") != object_name
-                    or size != archive["size"] or len(crc) != 4 or not re.fullmatch(r"[1-9][0-9]*", generation)
+                    or size != archive["size"] or stored.get("md5Hash") != content_md5
+                    or len(crc) != 4 or not re.fullmatch(r"[1-9][0-9]*", generation)
                     or not started - 60 <= completed <= now() + 60):
                 raise RuntimeError("Cloud Storage backup identity, integrity or completion time is invalid.")
         return {"environment": "production", "image": image, "project": project,

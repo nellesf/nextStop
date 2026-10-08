@@ -1,10 +1,12 @@
 """Exercise fail-closed promotion and exact-database backup verification."""
+import base64
 import importlib.util
 import hashlib
 import json
 import shlex
 import subprocess
 import sys
+import tempfile
 from types import SimpleNamespace
 import unittest
 from pathlib import Path
@@ -36,6 +38,7 @@ class ReleaseControlTests(unittest.TestCase):
 
     def backup_runner(self, changes=None, failure=None, corrupt_download=False, private_bucket=True):
         payload = b"PGDMP synthetic fixture with no production content"
+        content_md5 = base64.b64encode(hashlib.md5(payload, usedforsecurity=False).digest()).decode("ascii")
         events, local_paths = [], []
         destination = None
 
@@ -64,6 +67,7 @@ class ReleaseControlTests(unittest.TestCase):
             self.assertEqual(arguments[4], destination)
             bucket, name = destination.removeprefix("gs://").split("/", 1)
             return {"bucket": bucket, "name": name, "size": str(len(payload)),
+                    "md5Hash": content_md5,
                     "crc32c": "AAAAAA==", "generation": "42", "timeCreated": "2026-10-01T00:00:00Z",
                     **(changes or {})}
 
@@ -91,6 +95,7 @@ class ReleaseControlTests(unittest.TestCase):
             elif arguments[1:3] == ["storage", "cp"]:
                 events.append("upload")
                 self.assertIn("--if-generation-match=0", arguments)
+                self.assertIn(f"--content-md5={content_md5}", arguments)
                 destination = arguments[4]
                 self.assertTrue(destination.startswith("gs://nextstop-tech-staging-release-backups/production/nextstop-backend/"))
                 if failure == "upload":
@@ -102,6 +107,16 @@ class ReleaseControlTests(unittest.TestCase):
                 if failure == "cleanup":
                     raise RuntimeError("cleanup failed")
         return run, command, events, local_paths
+
+    def test_archive_checksums_cover_binary_data_across_read_boundaries(self):
+        payload = bytes(range(256)) * (32 * 1024) + b"\x00\xff\r\nlast chunk"
+        with tempfile.TemporaryDirectory() as temporary:
+            archive = Path(temporary) / "archive.dump"
+            archive.write_bytes(payload)
+            sha256, content_md5 = backup.archive_checksums(archive)
+        self.assertEqual(sha256, hashlib.sha256(payload).hexdigest())
+        self.assertEqual(base64.b64decode(content_md5, validate=True),
+                         hashlib.md5(payload, usedforsecurity=False).digest())
 
     def test_successful_backup_is_bound_to_database_image_generation_and_attempt(self):
         run, command, events, paths = self.backup_runner()
@@ -179,6 +194,22 @@ class ReleaseControlTests(unittest.TestCase):
                 with self.assertRaises(RuntimeError):
                     backup.create_backup(CONFIG, IMAGE, run=run, command=command, now=lambda: 1790812800)
                 self.assertEqual(events[-1], "cleanup")
+                self.assertTrue(all(not path.parent.exists() for path in paths))
+
+    def test_missing_or_mismatched_upload_md5_cannot_issue_receipt(self):
+        for stored_md5 in [None, "", "not_base64", "AAAAAAAAAAAAAAAAAAAAAA==", 42]:
+            with self.subTest(stored_md5=stored_md5):
+                run, command, events, paths = self.backup_runner({"md5Hash": stored_md5})
+
+                def metadata(arguments, **kwargs):
+                    result = run(arguments, **kwargs)
+                    if stored_md5 is None and arguments[1:4] == ["storage", "objects", "describe"]:
+                        result.pop("md5Hash")
+                    return result
+
+                with self.assertRaisesRegex(RuntimeError, "integrity"):
+                    backup.create_backup(CONFIG, IMAGE, run=metadata, command=command, now=lambda: 1790812800)
+                self.assertEqual(events, ["bucket", "prepare", "dump", "download", "upload", "describe", "cleanup"])
                 self.assertTrue(all(not path.parent.exists() for path in paths))
 
     def test_dump_download_upload_and_cleanup_failures_cannot_issue_receipt(self):

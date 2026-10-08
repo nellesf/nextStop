@@ -213,6 +213,14 @@ object. Its subprocesses explicitly set
 `CLOUDSDK_STORAGE_PARALLEL_COMPOSITE_UPLOAD_ENABLED=false`, overriding inherited
 values without changing global gcloud configuration, so large archives use a
 resumable single-object upload without temporary components or deletion rights.
+The downloaded archive's SHA-256 is checked against the VM source. In the same
+streaming read, the backup computes a Base64 MD5 transfer checksum and supplies it
+with `gcloud storage cp --content-md5`. Cloud Storage can then reject a checksum
+mismatch before finalizing the object, rather than relying only on the CLI's
+post-upload check and attempted deletion. The stored `md5Hash` must also match
+before a successful receipt is issued. MD5 is used only for transfer validation;
+the SHA-256 source check and existing restricted IAM permissions remain in place.
+See Google's [checksum validation documentation](https://docs.cloud.google.com/storage/docs/data-validation#google-cloud-cli-copies-and-rewrites).
 The receipt identifies production project, VM/database, immutable object
 generation, image and completion time. The host migrator rejects an expired or
 mismatched receipt. This requirement is a release backup gate, not a claim of
