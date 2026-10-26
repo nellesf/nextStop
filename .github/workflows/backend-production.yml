@@ -16,6 +16,11 @@ on:
         type: boolean
         default: false
         required: false
+      backup_only:
+        description: Back up the unchanged current production release without deploying
+        type: boolean
+        default: false
+        required: false
 
 permissions:
   contents: read
@@ -51,25 +56,33 @@ jobs:
           service_account: ${{ vars.NEXTSTOP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v3
       - name: Require successful staging of this exact image
+        if: ${{ !inputs.backup_only }}
         run: python3 deploy/gcp/verify-promotion.py --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE"
       - name: Verify security-only baseline and private candidate evidence
-        if: inputs.security_only
+        if: ${{ !inputs.backup_only && inputs.security_only }}
         run: python3 deploy/security/production-backport.py --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE" --check-only
       - name: Record the selected release
+        if: ${{ !inputs.backup_only }}
         id: deployment
         run: |
           id=$(python3 deploy/gcp/record-deployment.py start --environment production --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE")
           echo "id=$id" >> "$GITHUB_OUTPUT"
+      - name: Prepare the reviewed PostgreSQL backup clients
+        run: python3 deploy/security/postgres-client/prepare.py
       - name: Back up the exact production database
+        if: ${{ !inputs.backup_only }}
         run: python3 deploy/gcp/backup.py --image "$RELEASE_IMAGE" --output "$RUNNER_TEMP/production-backup.json"
+      - name: Back up the unchanged current production release
+        if: inputs.backup_only
+        run: python3 deploy/gcp/backup.py --current-production --output "$RUNNER_TEMP/production-backup.json"
       - name: Promote and verify production
-        if: ${{ !inputs.security_only }}
+        if: ${{ !inputs.backup_only && !inputs.security_only }}
         run: bash deploy/gcp-vm/deploy.sh --environment production --image "$RELEASE_IMAGE" --backup-receipt "$RUNNER_TEMP/production-backup.json"
       - name: Promote and verify the security-only production backport
-        if: inputs.security_only
+        if: ${{ !inputs.backup_only && inputs.security_only }}
         run: python3 deploy/security/production-backport.py --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE" --backup-receipt "$RUNNER_TEMP/production-backup.json"
       - name: Record outcome
-        if: always() && steps.deployment.outputs.id != ''
+        if: ${{ always() && !inputs.backup_only && steps.deployment.outputs.id != '' }}
         env:
           DEPLOYMENT_ID: ${{ steps.deployment.outputs.id }}
           RELEASE_OUTCOME: ${{ job.status == 'success' && 'success' || 'failure' }}

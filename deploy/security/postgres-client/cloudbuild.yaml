@@ -1,0 +1,71 @@
+# Explicit operator build only. Use --no-source and the full reviewed source commit.
+substitutions:
+  _REGISTRY: europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/postgres-client
+  _COMMIT: REQUIRED_FULL_GIT_COMMIT
+steps:
+  - id: verify-source
+    name: gcr.io/cloud-builders/git
+    entrypoint: bash
+    env: ['GIT_TERMINAL_PROMPT=0']
+    args:
+      - -ceu
+      - |
+        [[ "${_COMMIT}" =~ ^[0-9a-f]{40}$$ ]]
+        git init .
+        git remote add origin https://github.com/nellesf/nextStop.git
+        git sparse-checkout init --cone
+        git sparse-checkout set deploy/security
+        git fetch --depth=1 --filter=blob:none origin "${_COMMIT}"
+        git checkout --detach "${_COMMIT}"
+        test "$$(git rev-parse HEAD)" = "${_COMMIT}"
+  - id: build-client
+    name: gcr.io/cloud-builders/docker
+    args: ['build', '--pull', '--platform', 'linux/amd64', '--build-arg', 'SOURCE_COMMIT=${_COMMIT}', '--tag', '${_REGISTRY}:${_COMMIT}', 'deploy/security/postgres-client']
+  - id: check-client-runtime
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker run --rm --network none --read-only --cap-drop ALL \
+          --security-opt no-new-privileges --user 65532:65532 \
+          --pids-limit 32 --memory 128m --cpus 1 --entrypoint /bin/sh \
+          '${_REGISTRY}:${_COMMIT}' -ec '
+            test "$$(id -u):$$(id -g)" = "65532:65532"
+            for tool in psql pg_dump pg_restore; do
+              test "$$("$$tool" --version)" = "$$tool (PostgreSQL) 17.11"
+              "$$tool" --version
+            done
+            for forbidden in gosu postgres initdb pg_ctl docker-entrypoint.sh; do
+              test ! -e "/usr/local/bin/$$forbidden"
+            done'
+  - id: client-synthetic-dump-restore
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args: ['deploy/security/postgres-client/test-roundtrip.sh', '${_REGISTRY}:${_COMMIT}']
+  - id: export-client
+    name: gcr.io/cloud-builders/docker
+    args: ['save', '--output', '/workspace/postgres-client.tar', '${_REGISTRY}:${_COMMIT}']
+  - id: client-security-before-push
+    name: python:3.13-slim-bookworm
+    entrypoint: python3
+    args: ['deploy/security/scan-image.py', '--profile', 'postgres-client', '--archive', '/workspace/postgres-client.tar', '--commit', '${_COMMIT}', '--output', '/workspace/security-results/postgres-client.json']
+  - id: push-client
+    name: gcr.io/cloud-builders/docker
+    args: ['push', '${_REGISTRY}:${_COMMIT}']
+  - id: inspect-pushed-client
+    name: gcr.io/cloud-builders/docker
+    entrypoint: bash
+    args:
+      - -ceu
+      - |
+        docker image inspect '${_REGISTRY}:${_COMMIT}' > /workspace/security-results/postgres-client-inspection.json
+        docker image inspect --format '{{index .RepoDigests 0}}' '${_REGISTRY}:${_COMMIT}' > /workspace/security-results/postgres-client.ref
+  - id: bind-client-security-receipt
+    name: python:3.13-slim-bookworm
+    entrypoint: bash
+    args: ['-ceu', 'python3 deploy/security/scan-image.py --bind-inspection /workspace/security-results/postgres-client-inspection.json --image "$$(cat /workspace/security-results/postgres-client.ref)" --output /workspace/security-results/postgres-client.json']
+images: ['${_REGISTRY}:${_COMMIT}']
+timeout: 1800s
+options:
+  logging: CLOUD_LOGGING_ONLY

@@ -1,7 +1,10 @@
 """Exercise fail-closed promotion and exact-database backup verification."""
 import importlib.util
+import contextlib
 import hashlib
+import io
 import json
+import re
 import shlex
 import subprocess
 import sys
@@ -29,6 +32,14 @@ COMMIT = "b" * 40
 
 
 class ReleaseControlTests(unittest.TestCase):
+    def setUp(self):
+        client = {"image": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/postgres-client@sha256:" + "1" * 64,
+                  "configDigest": "sha256:" + "2" * 64, "sourceCommit": "3" * 40,
+                  "version": "17.11", "platform": "linux/amd64"}
+        mocked_client = patch.object(backup, "client_configuration", return_value=client)
+        mocked_client.start()
+        self.addCleanup(mocked_client.stop)
+
     def test_mutable_or_cross_repository_image_rejected(self):
         for image in [CONFIG["registry"] + ":latest", IMAGE.replace("/nextstop/", "/other/")]:
             with self.assertRaises(ValueError):
@@ -51,9 +62,11 @@ class ReleaseControlTests(unittest.TestCase):
                 self.assertEqual(arguments[3], "nextstop-backend")
                 self.assertIn("--tunnel-through-iap", arguments)
                 script = arguments[-1]
-                self.assertIn("pg_dump -U nextstop_app -d nextstop -Fc", script)
+                self.assertIn("client_run", script)
+                self.assertNotIn("docker exec", script)
                 self.assertIn("--exclude-table-data=nextstop.user_error_reports", script)
-                self.assertIn("pg_restore --list", script)
+                self.assertIn("pg_restore", script)
+                self.assertIn("--list", script)
                 self.assertIn("1800s", script)
                 self.assertIn("2>/dev/null", script)
                 if failure == "dump":
@@ -253,9 +266,110 @@ class ReleaseControlTests(unittest.TestCase):
 
     def test_remote_dump_script_is_valid_bash_without_executing_it(self):
         arguments = shlex.split(backup.dump_script("/srv/nextstop/.release-backup-" + "a" * 32))
-        self.assertEqual(arguments[:5], ["timeout", "--kill-after=10s", "1800s", "bash", "-c"])
+        self.assertEqual(arguments[:5], ["timeout", "--kill-after=60s", "1800s", "bash", "-c"])
         result = subprocess.run(["bash", "-n"], input=arguments[5], text=True, capture_output=True)
         self.assertEqual(result.returncode, 0, result.stderr)
+
+    def test_current_production_read_exports_only_validated_release_identity(self):
+        state = {"environment": "production", "image": IMAGE, "workerImage": IMAGE,
+                 "api": {"image": IMAGE, "privateExtra": "PRIVATE"}, "privateExtra": "PRIVATE"}
+        seen = []
+        def run(arguments, **kwargs):
+            script = shlex.split(arguments[-1].removeprefix('--command='))
+            self.assertEqual(script[:3], ['sudo', '/usr/bin/python3', '-c'])
+            source = SimpleNamespace(read_text=lambda: json.dumps(state))
+            with patch('pathlib.Path', return_value=source), contextlib.redirect_stdout(io.StringIO()) as output:
+                exec(script[3], {})
+            seen.append(output.getvalue())
+            return json.loads(output.getvalue())
+        self.assertEqual(backup.current_production_image(CONFIG, run=run), IMAGE)
+        self.assertNotIn('PRIVATE', seen[0])
+        self.assertEqual(set(json.loads(seen[0])), {'environment', 'image', 'apiImage', 'workerImage', 'pending'})
+        for changes in ({"environment": "staging"}, {"workerImage": IMAGE + "wrong"},
+                        {"api": {"image": IMAGE + "wrong"}}, {"pending": {}},
+                        {"pendingWorkerChanged": False}, {"pendingCandidateSlot": None},
+                        {"image": "PRIVATE"}):
+            invalid = {**state, **changes}
+            with self.subTest(changes=changes):
+                original = state
+                state = invalid
+                with self.assertRaises(RuntimeError):
+                    backup.current_production_image(CONFIG, run=run)
+                state = original
+        self.assertEqual(len(seen), 1)
+
+    def test_current_production_backup_rechecks_image_and_pending_state(self):
+        receipt = {"image": IMAGE, "status": "SUCCESSFUL"}
+        for final in (IMAGE, IMAGE[:-1] + 'c', RuntimeError('pending production state')):
+            command = unittest.mock.Mock()
+            with self.subTest(final=final), patch.object(backup, 'current_production_image', side_effect=[IMAGE, final]) as read, \
+                 patch.object(backup, 'create_backup', return_value=receipt) as create:
+                if final == IMAGE:
+                    self.assertEqual(backup.create_current_backup(CONFIG, command=command), receipt)
+                else:
+                    with self.assertRaises(RuntimeError):
+                        backup.create_current_backup(CONFIG, command=command)
+                self.assertEqual(read.call_count, 2)
+                self.assertEqual(create.call_args.args, (CONFIG, IMAGE))
+                self.assertEqual(command.call_args.args[0][-1], '--command=true')
+
+    def test_backup_cli_requires_exactly_one_image_source(self):
+        for targets in ([], ['--image', IMAGE, '--current-production']):
+            with self.subTest(targets=targets), patch.object(sys, 'argv', ['backup.py', *targets, '--output', '/tmp/unused.json']), \
+                 patch.object(backup, 'create_backup') as create, contextlib.redirect_stderr(io.StringIO()):
+                with self.assertRaises(SystemExit) as error:
+                    backup.main()
+                self.assertEqual(error.exception.code, 2)
+                create.assert_not_called()
+
+    def test_backup_only_workflow_never_records_or_promotes_even_with_security_only(self):
+        root = Path(__file__).parents[2]
+        workflow = (root / '.github/workflows/backend-production.yml').read_text()
+        self.assertFalse((root / '.github/workflows/backend-production-backup.yml').exists())
+        for guard in ("if: vars.NEXTSTOP_RELEASES_ENABLED == 'true' && github.ref == 'refs/heads/main'",
+                      'environment: production', 'group: nextstop-production-release',
+                      'cancel-in-progress: false', 'id-token: write',
+                      'workload_identity_provider: ${{ vars.NEXTSTOP_WORKLOAD_IDENTITY_PROVIDER }}',
+                      'service_account: ${{ vars.NEXTSTOP_DEPLOY_SERVICE_ACCOUNT }}'):
+            self.assertIn(guard, workflow)
+        self.assertRegex(workflow, r'backup_only:\n\s+description: [^\n]+\n\s+type: boolean\n\s+default: false')
+        for required in ('commit', 'image'):
+            self.assertRegex(workflow, required + r':\n\s+description: [^\n]+\n\s+type: string\n\s+required: true')
+        self.assertNotRegex(workflow, r'(?m)^\s+(schedule|pull_request|push):')
+        sections = workflow.split('      - name: ')[1:]
+        self.assertEqual(len(sections), 9)
+        for backup_only in (False, True):
+            for security_only in (False, True):
+                selected = []
+                for section in sections:
+                    name = section.splitlines()[0]
+                    match = re.search(r'^        if: (.+)$', section, re.M)
+                    condition = match.group(1) if match else 'True'
+                    condition = condition.removeprefix('${{').removesuffix('}}').strip()
+                    for source, value in (('inputs.backup_only', backup_only), ('inputs.security_only', security_only),
+                                          ('always()', True), ("steps.deployment.outputs.id != ''", not backup_only)):
+                        condition = condition.replace(source, str(value))
+                    condition = condition.replace('&&', ' and ').replace('!', 'not ')
+                    # Accept only this workflow's boolean grammar; new syntax
+                    # must receive an explicit routing-test update.
+                    self.assertTrue(set(condition.split()) <= {'True', 'False', 'and', 'not'})
+                    if eval(condition, {'__builtins__': {}}, {}):
+                        selected.append(name)
+                if backup_only:
+                    self.assertEqual(selected, ['Prepare the reviewed PostgreSQL backup clients',
+                                                'Back up the unchanged current production release'])
+                else:
+                    self.assertIn('Require successful staging of this exact image', selected)
+                    self.assertIn('Record the selected release', selected)
+                    self.assertIn('Record outcome', selected)
+                    self.assertIn('Back up the exact production database', selected)
+                    self.assertNotIn('Back up the unchanged current production release', selected)
+                    promotions = [name for name in selected if name.startswith('Promote and verify')]
+                    self.assertEqual(promotions, ['Promote and verify the security-only production backport'
+                                                  if security_only else 'Promote and verify production'])
+                    self.assertEqual('Verify security-only baseline and private candidate evidence' in selected, security_only)
+                    self.assertLess(selected.index('Prepare the reviewed PostgreSQL backup clients'),
+                                    selected.index('Back up the exact production database'))
 
     def promotion_runner(self, *, image=IMAGE, state="success", older_success=False, task="nextstop-release"):
         deployment = {"sha": COMMIT, "environment": "staging", "id": 42,

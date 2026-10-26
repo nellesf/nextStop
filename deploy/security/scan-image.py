@@ -21,6 +21,8 @@ ARCHIVE_SHA256 = 'c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f
 URL = f'https://github.com/aquasecurity/trivy/releases/download/v{VERSION}/trivy_{VERSION}_Linux-64bit.tar.gz'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
 COMMIT = re.compile(r'[0-9a-f]{40}\Z')
+PROFILES = ('backend', 'postgres-client')
+POSTGRES_CLIENT_BASE = 'sha256:e4cb93687b062cd25a0e8f672d85a7708235009d70d31f8a7698d9370092a9c4'
 
 
 class GateError(Exception):
@@ -54,9 +56,22 @@ def install(directory: Path) -> Path:
     return executable
 
 
-def archive_identity(archive: Path, commit: str):
+def client_configuration(config):
+    labels = config.get('Labels') or {}
+    if (config.get('User') != '65532:65532' or config.get('Entrypoint')
+            or config.get('Cmd') != ['psql', '--version'] or config.get('Volumes')
+            or config.get('ExposedPorts') or config.get('WorkingDir') != '/tmp'
+            or labels.get('tech.nextstop.image-purpose') != 'postgres-client'
+            or labels.get('org.opencontainers.image.base.digest') != POSTGRES_CLIENT_BASE
+            or labels.get('org.opencontainers.image.version') != '17.11'):
+        raise GateError('postgres_client_configuration_invalid')
+
+
+def archive_identity(archive: Path, commit: str, profile='backend'):
     if not COMMIT.fullmatch(commit):
         raise GateError('commit_invalid')
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
     with tarfile.open(archive, mode='r:*') as bundle:
         def read(name):
             member = bundle.getmember(name)
@@ -71,10 +86,14 @@ def archive_identity(archive: Path, commit: str):
     if (config.get('architecture') != 'amd64' or config.get('os') != 'linux'
             or config.get('config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != commit):
         raise GateError('image_platform_or_revision_mismatch')
+    if profile == 'postgres-client':
+        client_configuration(config.get('config', {}))
     return 'sha256:' + hashlib.sha256(data).hexdigest()
 
 
-def evaluate(report, image_id):
+def evaluate(report, image_id, profile='backend'):
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
     if (report.get('SchemaVersion') != 2 or report.get('Trivy', {}).get('Version') != VERSION
             or report.get('Metadata', {}).get('ImageID') != image_id
             or report.get('Metadata', {}).get('OS', {}).get('EOSL') is True):
@@ -82,8 +101,10 @@ def evaluate(report, image_id):
     results = report.get('Results', [])
     if not any(r.get('Class') == 'os-pkgs' and r.get('Packages') for r in results):
         raise GateError('os_inventory_missing')
-    if not any(r.get('Class') == 'lang-pkgs' and r.get('Type') in ('npm', 'node-pkg') and r.get('Packages') for r in results):
+    if profile == 'backend' and not any(r.get('Class') == 'lang-pkgs' and r.get('Type') in ('npm', 'node-pkg') and r.get('Packages') for r in results):
         raise GateError('npm_inventory_missing')
+    if profile == 'postgres-client' and report.get('Metadata', {}).get('OS', {}).get('Family') != 'alpine':
+        raise GateError('postgres_client_os_invalid')
     counts = {s: 0 for s in ('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')}
     blockers = []
     for result in results:
@@ -100,8 +121,8 @@ def evaluate(report, image_id):
     return counts, blockers
 
 
-def scan(archive: Path, commit: str, output: Path):
-    image_id = archive_identity(archive, commit)
+def scan(archive: Path, commit: str, output: Path, profile='backend'):
+    image_id = archive_identity(archive, commit, profile)
     with tempfile.TemporaryDirectory(prefix='nextstop-image-security-') as temporary:
         work = Path(temporary)
         binary = install(work)
@@ -117,8 +138,9 @@ def scan(archive: Path, commit: str, output: Path):
                  '--list-all-pkgs', '--ignore-unfixed=false', '--format', 'json', '--output', str(report_path),
                  '--timeout', '15m', '--disable-telemetry', '--skip-version-check'], cwd=work, env=env)
         report = json.loads(report_path.read_text())
-        counts, blockers = evaluate(report, image_id)
+        counts, blockers = evaluate(report, image_id, profile)
         receipt = {'schemaVersion': 1, 'passed': not blockers, 'commit': commit, 'imageId': image_id,
+                   'inventoryProfile': profile,
                    'image': None, 'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    'scanner': 'trivy', 'scannerVersion': VERSION, 'scannerArchiveSHA256': ARCHIVE_SHA256,
                    'policy': {'blockSeverities': ['HIGH', 'CRITICAL'], 'includeUnfixed': True,
@@ -142,6 +164,11 @@ def bind(output: Path, inspection, image: str):
             or image not in actual.get('RepoDigests', [])
             or actual.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != receipt.get('commit')):
         raise GateError('scanned_image_digest_binding_mismatch')
+    profile = receipt.get('inventoryProfile', 'backend')
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
+    if profile == 'postgres-client':
+        client_configuration(actual.get('Config', {}))
     receipt['image'] = image
     output.write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt, separators=(',', ':')))
@@ -155,13 +182,14 @@ def main():
     parser.add_argument('--commit')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--bind-inspection', type=Path)
+    parser.add_argument('--profile', choices=PROFILES, default='backend')
     args = parser.parse_args()
     try:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         if args.bind_inspection:
             bind(args.output, json.loads(args.bind_inspection.read_text()), args.image or '')
         elif args.archive and not args.image:
-            scan(args.archive, args.commit or '', args.output)
+            scan(args.archive, args.commit or '', args.output, args.profile)
         elif args.image and not args.archive:
             inspection = json.loads(command(['docker', 'image', 'inspect', args.image]))
             if len(inspection) != 1 or not DIGEST.fullmatch(inspection[0].get('Id', '')):
@@ -169,7 +197,7 @@ def main():
             with tempfile.TemporaryDirectory(prefix='nextstop-image-export-') as temporary:
                 archive = Path(temporary) / 'image.tar'
                 command(['docker', 'image', 'save', '--output', str(archive), inspection[0]['Id']])
-                receipt = scan(archive, args.commit or '', args.output)
+                receipt = scan(archive, args.commit or '', args.output, args.profile)
                 if receipt['imageId'] != inspection[0]['Id']:
                     raise GateError('exported_image_mismatch')
                 if '@' in args.image:
