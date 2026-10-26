@@ -108,3 +108,10 @@ components and must pass the same actual scan.
 Sources: [official Node 24 Alpine image](https://github.com/nodejs/docker-node/blob/main/24/alpine3.24/Dockerfile),
 [Alpine 3.24 signed package index](https://dl-cdn.alpinelinux.org/alpine/v3.24/main/x86_64/APKINDEX.tar.gz),
 [Debian MiniZip component clarification](https://security-tracker.debian.org/tracker/CVE-2023-45853).
+
+## Existing VM production security backport
+
+See [the security-only production backport](PRODUCTION-BACKPORT.md) for the
+separate image based on the deployed production application and its private
+staging validation. Its source history is integrated here without replacing
+main's newer application, dependencies or deployment behavior.
