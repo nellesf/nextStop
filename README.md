@@ -211,6 +211,7 @@ requires Apple's managed capability and matching provisioning.
 - [User-initiated reporting decision](docs/adr/0017-user-initiated-error-reports.md)
 - [Backend and proxy request diagnostics](docs/operations/request-diagnostics.md)
 - [Testing strategy](docs/testing.md)
+- [Xcode Cloud release channels](docs/operations/xcode-cloud.md)
 - [Deployment architecture](docs/deployment.md)
 - [Google Cloud staging and production releases](deploy/gcp-vm/README.md)
 - [Known limitations](docs/known-limitations.md)
