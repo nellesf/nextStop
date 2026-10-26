@@ -49,8 +49,24 @@ STAGING_CHECKS = {"apiReady", "authReady", "syntheticSearchPassed", "anonymousRe
                   "existingTrafficPreserved", "privateIAMPreserved", "gatewayAndBrokerUnchanged"}
 
 
+HOST_PHASES = frozenset({
+    "host-baseline", "host-backup", "host-image-pull", "host-image-identity",
+    "host-baseline-recheck", "host-installed-controller", "host-post-deploy-state",
+    "host-post-deploy-database", "host-post-deploy-environment", "host-post-deploy-tooling",
+})
+SAFE_PHASES = HOST_PHASES | frozenset({
+    "gate", "target", "backup-receipt", "staging-evidence", "deployment-identity",
+    "trusted-main-ancestry", "unchanged-application-and-schema", "staging-deployment",
+    "staging-status", "ssh-initialize", "host-security-backport", "backup-receipt-upload",
+    "backup-receipt-permissions", "registry-directory", "registry-credential", "registry-login",
+    "registry-cleanup", "receipt-cleanup",
+})
+
+
 class BackportError(RuntimeError):
-    pass
+    def __init__(self, message, *, phase="gate"):
+        super().__init__(message)
+        self.phase = phase if isinstance(phase, str) and phase in SAFE_PHASES else "gate"
 
 
 def command(args, *, phase, input_text=None, timeout=120):
@@ -58,9 +74,18 @@ def command(args, *, phase, input_text=None, timeout=120):
         result = subprocess.run(args, input=input_text, capture_output=True, text=True,
                                 check=False, timeout=timeout)
     except (OSError, subprocess.TimeoutExpired):
-        raise BackportError(phase + ": command unavailable or timed out; output suppressed.") from None
+        raise BackportError("Command unavailable or timed out; output suppressed.", phase=phase) from None
     if result.returncode:
-        raise BackportError(phase + ": command failed; output suppressed.")
+        safe_phase = phase
+        if phase == "host-security-backport":
+            try:
+                value = json.loads(result.stdout)
+                if (isinstance(value, dict) and value.get("passed") is False
+                        and isinstance(value.get("phase"), str) and value["phase"] in HOST_PHASES):
+                    safe_phase = value["phase"]
+            except (ValueError, TypeError):
+                pass
+        raise BackportError("Command failed; output suppressed.", phase=safe_phase)
     return result.stdout
 
 
@@ -68,12 +93,12 @@ def read_json(args, *, phase, run=command):
     try:
         return json.loads(run(args, phase=phase))
     except (ValueError, TypeError):
-        raise BackportError(phase + ": invalid structured response; output suppressed.") from None
+        raise BackportError("Invalid structured response; output suppressed.", phase=phase) from None
 
 
 def validate_target(commit, image):
     if commit != TARGET_COMMIT or image != TARGET_IMAGE:
-        raise BackportError("This reviewed maintenance path accepts only the pinned security backport.")
+        raise BackportError("This reviewed maintenance path accepts only the pinned security backport.", phase="target")
 
 
 def validate_backup(receipt, image, now=None):
@@ -84,7 +109,7 @@ def validate_backup(receipt, image, now=None):
             or type(receipt.get("completedAt")) not in (int, float)
             or not 0 <= now - receipt["completedAt"] <= 3600
             or not re.fullmatch(r"gs://nextstop-tech-staging-release-backups/production/nextstop-backend/[^#\s]+#[1-9][0-9]*", receipt.get("backupId", ""))):
-        raise BackportError("A fresh, generation-bound backup of this production database/image is required.")
+        raise BackportError("A fresh, generation-bound backup of this production database/image is required.", phase="backup-receipt")
 
 
 def validate_staging(deployments, statuses, commit, image, now=None):
@@ -92,7 +117,7 @@ def validate_staging(deployments, statuses, commit, image, now=None):
     matching = [row for row in deployments if row.get("sha") == commit
                 and row.get("environment") == "staging" and row.get("task") == "nextstop-release"]
     if not matching:
-        raise BackportError("No exact-image private staging validation is recorded.")
+        raise BackportError("No exact-image private staging validation is recorded.", phase="staging-evidence")
     latest = max(matching, key=lambda row: row["id"])
     payload = latest.get("payload", {})
     value = payload.get("validation", {})
@@ -108,7 +133,7 @@ def validate_staging(deployments, statuses, commit, image, now=None):
             or not all(value.get("checks", {}).get(key) is True for key in STAGING_CHECKS)
             or value.get("candidateRevisions") != {name: f"nextstop-{name}-{tag}" for name in ("api", "auth")}
             or not statuses or statuses[0].get("state") != "success"):
-        raise BackportError("Private staging evidence is missing, stale, mismatched or unsuccessful.")
+        raise BackportError("Private staging evidence is missing, stale, mismatched or unsuccessful.", phase="staging-evidence")
     return latest["id"]
 
 
@@ -116,7 +141,7 @@ def verify_source_and_staging(commit, image, *, run=command):
     validate_target(commit, image)
     account = run(["gcloud", "config", "get-value", "account"], phase="deployment-identity").strip()
     if account != DEPLOY_ACCOUNT:
-        raise BackportError("The protected production deployment identity is required.")
+        raise BackportError("The protected production deployment identity is required.", phase="deployment-identity")
     run(["git", "merge-base", "--is-ancestor", commit, "origin/main"], phase="trusted-main-ancestry")
     run(["git", "diff", "--exit-code", BASELINE_COMMIT, commit, "--", "backend/src", "backend/migrations", "ios"],
         phase="unchanged-application-and-schema")
@@ -125,7 +150,7 @@ def verify_source_and_staging(commit, image, *, run=command):
     matching = [row for row in rows if row.get("sha") == commit and row.get("environment") == "staging"
                 and row.get("task") == "nextstop-release"]
     if not matching:
-        raise BackportError("No exact staging validation is recorded.")
+        raise BackportError("No exact staging validation is recorded.", phase="staging-evidence")
     identifier = max(row["id"] for row in matching)
     statuses = read_json(["gh", "api", f"repos/nellesf/nextStop/deployments/{identifier}/statuses?per_page=1"],
                          phase="staging-status", run=run)
@@ -197,40 +222,65 @@ def baseline(data):
     protected = {name: sha(name) for name in ('/etc/nextstop/backend.env','/etc/nextstop/release.env')}
     return root, database, protected
 
+def verify_image(image, data):
+    manifest = data['image'].rsplit('@', 1)[1]
+    descriptor = image.get('Descriptor') if isinstance(image, dict) else None
+    descriptor_ok = (isinstance(descriptor, dict) and descriptor.get('digest') == manifest
+                     and descriptor.get('mediaType') == 'application/vnd.docker.distribution.manifest.v2+json')
+    # Classic Docker reports the config digest; the production containerd image
+    # store reports the manifest digest and its matching schema-2 descriptor.
+    identity_ok = (isinstance(image, dict) and (
+        (image.get('Id') == data['configDigest'] and (descriptor is None or descriptor_ok))
+        or (image.get('Id') == manifest and descriptor_ok)))
+    if (not identity_ok or not isinstance(image.get('RepoDigests'), list)
+            or data['image'] not in image['RepoDigests']
+            or image.get('Os') != 'linux' or image.get('Architecture') != 'amd64'
+            or image.get('Config',{}).get('Labels',{}).get('org.opencontainers.image.revision') != data['commit']):
+        raise GateError('Pulled image does not match verified identity/source/platform.')
+
 def main(data):
+    phase = 'host-baseline'
     try:
         root, database, protected = baseline(data)
         if data['checkOnly']:
             print(json.dumps({'passed':True, 'mode':'security-only-preflight', 'baselineVerified':True}))
             return
+        phase = 'host-backup'
         receipt(data['backupReceipt'], data)
         env = {'PATH':'/usr/sbin:/usr/bin:/sbin:/bin', 'LANG':'C.UTF-8', 'DOCKER_CONFIG':data['dockerConfig']}
+        phase = 'host-image-pull'
         execute(['docker','pull',data['image']],env,timeout=600)
+        phase = 'host-image-identity'
         image = json.loads(execute(['docker','image','inspect',data['image']],env))[0]
-        if (image.get('Id') != data['configDigest'] or data['image'] not in image.get('RepoDigests',[])
-                or image.get('Config',{}).get('Labels',{}).get('org.opencontainers.image.revision') != data['commit']):
-            raise GateError('Pulled image does not match verified digest/config/source.')
+        verify_image(image, data)
+        phase = 'host-baseline-recheck'
         baseline(data)
+        phase = 'host-backup'
         receipt(data['backupReceipt'], data)
+        phase = 'host-installed-controller'
         execute(['/usr/bin/python3', str(root/'deploy/releases/release.py'), 'deploy', '--environment','production',
                  '--image',data['image'],'--root',str(root),'--skip-migrations','--backup-receipt',data['backupReceipt']],env,timeout=1800)
+        phase = 'host-post-deploy-state'
         state=json.loads(pathlib.Path('/var/lib/nextstop/releases/state.json').read_text())
         if (state.get('image') != data['image'] or state.get('workerImage') != data['image']
                 or state.get('api',{}).get('image') != data['image']
                 or state.get('previous',{}).get('image') != data['baselineImage']
                 or any(key in state for key in ('pending','pendingWorkerChanged','pendingCandidateSlot'))):
             raise GateError('Post-deploy release state or retained rollback image is invalid.')
+        phase = 'host-post-deploy-database'
         if inspect_container('gcp-vm-database-1') != database or migrations() != data['migrations']:
             raise GateError('Database identity, uptime or migration history changed unexpectedly.')
+        phase = 'host-post-deploy-environment'
         if any(sha(name) != expected for name,expected in protected.items()):
             raise GateError('Production environment files changed unexpectedly.')
+        phase = 'host-post-deploy-tooling'
         if any(sha(root/name) != expected for name,expected in data['controllerHashes'].items()):
             raise GateError('Installed release tooling changed unexpectedly.')
         print(json.dumps({'passed':True,'mode':'security-only-production','image':data['image'],'commit':data['commit'],
                           'databaseUnchanged':True,'migrationsUnchanged':True,'environmentUnchanged':True,'retainedRollbackVerified':True}))
     except (GateError, OSError, ValueError, KeyError, TypeError) as error:
         reason=str(error) if isinstance(error,GateError) else 'Invalid host state; private details suppressed.'
-        print(json.dumps({'passed':False,'error':reason}))
+        print(json.dumps({'passed':False,'phase':phase,'error':reason}))
         raise SystemExit(1)
 '''
 
@@ -256,9 +306,9 @@ def host_check(data, *, run=command):
     try:
         value = json.loads(raw)
     except ValueError:
-        raise BackportError("Host returned invalid structured result; private output suppressed.") from None
+        raise BackportError("Host returned invalid structured result; private output suppressed.", phase="host-security-backport") from None
     if not isinstance(value, dict) or value.get("passed") is not True:
-        raise BackportError("Host security backport did not report success.")
+        raise BackportError("Host security backport did not report success.", phase="host-security-backport")
     return value
 
 
@@ -270,11 +320,11 @@ def deploy(commit, image, backup_path=None, *, check_only=False, run=command):
     if check_only:
         return {**preflight, "stagingDeploymentId": staging}
     if backup_path is None:
-        raise BackportError("Security-only deployment requires a fresh backup receipt.")
+        raise BackportError("Security-only deployment requires a fresh backup receipt.", phase="backup-receipt")
     try:
         backup = json.loads(Path(backup_path).read_text())
     except (OSError, ValueError):
-        raise BackportError("Backup receipt is unavailable or invalid.") from None
+        raise BackportError("Backup receipt is unavailable or invalid.", phase="backup-receipt") from None
     validate_backup(backup, image)
     operation = uuid.uuid4().hex
     receipt = "/tmp/nextstop-security-backup-" + operation + ".json"
@@ -287,7 +337,7 @@ def deploy(commit, image, backup_path=None, *, check_only=False, run=command):
         run(ssh(shlex.join(["sudo", "install", "-d", "-m", "700", credentials])), phase="registry-directory")
         token = run(["gcloud", "auth", "print-access-token", "--quiet"], phase="registry-credential").strip()
         if not token or len(token) > 16384 or any(char.isspace() for char in token):
-            raise BackportError("Registry credential unavailable; value suppressed.")
+            raise BackportError("Registry credential unavailable; value suppressed.", phase="registry-credential")
         run(ssh(shlex.join(["sudo", "env", "DOCKER_CONFIG=" + credentials, "docker", "login",
                            "--username", "oauth2accesstoken", "--password-stdin", REGISTRY.split("/")[0]])),
             phase="registry-login", input_text=token + "\n")
@@ -321,8 +371,10 @@ def main():
     try:
         result = deploy(args.commit, args.image, args.backup_receipt, check_only=args.check_only)
         print(json.dumps(result, sort_keys=True))
-    except (BackportError, OSError, ValueError, TypeError, KeyError):
-        print(json.dumps({"passed": False, "mode": "security-only-production", "error": "Security-only production gate failed; private output suppressed."}))
+    except (BackportError, OSError, ValueError, TypeError, KeyError) as error:
+        phase = error.phase if isinstance(error, BackportError) else "gate"
+        print(json.dumps({"passed": False, "mode": "security-only-production", "phase": phase,
+                          "error": "Security-only production gate failed; private output suppressed."}))
         raise SystemExit(1) from None
 
 

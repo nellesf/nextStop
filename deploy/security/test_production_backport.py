@@ -44,7 +44,7 @@ def remote_fixture():
     context = {"state": state, "receipt": backup(), "labels": backport.BASELINE_COMMIT,
                "migrations": list(backport.MIGRATIONS), "database": ["db-id", "db-image", "postgis/postgis:17-3.5", "start", True],
                "hashes": dict(backport.CONTROLLER_HASHES), "imageId": backport.TARGET_CONFIG_DIGEST,
-               "protectedHash": "unchanged", "appImage": backport.BASELINE_IMAGE}
+               "protectedHash": "unchanged", "appImage": backport.BASELINE_IMAGE, "descriptor": None}
 
     class FakePath:
         def __init__(self, value): self.value = str(value)
@@ -67,6 +67,7 @@ def remote_fixture():
         if args[:3] == ["docker", "image", "inspect"]:
             if "--format" in args: return context["labels"]
             return json.dumps([{"Id": context["imageId"], "RepoDigests": [backport.TARGET_IMAGE],
+                                "Os": "linux", "Architecture": "amd64", "Descriptor": context["descriptor"],
                                 "Config": {"Labels": {"org.opencontainers.image.revision": backport.TARGET_COMMIT}}}])
         if args[:2] == ["docker", "pull"]: return ""
         if args[0] == "/usr/bin/python3":
@@ -206,6 +207,65 @@ class BackportTests(unittest.TestCase):
             with self.subTest(failure=failure), contextlib.redirect_stdout(io.StringIO()) as output, self.assertRaises(SystemExit):
                 scope["main"](data)
             self.assertFalse(json.loads(output.getvalue())["passed"])
+
+    def test_both_docker_identity_formats_require_exact_source_and_platform(self):
+        scope, context, records, data = remote_fixture()
+        manifest = backport.TARGET_IMAGE.rsplit("@", 1)[1]
+        descriptor = {"digest": manifest, "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}
+        for form in ("classic", "containerd"):
+            valid = {"Id": backport.TARGET_CONFIG_DIGEST if form == "classic" else manifest,
+                     "RepoDigests": [backport.TARGET_IMAGE], "Os": "linux", "Architecture": "amd64",
+                     "Config": {"Labels": {"org.opencontainers.image.revision": backport.TARGET_COMMIT}}}
+            if form == "containerd": valid["Descriptor"] = descriptor
+            scope["verify_image"](valid, data)
+            for failure in ("id", "descriptor-digest", "descriptor-type", "descriptor-shape", "architecture", "os", "repo", "repo-shape", "revision"):
+                invalid = copy.deepcopy(valid)
+                if failure == "id": invalid["Id"] = "sha256:" + "0" * 64
+                elif failure.startswith("descriptor"):
+                    invalid["Descriptor"] = dict(descriptor)
+                    if failure == "descriptor-digest": invalid["Descriptor"]["digest"] = "sha256:" + "0" * 64
+                    elif failure == "descriptor-type": invalid["Descriptor"]["mediaType"] = "application/vnd.oci.image.index.v1+json"
+                    else: invalid["Descriptor"] = "unexpected"
+                elif failure == "architecture": invalid["Architecture"] = "arm64"
+                elif failure == "os": invalid["Os"] = "windows"
+                elif failure == "repo": invalid["RepoDigests"] = [backport.BASELINE_IMAGE]
+                elif failure == "repo-shape": invalid["RepoDigests"] = backport.TARGET_IMAGE
+                else: invalid["Config"]["Labels"]["org.opencontainers.image.revision"] = backport.BASELINE_COMMIT
+                with self.subTest(form=form, failure=failure), self.assertRaises(scope["GateError"]):
+                    scope["verify_image"](invalid, data)
+            if form == "containerd":
+                invalid = copy.deepcopy(valid)
+                invalid.pop("Descriptor")
+                with self.assertRaises(scope["GateError"]): scope["verify_image"](invalid, data)
+
+    def test_containerd_manifest_identity_passes_remote_gates(self):
+        scope, context, records, data = remote_fixture()
+        manifest = backport.TARGET_IMAGE.rsplit("@", 1)[1]
+        context["imageId"] = manifest
+        context["descriptor"] = {"digest": manifest, "mediaType": "application/vnd.docker.distribution.manifest.v2+json"}
+        with contextlib.redirect_stdout(io.StringIO()) as output: scope["main"](data)
+        self.assertTrue(json.loads(output.getvalue())["passed"])
+        self.assertEqual(sum(args[0] == "/usr/bin/python3" for args, _ in records), 1)
+
+    def test_subprocess_diagnostic_phase_is_allowlisted_without_private_output(self):
+        for phase in ("host-image-identity", "PRIVATE-TOKEN"):
+            stdout = json.dumps({"passed": False, "phase": phase, "error": "PRIVATE-DSN"})
+            with patch.object(backport.subprocess, "run", return_value=SimpleNamespace(returncode=1, stdout=stdout, stderr="PRIVATE-STDERR")):
+                with self.assertRaises(backport.BackportError) as error:
+                    backport.command(["false"], phase="host-security-backport")
+            self.assertEqual(error.exception.phase, phase if phase in backport.HOST_PHASES else "host-security-backport")
+            self.assertNotIn("PRIVATE", str(error.exception))
+
+    def test_cli_outputs_only_static_phase_and_error_text(self):
+        for error in (backport.BackportError("PRIVATE-TOKEN", phase="registry-login"),
+                      backport.BackportError("PRIVATE-DSN", phase="PRIVATE-PHASE"), ValueError("PRIVATE-VALUE")):
+            argv = ["production-backport.py", "--commit", backport.TARGET_COMMIT, "--image", backport.TARGET_IMAGE]
+            with patch("sys.argv", argv), patch.object(backport, "deploy", side_effect=error), contextlib.redirect_stdout(io.StringIO()) as output, self.assertRaises(SystemExit):
+                backport.main()
+            result = json.loads(output.getvalue())
+            self.assertFalse(result["passed"])
+            self.assertEqual(result["phase"], error.phase if isinstance(error, backport.BackportError) else "gate")
+            self.assertNotIn("PRIVATE", output.getvalue())
 
     def test_registry_token_stays_on_stdin_and_cleanup_runs_on_failure(self):
         calls=[]
