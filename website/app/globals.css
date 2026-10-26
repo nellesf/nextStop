@@ -266,3 +266,23 @@ footer p { color: var(--muted); font-size: 14px; } footer > div { display: flex;
   *, *::before, *::after { transition-duration: .01ms !important; animation-duration: .01ms !important; animation-iteration-count: 1 !important; }
 }
 :focus-visible { outline: 3px solid #2e9c75; outline-offset: 4px; }
+
+/* The language choice stays available when the compact navigation is hidden. */
+.site-header .header-actions { display: flex; align-items: center; gap: 20px; }
+.site-header .language-switcher { display: flex; gap: 10px; font-size: 12px; }
+.language-switcher a { padding: 8px 0; }
+.language-switcher a[aria-current="page"] { text-decoration: underline; text-underline-offset: 5px; }
+@media (max-width: 1100px) {
+  .site-header { gap: 16px; }
+  .site-header nav { gap: 16px; }
+  .site-header .header-actions { gap: 12px; }
+}
+@media (max-width: 520px) {
+  .site-header { height: auto; min-height: 96px; flex-wrap: wrap; padding-block: 18px; }
+  .site-header .header-actions { flex-wrap: wrap; justify-content: flex-end; gap: 8px 12px; }
+  .site-header .status-badge { font-size: 9px; padding: 8px; }
+}
+
+/* Keep expanded FAQ icons square when translated questions wrap. */
+.faq-list summary { align-items: flex-start; }
+.faq-list summary span { flex: 0 0 22px; line-height: 1; text-align: center; }

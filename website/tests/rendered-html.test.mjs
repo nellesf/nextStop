@@ -108,18 +108,19 @@ test("uses unchanged original CarPlay captures of the same main app as the iPhon
 
 test("keeps metadata, navigation, legal data, and source assets production-ready", async () => {
   const [page, layout, css, packageJson, imprint] = await Promise.all([
-    readFile(new URL("../app/page.tsx", import.meta.url), "utf8"),
-    readFile(new URL("../app/layout.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../components/landing-page.tsx", import.meta.url), "utf8"),
+    readFile(new URL("../content/metadata.ts", import.meta.url), "utf8"),
     readFile(new URL("../app/globals.css", import.meta.url), "utf8"),
     readFile(new URL("../package.json", import.meta.url), "utf8"),
     readFile(new URL("../content/imprint.ts", import.meta.url), "utf8"),
   ]);
 
   assert.match(layout, /metadataBase: new URL\("https:\/\/nextstop\.tech"\)/);
-  assert.match(layout, /<html lang="de">/);
-  assert.match(page, /aria-label="Hauptnavigation"/);
-  assert.match(page, /href="#privacy"/);
-  assert.match(page, /href="#impressum"/);
+  const html = await (await render()).text();
+  assert.match(html, /<html lang="de">/);
+  assert.match(html, /aria-label="Hauptnavigation"/);
+  assert.match(html, /href="#privacy"/);
+  assert.match(html, /href="#impressum"/);
   assert.match(page, /image-note/);
   assert.match(css, /prefers-reduced-motion/);
   assert.doesNotMatch(page, /_sites-preview|SkeletonPreview/);
@@ -188,4 +189,33 @@ test("exports a self-contained Firebase Hosting document", async () => {
   await assert.rejects(
     access(new URL("../firebase-public/.vite/manifest.json", import.meta.url)),
   );
+});
+
+
+test("serves and statically exports the complete English page with its own language and metadata", async () => {
+  const response = await render("/en/");
+  assert.equal(response.status, 200);
+  const html = await response.text();
+  const exported = await readFile(new URL("../firebase-public/en/index.html", import.meta.url), "utf8");
+  for (const document of [html, exported]) {
+    assert.match(document, /<html lang="en">/);
+    assert.match(document, /<title>nextStop – Your break\. Your choice\.<\/title>/);
+    assert.match(document, /rel="canonical" href="https:\/\/nextstop\.tech\/en\/"/);
+    assert.match(document, /property="og:image" content="https:\/\/nextstop\.tech\/og-en\.png"/);
+    assert.match(document, /hrefLang="de" href="https:\/\/nextstop\.tech\/"/i);
+    assert.match(document, /hrefLang="en" href="https:\/\/nextstop\.tech\/en\/"/i);
+    assert.doesNotMatch(document, /Dein Auto lädt|Anonyme Platzhalter|in Originalgröße öffnen|VORNAME NACHNAME/);
+    assert.match(document, /name@example\.invalid/);
+    assert.equal([...document.matchAll(/<details(?:\s|>)/g)].length, 6);
+    assert.equal([...document.matchAll(/<img[^>]+src="\/screenshots\//g)].length, 10);
+    assert.match(document, /German/);
+    assert.match(document, /Apple Maps/);
+    assert.match(document, /miles/);
+    const links = [...document.matchAll(/<a[^>]+href="(\/(?:en\/)?)"[^>]*>/g)];
+    assert.ok(links.some(([tag, href]) => href === "/en/" && tag.includes('aria-current="page"')));
+    assert.ok(links.some(([, href]) => href === "/"));
+    for (const [, asset] of document.matchAll(/(?:src|href)="(\/(?:_next|app-icon|og|screenshots\/)[^"?]*)/g)) {
+      await access(new URL(`../firebase-public${asset}`, import.meta.url));
+    }
+  }
 });

@@ -1,6 +1,6 @@
 # nextStop Website
 
-German product website for nextStop. The site is a static, responsive one-page
+German and English product website for nextStop. The site is a static, responsive one-page
 experience and is prepared for Firebase Hosting in a Google Cloud project.
 
 ## Local development
@@ -24,6 +24,23 @@ npm run build:firebase
 `npm run build:firebase` creates the deployable, ignored `firebase-public/`
 directory. The export contains no request-time application state and no forms,
 analytics, cookies, or external font requests.
+
+## Languages
+
+The German page is available at `/` and the English page at `/en/`. Both use the
+same landing-page component and layout styles, with copy in
+`content/landing-copy.ts`. A visible language switch works without JavaScript.
+Each locale has its own document language, metadata, canonical URL and social
+preview image. `npm run build:firebase` exports both `index.html` and
+`en/index.html`; publishing is a separate action.
+
+The English page keeps the original Simulator screenshots. It explains that the
+nextStop UI in the captures is German, while the Apple Maps examples use English
+and miles. Captures and provenance must not be translated or altered as part of
+website localization. Legal placeholders remain placeholders in both languages.
+
+`public/social-card-en.svg` is the English social-card source, and `public/og-en.png`
+is its verified 1200 × 630 browser render. Keep it aligned with the German card.
 
 ## Inputs still needed before a public launch
 
@@ -75,7 +92,7 @@ retained with its provenance but is not displayed because the Simulator capture
 contains a rendering artifact in the save button. A passing UI test does not
 replace visual review.
 
-`app/page.tsx` displays each image at its native aspect ratio without a recreated
+`components/landing-page.tsx` displays each image at its native aspect ratio without a recreated
 status bar or UI overlay. `app/globals.css` supplies only the surrounding device
 frame. Keep the original files when refreshing the captures and record the exact
 source revision and runner details alongside them. `npm test` checks that the
