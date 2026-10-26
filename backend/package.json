@@ -32,7 +32,7 @@
     "@google-cloud/tasks": "6.3.0",
     "cbor": "10.0.12",
     "csv-parse": "^7.0.2",
-    "fastify": "5.12.5",
+    "fastify": "5.12.7",
     "google-auth-library": "10.5.0",
     "node-app-attest": "1.0.1",
     "osm-pbf-parser-node": "1.1.4",
