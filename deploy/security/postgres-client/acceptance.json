@@ -1,0 +1,40 @@
+{
+  "cloudBuildId": "b8b6ef2a-90a8-495a-8c98-f2687e8233ab",
+  "sourceCommit": "01f43582d479ebd05bfe57a376c7a959e794a5eb",
+  "syntheticDumpRestore": "passed",
+  "productionDatabaseMigrationTested": false,
+  "registryManifestAndConfigurationIndependentlyVerified": true,
+  "securityReceipt": {
+    "schemaVersion": 1,
+    "passed": true,
+    "commit": "01f43582d479ebd05bfe57a376c7a959e794a5eb",
+    "imageId": "sha256:9bde4ff5333180379253a19b26824c091e5e98b3b5fd258a76bd20149c295f0d",
+    "inventoryProfile": "postgres-client",
+    "image": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/postgres-client@sha256:3255c463203864ca0fc899d0126082d93c133f9157dfa512582658566a04e31c",
+    "observedAt": "2026-10-26T11:02:18.513450+00:00",
+    "scanner": "trivy",
+    "scannerVersion": "0.75.0",
+    "scannerArchiveSHA256": "c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f3f",
+    "policy": {
+      "blockSeverities": [
+        "HIGH",
+        "CRITICAL"
+      ],
+      "includeUnfixed": true,
+      "scanners": [
+        "os",
+        "library"
+      ],
+      "suppressions": []
+    },
+    "counts": {
+      "UNKNOWN": 0,
+      "LOW": 0,
+      "MEDIUM": 0,
+      "HIGH": 0,
+      "CRITICAL": 0
+    },
+    "blockingFindings": [],
+    "reportSHA256": "be7901ac000ee3325607a1078d1cc0db8c8585c6d43ee4500b7adb9540b7a74e"
+  }
+}

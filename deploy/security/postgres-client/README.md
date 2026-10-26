@@ -64,8 +64,9 @@ Production adoption must select that exact accepted digest, use a private
 database network, a read-only filesystem, dropped capabilities and
 `no-new-privileges`. Pass credentials only through private stdin/tmpfs handling,
 never image configuration or command-line arguments. Mount no production data
-volume. No Cloud Build submission or production adoption is performed merely by
-adding these files; a passing image scan and restore evidence are still pending.
+volume. The accepted build is recorded below. Production backup adoption still requires
+a successful protected backup-only workflow run; that does not deploy an app or
+change the database server.
 
 ## Prepare the exact private image before backup
 
@@ -86,3 +87,19 @@ and cleaned by the remote process on success or failure; ordinary termination
 signals also run cleanup. No token or raw subprocess output is logged. It starts
 no container and touches no application, database, roles or deployment state.
 The following backup step uses `--pull=never` and rechecks the same metadata.
+
+## Accepted image, 2026-10-26
+
+Cloud Build `b8b6ef2a-90a8-495a-8c98-f2687e8233ab` built exact source
+`01f43582d479ebd05bfe57a376c7a959e794a5eb`. All nine steps passed, including the
+real isolated synthetic dump/restore gate and the pre-publication image scan.
+Trivy 0.75.0 reported zero findings at every severity without suppressions.
+The published manifest and configuration were independently hash-verified
+against the final bound receipt. See `image.json` for the accepted immutable
+identity and `acceptance.json` for the build and scan evidence.
+
+The existing protected production workflow supports `backup_only=true`. This
+mode prepares the pinned tools and backs up the unchanged current production
+release. It performs no deployment or migration, including if `security_only`
+is also true. Existing required commit/image inputs remain unchanged; the
+backup-only operation derives its image binding from validated host state.

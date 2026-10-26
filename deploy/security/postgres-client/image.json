@@ -1,0 +1,7 @@
+{
+  "image": "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/postgres-client@sha256:3255c463203864ca0fc899d0126082d93c133f9157dfa512582658566a04e31c",
+  "configDigest": "sha256:9bde4ff5333180379253a19b26824c091e5e98b3b5fd258a76bd20149c295f0d",
+  "sourceCommit": "01f43582d479ebd05bfe57a376c7a959e794a5eb",
+  "version": "17.11",
+  "platform": "linux/amd64"
+}
