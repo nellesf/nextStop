@@ -24,13 +24,24 @@ Cloud Build `results.images` must agree. A local CI image scan alone is not
 evidence that the production image has been replaced.
 
 For production, first validate this exact image in isolated private staging
-API/auth revisions and preserve the existing public staging traffic. Obtain a
-fresh production backup, then use the already installed VM release controller
-with `--skip-migrations`. Retain its readiness, synthetic-search, TLS, traffic
-switch, worker sequencing and rollback checks. Do not upload the newer main
-release tooling: its database-role SQL expects tables absent from this older
-production schema. No application migrations or role changes belong to this
-backport.
+API/auth revisions and preserve the existing public staging traffic. Record the
+complete validation receipt in the staging deployment payload; do not describe
+private API/auth validation as a public staging or worker rollout.
+
+Dispatch **Backend production promotion** from `main` with `security_only=true`,
+the complete tested source commit and its immutable image. This uses the normal
+protected production environment, review, identity, main-provenance and backup
+gates. The dedicated runner then invokes the already installed VM release
+controller with `--skip-migrations`. It verifies the controller, Compose and
+Nginx file hashes, original production image, absence of an interrupted release,
+original fifteen migrations and the fresh image-bound backup before changing
+application containers. Readiness, authenticated synthetic search, TLS, traffic
+switch, worker sequencing and rollback checks remain active.
+
+Do not upload the newer main release tooling for this backport: its database-role
+SQL expects tables absent from the older production schema. No application
+migrations, host environment edits or database-role changes belong to this
+application rollout. Host maintenance is a separate verified operation.
 
 Host and database-container findings are separate from this application-image
 gate. A clean backend image does not establish a clean production host or
