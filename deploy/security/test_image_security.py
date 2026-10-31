@@ -45,6 +45,17 @@ class SecurityTests(unittest.TestCase):
         self.assertEqual(len(blockers), 1)
         self.assertEqual(blockers[0]['Status'], 'will_not_fix')
 
+    def test_ci_postgis_blocks_every_severity_including_unfixed(self):
+        data = report()
+        data['Metadata']['OS']['Family'] = 'alpine'
+        data['Results'] = data['Results'][:1]
+        self.assertEqual(s.evaluate(data, IMAGE_ID, 'ci-postgis')[1], [])
+        data['Results'][0]['Vulnerabilities'] = [
+            {'Severity': severity, 'Status': 'will_not_fix'} for severity in s.SEVERITIES]
+        counts, blockers = s.evaluate(data, IMAGE_ID, 'ci-postgis')
+        self.assertEqual(counts, dict.fromkeys(s.SEVERITIES, 1))
+        self.assertEqual(len(blockers), len(s.SEVERITIES))
+
     def test_missing_inventory_wrong_identity_tool_version_eosl_or_suppression_fails(self):
         cases = []
         for key, value in [('SchemaVersion', 1), ('Trivy', {}), ('Metadata', {})]:

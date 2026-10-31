@@ -21,7 +21,8 @@ ARCHIVE_SHA256 = 'c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f
 URL = f'https://github.com/aquasecurity/trivy/releases/download/v{VERSION}/trivy_{VERSION}_Linux-64bit.tar.gz'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
 COMMIT = re.compile(r'[0-9a-f]{40}\Z')
-PROFILES = ('backend', 'postgres-client')
+PROFILES = ('backend', 'postgres-client', 'ci-postgis')
+SEVERITIES = ('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')
 POSTGRES_CLIENT_BASE = 'sha256:e4cb93687b062cd25a0e8f672d85a7708235009d70d31f8a7698d9370092a9c4'
 
 
@@ -88,6 +89,10 @@ def archive_identity(archive: Path, commit: str, profile='backend'):
         raise GateError('image_platform_or_revision_mismatch')
     if profile == 'postgres-client':
         client_configuration(config.get('config', {}))
+    if profile == 'ci-postgis':
+        settings = config['config']
+        if settings.get('User') != 'postgres' or (settings.get('Labels') or {}).get('tech.nextstop.image-purpose') != 'ci-postgis':
+            raise GateError('ci_database_configuration_invalid')
     return 'sha256:' + hashlib.sha256(data).hexdigest()
 
 
@@ -105,7 +110,9 @@ def evaluate(report, image_id, profile='backend'):
         raise GateError('npm_inventory_missing')
     if profile == 'postgres-client' and report.get('Metadata', {}).get('OS', {}).get('Family') != 'alpine':
         raise GateError('postgres_client_os_invalid')
-    counts = {s: 0 for s in ('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')}
+    if profile == 'ci-postgis' and report.get('Metadata', {}).get('OS', {}).get('Family') != 'alpine':
+        raise GateError('ci_database_os_invalid')
+    counts = {s: 0 for s in SEVERITIES}
     blockers = []
     for result in results:
         if result.get('ExperimentalModifiedFindings'):
@@ -115,7 +122,7 @@ def evaluate(report, image_id, profile='backend'):
             if severity not in counts:
                 raise GateError('unknown_severity_format')
             counts[severity] += 1
-            if severity in ('HIGH', 'CRITICAL'):
+            if profile == 'ci-postgis' or severity in ('HIGH', 'CRITICAL'):
                 blockers.append({k: finding.get(k) for k in
                                  ('VulnerabilityID', 'PkgName', 'InstalledVersion', 'FixedVersion', 'Severity', 'Status')})
     return counts, blockers
@@ -143,14 +150,14 @@ def scan(archive: Path, commit: str, output: Path, profile='backend'):
                    'inventoryProfile': profile,
                    'image': None, 'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    'scanner': 'trivy', 'scannerVersion': VERSION, 'scannerArchiveSHA256': ARCHIVE_SHA256,
-                   'policy': {'blockSeverities': ['HIGH', 'CRITICAL'], 'includeUnfixed': True,
+                   'policy': {'blockSeverities': list(SEVERITIES) if profile == 'ci-postgis' else ['HIGH', 'CRITICAL'], 'includeUnfixed': True,
                               'scanners': ['os', 'library'], 'suppressions': []},
                    'counts': counts, 'blockingFindings': blockers,
                    'reportSHA256': hashlib.sha256(report_path.read_bytes()).hexdigest()}
         output.write_text(json.dumps(receipt, indent=2) + '\n')
         print(json.dumps(receipt, separators=(',', ':')))
         if blockers:
-            raise GateError('high_or_critical_vulnerabilities')
+            raise GateError('ci_database_vulnerabilities' if profile == 'ci-postgis' else 'high_or_critical_vulnerabilities')
         return receipt
 
 

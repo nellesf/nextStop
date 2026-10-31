@@ -19,22 +19,7 @@ jobs:
     if: github.event_name != 'schedule'
     name: Lint, build, and test backend
     runs-on: ubuntu-latest
-    timeout-minutes: 15
-
-    services:
-      postgis:
-        image: postgis/postgis:17-3.5
-        env:
-          POSTGRES_DB: nextstop_test
-          POSTGRES_USER: nextstop_test
-          POSTGRES_PASSWORD: nextstop_test
-        ports:
-          - 5432:5432
-        options: >-
-          --health-cmd "pg_isready -U nextstop_test -d nextstop_test"
-          --health-interval 10s
-          --health-timeout 5s
-          --health-retries 10
+    timeout-minutes: 40
 
     steps:
       - name: Check out repository
@@ -79,11 +64,47 @@ jobs:
         working-directory: backend
         run: npm test
 
+      - name: Build disposable PostGIS 3.6.4 with its upstream decoder security fix
+        run: |
+          docker build --platform linux/amd64 --label "org.opencontainers.image.revision=$GITHUB_SHA" \
+            --tag "nextstop-ci-postgis:$GITHUB_SHA" deploy/security/ci-postgis
+
+      - name: Scan the test database image (all severities, including unfixed)
+        run: |
+          python3 deploy/security/scan-image.py --image "nextstop-ci-postgis:$GITHUB_SHA" \
+            --commit "$GITHUB_SHA" --profile ci-postgis --output security-results/ci-postgis.json
+
+      - name: Start the scanned database and exercise the native decoder
+        run: |
+          image=$(jq -er 'select(.passed == true) | .imageId' security-results/ci-postgis.json)
+          docker run --detach --rm --name nextstop-ci-postgis --publish 127.0.0.1:5432:5432 \
+            -e POSTGRES_DB=nextstop_test -e POSTGRES_USER=nextstop_test \
+            -e POSTGRES_PASSWORD=nextstop_test "$image"
+          for attempt in {1..60}; do
+            if docker exec nextstop-ci-postgis pg_isready -h 127.0.0.1 -U nextstop_test -d nextstop_test; then break; fi
+            sleep 2
+          done
+          docker exec nextstop-ci-postgis pg_isready -h 127.0.0.1 -U nextstop_test -d nextstop_test
+          docker exec nextstop-ci-postgis test ! -e /usr/local/bin/gosu
+          docker exec -i nextstop-ci-postgis psql -X -v ON_ERROR_STOP=1 -U nextstop_test -d nextstop_test \
+            < deploy/security/ci-postgis/check-decoder.sql
+
       - name: PostGIS integration tests
         working-directory: backend
         env:
           TEST_DATABASE_URL: postgresql://nextstop_test:nextstop_test@127.0.0.1:5432/nextstop_test
         run: npm run test:integration
+
+      - name: Remove the disposable database
+        if: always()
+        run: docker rm -f -v nextstop-ci-postgis >/dev/null 2>&1 || true
+
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: ci-postgis-security-${{ github.sha }}
+          path: security-results/ci-postgis*.json
+          if-no-files-found: warn
 
   security:
     name: Dependency and container security gate

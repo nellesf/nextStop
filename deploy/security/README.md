@@ -6,6 +6,15 @@ advisories block the run. The same gates run in the manual Cloud Build below.
 The daily run never starts a release: the staging release workflow accepts only
 a successful Backend run whose original event was a trusted main-branch push.
 
+Backend integration runs build a disposable Linux/amd64 PostgreSQL 17 database
+from [the CI Dockerfile](ci-postgis/Dockerfile). It rebuilds the PostGIS 3.6.4
+core library with the upstream FlatGeobuf fixes. The database runs as
+`postgres` and the image omits `gosu`. The `ci-postgis` scanner profile blocks
+every reported severity, including unfixed findings. CI starts the exact scanned
+image ID, checks valid and malformed input in the [native decoder](ci-postgis/check-decoder.sql)
+and runs the backend integration tests against it. The `ci-postgis-security-`
+artifact contains the scan receipt and full report. This image is job-local.
+
 The final runtime image is scanned with **Trivy 0.75.0** for OS packages and
 application libraries. **HIGH and CRITICAL findings block, including unfixed
 findings**. Low/medium/unknown findings remain in the report. End-of-life OS,
