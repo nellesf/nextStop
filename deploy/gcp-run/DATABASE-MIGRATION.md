@@ -1,12 +1,59 @@
-# Staging Cloud SQL database procedure
+# Cloud SQL database transfer
 
-This targets `nextstop-tech-testing:europe-west1:nextstop-staging` and PostgreSQL 17
-only. Production is unchanged. `database-transfer.py` prepares local review files;
-it never connects to a database or cloud API. Use installed PostgreSQL 17 tools,
+The staging procedure targets `nextstop-tech-testing:europe-west1:nextstop-staging`.
+The first production restore has a separate mode for
+`nextstop-tech-staging:europe-west1:nextstop-production`.
+`database-transfer.py` prepares local review files. Use installed PostgreSQL 17 tools,
 private service/password files, and the Cloud SQL Auth Proxy or mounted Cloud Run
 connector. Never put passwords in argv, checked-in files, shell traces, or output.
 
-## Bootstrap and role boundaries
+## First production restore from the legacy VM
+
+The separate `prepare-production` operation handles the existing migration-0015
+VM archive. Use the trusted **production** operator in a private directory on
+the production VM. Obtain the precise `gs://…dump#generation` from the approved
+production backup run. Read the object metadata and download that exact
+generation with authenticated GCS tooling. Keep the file mode 0600 throughout.
+The backup workflow checked the original VM archive's SHA-256 before upload.
+Its legacy receipt identifies the object generation. The preparation step
+checks the size and GCS MD5 for that generation and records the local SHA-256.
+
+```sh
+umask 077
+gcloud storage objects describe "$BACKUP_ID" --raw --format=json > "$PRIVATE_DIRECTORY/object.json"
+gcloud storage cp "$BACKUP_ID" "$PRIVATE_DIRECTORY/backup.dump"
+python3 deploy/gcp-run/database-transfer.py prepare-production \
+  --purpose backup --source-migrations 15 --directory "$PRIVATE_DIRECTORY" \
+  --connection-name nextstop-tech-staging:europe-west1:nextstop-production \
+  --backup-id "$BACKUP_ID" --object-metadata "$PRIVATE_DIRECTORY/object.json"
+```
+
+The legacy archive includes extension-owned objects in other schemas. The
+procedure selects the exact application table inventory and the empty report
+table definition. On a new, empty production database bootstrap PostGIS,
+`btree_gist` and the application owner before restoring. Independently check
+the socket, database system identifier and Cloud SQL instance creation time
+using the [production handoff procedure](PRODUCTION-PRIVATE-HANDOFF.md).
+Run the reviewed list only against this empty target. A 55 GiB restore and its
+index builds need an appropriate session statement timeout, sufficient free
+disk and a monitored maintenance window.
+
+```sh
+pg_restore --dbname=service=nextstop_production_cloudsql --schema=nextstop \
+  --no-owner --no-privileges --exit-on-error --single-transaction \
+  --use-list="$PRIVATE_DIRECTORY/restore.list" "$PRIVATE_DIRECTORY/backup.dump"
+```
+
+Verify exactly 15 migration records, zero report rows and matching public data
+before applying 0016–0019 and the reviewed role grants. Compare the active
+projections, public writer state, authentication keys and representative queries
+again before the final fenced transfer. Durable backups exclude reports.
+Remove the transient archive on the operator after verifying restoration.
+
+Before commissioning either managed environment, complete the separate
+PostGIS owner step below. This applies equally to an isolated restore rehearsal.
+
+## Staging bootstrap and role boundaries
 
 Connect to the already-created `nextstop` database as the Cloud SQL administrator
 (`postgres`, a non-superuser member of `cloudsqlsuperuser`). Load six process
@@ -21,6 +68,15 @@ characters. Required database log settings are `log_statement=none`,
 psql -Xq -v ON_ERROR_STOP=1 --dbname=service=nextstop_staging_admin \
   --file=deploy/gcp-run/database-bootstrap.sql
 ```
+
+After bootstrap and again after restoration or a PostGIS upgrade, apply
+`deploy/security/restrict-postgis-flatbuffer-decoder.sql` as the PostGIS owner.
+Run `deploy/security/verify-postgis-flatbuffer-decoder.sql` with
+`psql -X -v ON_ERROR_STOP=1` as `nextstop_api` on the same pinned database.
+Both commands must succeed before that target is used for traffic or accepted
+as a completed restore. Include their results and an ordinary populated spatial
+search in the recovery evidence. The application migrator lacks the extension
+owner's grant authority. [PostGIS security procedure](../security/POSTGIS-DECODER.md).
 
 The SQL owns its transaction. It creates restricted roles, installs `postgis` and
 `btree_gist`, assigns database/schema ownership to `nextstop_app`, and retains

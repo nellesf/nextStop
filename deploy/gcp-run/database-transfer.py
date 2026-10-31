@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 """Prepare local review artifacts only. This CLI never connects to a database or cloud API."""
 import argparse
+import base64
 from datetime import datetime, timedelta, timezone
 import hashlib
 import json
@@ -89,7 +90,7 @@ def plan(connection, directory, purpose, migrations):
                              "After verification remove exact transient files and source copies; preserve application signing keys."]}
 
 
-def validate_listing(listing, purpose, migrations):
+def checked_listing(listing, expected):
     found = []
     output = []
     for line in listing.splitlines():
@@ -106,17 +107,60 @@ def validate_listing(listing, purpose, migrations):
             output.append("; " + line)
         else:
             output.append(line)
-    if len(found) != len(set(found)) or set(found) != expected_tables(purpose, migrations):
+    if len(found) != len(set(found)) or set(found) != expected:
         raise ValueError("Archive data inventory differs from its reviewed purpose and schema version.")
     return "\n".join(output) + "\n"
 
 
-def prepare(archive, directory, purpose, migrations, pg_restore="pg_restore"):
+def validate_listing(listing, purpose, migrations):
+    return checked_listing(listing, expected_tables(purpose, migrations))
+
+
+def private_archive_info(archive):
     if archive.is_symlink() or not archive.is_file():
         raise ValueError("Archive must be a regular private file.")
     info = archive.stat()
     if info.st_uid != os.getuid() or stat.S_IMODE(info.st_mode) & 0o077:
         raise ValueError("Archive must be operator-owned and mode 0600.")
+    return info
+
+
+def prepare_production(directory, backup_id, metadata, pg_restore):
+    # The protected VM release workflow uses a full custom dump. Only the
+    # application schema may be restored into the extension-managed target.
+    pattern = r"gs://(nextstop-tech-staging-release-backups)/(production/nextstop-backend/[0-9]+-[0-9a-f]{32}\.dump)#([1-9][0-9]*)"
+    match = re.fullmatch(pattern, backup_id or "")
+    if (not match or not isinstance(metadata, dict)
+            or (metadata.get("bucket"), metadata.get("name"), str(metadata.get("generation"))) != match.groups()):
+        raise ValueError("The exact production backup generation is required.")
+    archive = directory / "backup.dump"
+    info = private_archive_info(archive)
+    if info.st_size < 5 or str(info.st_size) != str(metadata.get("size")):
+        raise ValueError("Unexpected production archive length.")
+    sha = hashlib.sha256()
+    md5 = hashlib.md5(usedforsecurity=False)  # GCS transfer checksum for the pinned generation
+    with archive.open("rb") as stream:
+        for block in iter(lambda: stream.read(8 * 1024 * 1024), b""):
+            sha.update(block)
+            md5.update(block)
+    if base64.b64encode(md5.digest()).decode("ascii") != metadata.get("md5Hash"):
+        raise ValueError("Archive does not match the authenticated GCS object.")
+    result = subprocess.run([pg_restore, "--list", "--schema=nextstop", str(archive)],
+                            capture_output=True, text=True, timeout=60)
+    if result.returncode or not re.search(r"^\d+; \d+ \d+ TABLE nextstop user_error_reports nextstop_app$", result.stdout, re.MULTILINE):
+        raise ValueError("The legacy backup must include the empty report table definition.")
+    expected = BASE_TABLES - {"live_refresh_control", "monthly_ingestion_schedule", "user_error_reports"}
+    listing = checked_listing(result.stdout, expected)
+    receipt = {"backupId": backup_id, "sha256": sha.hexdigest(), "bytes": info.st_size,
+               "sourceMigrations": 15, "dataTableCount": len(expected),
+               "targetConnectionName": "nextstop-tech-staging:europe-west1:nextstop-production"}
+    write_private(directory / "restore.list", listing)
+    write_private(directory / "archive-receipt.json", json.dumps(receipt, indent=2) + "\n")
+    return receipt
+
+
+def prepare(archive, directory, purpose, migrations, pg_restore="pg_restore"):
+    info = private_archive_info(archive)
     now = datetime.now(timezone.utc)
     if purpose == "handoff" and now.timestamp() - info.st_mtime > 4 * 60 * 60:
         raise ValueError("Private handoff archive exceeded its four-hour transfer window.")
@@ -154,15 +198,26 @@ def prepare(archive, directory, purpose, migrations, pg_restore="pg_restore"):
 
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("operation", choices=["plan", "prepare"])
+    parser.add_argument("operation", choices=["plan", "prepare", "prepare-production"])
     parser.add_argument("--directory", required=True)
     parser.add_argument("--purpose", choices=["handoff", "backup"], required=True)
-    parser.add_argument("--source-migrations", type=int, choices=SUPPORTED_MIGRATIONS, default=17)
+    parser.add_argument("--source-migrations", type=int, choices=(15, *SUPPORTED_MIGRATIONS), default=17)
     parser.add_argument("--connection-name")
+    parser.add_argument("--backup-id")
+    parser.add_argument("--object-metadata", type=Path)
     parser.add_argument("--pg-restore", default="pg_restore")
     args = parser.parse_args()
     directory = checked_directory(args.directory)
-    if args.operation == "plan":
+    if args.operation == "prepare-production":
+        if (args.purpose != "backup" or args.source_migrations != 15 or not args.object_metadata
+                or args.connection_name != "nextstop-tech-staging:europe-west1:nextstop-production"):
+            parser.error("Expected the migration-15 production baseline and its managed production target.")
+        value = prepare_production(directory, args.backup_id,
+                                   json.loads(args.object_metadata.read_text()), args.pg_restore)
+        print(json.dumps({"prepared": "production archive", "dataTableCount": value["dataTableCount"]}))
+    elif args.backup_id or args.object_metadata or args.source_migrations not in SUPPORTED_MIGRATIONS:
+        parser.error("Production archive options are restricted to prepare-production.")
+    elif args.operation == "plan":
         value = plan(args.connection_name or "", directory, args.purpose, args.source_migrations)
         write_private(directory / "plan.json", json.dumps(value, indent=2) + "\n")
         print(json.dumps({"prepared": "plan", "cloudOrDatabaseActions": 0}))

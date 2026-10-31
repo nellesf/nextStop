@@ -306,9 +306,11 @@ final class UserErrorReportUITests: XCTestCase {
     if identifier == "app-info" && target.exists && target.isHittable {
       return
     }
-    // The full privacy notice spans several screens at the largest text size;
-    // callers allow its accessibility snapshots extra time on hosted runners.
-    let deadline = Date().addingTimeInterval(timeout ?? controlTimeout)
+    // A hosted accessibility snapshot can stall even when the preceding drag
+    // worked. Time out stalled scrolling and keep the gesture limit below.
+    let stallTimeout = timeout ?? controlTimeout
+    var deadline = Date().addingTimeInterval(stallTimeout)
+    var closestGap = CGFloat.infinity
     for _ in 0..<24 {
       let frame = app.frame
       let keyboard = app.keyboards.firstMatch
@@ -342,6 +344,11 @@ final class UserErrorReportUITests: XCTestCase {
           ? targetFrame.minY >= viewport.minY && targetFrame.maxY <= viewport.maxY
           : visible.height >= min(100, viewport.height * 0.5)
         if isVisible && target.isHittable { return }
+        let gap = max(0, viewport.minY - targetFrame.maxY, targetFrame.minY - viewport.maxY)
+        if gap < closestGap {
+          closestGap = gap
+          deadline = Date().addingTimeInterval(stallTimeout)
+        }
         if targetFrame.minY < viewport.minY {
           scrollDirection = .down
           distance = viewport.minY - targetFrame.minY + 24

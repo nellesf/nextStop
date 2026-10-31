@@ -23,6 +23,18 @@ void test("only named staging can explicitly retain the VM broker during migrati
   assert.throws(() => brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "staging", NEXTSTOP_STAGING_HOSTING: "invalid" }));
 });
 
+void test("the production Cloud Run broker is opt-in until cutover and keeps its paired port", () => {
+  const variables = { NEXTSTOP_BACKEND_ENVIRONMENT: "production", NEXTSTOP_PRODUCTION_HOSTING: "cloud-run" };
+  const cloud = brokerConfiguration(variables);
+  assert.equal(cloud.mode, "cloud-run");
+  assert.equal(cloud.project, "nextstop-tech-staging");
+  assert.equal(cloud.port, 8766);
+  assert.equal(brokerConfiguration({ ...variables, NEXTSTOP_PRODUCTION_HOSTING: "vm" }).mode, "remote");
+  assert.throws(() => brokerConfiguration({ ...variables, NEXTSTOP_BACKEND_ENVIRONMENT: "staging" }));
+  assert.throws(() => brokerConfiguration({ ...variables, NEXTSTOP_PRODUCTION_HOSTING: "invalid" }));
+  assert.throws(() => brokerConfiguration({ NEXTSTOP_SIMULATOR_AUTH_MODE: "staging", NEXTSTOP_PRODUCTION_HOSTING: "cloud-run" }));
+});
+
 void test("named presets reject crossed credentials, ports and legacy modes", () => {
   for (const changes of [
     { NEXTSTOP_GCP_PROJECT: "nextstop-tech-staging" },

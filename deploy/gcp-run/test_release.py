@@ -38,7 +38,7 @@ def metadata(config, applied=False):
                                                  "sslMode": "TRUSTED_CLIENT_CERTIFICATE_REQUIRED", "serverCaMode": "GOOGLE_MANAGED_INTERNAL_CA"},
                              "databaseFlags": [{"name": name, "value": value} for name, value in {
                                  "log_connections": "off", "log_disconnections": "off", "log_min_duration_statement": "-1",
-                                 "log_min_error_statement": "panic", "log_parameter_max_length": "0",
+                                 "log_min_error_statement": "panic", "log_error_verbosity": "terse", "log_parameter_max_length": "0",
                                  "log_parameter_max_length_on_error": "0", "log_statement": "none",
                              }.items()]}},
         "sink": {"exclusions": [copy.deepcopy(render.LOG_EXCLUSION)]},

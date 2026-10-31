@@ -115,3 +115,6 @@ See [the security-only production backport](PRODUCTION-BACKPORT.md) for the
 separate image based on the deployed production application and its private
 staging validation. Its source history is integrated here without replacing
 main's newer application, dependencies or deployment behavior.
+
+The database owner applies and verifies the [PostGIS FlatGeobuf input
+restrictions](POSTGIS-DECODER.md) on each restored or upgraded database.

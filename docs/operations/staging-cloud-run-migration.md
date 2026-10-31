@@ -1,5 +1,46 @@
 # Staging Cloud Run migration record
 
+## Security release acceptance, 2026-10-31
+
+Staging release `056c5994fdf2` uses source `6829b8ad127540b8b39afec90bec8776c4790026`
+and image `sha256:5a8c4eb943a1a1cb5d9bb9da1c91bef98e9c5cee3c3110d26968bf95945dedb2`.
+The regional Cloud Build, [backend CI and security gate](https://github.com/nellesf/nextStop/actions/runs/41231091707)
+and immutable registry readback passed. Job `nextstop-migrate-rxlk8` applied
+the compatible schema and grants to Cloud SQL.
+
+At 19:23:30 UTC the public staging domain passed API and Auth readiness and an
+authenticated candidate search on the new digest. All five stable services
+routed 100% to `056c5994fdf2`, and all four schedules returned to their original
+enabled state. GitHub deployment `7463268782` recorded the commit, immutable
+image and `cloud-run` target. Its final status was independently read back as
+successful. The committed staging configuration pins the verified evidence and
+captures those traffic allocations.
+
+- The tagged gateway reported the expected API and Auth digest. Its authenticated
+  search matched the previous release for all 50 static candidates and 31
+  McDonald's-filtered candidates. Three concurrent warm requests took 802–1,236 ms
+  without the food filter and 467–670 ms with it. A spoofed-header source received
+  HTTP 429 while a second network received its expected schema rejection.
+- Two concurrent Swiss availability requests produced one task, one provider
+  attempt and one publication. A follow-up reused the fresh cache, and the German
+  fixture created no task. The regular monthly job `nextstop-monthly-r6bm8`
+  returned `not_due`. Both due dates and October's two recorded attempts were
+  preserved. Monitoring reported zero active and idle instances for all five
+  final revisions together at 19:13 UTC.
+- Filtered backup `nextstop-backup-swsm4` completed at 19:16:37 UTC. Its
+  2,605,510,912-byte archive and separate report schema were verified against
+  their object generations and checksums and restored into an isolated native
+  PostgreSQL 17.11/PostGIS 3.5.6 instance. It contained 19 migrations and zero
+  report rows. Role checks, indexes and both active projection identities passed.
+  Three representative searches returned 50, 31 and 50 candidates. Cloud SQL
+  ran PostGIS 3.6.4. On the restored database, restricting the two FlatGeobuf
+  functions reduced 12 effective runtime grants to zero, including after the
+  normal grants were reapplied. All three result sets preserved their identities
+  and ordering. The temporary restored cluster and copies were removed.
+- The six source-bound operator checks are stored in the private evidence object
+  pinned by generation `1793474513410198` and SHA-256
+  `c456aefed3b76b17a581beef9cb9359d24b229dad0e7c1598451d6fd98d990f4`.
+
 ## Hourly cleanup diagnosis, 2026-10-31
 
 Cloud SQL logged a worker statement timeout 5 milliseconds before the cleanup
@@ -16,10 +57,13 @@ sequential scan for the locked 1,000-row selection. A read-only reproduction
 on the same database and projection reached the job's two-second statement
 limit. In the comparison, ordering the batch by campus ID and minimum power
 used the existing primary-key index and found the 342 remaining rows in 246 ms.
-All seven stages now select in their table's primary-key order. The deletion
-still addresses only the bounded, locked tuple identities. Verify that an
-ordinary execution of the deployed release advances the stage and that search
-succeeds during cleanup before accepting the release.
+All seven stages now select in their table's primary-key order and delete only
+the bounded, locked tuples. On the final release, ordinary execution
+`nextstop-cleanup-wldx8` advanced the blocked stage from 1 to 2 in 3.498
+seconds of task time. All 19 concurrent search samples returned the same result,
+including a complete request inside the task window. Active and rollback
+projections, import due dates and budget were preserved. The independent
+19:00 UTC scheduled execution `nextstop-cleanup-pmn8r` also succeeded.
 
 ## Direct-domain acceptance and completed source retirement, 2026-10-05
 

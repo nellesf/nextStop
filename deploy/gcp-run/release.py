@@ -24,6 +24,7 @@ class ReleaseError(RuntimeError):
 
 
 SQL_LOG_FLAGS = {
+    "log_error_verbosity": "terse",
     "log_connections": "off", "log_disconnections": "off",
     "log_min_duration_statement": "-1", "log_min_error_statement": "panic",
     "log_parameter_max_length": "0", "log_parameter_max_length_on_error": "0",

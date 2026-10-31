@@ -1,6 +1,6 @@
 const presets = {
-  staging: { project: "nextstop-tech-testing", instance: "nextstop-backend", port: 8765 },
-  production: { project: "nextstop-tech-staging", instance: "nextstop-backend", port: 8766 },
+  staging: { project: "nextstop-tech-testing", instance: "nextstop-backend", port: 8765, cloudNumber: "353471052580" },
+  production: { project: "nextstop-tech-staging", instance: "nextstop-backend", port: 8766, cloudNumber: "1022346259037" },
 };
 
 export function brokerConfiguration(environment = process.env) {
@@ -41,12 +41,15 @@ export function brokerConfiguration(environment = process.env) {
   if (legacyCommand === "true" && !legacy) {
     throw new Error("The old compose minter is permitted only in explicit legacy staging mode.");
   }
-  const hosting = environment.NEXTSTOP_STAGING_HOSTING ?? "cloud-run";
-  if (!["cloud-run", "vm"].includes(hosting) ||
-      (environment.NEXTSTOP_STAGING_HOSTING !== undefined && name !== "staging")) {
-    throw new Error("NEXTSTOP_STAGING_HOSTING is only valid for the named staging preset.");
+  const stagingHosting = environment.NEXTSTOP_STAGING_HOSTING;
+  const productionHosting = environment.NEXTSTOP_PRODUCTION_HOSTING;
+  if ((stagingHosting !== undefined && name !== "staging") ||
+      (productionHosting !== undefined && (legacy || name !== "production"))) {
+    throw new Error("Cloud hosting selection must match the named backend environment.");
   }
-  const cloud = !legacy && name === "staging" && hosting === "cloud-run";
+  const hosting = name === "production" ? productionHosting ?? "vm" : stagingHosting ?? "cloud-run";
+  if (!["vm", "cloud-run"].includes(hosting)) throw new Error("Backend hosting must be vm or cloud-run.");
+  const cloud = !legacy && name !== "local" && hosting === "cloud-run";
   return {
     name, port, project, zone, instance, mode: name === "local" ? "local" : cloud ? "cloud-run" : "remote",
     ...(cloud ? { region: "europe-west1", service: "nextstop-broker" } : {}),
@@ -59,4 +62,14 @@ export function brokerConfiguration(environment = process.env) {
 function identifier(value) {
   if (!/^[a-z][a-z0-9-]{0,62}$/u.test(value)) throw new Error("Invalid cloud target identifier.");
   return value;
+}
+
+// IAM credentials may go only to the deterministic origin of the chosen environment.
+export function cloudRunBrokerOrigin(configuration) {
+  const preset = Object.hasOwn(presets, configuration.name) ? presets[configuration.name] : undefined;
+  if (!preset || configuration.project !== preset.project || configuration.region !== "europe-west1" ||
+      configuration.service !== "nextstop-broker") {
+    throw new Error("Cloud token minting is restricted to the selected environment's private broker.");
+  }
+  return `https://nextstop-broker-${preset.cloudNumber}.europe-west1.run.app`;
 }

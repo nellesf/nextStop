@@ -3,9 +3,13 @@
 Set NEXTSTOP_TEST_PG_BIN to an existing PostgreSQL 17 bin directory with PostGIS.
 Cloud SQL's extension-install permission remains a separate managed-service gate.
 """
+import base64
+import hashlib
+import json
 import os
 from pathlib import Path
 import subprocess
+import sys
 import tempfile
 import unittest
 
@@ -74,6 +78,75 @@ class RestrictedBootstrapTests(unittest.TestCase):
     def test_filled_private_handoff_and_rollback(self):
         from private_handoff_rehearsal import rehearse
         rehearse(self, ROOT / "backend/migrations")
+
+    def test_production_baseline_selects_only_application_schema(self):
+        # The old VM dumps every schema, including extension-owned TIGER data.
+        source, target = "legacy_source", "managed_target"
+        migrations = sorted((ROOT / "backend/migrations").glob("*.sql"))
+        for database in (source, target):
+            self.sql("test_super", f"CREATE DATABASE {database} OWNER nextstop_app TEMPLATE template0", database="postgres")
+            self.addCleanup(self.sql, "test_super", f"DROP DATABASE {database}", database="postgres")
+            self.sql("test_super", "CREATE EXTENSION postgis; CREATE EXTENSION btree_gist", database=database)
+        for migration in migrations[:15]:
+            self.command("psql", "-Xq", "-v", "ON_ERROR_STOP=1", "-U", "nextstop_app", "-d", source, "-f", str(migration))
+        self.sql("test_super", "CREATE SCHEMA tiger; CREATE TABLE tiger.lookup(id int); INSERT INTO tiger.lookup VALUES (42)", database=source)
+        self.sql("nextstop_app", """INSERT INTO nextstop.app_attest_challenges VALUES
+          ('11111111-1111-1111-1111-111111111111',decode(repeat('11',32),'hex'),'attestation',
+           decode(repeat('22',32),'hex'),now(),now()+interval '1 minute')""", database=source)
+        self.sql("nextstop_app", """WITH version AS (
+          INSERT INTO nextstop.projection_versions
+            (id,source_dataset_hash,source_observed_at,built_at,published_at,status,coverage_status,active_sources,unavailable_sources)
+          VALUES (gen_random_uuid(),repeat('a',64),now(),now(),now(),'active','complete',ARRAY['fixture'],'{}') RETURNING id)
+          INSERT INTO nextstop.charging_park_projection
+            (projection_id,park_id,name,centroid,navigation_coordinate,member_location_ids,operators,operator_charging_point_counts,
+             charging_point_count,known_available_count,known_unavailable_count,unknown_count,availability_complete,
+             maximum_power_kw,source_summaries,data_updated_at)
+          SELECT id,gen_random_uuid(),'Synthetic charging park','POINT(10 52)'::geography,'POINT(10 52)'::geography,
+            ARRAY[gen_random_uuid()],ARRAY['Fixture'],'[{"name":"Fixture","chargingPoints":2}]',2,0,0,2,false,150,'[]',now()
+          FROM version""", database=source)
+        spatial_read = """SELECT to_jsonb(p)::text FROM nextstop.charging_park_projection p
+          JOIN nextstop.projection_versions v ON p.projection_id=v.id
+          WHERE v.status='active' AND ST_DWithin(p.centroid,'POINT(10.001 52)'::geography,5000)"""
+        expected_park = self.sql("nextstop_app", spatial_read, database=source).stdout
+        self.assertEqual(json.loads(expected_park)["charging_point_count"], 2)
+        self.sql("nextstop_app", "CREATE SCHEMA nextstop", database=target)
+        with tempfile.TemporaryDirectory(dir=self.base) as temporary:
+            directory = Path(temporary)
+            archive = directory / "backup.dump"
+            archive.touch(mode=0o600)
+            self.command("pg_dump", "-Fc", "--no-owner", "--no-privileges", "--exclude-table-data=nextstop.user_error_reports",
+                         "-U", "test_super", "-d", source, "--file=" + str(archive))
+            self.assertIn("TABLE DATA tiger lookup", self.command("pg_restore", "--list", str(archive)).stdout)
+            name = "production/nextstop-backend/1793486150-" + "0" * 32 + ".dump"
+            bucket = "nextstop-tech-staging-release-backups"
+            reference = f"gs://{bucket}/{name}#12345"
+            metadata = {"name": name, "bucket": bucket, "generation": "12345", "size": str(archive.stat().st_size),
+                        "md5Hash": base64.b64encode(hashlib.md5(archive.read_bytes(), usedforsecurity=False).digest()).decode("ascii")}
+            def prepare(object_metadata):
+                metadata_path = directory / "object.json"
+                metadata_path.write_text(json.dumps(object_metadata))
+                return subprocess.run([sys.executable, str(HERE / "database-transfer.py"), "prepare-production",
+                                       "--purpose", "backup", "--source-migrations", "15", "--directory", str(directory),
+                                       "--connection-name", "nextstop-tech-staging:europe-west1:nextstop-production",
+                                       "--backup-id", reference, "--object-metadata", str(metadata_path),
+                                       "--pg-restore", str(self.binary / "pg_restore")], capture_output=True, timeout=30)
+
+            self.assertNotEqual(prepare({**metadata, "generation": "2"}).returncode, 0)
+            self.assertNotEqual(prepare({**metadata, "md5Hash": ""}).returncode, 0)
+            self.assertEqual(prepare(metadata).returncode, 0)
+            self.assertNotIn("tiger lookup", (directory / "restore.list").read_text())
+            self.command("pg_restore", "--schema=nextstop", "--no-owner", "--no-privileges", "--single-transaction",
+                         "--exit-on-error", "--use-list=" + str(directory / "restore.list"), "-U", "nextstop_app", "-d", target, str(archive))
+            receipt = json.loads((directory / "archive-receipt.json").read_text())
+            self.assertEqual(receipt["sha256"], hashlib.sha256(archive.read_bytes()).hexdigest())
+        for migration in migrations[15:]:
+            self.command("psql", "-Xq", "-v", "ON_ERROR_STOP=1", "-U", "nextstop_app", "-d", target, "-f", str(migration))
+        result = self.sql("nextstop_app", """SELECT (SELECT count(*) FROM nextstop.schema_migrations),
+          (SELECT count(*) FROM nextstop.app_attest_challenges), (SELECT count(*) FROM nextstop.user_error_reports),
+          to_regnamespace('tiger') IS NULL""", database=target)
+        self.assertEqual(result.stdout.strip(), "19|1|0|t")
+        self.assertEqual(self.sql("nextstop_app", spatial_read, database=target).stdout, expected_park)
+        self.assertEqual(self.sql("nextstop_app", spatial_read, database=source).stdout, expected_park)
 
     def test_all_runtime_isolation_and_worker_session_features(self):
         self.script("nextstop_app", "database-verify.sql")
