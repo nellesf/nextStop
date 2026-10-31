@@ -24,6 +24,7 @@ def main() -> None:
     start.add_argument("--environment", choices=["staging", "production"], required=True)
     start.add_argument("--commit", required=True)
     start.add_argument("--image", required=True)
+    start.add_argument("--hosting", choices=["vm", "cloud-run"])
     status = commands.add_parser("status")
     status.add_argument("--id", type=int, required=True)
     status.add_argument("--state", choices=["success", "failure"], required=True)
@@ -37,7 +38,7 @@ def main() -> None:
         deployment = post(endpoint, {"ref": args.commit, "task": "nextstop-release",
             "auto_merge": False, "required_contexts": [], "environment": args.environment,
             "production_environment": args.environment == "production", "transient_environment": False,
-            "payload": {"image": args.image}})
+            "payload": {"image": args.image, **({"hosting": args.hosting} if args.hosting else {})}})
         identifier = int(deployment["id"])
         post(f"{endpoint}/{identifier}/statuses", {"state": "in_progress", "auto_inactive": False})
         print(identifier)

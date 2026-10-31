@@ -79,8 +79,9 @@ jobs:
         id: deployment
         env:
           RELEASE_IMAGE: ${{ steps.image.outputs.ref }}
+          HOSTING: ${{ vars.NEXTSTOP_STAGING_HOSTING || 'vm' }}
         run: |
-          id=$(python3 deploy/gcp/record-deployment.py start --environment staging --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE")
+          id=$(python3 deploy/gcp/record-deployment.py start --environment staging --hosting "$HOSTING" --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE")
           echo "id=$id" >> "$GITHUB_OUTPUT"
       - name: Validate staging hosting selection
         if: vars.NEXTSTOP_RELEASES_ENABLED == 'true'

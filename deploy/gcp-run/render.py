@@ -1,15 +1,34 @@
 #!/usr/bin/env python3
-"""Render the isolated staging Cloud Run release; no cloud calls or secret values."""
+"""Render an isolated nextStop Cloud Run release; no cloud calls or secret values."""
 import argparse
 import hashlib
 import json
 from pathlib import Path
 import re
+from typing import NamedTuple
 
-PROJECT = "nextstop-tech-testing"
-PROJECT_NUMBER = "353471052580"
 REGION = "europe-west1"
-CONNECTION = f"{PROJECT}:{REGION}:nextstop-staging"
+
+
+class Target(NamedTuple):
+    environment: str
+    project: str
+    number: str
+    domain: str
+
+    @property
+    def connection(self):
+        return f"{self.project}:{REGION}:nextstop-{self.environment}"
+
+    @property
+    def deploy_account(self):
+        return f"nextstop-{self.environment}-deploy@{self.project}.iam.gserviceaccount.com"
+
+
+STAGING = Target("staging", "nextstop-tech-testing", "353471052580", "api-staging.nextstop.tech")
+PRODUCTION = Target("production", "nextstop-tech-staging", "1022346259037", "api.nextstop.tech")
+TARGETS = {target.environment: target for target in (STAGING, PRODUCTION)}
+PROJECT, PROJECT_NUMBER, CONNECTION = STAGING.project, STAGING.number, STAGING.connection
 REGISTRY = "europe-west3-docker.pkg.dev/nextstop-tech-staging/nextstop/backend"
 SERVICES = ("gateway", "api", "auth", "live", "broker")
 SECRETS = (
@@ -35,39 +54,52 @@ class ConfigurationError(ValueError):
     pass
 
 
-def account(role):
-    return f"nextstop-run-{role}@{PROJECT}.iam.gserviceaccount.com"
+def account(role, target=STAGING):
+    return f"nextstop-run-{role}@{target.project}.iam.gserviceaccount.com"
 
 
-def origin(service, tag=None):
+def origin(service, tag=None, target=STAGING):
     prefix = "" if tag is None else tag + "---"
-    return f"https://{prefix}nextstop-{service}-{PROJECT_NUMBER}.{REGION}.run.app"
+    return f"https://{prefix}nextstop-{service}-{target.number}.{REGION}.run.app"
+
+
+def log_exclusion(target):
+    return {**LOG_EXCLUSION, "name": f"nextstop-{target.environment}-cloud-run-requests"}
 
 
 def canonical(value):
     return json.dumps(value, sort_keys=True, separators=(",", ":"))
 
 
-def validate(config):
+def validate(config, expected_environment="staging", *, offline=False):
     required = {"environment", "project", "region", "backendImage", "commit", "cloudSqlConnectionName",
                 "cacheBucket", "backupBucket", "appAttestAppId", "secretVersions", "retainedTraffic", "acceptanceEvidence"}
+    if isinstance(config, dict) and config.get("environment") == "production":
+        required.add("cloudSqlDiskGb")
     if not isinstance(config, dict) or set(config) != required:
-        raise ConfigurationError("Configuration keys do not match the staging schema.")
-    if (config["environment"], config["project"], config["region"], config["cloudSqlConnectionName"]) != (
-        "staging", PROJECT, REGION, CONNECTION,
+        raise ConfigurationError("Configuration keys do not match the Cloud Run schema.")
+    target = TARGETS.get(config["environment"]) if isinstance(config["environment"], str) else None
+    if target is None or target.environment != expected_environment or (config["project"], config["region"], config["cloudSqlConnectionName"]) != (
+        target.project, REGION, target.connection,
     ):
-        raise ConfigurationError("Only the approved isolated staging project, region and database are supported.")
+        raise ConfigurationError("Cloud Run environment, project, region and database must match the approved target.")
     if not isinstance(config["backendImage"], str) or not re.fullmatch(re.escape(REGISTRY) + r"@sha256:[0-9a-f]{64}", config["backendImage"]):
         raise ConfigurationError("A backend digest from the existing approved registry is required.")
     if not isinstance(config["commit"], str) or not re.fullmatch(r"[0-9a-f]{40}", config["commit"]):
         raise ConfigurationError("A complete source commit is required; verify its OCI revision before applying.")
     for bucket in ("cacheBucket", "backupBucket"):
-        if not isinstance(config[bucket], str) or not re.fullmatch(r"nextstop-tech-testing-[a-z0-9][a-z0-9-]{1,38}", config[bucket]):
-            raise ConfigurationError("Storage buckets must belong to isolated staging.")
+        if not isinstance(config[bucket], str) or not re.fullmatch(re.escape(target.project) + r"-[a-z0-9][a-z0-9-]{1,38}", config[bucket]):
+            raise ConfigurationError("Storage buckets must belong to the selected environment.")
+    if target == PRODUCTION and (type(config["cloudSqlDiskGb"]) is not int or not 60 <= config["cloudSqlDiskGb"] <= 1024):
+        raise ConfigurationError("Production requires a reviewed disk size covering the measured source.")
+    if target == PRODUCTION and (config["cacheBucket"], config["backupBucket"], config["appAttestAppId"]) != (
+        target.project + "-download-cache", target.project + "-database-backups", "MR3P73S995.de.nextstop.app",
+    ):
+        raise ConfigurationError("Production requires its dedicated buckets and signed application identifier.")
     if config["cacheBucket"] == config["backupBucket"]:
         raise ConfigurationError("Public download cache and private filtered backups require separate buckets.")
     evidence = config["acceptanceEvidence"]
-    if (not isinstance(evidence, dict) or set(evidence) != {"object", "generation", "sha256"}
+    if not (offline and target == PRODUCTION and evidence is None) and (not isinstance(evidence, dict) or set(evidence) != {"object", "generation", "sha256"}
             or not isinstance(evidence["sha256"], str) or not re.fullmatch(r"[0-9a-f]{64}", evidence["sha256"])
             or evidence["object"] != "operations/evidence/" + evidence["sha256"] + ".json"
             or not isinstance(evidence["generation"], str) or not re.fullmatch(r"[1-9][0-9]{0,24}", evidence["generation"])):
@@ -95,7 +127,13 @@ def validate(config):
                 raise ConfigurationError("Invalid traffic allocation.")
             tag = entry.get("tag")
             if tag is not None:
-                if not isinstance(tag, str) or not re.fullmatch(r"r-[0-9a-f]{12}", tag) or tag in tags:
+                # The security-backport drill keeps private zero-traffic API/Auth
+                # tags bound to an immutable revision under its exact own name.
+                security_tag = (config["environment"] == "staging" and service in {"api", "auth"}
+                                and entry["percent"] == 0 and isinstance(tag, str)
+                                and re.fullmatch(r"sec-[0-9a-f]{12}-[0-9a-f]{12}", tag)
+                                and entry["revisionName"] == "nextstop-" + service + "-" + tag)
+                if not isinstance(tag, str) or tag in tags or not (security_tag or re.fullmatch(r"r-[0-9a-f]{12}", tag)):
                     raise ConfigurationError("Only unique immutable release tags may be retained.")
                 tags.add(tag)
         if sum(row["percent"] for row in traffic) != 100:
@@ -110,7 +148,7 @@ def release_id(config):
 
 def secret(config, variable, name):
     return {"name": variable, "valueFrom": {"secretKeyRef": {
-        "name": "nextstop-staging-" + name, "key": config["secretVersions"][name],
+        "name": "nextstop-" + config["environment"] + "-" + name, "key": config["secretVersions"][name],
     }}}
 
 
@@ -119,23 +157,24 @@ def environment(values):
 
 
 def runtime_environment(config, database=True):
-    values = {"NEXTSTOP_RUNTIME": "cloud-run", "NEXTSTOP_ENVIRONMENT": "staging",
+    values = {"NEXTSTOP_RUNTIME": "cloud-run", "NEXTSTOP_ENVIRONMENT": config["environment"],
               "RELEASE_IMAGE_DIGEST": config["backendImage"].split("@", 1)[1]}
     if database:
-        values.update(DATABASE_TRANSPORT="cloud-sql-socket", CLOUD_SQL_CONNECTION_NAME=CONNECTION)
+        values.update(DATABASE_TRANSPORT="cloud-sql-socket", CLOUD_SQL_CONNECTION_NAME=config["cloudSqlConnectionName"])
     return environment(values)
 
 
-def live_environment():
+def live_environment(target):
     return environment({
         "LIVE_REFRESH_TRANSPORT": "cloud-tasks",
-        "LIVE_REFRESH_TASK_QUEUE": f"projects/{PROJECT}/locations/{REGION}/queues/{QUEUE}",
-        "LIVE_REFRESH_TASK_TARGET": origin("live") + "/refresh",
-        "LIVE_REFRESH_TASK_SERVICE_ACCOUNT": account("tasks"),
+        "LIVE_REFRESH_TASK_QUEUE": f"projects/{target.project}/locations/{REGION}/queues/{QUEUE}",
+        "LIVE_REFRESH_TASK_TARGET": origin("live", target=target) + "/refresh",
+        "LIVE_REFRESH_TASK_SERVICE_ACCOUNT": account("tasks", target),
     })
 
 
 def service(config, name, extra_env, command, role=None):
+    target = TARGETS[config["environment"]]
     tag = "r-" + release_id(config)
     revision = "nextstop-" + name + "-" + release_id(config)
     database = name not in {"gateway", "broker"}
@@ -144,7 +183,7 @@ def service(config, name, extra_env, command, role=None):
                    "run.googleapis.com/cpu-throttling": "true", "run.googleapis.com/startup-cpu-boost": "false"}
     if database:
         # v1 Cloud Run mounts this connection at /cloudsql/<connection name>.
-        annotations["run.googleapis.com/cloudsql-instances"] = CONNECTION
+        annotations["run.googleapis.com/cloudsql-instances"] = target.connection
     traffic = [dict(row) for row in config["retainedTraffic"].get(name, [])]
     existing = next((row for row in traffic if row.get("tag") == tag), None)
     if existing is not None and existing["revisionName"] != revision:
@@ -153,14 +192,14 @@ def service(config, name, extra_env, command, role=None):
         traffic.append({"revisionName": revision, "tag": tag, "percent": 0 if traffic else 100})
     return {
         "apiVersion": "serving.knative.dev/v1", "kind": "Service",
-        "metadata": {"name": "nextstop-" + name, "namespace": PROJECT_NUMBER,
-                     "labels": {"nextstop-environment": "staging", "nextstop-release": release_id(config)},
+        "metadata": {"name": "nextstop-" + name, "namespace": target.number,
+                     "labels": {"nextstop-environment": target.environment, "nextstop-release": release_id(config)},
                      "annotations": {"run.googleapis.com/ingress": "all", "run.googleapis.com/minScale": "0",
                                      "run.googleapis.com/maxScale": "1",
                                      "run.googleapis.com/invoker-iam-disabled": "false"}},
         "spec": {"template": {
             "metadata": {"name": revision, "annotations": annotations},
-            "spec": {"serviceAccountName": account(role or name),
+            "spec": {"serviceAccountName": account(role or name, target),
                      "containerConcurrency": 1 if name == "live" else 8,
                      "timeoutSeconds": 300 if name == "live" else 60 if name == "gateway" else 30,
                      "containers": [{"name": name, "image": config["backendImage"],
@@ -177,6 +216,7 @@ def service(config, name, extra_env, command, role=None):
 
 
 def job(config, name):
+    target = TARGETS[config["environment"]]
     env = runtime_environment(config)
     if name == "backup":
         role = "backup"
@@ -201,14 +241,14 @@ def job(config, name):
         args = ["dist/src/jobs/maintenance-job.js"]
         env += environment({"MAINTENANCE_JOB_MODE": JOB_MODES[name], "MAINTENANCE_JOB_MAX_SECONDS": JOB_SECONDS[name]})
     return {"apiVersion": "run.googleapis.com/v1", "kind": "Job",
-            "metadata": {"name": "nextstop-" + name, "namespace": PROJECT_NUMBER,
-                         "labels": {"nextstop-environment": "staging", "nextstop-release": release_id(config)}},
+            "metadata": {"name": "nextstop-" + name, "namespace": target.number,
+                         "labels": {"nextstop-environment": target.environment, "nextstop-release": release_id(config)}},
             # Cloud Run v1 ExecutionTemplateSpec accepts metadata; its nested
             # TaskTemplateSpec accepts only spec. Jobs always use generation2.
             "spec": {"template": {
-                "metadata": {"annotations": {"run.googleapis.com/cloudsql-instances": CONNECTION}},
+                "metadata": {"annotations": {"run.googleapis.com/cloudsql-instances": target.connection}},
                 "spec": {"taskCount": 1, "parallelism": 1, "template": {
-                "spec": {"serviceAccountName": account(role), "maxRetries": 0,
+                "spec": {"serviceAccountName": account(role, target), "maxRetries": 0,
                          "timeoutSeconds": str(JOB_SECONDS[name] + (30 if name in JOB_MODES else 0)),
                          "containers": [{"image": config["backendImage"], "command": ["node"], "args": args,
                                          "env": env, "resources": {"limits": {
@@ -216,38 +256,39 @@ def job(config, name):
                                              "memory": "8Gi" if name == "monthly" else "512Mi"}}}]}}}}}}
 
 
-def scheduler(name):
-    return {"name": f"projects/{PROJECT}/locations/{REGION}/jobs/nextstop-{name}",
+def scheduler(name, target=STAGING):
+    return {"name": f"projects/{target.project}/locations/{REGION}/jobs/nextstop-{name}",
             "schedule": SCHEDULES[name], "timeZone": "Etc/UTC",
             "attemptDeadline": "180s", "retryConfig": {"retryCount": 0, "maxRetryDuration": "0s"},
-            "httpTarget": {"uri": f"https://run.googleapis.com/v2/projects/{PROJECT}/locations/{REGION}/jobs/nextstop-{name}:run",
+            "httpTarget": {"uri": f"https://run.googleapis.com/v2/projects/{target.project}/locations/{REGION}/jobs/nextstop-{name}:run",
                            "httpMethod": "POST", "headers": {"Content-Type": "application/json"}, "body": "e30=",
-                           "oauthToken": {"serviceAccountEmail": account("scheduler"),
+                           "oauthToken": {"serviceAccountEmail": account("scheduler", target),
                                           "scope": "https://www.googleapis.com/auth/cloud-platform"}}}
 
 
 def render(config):
-    validate(config)
+    validate(config, config.get("environment"), offline=True)
+    target = TARGETS[config["environment"]]
     tag = "r-" + release_id(config)
     result = {
-        "gateway": service(config, "gateway", environment({"BACKEND_API_ORIGIN": origin("api", tag),
-                                                           "BACKEND_AUTH_ORIGIN": origin("auth", tag),
-                                                           "BACKEND_API_AUDIENCE": origin("api"),
-                                                           "BACKEND_AUTH_AUDIENCE": origin("auth")}), "gateway-server"),
+        "gateway": service(config, "gateway", environment({"BACKEND_API_ORIGIN": origin("api", tag, target),
+                                                           "BACKEND_AUTH_ORIGIN": origin("auth", tag, target),
+                                                           "BACKEND_API_AUDIENCE": origin("api", target=target),
+                                                           "BACKEND_AUTH_AUDIENCE": origin("auth", target=target)}), "gateway-server"),
         "api": service(config, "api", [secret(config, "DATABASE_URL", "api-database-url"),
                                        secret(config, "SUPPORT_DATABASE_URL", "support-database-url"),
                                        secret(config, "SNAPSHOT_SIGNING_KEY", "snapshot-signing-key"),
                                        secret(config, "SEARCH_ACCESS_TOKEN_SIGNING_KEY", "access-token-signing-key")]
                        + environment({"ALLOW_LEGACY_STAGING_BEARER": "false", "DEMAND_LIVE_AVAILABILITY_ENABLED": "true"})
-                       + live_environment(), "server"),
+                       + live_environment(target), "server"),
         "auth": service(config, "auth", [secret(config, "AUTH_DATABASE_URL", "auth-database-url"),
                                          secret(config, "SEARCH_ACCESS_TOKEN_SIGNING_KEY", "access-token-signing-key")]
-                        + environment({"APP_ATTEST_APP_ID": config["appAttestAppId"], "APP_ATTEST_ALLOW_DEVELOPMENT": "true"}), "auth-server"),
-        "live": service(config, "live", [secret(config, "DATABASE_URL", "worker-database-url")] + live_environment(), "live-refresh-server"),
+                        + environment({"APP_ATTEST_APP_ID": config["appAttestAppId"], "APP_ATTEST_ALLOW_DEVELOPMENT": "true" if target == STAGING else "false"}), "auth-server"),
+        "live": service(config, "live", [secret(config, "DATABASE_URL", "worker-database-url")] + live_environment(target), "live-refresh-server"),
         "broker": service(config, "broker", [secret(config, "SEARCH_ACCESS_TOKEN_SIGNING_KEY", "access-token-signing-key")], "simulator-token-server"),
     }
     result.update({name: job(config, name) for name in JOBS})
-    result["queue"] = {"name": f"projects/{PROJECT}/locations/{REGION}/queues/{QUEUE}",
+    result["queue"] = {"name": f"projects/{target.project}/locations/{REGION}/queues/{QUEUE}",
                        "rateLimits": {"maxDispatchesPerSecond": 0.1, "maxConcurrentDispatches": 1},
                        "retryConfig": {"maxAttempts": 3, "maxRetryDuration": "0s", "minBackoff": "660s",
                                        "maxBackoff": "660s", "maxDoublings": 0},
@@ -255,8 +296,8 @@ def render(config):
     # Scheduler state is output-only. These request bodies are NOT automatically
     # submitted: creating a scheduler immediately enables it, so activation is a
     # separate operator step after all release/backup/budget gates pass.
-    result.update({"scheduler-" + name: scheduler(name) for name in SCHEDULES})
-    result["logging-exclusion"] = LOG_EXCLUSION
+    result.update({"scheduler-" + name: scheduler(name, target) for name in SCHEDULES})
+    result["logging-exclusion"] = log_exclusion(target)
     return result
 
 
@@ -279,7 +320,7 @@ def main():
     try:
         config = json.loads(args.config.read_text())
         manifests = write_rendered(config, args.output)
-        print(json.dumps({"project": PROJECT, "release": release_id(config), "manifestCount": len(manifests)}))
+        print(json.dumps({"project": config["project"], "release": release_id(config), "manifestCount": len(manifests)}))
     except (ConfigurationError, ValueError, OSError, TypeError, KeyError):
         raise SystemExit("Invalid staging release configuration or output path; no cloud changes made.") from None
 

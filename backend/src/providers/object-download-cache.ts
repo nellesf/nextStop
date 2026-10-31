@@ -169,10 +169,12 @@ export function objectDownloadCacheBucket(environment: RuntimeEnvironment = proc
   const backend = environment.DOWNLOAD_CACHE_BACKEND ?? "file";
   if (backend === "file") return undefined;
   if (backend !== "gcs" || deploymentRuntime(environment) !== "cloud-run") {
-    throw new Error("GCS download caching requires the explicit staging Cloud Run runtime.");
+    throw new Error("GCS download caching requires the Cloud Run runtime.");
   }
   const bucket = environment.DOWNLOAD_CACHE_BUCKET ?? "";
-  if (!/^[a-z0-9][a-z0-9._-]{1,61}[a-z0-9]$/u.test(bucket)) throw new Error("DOWNLOAD_CACHE_BUCKET is invalid.");
+  const expected = environment.NEXTSTOP_ENVIRONMENT === "production"
+    ? "nextstop-tech-staging-download-cache" : "nextstop-tech-testing-download-cache";
+  if (bucket !== expected) throw new Error("DOWNLOAD_CACHE_BUCKET must match the deployment environment.");
   return bucket;
 }
 

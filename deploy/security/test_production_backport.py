@@ -290,7 +290,7 @@ class BackportTests(unittest.TestCase):
     def test_workflow_keeps_protected_environment_backup_and_normal_route(self):
         workflow=(Path(__file__).parents[2]/".github/workflows/backend-production.yml").read_text()
         for required in ("environment: production", "github.ref == 'refs/heads/main'", "deploy/gcp/verify-promotion.py",
-                         "deploy/gcp/backup.py", "if: ${{ !inputs.backup_only && !inputs.security_only }}", "--check-only", "default: false"):
+                         "deploy/gcp/backup.py", "if: ${{ !inputs.backup_only && !inputs.security_only && vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run' }}", "--check-only", "default: false"):
             self.assertIn(required,workflow)
         self.assertEqual(workflow.count("uses: actions/checkout@v7"),1)
         self.assertNotIn("ref: ${{ inputs.commit }}",workflow)

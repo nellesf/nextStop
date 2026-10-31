@@ -160,7 +160,7 @@ class DeployTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "current_services", return_value=[]))
             stack.enter_context(patch.object(release, "service_snapshot", return_value=config["retainedTraffic"]))
             stack.enter_context(patch.object(deploy, "schedule_snapshot", return_value={"nextstop-" + name: "ENABLED" for name in render.SCHEDULES}))
-            stack.enter_context(patch.object(deploy, "set_schedules", side_effect=lambda _snapshot, action: actions.append(action)))
+            stack.enter_context(patch.object(deploy, "set_schedules", side_effect=lambda _snapshot, action, _target: actions.append(action)))
             stack.enter_context(patch.object(release, "preflight", side_effect=release.ReleaseError("preflight") if fail_preflight else None))
             stack.enter_context(patch.object(verify, "verify", side_effect=release.ReleaseError("candidate") if fail_candidate else lambda *_: gates))
             stack.enter_context(patch.object(verify, "verify_public", side_effect=release.ReleaseError("public") if fail_public else None))

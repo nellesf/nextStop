@@ -14,7 +14,7 @@ from pathlib import Path
 import subprocess
 import sys
 
-from render import (CONNECTION, JOBS, LOG_EXCLUSION, PROJECT, PROJECT_NUMBER,
+from render import (JOBS, PROJECT, STAGING, TARGETS, log_exclusion,
                     QUEUE, REGION, SCHEDULES, SERVICES, ConfigurationError, account,
                     canonical, release_id, render, validate, write_rendered)
 
@@ -54,8 +54,8 @@ def verify_sql_security(settings):
         raise ReleaseError("Database sampled-statement logging would expose request data.")
 
 
-def gcloud(*args):
-    return ["gcloud", *args, "--project=" + PROJECT, "--quiet", "--verbosity=error"]
+def gcloud(*args, target=STAGING):
+    return ["gcloud", *args, "--project=" + target.project, "--quiet", "--verbosity=error"]
 
 
 def run(command, timeout=90):
@@ -94,8 +94,8 @@ def service_snapshot(rows):
     return result
 
 
-def current_services():
-    return json_command(gcloud("run", "services", "list", "--region=" + REGION, "--format=json"))
+def current_services(target=STAGING):
+    return json_command(gcloud("run", "services", "list", "--region=" + REGION, "--format=json", target=target))
 
 
 def same_traffic(left, right):
@@ -104,21 +104,22 @@ def same_traffic(left, right):
 
 
 def definitions_plan(config, output, queue_exists):
-    validate(config)
+    validate(config, config.get("environment"))
+    target = TARGETS[config["environment"]]
     queue = render(config)["queue"]
     commands = [gcloud("tasks", "queues", "update" if queue_exists else "create", QUEUE,
                        "--location=" + REGION, "--max-concurrent-dispatches=1", "--max-dispatches-per-second=0.1",
                        "--max-attempts=3", "--max-retry-duration=0s", "--min-backoff=660s", "--max-backoff=660s",
-                       "--max-doublings=0", "--log-sampling-ratio=0")]
+                       "--max-doublings=0", "--log-sampling-ratio=0", target=target)]
     for name in ("api", "auth", "live", "broker", "gateway"):
-        commands.append(gcloud("run", "services", "replace", str(output / (name + ".json")), "--region=" + REGION))
+        commands.append(gcloud("run", "services", "replace", str(output / (name + ".json")), "--region=" + REGION, target=target))
     for name in JOBS:
-        commands.append(gcloud("run", "jobs", "replace", str(output / (name + ".json")), "--region=" + REGION))
-    result = {"project": PROJECT, "region": REGION, "release": release_id(config),
+        commands.append(gcloud("run", "jobs", "replace", str(output / (name + ".json")), "--region=" + REGION, target=target))
+    result = {"project": target.project, "region": REGION, "release": release_id(config),
               "image": config["backendImage"], "commit": config["commit"], "commands": commands,
               "queueRetry": queue["retryConfig"],
               "prerequisites": ["OCI revision/platform verification for the exact image and commit",
-                                "g1-small PostgreSQL17 with 50 GiB SSD, separate role/secret grants and seeded public corpus",
+                                "approved PostgreSQL 17 sizing, separate role/secret grants and seeded public corpus",
                                 "all non-gateway services IAM-private; gateway identity has no secret or SQL access",
                                 "raw Cloud Run request-log exclusion active before any request",
                                 "all four schedules absent or paused and no unfinished maintenance execution",
@@ -131,14 +132,14 @@ def definitions_plan(config, output, queue_exists):
     return result
 
 
-def verify_private_iam(rows):
+def verify_private_iam(rows, target=STAGING):
     for row in rows:
         name = row.get("metadata", {}).get("name", "")
         if name.removeprefix("nextstop-") not in SERVICES or name == "nextstop-gateway":
             continue
         if str(row.get("metadata", {}).get("annotations", {}).get("run.googleapis.com/invoker-iam-disabled", "false")).lower() == "true":
             raise ReleaseError("A private runtime service has disabled the IAM invoker check.")
-        policy = json_command(gcloud("run", "services", "get-iam-policy", name, "--region=" + REGION, "--format=json(bindings)"))
+        policy = json_command(gcloud("run", "services", "get-iam-policy", name, "--region=" + REGION, "--format=json(bindings)", target=target))
         if any(member in {"allUsers", "allAuthenticatedUsers"}
                for binding in policy.get("bindings", []) for member in binding.get("members", [])):
             raise ReleaseError("A private runtime service has a public IAM binding.")
@@ -146,17 +147,18 @@ def verify_private_iam(rows):
 
 def verify_candidates(config):
     """Read immutable candidate metadata, without accessing environment values in secrets."""
+    target = TARGETS[config["environment"]]
     manifests = render(config)
     for name in SERVICES:
         expected = manifests[name]["spec"]["template"]
         row = json_command(gcloud("run", "revisions", "describe", expected["metadata"]["name"],
-                                  "--region=" + REGION, "--format=json(metadata,spec,status)"))
+                                  "--region=" + REGION, "--format=json(metadata,spec,status)", target=target))
         spec, status = row.get("spec", {}), row.get("status", {})
         containers = spec.get("containers", [])
         expected_container = expected["spec"]["containers"][0]
         annotations = row.get("metadata", {}).get("annotations", {})
         if (row.get("metadata", {}).get("name") != expected["metadata"]["name"]
-                or spec.get("serviceAccountName") != account(name) or len(containers) != 1
+                or spec.get("serviceAccountName") != account(name, target) or len(containers) != 1
                 or not any(c.get("type") == "Ready" and c.get("status") == "True" for c in status.get("conditions", []))):
             raise ReleaseError("A candidate revision is missing, not ready or has the wrong identity.")
         container = containers[0]
@@ -175,42 +177,47 @@ def verify_candidates(config):
 
 
 def preflight(config, queue_exists, candidates_applied=False):
-    project = json_command(gcloud("projects", "describe", PROJECT, "--format=json(projectNumber,projectId)"))
-    if (project.get("projectId"), str(project.get("projectNumber"))) != (PROJECT, PROJECT_NUMBER):
-        raise ReleaseError("Project identity does not match the isolated staging project.")
-    rows = current_services()
+    validate(config, config.get("environment"))
+    target = TARGETS[config["environment"]]
+    project = json_command(gcloud("projects", "describe", target.project, "--format=json(projectNumber,projectId)", target=target))
+    if (project.get("projectId"), str(project.get("projectNumber"))) != (target.project, target.number):
+        raise ReleaseError("Project identity does not match the configured Cloud Run project.")
+    rows = current_services(target)
     actual = service_snapshot(rows)
     expected = ({name: render(config)[name]["spec"]["traffic"] for name in SERVICES}
                 if candidates_applied else config["retainedTraffic"])
     if not same_traffic(actual, expected):
         raise ReleaseError("Serving traffic changed; capture a fresh snapshot and review a new plan.")
-    verify_private_iam(rows)
+    verify_private_iam(rows, target)
     if candidates_applied:
         verify_candidates(config)
-    sql = json_command(gcloud("sql", "instances", "describe", CONNECTION.rsplit(":", 1)[1],
-                              "--format=json(databaseVersion,region,settings.tier,settings.dataDiskSizeGb,settings.dataDiskType,settings.availabilityType,settings.backupConfiguration,settings.connectorEnforcement,settings.ipConfiguration,settings.databaseFlags,settings.storageAutoResize)"))
+    sql = json_command(gcloud("sql", "instances", "describe", target.connection.rsplit(":", 1)[1],
+                              "--format=json(databaseVersion,region,settings.tier,settings.dataDiskSizeGb,settings.dataDiskType,settings.availabilityType,settings.backupConfiguration,settings.connectorEnforcement,settings.ipConfiguration,settings.databaseFlags,settings.storageAutoResize,settings.deletionProtectionEnabled)", target=target))
     settings = sql.get("settings", {})
     if (sql.get("databaseVersion"), sql.get("region"), settings.get("tier"), str(settings.get("dataDiskSizeGb")), settings.get("dataDiskType"), settings.get("availabilityType")) != (
-        "POSTGRES_17", REGION, "db-g1-small", "50", "PD_SSD", "ZONAL",
+        "POSTGRES_17", REGION, "db-g1-small", str(config.get("cloudSqlDiskGb", 50)), "PD_SSD", "ZONAL",
     ):
-        raise ReleaseError("Database sizing differs from the approved staging cost plan.")
+        raise ReleaseError("Database sizing differs from the approved database configuration.")
+    if target.environment == "production" and settings.get("deletionProtectionEnabled") is not True:
+        raise ReleaseError("Production requires Cloud SQL deletion protection.")
     backup = settings.get("backupConfiguration", {})
     if backup.get("enabled") or backup.get("pointInTimeRecoveryEnabled"):
         raise ReleaseError("Managed full backups or PITR conflict with the filtered report-data backup policy.")
     verify_sql_security(settings)
-    sink = json_command(gcloud("logging", "sinks", "describe", "_Default", "--format=json(exclusions)"))
-    if not any(row.get("name") == LOG_EXCLUSION["name"] and row.get("filter") == LOG_EXCLUSION["filter"]
+    expected_exclusion = log_exclusion(target)
+    sink = json_command(gcloud("logging", "sinks", "describe", "_Default", "--format=json(exclusions)", target=target))
+    if not any(row.get("name") == expected_exclusion["name"] and row.get("filter") == expected_exclusion["filter"]
                and not row.get("disabled", False) for row in sink.get("exclusions", [])):
         raise ReleaseError("The required raw-request-log exclusion is not active.")
-    queues = json_command(gcloud("tasks", "queues", "list", "--location=" + REGION, "--format=json(name)"))
+    queues = json_command(gcloud("tasks", "queues", "list", "--location=" + REGION, "--format=json(name)", target=target))
     found = any(row.get("name", "").rsplit("/", 1)[-1] == QUEUE for row in queues)
     if found != (queue_exists or candidates_applied):
         raise ReleaseError("Queue existence changed; review an updated plan.")
-    schedules = json_command(gcloud("scheduler", "jobs", "list", "--location=" + REGION, "--format=json(name,state)"))
+    schedules = json_command(gcloud("scheduler", "jobs", "list", "--location=" + REGION, "--format=json(name,state)", target=target))
     ours = {"nextstop-" + name for name in SCHEDULES}
     if any(row.get("name", "").rsplit("/", 1)[-1] in ours and row.get("state") != "PAUSED" for row in schedules):
         raise ReleaseError("Pause this release's schedules before replacing job definitions.")
-    executions = json_command(gcloud("run", "jobs", "executions", "list", "--region=" + REGION, "--format=json(metadata.labels,status)"))
+    executions = json_command(gcloud("run", "jobs", "executions", "list", "--region=" + REGION, "--format=json(metadata.labels,status)", target=target))
     for row in executions:
         name = row.get("metadata", {}).get("labels", {}).get("run.googleapis.com/job")
         if name in {"nextstop-" + job for job in JOBS} and not row.get("status", {}).get("completionTime"):
@@ -239,8 +246,9 @@ def verify_receipt(config, receipt, now=None):
 def promotion_plan(config):
     # Older gateways use immutable API/auth tags. Private default transitions do
     # not redirect their API calls; shared live-task wire compatibility is a gate.
+    target = TARGETS[config["environment"]]
     return [gcloud("run", "services", "update-traffic", "nextstop-" + name, "--region=" + REGION,
-                   "--to-revisions=nextstop-" + name + "-" + release_id(config) + "=100")
+                   "--to-revisions=nextstop-" + name + "-" + release_id(config) + "=100", target=target)
             for name in ("live", "broker", "api", "auth", "gateway")]
 
 
@@ -261,6 +269,8 @@ def main():
         if args.config is None or args.output is None:
             raise ReleaseError("--config and --output are required.")
         config = validate(json.loads(args.config.read_text()))
+        if config["project"] != args.project:
+            raise ReleaseError("Configuration does not match the explicit project.")
         output = args.output.resolve()
         plan = definitions_plan(config, output, args.queue_exists)
         if args.mode == "plan":

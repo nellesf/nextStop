@@ -53,6 +53,25 @@ class RenderTests(unittest.TestCase):
             self.assertEqual(gateway_env["BACKEND_" + name.upper() + "_AUDIENCE"]["value"], render.origin(name))
         self.assertEqual(render.release_id(config), render.release_id(configuration()))
 
+    def test_preserves_private_security_backport_tag_only_on_its_original_zero_traffic_revision(self):
+        tag = "sec-e32bb59f69ee-95753a1b0dee"
+        config = configuration()
+        for service in ("api", "auth"):
+            traffic = [{"revisionName": "nextstop-" + service + "-original", "percent": 100},
+                       {"revisionName": "nextstop-" + service + "-" + tag, "percent": 0, "tag": tag}]
+            config["retainedTraffic"][service] = traffic
+            self.assertIn(traffic[1], render.render(config)[service]["spec"]["traffic"])
+        for service, revision, percent in (("broker", "nextstop-broker-" + tag, 0),
+                                           ("api", "nextstop-api-other", 0),
+                                           ("api", "nextstop-api-" + tag, 100)):
+            with self.subTest(service=service, revision=revision, percent=percent):
+                config = configuration()
+                config["retainedTraffic"][service] = [
+                    {"revisionName": "nextstop-" + service + "-original", "percent": 100 - percent},
+                    {"revisionName": revision, "percent": percent, "tag": tag}]
+                with self.assertRaises(render.ConfigurationError):
+                    render.render(config)
+
     def test_changed_secret_version_creates_new_revision(self):
         config = configuration()
         old = render.release_id(config)

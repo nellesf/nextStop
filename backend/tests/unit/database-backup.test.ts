@@ -1,11 +1,21 @@
 import assert from "node:assert/strict";
 import test from "node:test";
-import { backupArguments, backupConfiguration } from "../../src/jobs/database-backup.js";
+import { Readable } from "node:stream";
+import { createHash } from "node:crypto";
+import { backupArguments, backupConfiguration, verifyBackupBytes } from "../../src/jobs/database-backup.js";
 
 const environment = { NEXTSTOP_RUNTIME: "cloud-run", NEXTSTOP_ENVIRONMENT: "staging",
   DATABASE_TRANSPORT: "cloud-sql-socket", CLOUD_SQL_CONNECTION_NAME: "nextstop-tech-testing:europe-west1:nextstop-staging",
   BACKUP_DATABASE_URL: "postgresql://nextstop_backup:synthetic-backup-password@localhost/nextstop",
   BACKUP_BUCKET: "nextstop-tech-testing-database-backups" };
+
+void test("backup verification rejects a truncated, oversized or substituted generation", async () => {
+  const hash = createHash("sha256").update("archive").digest("hex");
+  await verifyBackupBytes(Readable.from([Buffer.from("arc"), Buffer.from("hive")]), 7, hash);
+  for (const content of ["archiv", "archive!", "archivX"]) {
+    await assert.rejects(verifyBackupBytes(Readable.from([Buffer.from(content)]), 7, hash));
+  }
+});
 
 void test("backup uses the restricted socket identity and excludes the complete report table", () => {
   const config = backupConfiguration(environment);

@@ -141,3 +141,50 @@ restore with auth preserved, equivalent empty report DDL, and 20 concurrent actu
 TypeScript budget reservations. The local dummy `cloudsqlsuperuser` does not emulate
 managed extension privileges; those and Cloud SQL's explicit creator-grant path
 need the separate managed-service check.
+
+### Filled private-state handoff and return
+
+The `test_filled_private_handoff_and_rollback` integration test creates two
+databases from `template0`, installs migrations through 0015 and 0019 respectively,
+and seeds synthetic App Attest keys, challenges, reports and deletion markers.
+It closes both writer logins on each inactive database, drains a transaction
+already in progress, and checks every field after the forward and reverse copies.
+The return includes a newer assertion counter and revocation, a consumed
+challenge, a new challenge, a withdrawn report and a newly submitted report.
+An expired challenge remains unusable and the report purge retains live deletion
+markers. A deliberately interrupted import rolls back the whole transaction. A
+divergent inactive database fails the comparison before the copy.
+
+On 2026-10-31 the test passed locally on PostgreSQL 17.11 and on the actual
+Staging Cloud SQL instance after maintenance `POSTGRES_17_11.R20260712.01_44`.
+Managed rehearsal `5fa2e55d291e2f` used two empty databases on that instance,
+an ephemeral administrator and two restricted writers. Both databases and all
+three logins were confirmed removed after the run. This exercises schema-15
+and schema-19 private state on the managed engine. Production VM connectivity,
+cross-instance transport, signing identities and ingress cutover are separate
+release checks.
+
+For an actual handoff, establish the following conditions on **both** endpoints.
+
+1. Pin each connection to its intended project, database and restricted owner.
+   Verify the private table definitions and the App ID/signing-key equality
+   without printing key material. Freeze deployment, Auth, Report and purge
+   writers, deny reconnections and allow in-flight transactions to finish.
+   Verify effective writer access is denied and no writer sessions remain.
+2. Record an exact private baseline for the inactive destination and a consistent
+   source snapshot of `nextstop.app_attest_keys`, `nextstop.app_attest_challenges`
+   and `nextstop.user_error_reports`. Preserve nulls and absolute timestamps.
+   Keep comparison data private. A row count cannot distinguish a consumed
+   challenge or a withdrawal. Use the report-inclusive transfer solely for the
+   immediate handoff within the existing four-hour limit.
+3. Check that the inactive destination still matches its baseline. While both
+   sides remain frozen, replace just these three tables in one transaction
+   using the completed, verified snapshot. Compare all their rows and columns.
+   If any check fails, keep both endpoints frozen while resolving which has the
+   latest state. Enable writers on exactly one verified destination.
+4. To return, freeze and drain the **new active writer**, check the retained
+   inactive baseline, and repeat the transaction in reverse using the **current**
+   state, including post-cutover writes and withdrawals. Validate readiness and
+   authenticated search before reopening ingress. Remove transient private
+   copies, including stale payloads on the inactive server, within the handoff
+   window. Retained backups must continue to exclude reports.

@@ -71,6 +71,10 @@ class RestrictedBootstrapTests(unittest.TestCase):
         self.script("nextstop_app", "database-roles.sql")
         self.assertEqual(self.sql("nextstop_app", "SELECT rolsuper OR rolcreaterole OR rolcreatedb OR rolbypassrls FROM pg_roles WHERE rolname=current_user").stdout.strip(), "f")
 
+    def test_filled_private_handoff_and_rollback(self):
+        from private_handoff_rehearsal import rehearse
+        rehearse(self, ROOT / "backend/migrations")
+
     def test_all_runtime_isolation_and_worker_session_features(self):
         self.script("nextstop_app", "database-verify.sql")
         for role, allowed, denied in [

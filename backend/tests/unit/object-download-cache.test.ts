@@ -121,11 +121,14 @@ void test("old generation is retained until consumer cleanup; tampered body and 
   await assert.rejects(cache.write(Readable.from([payload]), { ...metadata, etag: "bad\r\nheader" }, 100), /integrity/u);
 });
 
-void test("cloud cache is explicit and staging-only; VM retains its existing file cache", () => {
+void test("cloud cache is isolated by environment and VM retains its file cache", () => {
   assert.equal(objectDownloadCacheBucket({}), undefined);
   const cloud = { NEXTSTOP_RUNTIME: "cloud-run", NEXTSTOP_ENVIRONMENT: "staging", DOWNLOAD_CACHE_BACKEND: "gcs",
-    DOWNLOAD_CACHE_BUCKET: "nextstop-testing-cache" };
+    DOWNLOAD_CACHE_BUCKET: "nextstop-tech-testing-download-cache" };
   assert.equal(objectDownloadCacheBucket(cloud), cloud.DOWNLOAD_CACHE_BUCKET);
+  const production = { ...cloud, NEXTSTOP_ENVIRONMENT: "production", DOWNLOAD_CACHE_BUCKET: "nextstop-tech-staging-download-cache" };
+  assert.equal(objectDownloadCacheBucket(production), production.DOWNLOAD_CACHE_BUCKET);
+  assert.throws(() => objectDownloadCacheBucket({ ...production, NEXTSTOP_ENVIRONMENT: "staging" }));
   for (const override of [{ NEXTSTOP_RUNTIME: "vm" }, { NEXTSTOP_ENVIRONMENT: "production" },
     { DOWNLOAD_CACHE_BUCKET: "gs://invalid" }, { DOWNLOAD_CACHE_BACKEND: "unknown" }]) {
     assert.throws(() => objectDownloadCacheBucket({ ...cloud, ...override }));

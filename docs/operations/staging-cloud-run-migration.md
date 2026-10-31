@@ -1,5 +1,26 @@
 # Staging Cloud Run migration record
 
+## Hourly cleanup diagnosis, 2026-10-31
+
+Cloud SQL logged a worker statement timeout 5 milliseconds before the cleanup
+process failed at 09:00:49 UTC on October 5 and 4 milliseconds before it failed
+at 13:00:27 UTC on October 6. The privacy-preserving PostgreSQL settings omit
+SQL text for these errors. From October 5 at 09:00 UTC through October 31 at
+18:00 UTC, the job logged 578 failures and 55 successes. Every hourly run after
+October 9 failed in this interval.
+
+On October 31 the worker had no expired availability snapshots. The oldest
+in-progress charging projection was stuck at retention stage 1, the campus
+power table. PostgreSQL estimated 142,810 rows for this projection and chose a
+sequential scan for the locked 1,000-row selection. A read-only reproduction
+on the same database and projection reached the job's two-second statement
+limit. In the comparison, ordering the batch by campus ID and minimum power
+used the existing primary-key index and found the 342 remaining rows in 246 ms.
+All seven stages now select in their table's primary-key order. The deletion
+still addresses only the bounded, locked tuple identities. Verify that an
+ordinary execution of the deployed release advances the stage and that search
+succeeds during cleanup before accepting the release.
+
 ## Direct-domain acceptance and completed source retirement, 2026-10-05
 
 At 11:25:43 UTC, absence was verified for the exact old staging VM, both source

@@ -34,7 +34,7 @@ jobs:
     if: vars.NEXTSTOP_RELEASES_ENABLED == 'true' && github.ref == 'refs/heads/main'
     environment: production
     runs-on: ubuntu-latest
-    timeout-minutes: 60
+    timeout-minutes: 150
     permissions:
       contents: read
       deployments: write
@@ -55,6 +55,17 @@ jobs:
           workload_identity_provider: ${{ vars.NEXTSTOP_WORKLOAD_IDENTITY_PROVIDER }}
           service_account: ${{ vars.NEXTSTOP_DEPLOY_SERVICE_ACCOUNT }}
       - uses: google-github-actions/setup-gcloud@v3
+      - name: Select the commissioned production target
+        env:
+          HOSTING: ${{ vars.NEXTSTOP_PRODUCTION_HOSTING }}
+          SECURITY_ONLY: ${{ inputs.security_only }}
+          BACKUP_ONLY: ${{ inputs.backup_only }}
+        run: |
+          case "$HOSTING" in
+            ''|vm) ;;
+            cloud-run) [[ "$BACKUP_ONLY" == true || "$SECURITY_ONLY" == false ]] ;;
+            *) exit 1 ;;
+          esac
       - name: Require successful staging of this exact image
         if: ${{ !inputs.backup_only }}
         run: python3 deploy/gcp/verify-promotion.py --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE"
@@ -68,19 +79,32 @@ jobs:
           id=$(python3 deploy/gcp/record-deployment.py start --environment production --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE")
           echo "id=$id" >> "$GITHUB_OUTPUT"
       - name: Prepare the reviewed PostgreSQL backup clients
+        if: vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run'
         run: python3 deploy/security/postgres-client/prepare.py
       - name: Back up the exact production database
-        if: ${{ !inputs.backup_only }}
+        if: ${{ !inputs.backup_only && vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run' }}
         run: python3 deploy/gcp/backup.py --image "$RELEASE_IMAGE" --output "$RUNNER_TEMP/production-backup.json"
       - name: Back up the unchanged current production release
-        if: inputs.backup_only
+        if: inputs.backup_only && vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run'
         run: python3 deploy/gcp/backup.py --current-production --output "$RUNNER_TEMP/production-backup.json"
       - name: Promote and verify production
-        if: ${{ !inputs.backup_only && !inputs.security_only }}
+        if: ${{ !inputs.backup_only && !inputs.security_only && vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run' }}
         run: bash deploy/gcp-vm/deploy.sh --environment production --image "$RELEASE_IMAGE" --backup-receipt "$RUNNER_TEMP/production-backup.json"
       - name: Promote and verify the security-only production backport
-        if: ${{ !inputs.backup_only && inputs.security_only }}
+        if: ${{ !inputs.backup_only && inputs.security_only && vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run' }}
         run: python3 deploy/security/production-backport.py --commit "$RELEASE_COMMIT" --image "$RELEASE_IMAGE" --backup-receipt "$RUNNER_TEMP/production-backup.json"
+      - name: Back up the currently serving Cloud SQL database
+        if: inputs.backup_only && vars.NEXTSTOP_PRODUCTION_HOSTING == 'cloud-run'
+        run: python3 deploy/gcp-run/production.py backup
+      - name: Verify and promote the commissioned Cloud Run production release
+        if: ${{ !inputs.backup_only && !inputs.security_only && vars.NEXTSTOP_PRODUCTION_HOSTING == 'cloud-run' }}
+        env:
+          NEXTSTOP_PRODUCTION_RUN_EVIDENCE: ${{ vars.NEXTSTOP_PRODUCTION_RUN_EVIDENCE }}
+        run: |
+          gcloud auth configure-docker europe-west3-docker.pkg.dev --quiet
+          docker pull --platform linux/amd64 "$RELEASE_IMAGE"
+          python3 deploy/security/scan-image.py --image "$RELEASE_IMAGE" --commit "$RELEASE_COMMIT" --output "$RUNNER_TEMP/production-security/image.json"
+          python3 deploy/gcp-run/production.py promote --image "$RELEASE_IMAGE" --commit "$RELEASE_COMMIT" --scan "$RUNNER_TEMP/production-security/image.json"
       - name: Record outcome
         if: ${{ always() && !inputs.backup_only && steps.deployment.outputs.id != '' }}
         env:

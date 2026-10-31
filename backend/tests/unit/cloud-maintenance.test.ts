@@ -86,11 +86,17 @@ void test("budget database error releases the global lock and never starts provi
 
 void test("cloud maintenance configuration enforces runtime, cache, role connection and hard per-mode deadlines", () => {
   const base = { NEXTSTOP_RUNTIME: "cloud-run", NEXTSTOP_ENVIRONMENT: "staging", DATABASE_URL: "postgres://worker/database",
-    SUPPORT_DATABASE_URL: "postgres://support/database", DOWNLOAD_CACHE_BACKEND: "gcs", DOWNLOAD_CACHE_BUCKET: "private-cache" };
+    SUPPORT_DATABASE_URL: "postgres://support/database", DOWNLOAD_CACHE_BACKEND: "gcs", DOWNLOAD_CACHE_BUCKET: "nextstop-tech-testing-download-cache" };
   assert.deepEqual(maintenanceJobConfiguration({ ...base, MAINTENANCE_JOB_MODE: "monthly-import" }),
     { mode: "monthly-import", maximumSeconds: 28_800, databaseURL: base.DATABASE_URL });
   assert.equal(maintenanceJobConfiguration({ ...base, MAINTENANCE_JOB_MODE: "report-purge" }).databaseURL, base.SUPPORT_DATABASE_URL);
+  const production = { ...base, NEXTSTOP_ENVIRONMENT: "production", DATABASE_TRANSPORT: "cloud-sql-socket",
+    CLOUD_SQL_CONNECTION_NAME: "nextstop-tech-staging:europe-west1:nextstop-production",
+    DATABASE_URL: "postgresql://nextstop_worker:synthetic@localhost/nextstop",
+    SUPPORT_DATABASE_URL: "postgresql://nextstop_support:synthetic@localhost/nextstop",
+    DOWNLOAD_CACHE_BUCKET: "nextstop-tech-staging-download-cache" };
   for (const mode of ["monthly-import", "cleanup", "report-purge"]) {
+    assert.equal(maintenanceJobConfiguration({ ...production, MAINTENANCE_JOB_MODE: mode }).mode, mode);
     assert.throws(() => maintenanceJobConfiguration({ ...base, MAINTENANCE_JOB_MODE: mode, MAINTENANCE_JOB_MAX_SECONDS: "28801" }));
     assert.throws(() => maintenanceJobConfiguration({ ...base, MAINTENANCE_JOB_MODE: mode, MAINTENANCE_JOB_MAX_SECONDS: "0" }));
     assert.throws(() => maintenanceJobConfiguration({ ...base, MAINTENANCE_JOB_MODE: mode, NEXTSTOP_ENVIRONMENT: "production" }));

@@ -1,0 +1,20 @@
+{
+  "environment": "production",
+  "project": "nextstop-tech-staging",
+  "region": "europe-west1",
+  "cloudSqlConnectionName": "nextstop-tech-staging:europe-west1:nextstop-production",
+  "cloudSqlDiskGb": 100,
+  "cacheBucket": "nextstop-tech-staging-download-cache",
+  "backupBucket": "nextstop-tech-staging-database-backups",
+  "appAttestAppId": "MR3P73S995.de.nextstop.app",
+  "secretVersions": {
+    "api-database-url": "1",
+    "auth-database-url": "1",
+    "support-database-url": "1",
+    "worker-database-url": "1",
+    "migrator-database-url": "1",
+    "backup-database-url": "1",
+    "snapshot-signing-key": "1",
+    "access-token-signing-key": "1"
+  }
+}

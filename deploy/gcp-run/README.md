@@ -4,7 +4,7 @@ The owner selected Cloud SQL for the staging migration on 2026-10-04. This folde
 contains local render/release controls, database transfer helpers and a reviewable
 cost model. It is not evidence that a cloud deployment or migration has completed.
 Production continues to use the existing VM, database and protected release path.
-No production role, image, domain or workflow is changed by these helpers.
+The staging CLI selects only staging. Production has a separate protected entry point described below.
 
 The fixed target is project `nextstop-tech-testing` (`353471052580`), region
 `europe-west1`, PostgreSQL17 Enterprise `db-g1-small`, zonal, 50GiB SSD, instance
@@ -423,3 +423,43 @@ Price and platform sources checked2026-10-04:
 [service URL format](https://docs.cloud.google.com/run/docs/triggering/https-request),
 [service authentication](https://docs.cloud.google.com/run/docs/authenticating/service-to-service),
 [domain mapping](https://docs.cloud.google.com/run/docs/mapping-custom-domains).
+
+## Protected production Cloud Run releases
+
+The production target is `nextstop-tech-staging:europe-west1:nextstop-production`.
+Its checked-in configuration uses a separate 100 GiB SSD, Cloud SQL deletion
+protection, restricted database accounts, a private filtered backup bucket and
+numeric production secret versions. Each runtime role is in the production
+project. The gateway uses immutable production API and auth revision tags.
+Production rejects development App Attest attestations. The token broker is
+private and may be invoked only by explicitly authorized production principals.
+
+Render the initial manifests and SQL request to a private local directory. This
+command only writes local files. The image and commit must be the tested
+immutable release. `hashes` prints the production acceptance fingerprints.
+
+```sh
+python3 deploy/gcp-run/production.py render --image "$IMAGE" --commit "$COMMIT" --output "$PRIVATE_DIRECTORY"
+python3 deploy/gcp-run/production.py hashes --image "$IMAGE" --commit "$COMMIT"
+```
+
+Keep `NEXTSTOP_PRODUCTION_HOSTING` at its current VM setting during the initial
+provisioning, filled-state handoff, rollback rehearsal and production domain
+cutover. Commission the four schedules and verify which jobs may resume before
+selecting `cloud-run` in the protected GitHub production environment. Set
+`NEXTSTOP_PRODUCTION_RUN_EVIDENCE` there to the production operator record's
+immutable reference with `object`, `generation` and `sha256`. The record lives
+under `operations/evidence/` in the production backup bucket. Grant the deploy
+identity access to those evidence objects only. Its Cloud Logging access must
+cover the specific production backup completion events. The restricted backup
+runtime performs the archive and schema checksum readback in GCP.
+
+After commissioning, the normal promotion workflow requires the full staging
+Cloud Run deployment, all three main push test workflows and a fresh scan with
+zero findings for the same release image. It executes the current production
+backup job and binds its verified completion to the immutable job execution and
+receipt generation before changing definitions. If the job cannot prove those
+conditions the release stops. A backup-only dispatch executes the same backup
+validation. Automated Cloud Run releases preserve tagged prior revisions and
+restore serving traffic on a failed public check. Data reconciliation during a
+return to the original VM requires the separate writer handoff procedure.

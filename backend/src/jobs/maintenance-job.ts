@@ -1,5 +1,5 @@
 import { fileURLToPath } from "node:url";
-import { createDatabasePool } from "../persistence/database.js";
+import { createDatabasePool, databasePoolConfiguration } from "../persistence/database.js";
 import { PostgresUserErrorReportRepository } from "../persistence/postgres-user-error-reports.js";
 import { pruneExpiredAvailabilitySnapshots } from "../persistence/availability-retention.js";
 import { pruneRetiredChargingSearchProjections } from "../persistence/projection-retention.js";
@@ -19,7 +19,7 @@ export interface MaintenanceJobConfiguration {
 const limits = { "monthly-import": [28_800, 28_800], cleanup: [180, 600], "report-purge": [120, 300] } as const;
 
 export function maintenanceJobConfiguration(environment: RuntimeEnvironment = process.env): MaintenanceJobConfiguration {
-  if (deploymentRuntime(environment) !== "cloud-run") throw new Error("Maintenance jobs require staging Cloud Run runtime.");
+  if (deploymentRuntime(environment) !== "cloud-run") throw new Error("Maintenance jobs require Cloud Run.");
   const mode = environment.MAINTENANCE_JOB_MODE;
   if (mode !== "monthly-import" && mode !== "cleanup" && mode !== "report-purge") throw new Error("MAINTENANCE_JOB_MODE is invalid.");
   const maximumSeconds = Number(environment.MAINTENANCE_JOB_MAX_SECONDS ?? limits[mode][0]);
@@ -28,6 +28,12 @@ export function maintenanceJobConfiguration(environment: RuntimeEnvironment = pr
   }
   const databaseURL = mode === "report-purge" ? environment.SUPPORT_DATABASE_URL : environment.DATABASE_URL;
   if (databaseURL === undefined || databaseURL.trim() === "") throw new Error("The maintenance mode requires its dedicated database connection.");
+  if (environment.NEXTSTOP_ENVIRONMENT === "production" || environment.DATABASE_TRANSPORT === "cloud-sql-socket") {
+    const expectedRole = mode === "report-purge" ? "nextstop_support" : "nextstop_worker";
+    if (databasePoolConfiguration(databaseURL, {}, environment).user !== expectedRole) {
+      throw new Error("The maintenance database role must match the job.");
+    }
+  }
   if (mode === "monthly-import" && environment.DOWNLOAD_CACHE_BACKEND !== "gcs") {
     throw new Error("Cloud monthly imports require the explicit GCS download cache.");
   }

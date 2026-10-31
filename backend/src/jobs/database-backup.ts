@@ -4,12 +4,30 @@ import { Transform, type TransformCallback } from "node:stream";
 import { pipeline } from "node:stream/promises";
 import { promisify } from "node:util";
 import { fileURLToPath } from "node:url";
-import { Storage } from "@google-cloud/storage";
+import { Storage, type File } from "@google-cloud/storage";
 import { databasePoolConfiguration } from "../persistence/database.js";
 import { deploymentRuntime } from "../runtime/deployment-runtime.js";
 
 export const backupArguments = ["--format=custom", "--schema=nextstop", "--no-owner", "--no-privileges",
   "--lock-wait-timeout=500ms", "--exclude-table=nextstop.user_error_reports"] as const;
+
+/** Re-read the exact GCS generation before a production migration trusts its receipt. */
+export async function verifyBackupBytes(source: AsyncIterable<unknown>, bytes: number, sha256: string): Promise<void> {
+  const hash = createHash("sha256");
+  let seen = 0;
+  for await (const chunk of source) {
+    if (!Buffer.isBuffer(chunk)) throw new Error("Backup verification failed.");
+    seen += chunk.length;
+    if (seen > bytes) throw new Error("Backup verification failed.");
+    hash.update(chunk);
+  }
+  if (seen !== bytes || hash.digest("hex") !== sha256) throw new Error("Backup verification failed.");
+}
+
+async function verifyGeneration(file: File, generation: string | number, bytes: number, sha256: string): Promise<void> {
+  const exact = file.bucket.file(file.name, { generation });
+  await verifyBackupBytes(exact.createReadStream({ validation: "crc32c", decompress: false }), bytes, sha256);
+}
 
 export function backupConfiguration(environment: NodeJS.ProcessEnv): { bucket: string; pg: NodeJS.ProcessEnv } {
   if (deploymentRuntime(environment) !== "cloud-run") {
@@ -31,6 +49,11 @@ export function backupConfiguration(environment: NodeJS.ProcessEnv): { bucket: s
 /** Streams directly to GCS. Only a successful pg_dump publishes a completion receipt. */
 export async function runDatabaseBackup(environment: NodeJS.ProcessEnv = process.env): Promise<void> {
   const config = backupConfiguration(environment);
+  const production = environment.NEXTSTOP_ENVIRONMENT === "production";
+  const execution = environment.CLOUD_RUN_EXECUTION;
+  if (production && (!execution || !/^nextstop-backup-[a-z0-9]+$/u.test(execution))) {
+    throw new Error("Production backup requires its Cloud Run execution identity.");
+  }
   const bucket = new Storage({ retryOptions: { maxRetries: 2 } }).bucket(config.bucket);
   const now = new Date();
   const name = `${environment.NEXTSTOP_ENVIRONMENT}/${now.toISOString().slice(0,10)}/${randomUUID()}`;
@@ -66,14 +89,28 @@ export async function runDatabaseBackup(environment: NodeJS.ProcessEnv = process
     }))]);
     const [metadata] = await bucket.file(`${name}.dump`).getMetadata();
     if (bytes < 5 || Number(metadata.size) !== bytes || metadata.generation === undefined) throw new Error("Backup verification failed.");
-    await bucket.file(`${name}.json`).save(JSON.stringify({ version: 1, createdAt: now.toISOString(),
-      archive: `${name}.dump`, generation: metadata.generation, bytes, sha256: hash.digest("hex"),
+    const archiveHash = hash.digest("hex");
+    const schemaHash = createHash("sha256").update(schema).digest("hex");
+    if (production) {
+      await verifyGeneration(schemaFile, schemaMetadata.generation, Buffer.byteLength(schema), schemaHash);
+      await verifyGeneration(bucket.file(`${name}.dump`), metadata.generation, bytes, archiveHash);
+    }
+    const receiptFile = bucket.file(`${name}.json`);
+    await receiptFile.save(JSON.stringify({ version: 1, createdAt: now.toISOString(), ...(production && { execution }),
+      archive: `${name}.dump`, generation: metadata.generation, bytes, sha256: archiveHash,
       excludedTables: ["nextstop.user_error_reports"],
       reportSchema: { object: `${name}.report-schema.sql`, generation: schemaMetadata.generation,
-        sha256: createHash("sha256").update(schema).digest("hex") },
+        sha256: schemaHash },
     }), { resumable: false, validation: "crc32c", preconditionOpts: { ifGenerationMatch: 0 },
       metadata: { contentType: "application/json", cacheControl: "no-store" } });
-    console.info(JSON.stringify({ event: `${environment.NEXTSTOP_ENVIRONMENT}_backup_completed`, bytes, reportsExcluded: true }));
+    if (production) {
+      const [receipt] = await receiptFile.getMetadata();
+      if (!receipt.generation) throw new Error("Missing production backup receipt generation.");
+      console.info(JSON.stringify({ event: "production_backup_completed", bytes, reportsExcluded: true, execution,
+        receiptObject: receiptFile.name, receiptGeneration: String(receipt.generation), integrityVerified: true }));
+    } else {
+      console.info(JSON.stringify({ event: "staging_backup_completed", bytes, reportsExcluded: true }));
+    }
   } finally { if (dump.exitCode === null) dump.kill("SIGKILL"); }
 }
 

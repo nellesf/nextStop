@@ -337,7 +337,7 @@ class ReleaseControlTests(unittest.TestCase):
             self.assertRegex(workflow, required + r':\n\s+description: [^\n]+\n\s+type: string\n\s+required: true')
         self.assertNotRegex(workflow, r'(?m)^\s+(schedule|pull_request|push):')
         sections = workflow.split('      - name: ')[1:]
-        self.assertEqual(len(sections), 9)
+        self.assertEqual(len(sections), 12)
         for backup_only in (False, True):
             for security_only in (False, True):
                 selected = []
@@ -347,6 +347,8 @@ class ReleaseControlTests(unittest.TestCase):
                     condition = match.group(1) if match else 'True'
                     condition = condition.removeprefix('${{').removesuffix('}}').strip()
                     for source, value in (('inputs.backup_only', backup_only), ('inputs.security_only', security_only),
+                                          ("vars.NEXTSTOP_PRODUCTION_HOSTING != 'cloud-run'", True),
+                                          ("vars.NEXTSTOP_PRODUCTION_HOSTING == 'cloud-run'", False),
                                           ('always()', True), ("steps.deployment.outputs.id != ''", not backup_only)):
                         condition = condition.replace(source, str(value))
                     condition = condition.replace('&&', ' and ').replace('!', 'not ')
@@ -356,7 +358,7 @@ class ReleaseControlTests(unittest.TestCase):
                     if eval(condition, {'__builtins__': {}}, {}):
                         selected.append(name)
                 if backup_only:
-                    self.assertEqual(selected, ['Prepare the reviewed PostgreSQL backup clients',
+                    self.assertEqual(selected, ['Select the commissioned production target', 'Prepare the reviewed PostgreSQL backup clients',
                                                 'Back up the unchanged current production release'])
                 else:
                     self.assertIn('Require successful staging of this exact image', selected)
@@ -387,6 +389,23 @@ class ReleaseControlTests(unittest.TestCase):
     def test_exact_successful_staged_artifact_can_be_promoted(self):
         self.assertEqual(promotion.verify(COMMIT, IMAGE, run=self.promotion_runner()),
                          {"commit": COMMIT, "image": IMAGE, "stagingDeploymentId": 42})
+
+    def test_cloud_run_requires_exact_full_staging_and_successful_main_test_runs(self):
+        runner = self.promotion_runner()
+        with self.assertRaises(ValueError):
+            promotion.verify(COMMIT, IMAGE, run=runner, require_cloud_run=True)
+
+        def cloud_run(arguments, conclusion="success"):
+            if "/actions/workflows/" in arguments[-1]:
+                return {"workflow_runs": [{"head_sha": COMMIT, "status": "completed", "conclusion": conclusion}]}
+            rows = runner(arguments)
+            if isinstance(rows, list) and rows and "payload" in rows[0]:
+                rows[0]["payload"]["hosting"] = "cloud-run"
+            return rows
+
+        self.assertEqual(promotion.verify(COMMIT, IMAGE, run=cloud_run, require_cloud_run=True)["stagingDeploymentId"], 42)
+        with self.assertRaises(ValueError):
+            promotion.verify(COMMIT, IMAGE, run=lambda args: cloud_run(args, "failure"), require_cloud_run=True)
 
     def test_later_failed_staging_attempt_blocks_older_success(self):
         with self.assertRaises(ValueError):

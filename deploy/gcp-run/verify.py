@@ -20,7 +20,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-from render import PROJECT, ConfigurationError, origin, release_id, validate
+from render import PROJECT, TARGETS, ConfigurationError, origin, release_id, validate
 
 MAXIMUM_RESPONSE_BYTES = 2 * 1024 * 1024
 SMOKE_GATES = ("apiReady", "authReady", "syntheticSearchPassed", "xffPrefixResistancePassed")
@@ -98,12 +98,13 @@ def verify_public(config, token_provider, request=request_json):
 
 
 def _verify(config, token_provider, request, monotonic, public):
-    validate(config)
+    validate(config, config.get("environment"))
+    target = TARGETS[config["environment"]]
     tag = "r-" + release_id(config)
-    gateway = "https://api-staging.nextstop.tech" if public else origin("gateway", tag)
-    broker = origin("broker", tag)
+    gateway = "https://" + target.domain if public else origin("gateway", tag, target)
+    broker = origin("broker", tag, target)
     try:
-        broker_identity = token_provider(origin("broker"))
+        broker_identity = token_provider(origin("broker", target=target))
         status, minted, _ = request(broker + "/token", "POST", {"Authorization": "Bearer " + broker_identity})
         app_token = minted.get("accessToken")
         if (status != 200 or set(minted) != {"accessToken", "expiresInSeconds", "tokenType"}
@@ -115,7 +116,7 @@ def _verify(config, token_provider, request, monotonic, public):
         # token separate and generates fresh private-service IAM credentials.
         headers = {"Authorization": "Bearer " + app_token, "Content-Type": "application/json"}
         if not public:
-            headers["X-Serverless-Authorization"] = "Bearer " + token_provider(origin("gateway"))
+            headers["X-Serverless-Authorization"] = "Bearer " + token_provider(origin("gateway", target=target))
         expected = {"status": "ready", "release": config["backendImage"].split("@", 1)[1]}
         for path in ("/ready", "/ready/auth"):
             status, body, _ = request(gateway + path, "GET", headers)
