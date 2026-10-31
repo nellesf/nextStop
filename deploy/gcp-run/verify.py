@@ -20,7 +20,7 @@ import urllib.error
 import urllib.request
 import uuid
 
-from render import PROJECT, TARGETS, ConfigurationError, origin, release_id, validate
+from render import PROJECT, REGISTRY, TARGETS, ConfigurationError, origin, release_id, validate
 
 MAXIMUM_RESPONSE_BYTES = 2 * 1024 * 1024
 SMOKE_GATES = ("apiReady", "authReady", "syntheticSearchPassed", "xffPrefixResistancePassed")
@@ -92,17 +92,19 @@ def verify(config, token_provider, request=request_json, monotonic=time.monotoni
     return _verify(config, token_provider, request, monotonic, public=False)
 
 
-def verify_public(config, token_provider, request=request_json):
-    """After promotion, check the fixed public staging origin without another limiter probe."""
-    return _verify(config, token_provider, request, time.monotonic, public=True)
+def verify_public(config, token_provider, request=request_json, *, restored_image=None):
+    """Check the selected target’s fixed public origin without another limiter probe."""
+    if restored_image is not None and not re.fullmatch(re.escape(REGISTRY) + r"@sha256:[0-9a-f]{64}", restored_image):
+        raise VerificationError("Invalid restored gateway image.")
+    return _verify(config, token_provider, request, time.monotonic, public=True, restored_image=restored_image)
 
 
-def _verify(config, token_provider, request, monotonic, public):
+def _verify(config, token_provider, request, monotonic, public, restored_image=None):
     validate(config, config.get("environment"))
     target = TARGETS[config["environment"]]
     tag = "r-" + release_id(config)
     gateway = "https://" + target.domain if public else origin("gateway", tag, target)
-    broker = origin("broker", tag, target)
+    broker = origin("broker", None if restored_image else tag, target)
     try:
         broker_identity = token_provider(origin("broker", target=target))
         status, minted, _ = request(broker + "/token", "POST", {"Authorization": "Bearer " + broker_identity})
@@ -117,7 +119,7 @@ def _verify(config, token_provider, request, monotonic, public):
         headers = {"Authorization": "Bearer " + app_token, "Content-Type": "application/json"}
         if not public:
             headers["X-Serverless-Authorization"] = "Bearer " + token_provider(origin("gateway", target=target))
-        expected = {"status": "ready", "release": config["backendImage"].split("@", 1)[1]}
+        expected = {"status": "ready", "release": (restored_image or config["backendImage"]).split("@", 1)[1]}
         for path in ("/ready", "/ready/auth"):
             status, body, _ = request(gateway + path, "GET", headers)
             if status != 200 or body != expected:

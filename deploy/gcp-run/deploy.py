@@ -20,6 +20,7 @@ import urllib.parse
 import registry
 import release
 import render
+import gateway_tags
 
 ROOT = Path(__file__).resolve().parents[2]
 DEPLOY_ACCOUNT = render.STAGING.deploy_account
@@ -166,9 +167,29 @@ def rollback_plan(config):
     return result
 
 
+def retire_after_restoration(config, token, *, target):
+    import verify
+    gateway_tags.gateway_service(config, target)
+    retained = config["retainedTraffic"]
+    current = release.service_snapshot(release.current_services(target))
+    if any(gateway_tags.allocations(current.get(s, [])) != gateway_tags.allocations(retained[s])
+           for s in render.SERVICES):
+        raise release.ReleaseError("Original serving allocations have not been restored.")
+    previous = gateway_tags.allocations(retained["gateway"])
+    if len(previous) != 1:
+        # One public request cannot verify every revision of a split fallback.
+        raise release.ReleaseError("Split gateway rollback needs independent public verification.")
+    revision = next(iter(previous))
+    image = release.run(release.gcloud("run", "revisions", "describe", revision,
+                        "--region=" + render.REGION, "--format=value(status.imageDigest)", target=target)).strip()
+    verify.verify_public(config, token, restored_image=image)
+    gateway_tags.retire(config, previous, target=target)
+
+
 def deploy(config, *, root=ROOT, target=render.STAGING):
     import verify  # Shared checked-in HTTP gates; no HTTP side effects on import.
 
+    gateway_tags.gateway_service(config, target)
     render.validate(config, target.environment)
     if release.run(["git", "-C", str(root), "rev-parse", "HEAD"]).strip() != config["commit"]:
         raise release.ReleaseError("Checked-out source does not match the requested application commit.")
@@ -192,6 +213,7 @@ def deploy(config, *, root=ROOT, target=render.STAGING):
     paused = False
     mutated_definitions = False
     traffic_started = False
+    gateway_attempted = False
     try:
         paused = True
         set_schedules(schedules, "pause", target)
@@ -206,6 +228,8 @@ def deploy(config, *, root=ROOT, target=render.STAGING):
             release.run(release.gcloud("run", "jobs", "execute", "nextstop-migrate", "--region=" + render.REGION, "--wait", target=target), timeout=1000)
             event("compatible-migrations-and-grants")
             for command in release.definitions_plan(config, directory, True)["commands"]:
+                if str(directory / "gateway.json") in command:
+                    gateway_attempted = True
                 release.run(command, timeout=600)
             release.preflight(config, queue_exists=True, candidates_applied=True)
             event("candidate-definitions")
@@ -236,14 +260,20 @@ def deploy(config, *, root=ROOT, target=render.STAGING):
                 set_schedules(schedules, "pause", target)
             except release.ReleaseError:
                 event("scheduler-pause-recovery", "attention")
+        rollback_ok = True
         if traffic_started:
-            rollback_ok = True
             for command in rollback_plan(config):
                 try:
                     release.run(command, timeout=180)
                 except release.ReleaseError:
                     rollback_ok = False
             event("original-traffic-restoration", "completed" if rollback_ok else "attention")
+        if gateway_attempted and rollback_ok:
+            try:
+                retire_after_restoration(config, token, target=target)
+                event("restored-public-gateway-tags")
+            except Exception:
+                event("restored-public-gateway-tags", "attention")
         raise
     finally:
         if paused and not mutated_definitions:
@@ -252,6 +282,13 @@ def deploy(config, *, root=ROOT, target=render.STAGING):
             set_schedules(schedules, "resume", target)
         elif paused:
             event("schedules-remain-paused-after-failure", "attention")
+    # A failed cleanup must not undo an already verified, healthy rollout.
+    try:
+        gateway_tags.retire(config, {"nextstop-gateway-" + render.release_id(config): 100}, target=target)
+    except release.ReleaseError:
+        event("retired-public-gateway-tags", "attention")
+        raise
+    event("retired-public-gateway-tags")
 
 
 def main():

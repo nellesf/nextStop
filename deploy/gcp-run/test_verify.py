@@ -16,8 +16,10 @@ import verify
 
 
 class SyntheticHTTP:
-    def __init__(self, config, public=False):
+    def __init__(self, config, public=False, restored=False):
         self.config, self.public = config, public
+        self.restored = restored
+        self.target = render.TARGETS[config["environment"]]
         self.calls = []
         self.probes = 0
         self.limiter = True
@@ -26,11 +28,11 @@ class SyntheticHTTP:
     def __call__(self, url, method, headers, payload=None, timeout=30):
         self.calls.append((url, method, headers, payload, timeout))
         tag = "r-" + render.release_id(self.config)
-        if url == render.origin("broker", tag) + "/token":
+        if url == render.origin("broker", None if self.restored else tag, self.target) + "/token":
             assert method == "POST" and payload is None
             assert headers == {"Authorization": "Bearer " + "private-identity" * 3}
             return 200, {"accessToken": "private-app-token" * 3, "expiresInSeconds": 900, "tokenType": "Bearer"}, {}
-        base = "https://api-staging.nextstop.tech" if self.public else render.origin("gateway", tag)
+        base = "https://" + self.target.domain if self.public else render.origin("gateway", tag, self.target)
         assert url.startswith(base + "/")
         assert headers["Authorization"] == "Bearer " + "private-app-token" * 3
         assert ("X-Serverless-Authorization" in headers) is not self.public
@@ -76,6 +78,16 @@ class VerificationTests(unittest.TestCase):
                          {gate: True for gate in verify.SMOKE_GATES if gate != "xffPrefixResistancePassed"})
         self.assertEqual(len(client.calls), 4)
         self.assertEqual(client.probes, 0)
+
+    def test_restored_public_check_mints_from_the_restored_broker_and_requires_exact_prior_digest(self):
+        config = configuration()
+        client = SyntheticHTTP(config, public=True, restored=True)
+        prior = render.REGISTRY + "@sha256:" + "b" * 64
+        client.digest = prior.split("@")[1]
+        self.assertTrue(verify.verify_public(config, identity, request=client, restored_image=prior)["syntheticSearchPassed"])
+        self.assertEqual(client.calls[0][0], render.origin("broker") + "/token")
+        with self.assertRaises(verify.VerificationError):
+            verify.verify_public(config, identity, request=client, restored_image=render.REGISTRY + "@sha256:" + "c" * 64)
 
     def test_missing_throttle_slow_probe_or_wrong_limiter_cannot_be_reported_as_success(self):
         config = configuration()

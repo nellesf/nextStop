@@ -9,6 +9,7 @@ import unittest
 from unittest.mock import patch
 
 import deploy
+import production
 import registry
 import release
 import render
@@ -137,8 +138,10 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(len(run.call_args_list), 3)
         self.assertTrue(all("nextstop-monthly" not in call.args[0] for call in run.call_args_list))
 
-    def pipeline(self, fail_public=False, fail_candidate=False, fail_preflight=False):
+    def pipeline(self, fail_public=False, fail_candidate=False, fail_preflight=False, fail_cleanup=False, target=render.STAGING):
         config = configuration()
+        if target is render.PRODUCTION:
+            config = production.configuration(config["commit"], config["backendImage"], config["acceptanceEvidence"])
         config["retainedTraffic"] = {name: [{"revisionName": "nextstop-" + name + "-old", "percent": 100, "tag": "r-111111111111"}] for name in render.SERVICES}
         commands, actions = [], []
 
@@ -146,7 +149,7 @@ class DeployTests(unittest.TestCase):
             if command[0] == "git":
                 return config["commit"] if "rev-parse" in command else ""
             if command[1:4] == ["config", "get-value", "account"]:
-                return deploy.DEPLOY_ACCOUNT
+                return target.deploy_account
             commands.append(command)
             return ""
 
@@ -161,17 +164,21 @@ class DeployTests(unittest.TestCase):
             stack.enter_context(patch.object(release, "service_snapshot", return_value=config["retainedTraffic"]))
             stack.enter_context(patch.object(deploy, "schedule_snapshot", return_value={"nextstop-" + name: "ENABLED" for name in render.SCHEDULES}))
             stack.enter_context(patch.object(deploy, "set_schedules", side_effect=lambda _snapshot, action, _target: actions.append(action)))
+            stack.enter_context(patch.object(deploy.gateway_tags, "retire",
+                side_effect=release.ReleaseError("conflict") if fail_cleanup else lambda *_, **kw: actions.append("retire") if kw["target"] is target else self.fail("Wrong cleanup target")))
+            stack.enter_context(patch.object(deploy, "retire_after_restoration",
+                side_effect=lambda *_, **_kw: actions.append("verify-restored-and-retire")))
             stack.enter_context(patch.object(release, "preflight", side_effect=release.ReleaseError("preflight") if fail_preflight else None))
             stack.enter_context(patch.object(verify, "verify", side_effect=release.ReleaseError("candidate") if fail_candidate else lambda *_: gates))
             stack.enter_context(patch.object(verify, "verify_public", side_effect=release.ReleaseError("public") if fail_public else None))
             stack.enter_context(patch.object(deploy.time, "sleep"))
             stack.enter_context(contextlib.redirect_stdout(io.StringIO()))
-            failed = fail_public or fail_candidate or fail_preflight
+            failed = fail_public or fail_candidate or fail_preflight or fail_cleanup
             if failed:
                 with self.assertRaises(release.ReleaseError):
-                    deploy.deploy(config)
+                    deploy.deploy(config, target=target)
             else:
-                deploy.deploy(config)
+                deploy.deploy(config, target=target)
         return commands, actions
 
     def test_real_gate_orchestration_migrates_before_definitions_and_gateway_last(self):
@@ -181,12 +188,41 @@ class DeployTests(unittest.TestCase):
         self.assertLess(execute, first_service)
         traffic = [command for command in commands if "update-traffic" in command]
         self.assertEqual(traffic[-1][4], "nextstop-gateway")
-        self.assertEqual(actions, ["pause", "resume"])
+        self.assertEqual(actions, ["pause", "resume", "retire"])
 
     def test_candidate_failure_never_promotes_and_leaves_new_jobs_paused(self):
         commands, actions = self.pipeline(fail_candidate=True)
         self.assertFalse(any("update-traffic" in command for command in commands))
         self.assertNotIn("resume", actions)
+
+    def test_production_controller_promotes_and_finalizes_only_in_its_own_project(self):
+        commands, actions = self.pipeline(target=render.PRODUCTION)
+        self.assertIn("retire", actions)
+        cloud = [cmd for cmd in commands if cmd[0] == "gcloud"]
+        self.assertTrue(cloud)
+        self.assertTrue(all("--project=" + render.PRODUCTION.project in cmd for cmd in cloud))
+
+    def test_cleanup_conflict_never_rolls_back_a_verified_release(self):
+        commands, actions = self.pipeline(fail_cleanup=True)
+        self.assertEqual(actions, ["pause", "resume"])
+        self.assertFalse(any(any(arg.endswith("-old=100") for arg in command) for command in commands))
+
+    def test_restoration_requires_original_allocations_and_public_proof_before_retirement(self):
+        config = configuration()
+        retained = {s: [{"revisionName": "nextstop-" + s + "-old", "percent": 100}] for s in render.SERVICES}
+        config["retainedTraffic"] = retained
+        for drift in (False, True):
+            live = dict(retained)
+            if drift:
+                live["api"] = [{"revisionName": "nextstop-api-unexpected", "percent": 100}]
+            with self.subTest(drift=drift), patch.object(release, "current_services"), \
+                    patch.object(release, "service_snapshot", return_value=live), \
+                    patch.object(release, "run", return_value=config["backendImage"]), \
+                    patch.object(verify, "verify_public", side_effect=verify.VerificationError("failed")) as verify_old, \
+                    patch.object(deploy.gateway_tags, "retire") as retire, self.assertRaises(RuntimeError):
+                deploy.retire_after_restoration(config, None, target=render.STAGING)
+            self.assertEqual(verify_old.call_count, 0 if drift else 1)
+            retire.assert_not_called()
 
     def test_public_failure_restores_original_gateway_first_and_keeps_jobs_paused(self):
         commands, actions = self.pipeline(fail_public=True)
@@ -194,6 +230,7 @@ class DeployTests(unittest.TestCase):
         self.assertEqual(len(rollbacks), 5)
         self.assertEqual(rollbacks[0][4], "nextstop-gateway")
         self.assertNotIn("resume", actions)
+        self.assertIn("verify-restored-and-retire", actions)
 
     def test_preflight_failure_restores_previous_schedules_without_job_mutation(self):
         commands, actions = self.pipeline(fail_preflight=True)

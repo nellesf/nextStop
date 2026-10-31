@@ -112,8 +112,11 @@ def definitions_plan(config, output, queue_exists):
                        "--location=" + REGION, "--max-concurrent-dispatches=1", "--max-dispatches-per-second=0.1",
                        "--max-attempts=3", "--max-retry-duration=0s", "--min-backoff=660s", "--max-backoff=660s",
                        "--max-doublings=0", "--log-sampling-ratio=0", target=target)]
-    for name in ("api", "auth", "live", "broker", "gateway"):
+    for name in ("api", "auth", "live", "broker"):
         commands.append(gcloud("run", "services", "replace", str(output / (name + ".json")), "--region=" + REGION, target=target))
+    commands.append([sys.executable, str(Path(__file__).with_name("gateway_tags.py")),
+                     "--project=" + target.project, "--manifest", str(output / "gateway.json"),
+                     "--expected-traffic", canonical(config["retainedTraffic"].get("gateway", []))])
     for name in JOBS:
         commands.append(gcloud("run", "jobs", "replace", str(output / (name + ".json")), "--region=" + REGION, target=target))
     result = {"project": target.project, "region": REGION, "release": release_id(config),
@@ -253,9 +256,26 @@ def promotion_plan(config):
             for name in ("live", "broker", "api", "auth", "gateway")]
 
 
+def finalize_public_gateway(config, *, restored=False):
+    import deploy
+    import gateway_tags
+    import verify
+    try:
+        gateway_tags.gateway_service(config, STAGING)
+        token = verify.identity_provider()
+        if restored:
+            deploy.retire_after_restoration(config, token, target=STAGING)
+        else:
+            verify.verify_public(config, token)
+            gateway_tags.retire(config, {"nextstop-gateway-" + release_id(config): 100}, target=STAGING)
+    except RuntimeError:
+        raise ReleaseError("Public gateway finalization failed; verify current traffic before retrying.") from None
+
+
 def main():
     parser = argparse.ArgumentParser(description=__doc__)
-    parser.add_argument("mode", choices=("snapshot", "plan", "apply-definitions", "promote"))
+    parser.add_argument("mode", choices=("snapshot", "plan", "apply-definitions", "promote",
+                                         "finalize-public", "finalize-restored"))
     parser.add_argument("--project", required=True, choices=(PROJECT,))
     parser.add_argument("--config", type=Path)
     parser.add_argument("--output", type=Path)
@@ -280,6 +300,9 @@ def main():
             return
         if args.expected_plan_sha256 != plan["planSha256"]:
             raise ReleaseError("The applied configuration must match the reviewed plan hash.")
+        if args.mode in {"finalize-public", "finalize-restored"}:
+            finalize_public_gateway(config, restored=args.mode == "finalize-restored")
+            return
         preflight(config, args.queue_exists, candidates_applied=args.mode == "promote")
         if args.mode == "apply-definitions":
             write_rendered(config, output)
@@ -293,6 +316,8 @@ def main():
             print(json.dumps({"phase": args.mode, "step": index, "state": "starting"}), flush=True)
             run(command, timeout=900)
             print(json.dumps({"phase": args.mode, "step": index, "state": "completed"}), flush=True)
+        if args.mode == "promote" and config["retainedTraffic"].get("gateway"):
+            finalize_public_gateway(config)
     except (ReleaseError, ConfigurationError, OSError, ValueError, TypeError, KeyError) as error:
         # Known messages are fixed, not provider error text or secret-bearing config.
         message = str(error) if isinstance(error, (ReleaseError, ConfigurationError)) else "Invalid local release input."

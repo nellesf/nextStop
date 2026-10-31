@@ -208,7 +208,11 @@ Copy the fresh resolved `retainedTraffic` snapshot into the config. On an existi
 queue add `--queue-exists` consistently when generating/applying that plan. Inspect
 the plan, rendered IAM/secret references and image proof. The rendered release ID
 binds image, commit, configuration and secret versions; traffic history does not
-change that ID. Existing tagged revisions are preserved, with the candidate tag
+change that ID. Before replacing the gateway, the controller reads its desired and observed routes
+again and requires both to match the reviewed snapshot. A regional Cloud Run v1
+replacement carries that exact resource version, so a concurrently retired URL
+cannot be reintroduced by a stale manifest. First commissioning uses create-only.
+Existing tagged revisions are preserved, with the candidate tag
 receiving0% while the old revision keeps its allocation. First-created services
 have100% of their own traffic but remain private until the separate IAM step.
 
@@ -251,9 +255,13 @@ Promotion requires evidence from the last hour and re-reads actual candidate
 readiness, digest, identity, command and pinned environment. It expects the
 post-apply candidate tags and queue to exist. Private defaults change first;
 gateway traffic changes last. Older gateways keep their tagged API/auth targets.
-No retained tag is automatically deleted or repointed. A partial failure stops
-without guessing the current state; take a fresh snapshot, inspect which defaults
-changed, and review a new plan before retrying.
+On an existing staging gateway, manual `promote` also verifies readiness and
+search through the public domain and retires obsolete public release tags. On
+first commissioning, run `finalize-public` after the public domain is serving.
+Use the same config, output directory and expected plan hash as for `promote`.
+This finalization can be retried independently after a traffic conflict or an
+interrupted cleanup. After an operator has restored the original allocations,
+`finalize-restored` verifies that fallback and closes its abandoned candidate.
 
 Rollback selects the previous gateway revision and its preserved private tags;
 retain old image digests and numeric secret versions while rollback is required.
@@ -331,9 +339,25 @@ then gateway; verify readiness/search through the fixed public staging domain;
 restore only schedules that were previously enabled. The prefix test intentionally
 uses the auth limiter, so a bounded10s refill separates it from the public check.
 
+A commissioned public gateway has service-wide public access, including its zero-percent
+candidate tag. The tagged URL is needed for the end-to-end gateway and
+forwarded-header checks before changing default traffic. Zero percent alone
+does not close that URL. After a successful public check, the controller removes
+only known, inactive `r-<release>` tags on their matching gateway revisions.
+It preserves all allocated revisions, foreign tags and private service tags.
+The traffic-only update checks the latest service ETag and verifies the resulting
+routes. A conflict stops cleanup without undoing a healthy release.
+
+After a failed candidate or a successful rollback, the controller first checks
+the original percentages on all five services and verifies the previous gateway
+digest and an authenticated search through the public domain. A split fallback
+or failed verification leaves tags intact for operator review. On cancellation
+before the controller can run recovery, compare the live allocations to the
+reviewed snapshot and use the appropriate finalization command above.
+
 If a candidate check fails, no gateway handoff occurs. If promotion or the public
-check fails, restore the original traffic allocations with gateway first, retain
-all revision tags and leave changed job schedules paused for review. A command
+check fails, restore the original traffic allocations with gateway first and
+leave changed job schedules paused for review. A command
 failure is not proof that the requested cloud change had no effect; inspect the
 sanitized phase status and current control-plane metadata before retrying. The
 script never widens IAM or falls back to a shared bearer.
@@ -442,6 +466,12 @@ immutable release. `hashes` prints the production acceptance fingerprints.
 python3 deploy/gcp-run/production.py render --image "$IMAGE" --commit "$COMMIT" --output "$PRIVATE_DIRECTORY"
 python3 deploy/gcp-run/production.py hashes --image "$IMAGE" --commit "$COMMIT"
 ```
+
+For releases after commissioning, the same gateway tag retirement and rollback
+checks run against the fixed production project `nextstop-tech-staging` in
+`europe-west1`. They verify `api.nextstop.tech` using the private production
+broker, and apply a conditional traffic update only to the production gateway.
+The manual `release.py` finalization commands above are restricted to staging.
 
 Keep `NEXTSTOP_PRODUCTION_HOSTING` at its current VM setting during the initial
 provisioning, filled-state handoff, rollback rehearsal and production domain

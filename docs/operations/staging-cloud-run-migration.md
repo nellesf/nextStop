@@ -1,5 +1,23 @@
 # Staging Cloud Run migration record
 
+## Staging verification on October 31, 2026 at 20:12 UTC
+
+All five services moved to release `bdfd836d556d` and all five job definitions
+use image `sha256:b2d8bfcf5185f9916e4e37c5d1ee1ee90d04206717c12e518e2ad00171e58b4a`
+from commit `7e080b0bf4ffd10353caadb9abb490b18ea57230`. The migration
+`nextstop-migrate-6d22f` and cleanup `nextstop-cleanup-r6lsn` succeeded.
+The public staging hostname returned the expected API and auth digest and
+passed an authenticated candidate search. All four schedules resumed.
+[GitHub deployment 7463791928](https://api.github.com/repos/nellesf/nextStop/deployments/7463791928).
+
+Four superseded gateway revisions had hosted public tag URLs. The operator
+removed their tags and checked that both URL forms per revision returned 404.
+The revision names are retained for rollback. Only the current gateway release
+has a public tag. Private upstream tags retain their IAM access controls.
+Cloud Run validated the controller's conditional gateway replacement with
+`dryRun=all`. A subsequent read confirmed that the resource version, traffic
+and generation 18 were unchanged and that the simulated tag did not exist.
+
 ## Security release acceptance, 2026-10-31
 
 Staging release `056c5994fdf2` uses source `6829b8ad127540b8b39afec90bec8776c4790026`
@@ -13,8 +31,8 @@ authenticated candidate search on the new digest. All five stable services
 routed 100% to `056c5994fdf2`, and all four schedules returned to their original
 enabled state. GitHub deployment `7463268782` recorded the commit, immutable
 image and `cloud-run` target. Its final status was independently read back as
-successful. The committed staging configuration pins the verified evidence and
-captures those traffic allocations.
+successful. The staging configuration at the time pinned the verified evidence
+and captured those traffic allocations.
 
 - The tagged gateway reported the expected API and Auth digest. Its authenticated
   search matched the previous release for all 50 static candidates and 31
