@@ -334,6 +334,8 @@ final class UserErrorReportUITests: XCTestCase {
       let exists = target.exists
       var scrollDirection = direction
       var distance = viewport.height * 0.7
+      let standardMinimumDrag: CGFloat = 80
+      var needsFineAdjustment = false
       if exists {
         let targetFrame = target.frame
         // XCTest may report an element under the sheet navigation bar as hittable.
@@ -349,16 +351,21 @@ final class UserErrorReportUITests: XCTestCase {
           closestGap = gap
           deadline = Date().addingTimeInterval(stallTimeout)
         }
+        // A tall paragraph can leave less room for alignment than one normal
+        // drag. Aim for the middle of that space instead of overshooting it.
+        let spareHeight = viewport.height - targetFrame.height
+        needsFineAdjustment = (0..<standardMinimumDrag).contains(spareHeight) && !visible.isEmpty
+        let inset = needsFineAdjustment ? spareHeight / 2 : 24
         if targetFrame.minY < viewport.minY {
           scrollDirection = .down
-          distance = viewport.minY - targetFrame.minY + 24
+          distance = viewport.minY - targetFrame.minY + inset
         } else if targetFrame.maxY > viewport.maxY {
           scrollDirection = .up
-          distance = targetFrame.maxY - viewport.maxY + 24
+          distance = targetFrame.maxY - viewport.maxY + inset
         }
       }
       if Date() >= deadline { break }
-      distance = min(max(distance, 80), viewport.height * 0.7)
+      distance = min(max(distance, needsFineAdjustment ? 12 : standardMinimumDrag), viewport.height * 0.7)
       let high = viewport.minY + 30
       let low = viewport.maxY - 30
       let startY = scrollDirection == .up ? low : high
@@ -368,7 +375,12 @@ final class UserErrorReportUITests: XCTestCase {
         CGVector(dx: frame.width - 24, dy: startY))
       let end = app.coordinate(withNormalizedOffset: .zero).withOffset(
         CGVector(dx: frame.width - 24, dy: endY))
-      start.press(forDuration: 0.05, thenDragTo: end)
+      if needsFineAdjustment {
+        // Let the scroll view settle under the finger before lifting it.
+        start.press(forDuration: 0.05, thenDragTo: end, withVelocity: .slow, thenHoldForDuration: 0.4)
+      } else {
+        start.press(forDuration: 0.05, thenDragTo: end)
+      }
     }
     // Never query a missing element's identifier while recording the original failure.
     screenshot(app, named: "unreachable-\(identifier)")
