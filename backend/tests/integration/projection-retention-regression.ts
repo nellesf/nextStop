@@ -149,7 +149,15 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
     const session = await pool.connect();
     try {
       await session.query("SET plan_cache_mode = 'force_generic_plan'");
-      const sessionPool = { connect: () => Promise.resolve({ query: session.query.bind(session), release: () => {} }) } as unknown as Pool;
+      const sessionPool = { connect: () => Promise.resolve({
+        query: (statement: string, values?: unknown[]) => {
+          if (statement.startsWith("SELECT ctid::text")) {
+            assert.match(statement, /ORDER BY campus_id, minimum_power_kw\s+LIMIT \$2 FOR UPDATE/u,
+              "Depleted campus power batches must follow their primary-key index under LIMIT.");
+          }
+          return session.query(statement, values);
+        }, release: () => {},
+      }) } as unknown as Pool;
       const empty = await pruneRetiredChargingSearchProjections(sessionPool, () => now, { batchSize: 1, maxBatches: 1 });
       assert.deepEqual(empty, { kind: "bounded", deletedRows: 0, completedVersions: 0, batches: 1 });
       assert.equal((await session.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode,

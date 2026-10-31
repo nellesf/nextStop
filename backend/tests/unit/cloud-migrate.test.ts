@@ -29,6 +29,16 @@ void test("cloud migrations run expand-only then restricted object grants with s
   }
 });
 
+void test("production migration and grants target the same isolated production database", async () => {
+  const connection = "nextstop-tech-staging:europe-west1:nextstop-production";
+  const calls: CloudMigrationCommand[] = [];
+  await runCloudMigrations({ ...environment, NEXTSTOP_ENVIRONMENT: "production", CLOUD_SQL_CONNECTION_NAME: connection },
+    (command) => { calls.push(command); return Promise.resolve(); });
+  assert.equal(calls[0]!.environment.NEXTSTOP_ENVIRONMENT, "production");
+  assert.equal(calls[0]!.environment.CLOUD_SQL_CONNECTION_NAME, connection);
+  assert.equal(calls[1]!.environment.PGHOST, `/cloudsql/${connection}`);
+});
+
 void test("a failed schema phase prevents grants and neither phase reflects child errors", async () => {
   for (const failed of ["schema", "grants"]) {
     const calls: string[] = [];

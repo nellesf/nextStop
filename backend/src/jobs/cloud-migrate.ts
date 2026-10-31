@@ -33,7 +33,7 @@ export async function runCloudMigrations(
   execute: (command: CloudMigrationCommand) => Promise<void> = executeCommand,
 ): Promise<void> {
   if (deploymentRuntime(environment) !== "cloud-run" || environment.DATABASE_TRANSPORT !== "cloud-sql-socket") {
-    throw new Error("Cloud migrations require the staging Cloud SQL socket runtime.");
+    throw new Error("Cloud migrations require the Cloud SQL socket runtime.");
   }
   const url = environment.DATABASE_URL ?? "";
   const config = databasePoolConfiguration(url, {}, environment);
@@ -45,7 +45,7 @@ export async function runCloudMigrations(
     phase: "schema", executable: process.execPath,
     arguments: [fileURLToPath(new URL("../persistence/migrate.js", import.meta.url)), "--expand-only"],
     environment: {
-      NEXTSTOP_RUNTIME: "cloud-run", NEXTSTOP_ENVIRONMENT: "staging",
+      NEXTSTOP_RUNTIME: "cloud-run", NEXTSTOP_ENVIRONMENT: environment.NEXTSTOP_ENVIRONMENT,
       DATABASE_TRANSPORT: "cloud-sql-socket", CLOUD_SQL_CONNECTION_NAME: environment.CLOUD_SQL_CONNECTION_NAME,
       DATABASE_URL: url,
     }, timeoutMilliseconds: 780_000,

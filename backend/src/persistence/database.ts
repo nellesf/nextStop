@@ -36,11 +36,14 @@ export function databasePoolConfiguration(
     throw new Error("DATABASE_TRANSPORT is invalid.");
   }
   if (!cloud && transport === "cloud-sql-socket") {
-    throw new Error("Cloud SQL sockets require the staging Cloud Run runtime.");
+    throw new Error("Cloud SQL sockets require the Cloud Run runtime.");
   }
   if (cloud && transport === "cloud-sql-socket") {
     configureCloudSQLSocket(configuration, connectionString, environment);
   } else if (cloud) {
+    if (environment.NEXTSTOP_ENVIRONMENT === "production") {
+      throw new Error("Production Cloud Run requires its dedicated Cloud SQL socket.");
+    }
     if (environment.CLOUD_SQL_CONNECTION_NAME !== undefined) {
       throw new Error("CLOUD_SQL_CONNECTION_NAME requires the cloud-sql-socket transport.");
     }
@@ -78,10 +81,12 @@ function databaseURL(value: string): URL {
 /** Only Cloud Run's mounted, IAM-authorized Cloud SQL connector may bypass the local PG TLS layer. */
 function configureCloudSQLSocket(configuration: PoolConfig, value: string, environment: RuntimeEnvironment): void {
   const connection = environment.CLOUD_SQL_CONNECTION_NAME ?? "";
+  const expected = environment.NEXTSTOP_ENVIRONMENT === "production"
+    ? "nextstop-tech-staging:europe-west1:nextstop-production"
+    : "nextstop-tech-testing:europe-west1:nextstop-staging";
   const socket = `/cloudsql/${connection}`;
-  if (!/^[a-z][a-z0-9-]{4,61}[a-z0-9]:[a-z]+-[a-z]+[0-9]:[a-z][a-z0-9-]{0,96}[a-z0-9]$/u.test(connection) ||
-      Buffer.byteLength(`${socket}/.s.PGSQL.5432`) > 107 || environment.DATABASE_SSL_CA !== undefined) {
-    throw new Error("A valid Cloud SQL connection name is required for the mounted socket.");
+  if (connection !== expected || environment.DATABASE_SSL_CA !== undefined) {
+    throw new Error("The mounted Cloud SQL socket must match the deployment environment.");
   }
   const url = databaseURL(value);
   if (url.hostname !== "localhost" || url.port !== "" || url.pathname !== "/nextstop" ||

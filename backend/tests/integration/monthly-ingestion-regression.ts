@@ -53,8 +53,10 @@ async function verifyCloudMonthlyBudget(pool: Pool): Promise<void> {
   await pool.query(`INSERT INTO nextstop.monthly_ingestion_schedule (job,next_due_at) VALUES
     ('charging-static','2026-11-01T00:00:00Z'),('food-pois','2026-12-10T00:00:00Z')`);
   await budget.deferDueUntilNextMonth(november);
-  assert.deepEqual((await pool.query("SELECT job,next_due_at::text FROM nextstop.monthly_ingestion_schedule ORDER BY job")).rows,
-    [{ job: "charging-static", next_due_at: "2026-12-01 02:00:00+00" }, { job: "food-pois", next_due_at: "2026-12-10 00:00:00+00" }]);
+  assert.deepEqual((await pool.query("SELECT job, next_due_at FROM nextstop.monthly_ingestion_schedule ORDER BY job")).rows, [
+    { job: "charging-static", next_due_at: new Date("2026-12-01T02:00:00Z") },
+    { job: "food-pois", next_due_at: new Date("2026-12-10T00:00:00Z") },
+  ]);
   await pool.query("DELETE FROM nextstop.monthly_ingestion_schedule");
   await pool.query("DELETE FROM nextstop.monthly_import_budget");
 }

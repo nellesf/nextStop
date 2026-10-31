@@ -12,16 +12,19 @@ export const backupArguments = ["--format=custom", "--schema=nextstop", "--no-ow
   "--lock-wait-timeout=500ms", "--exclude-table=nextstop.user_error_reports"] as const;
 
 export function backupConfiguration(environment: NodeJS.ProcessEnv): { bucket: string; pg: NodeJS.ProcessEnv } {
-  if (deploymentRuntime(environment) !== "cloud-run" || environment.NEXTSTOP_ENVIRONMENT !== "staging") {
-    throw new Error("Backups require the isolated staging Cloud Run runtime.");
+  if (deploymentRuntime(environment) !== "cloud-run") {
+    throw new Error("Backups require an isolated Cloud Run runtime.");
   }
   const bucket = environment.BACKUP_BUCKET ?? "";
-  if (!/^nextstop-tech-testing-[a-z0-9-]{2,50}$/u.test(bucket)) throw new Error("Invalid staging backup bucket.");
+  const validBucket = environment.NEXTSTOP_ENVIRONMENT === "production"
+    ? bucket === "nextstop-tech-staging-database-backups"
+    : /^nextstop-tech-testing-[a-z0-9-]{2,50}$/u.test(bucket);
+  if (!validBucket) throw new Error("Invalid backup bucket for this environment.");
   const config = databasePoolConfiguration(environment.BACKUP_DATABASE_URL ?? "", {}, environment);
   if (config.user !== "nextstop_backup" || typeof config.password !== "string" ||
       typeof config.host !== "string" || config.database !== "nextstop") throw new Error("Restricted backup credentials required.");
   return { bucket, pg: { PGHOST: config.host, PGPORT: "5432", PGDATABASE: "nextstop", PGUSER: config.user,
-    PGPASSWORD: config.password, PGCONNECT_TIMEOUT: "15", PGAPPNAME: "nextstop-staging-backup",
+    PGPASSWORD: config.password, PGCONNECT_TIMEOUT: "15", PGAPPNAME: `nextstop-${environment.NEXTSTOP_ENVIRONMENT}-backup`,
     PGOPTIONS: "-c default_transaction_read_only=on -c statement_timeout=1800000 -c lock_timeout=500" } };
 }
 
@@ -30,7 +33,7 @@ export async function runDatabaseBackup(environment: NodeJS.ProcessEnv = process
   const config = backupConfiguration(environment);
   const bucket = new Storage({ retryOptions: { maxRetries: 2 } }).bucket(config.bucket);
   const now = new Date();
-  const name = `staging/${now.toISOString().slice(0,10)}/${randomUUID()}`;
+  const name = `${environment.NEXTSTOP_ENVIRONMENT}/${now.toISOString().slice(0,10)}/${randomUUID()}`;
   // Catalog-only export preserves report DDL without granting SELECT on report values.
   const { stdout: schema } = await promisify(execFile)("/usr/lib/postgresql/17/bin/psql", ["-XqAt", "-v", "ON_ERROR_STOP=1",
     "--file=" + fileURLToPath(new URL("../../operations/export-report-schema.sql", import.meta.url))],
@@ -70,11 +73,11 @@ export async function runDatabaseBackup(environment: NodeJS.ProcessEnv = process
         sha256: createHash("sha256").update(schema).digest("hex") },
     }), { resumable: false, validation: "crc32c", preconditionOpts: { ifGenerationMatch: 0 },
       metadata: { contentType: "application/json", cacheControl: "no-store" } });
-    console.info(JSON.stringify({ event: "staging_backup_completed", bytes, reportsExcluded: true }));
+    console.info(JSON.stringify({ event: `${environment.NEXTSTOP_ENVIRONMENT}_backup_completed`, bytes, reportsExcluded: true }));
   } finally { if (dump.exitCode === null) dump.kill("SIGKILL"); }
 }
 
 if (process.argv[1]?.endsWith("/database-backup.js")) {
   try { await runDatabaseBackup(); }
-  catch { console.error(JSON.stringify({ event: "staging_backup_failed" })); process.exitCode = 1; }
+  catch { console.error(JSON.stringify({ event: process.env.NEXTSTOP_ENVIRONMENT === "production" ? "production_backup_failed" : "staging_backup_failed" })); process.exitCode = 1; }
 }

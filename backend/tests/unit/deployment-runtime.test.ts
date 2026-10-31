@@ -8,11 +8,12 @@ import { liveRefreshTransport } from "../../src/runtime/live-refresh-transport.j
 const cloud = { NEXTSTOP_RUNTIME: "cloud-run", NEXTSTOP_ENVIRONMENT: "staging" };
 const url = "postgresql://synthetic-user:synthetic-password@db.example.org/nextstop";
 
-void test("cloud runtime requires explicit staging opt-in; VM defaults and drain duration are unchanged", () => {
+void test("cloud runtime requires an explicit deployment environment and preserves VM defaults", () => {
   assert.equal(deploymentRuntime({}), "vm");
   assert.equal(deploymentRuntime({ NEXTSTOP_ENVIRONMENT: "production" }), "vm");
   assert.equal(deploymentRuntime(cloud), "cloud-run");
-  for (const value of [{ NEXTSTOP_RUNTIME: "cloud-run" }, { ...cloud, NEXTSTOP_ENVIRONMENT: "production" }, { NEXTSTOP_RUNTIME: "other" }]) {
+  assert.equal(deploymentRuntime({ ...cloud, NEXTSTOP_ENVIRONMENT: "production" }), "cloud-run");
+  for (const value of [{ NEXTSTOP_RUNTIME: "cloud-run" }, { ...cloud, NEXTSTOP_ENVIRONMENT: "test" }, { NEXTSTOP_RUNTIME: "other" }]) {
     assert.throws(() => deploymentRuntime(value));
   }
   assert.equal(httpShutdownGraceMilliseconds("cloud-run"), 8_000);

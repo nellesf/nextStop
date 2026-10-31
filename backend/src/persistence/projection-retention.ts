@@ -10,13 +10,13 @@ const maximumBatches = 32;
 // Children precede parents so foreign-key cascades cannot turn one bounded
 // parent deletion into an unbounded cleanup. Audit/source tables are absent.
 const searchTables = [
-  ["charging_park_food_poi_matches", "charging_projection_id"],
-  ["charging_campus_power_projection", "projection_id"],
-  ["charging_campus_park_memberships", "projection_id"],
-  ["charging_campus_projection", "projection_id"],
-  ["charging_park_power_projection", "projection_id"],
-  ["charging_park_location_memberships", "projection_id"],
-  ["charging_park_projection", "projection_id"],
+  ["charging_park_food_poi_matches", "charging_projection_id", "food_projection_id, park_id, osm_type, osm_id"],
+  ["charging_campus_power_projection", "projection_id", "campus_id, minimum_power_kw"],
+  ["charging_campus_park_memberships", "projection_id", "campus_id, park_id"],
+  ["charging_campus_projection", "projection_id", "campus_id"],
+  ["charging_park_power_projection", "projection_id", "park_id, minimum_power_kw"],
+  ["charging_park_location_memberships", "projection_id", "park_id, location_id"],
+  ["charging_park_projection", "projection_id", "park_id"],
 ] as const;
 
 export interface ProjectionRetentionOptions {
@@ -102,10 +102,13 @@ async function pruneBatch(
        WHERE id = $1`,
       [target.id, timestamp],
     );
-    const [tableName, projectionColumn] = table;
+    // Follow the primary key within a version. Without the index order, LIMIT
+    // can favor a sequential scan even after most rows for that version are gone.
+    const [tableName, projectionColumn, keyOrder] = table;
     const selected = await client.query<{ ctid: string }>(
       `SELECT ctid::text AS ctid FROM nextstop.${tableName}
        WHERE ${projectionColumn} = $1
+       ORDER BY ${keyOrder}
        LIMIT $2 FOR UPDATE`,
       [target.id, batchSize],
     );

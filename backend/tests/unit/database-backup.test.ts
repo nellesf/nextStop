@@ -17,7 +17,17 @@ void test("backup uses the restricted socket identity and excludes the complete 
   assert.equal(config.pg.SEARCH_ACCESS_TOKEN_SIGNING_KEY,undefined);
 });
 
-void test("backup cannot run on production, use an owner credential or send an archive outside staging", () => {
+void test("production backups require the dedicated production database and private backup bucket", () => {
+  const production = { ...environment, NEXTSTOP_ENVIRONMENT: "production",
+    CLOUD_SQL_CONNECTION_NAME: "nextstop-tech-staging:europe-west1:nextstop-production",
+    BACKUP_BUCKET: "nextstop-tech-staging-database-backups" };
+  assert.equal(backupConfiguration(production).pg.PGHOST, `/cloudsql/${production.CLOUD_SQL_CONNECTION_NAME}`);
+  assert.throws(() => backupConfiguration({ ...production, BACKUP_BUCKET: environment.BACKUP_BUCKET }));
+  assert.throws(() => backupConfiguration({ ...production, CLOUD_SQL_CONNECTION_NAME: environment.CLOUD_SQL_CONNECTION_NAME }));
+  assert.throws(() => backupConfiguration({ ...environment, CLOUD_SQL_CONNECTION_NAME: production.CLOUD_SQL_CONNECTION_NAME }));
+});
+
+void test("staging backups reject an owner credential or an archive outside staging", () => {
   for (const changed of [{NEXTSTOP_ENVIRONMENT:"production"},{NEXTSTOP_RUNTIME:"vm"},
     {BACKUP_BUCKET:"nextstop-production-backups"},{BACKUP_DATABASE_URL:environment.BACKUP_DATABASE_URL.replace("nextstop_backup","nextstop_app")},
     {BACKUP_DATABASE_URL:environment.BACKUP_DATABASE_URL.replace("localhost","remote.example")}]) {
