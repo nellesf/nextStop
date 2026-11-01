@@ -33,9 +33,22 @@ jobs:
       - name: Show Xcode version
         run: xcodebuild -version
 
+      - name: Prepare the iPhone 17 Pro test destination
+        id: simulator
+        run: |
+          set -euo pipefail
+          sdk_version=$(xcrun --sdk iphonesimulator --show-sdk-version)
+          runtime="com.apple.CoreSimulator.SimRuntime.iOS-${sdk_version//./-}"
+          if ! xcrun simctl list runtimes --json | jq -e --arg id "$runtime" 'any(.runtimes[]; .identifier == $id and .isAvailable)' >/dev/null; then
+            xcodebuild -downloadPlatform iOS -buildVersion "$sdk_version"
+          fi
+          device=$(xcrun simctl create "nextStop CI" com.apple.CoreSimulator.SimDeviceType.iPhone-17-Pro "$runtime")
+          echo "device=$device" >> "$GITHUB_OUTPUT"
+
       - name: Build and test iOS app
         env:
           TEST_SCOPE: ${{ inputs.test_scope || 'all' }}
+          SIMULATOR_ID: ${{ steps.simulator.outputs.device }}
         run: |
           set -o pipefail
           test_selection=()
@@ -46,7 +59,7 @@ jobs:
             -project ios/NextStop.xcodeproj \
             -scheme NextStopApp \
             -configuration Debug \
-            -destination 'platform=iOS Simulator,name=iPhone 17 Pro,OS=latest' \
+            -destination "platform=iOS Simulator,id=$SIMULATOR_ID" \
             -resultBundlePath TestResults.xcresult \
             "${test_selection[@]}" \
             CODE_SIGNING_ALLOWED=NO \
