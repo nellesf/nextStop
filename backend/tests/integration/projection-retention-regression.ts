@@ -162,8 +162,14 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
           query: async (statement: string, values?: unknown[]) => {
             if (statement.startsWith("SELECT ctid::text")) {
               const plan = await session.query<{ "QUERY PLAN": string }>(`EXPLAIN (COSTS OFF) ${statement}`, values);
-              assert.ok(plan.rows.some(row => row["QUERY PLAN"].includes(`${table}_pkey`)));
-              assert.ok(plan.rows.every(row => !row["QUERY PLAN"].includes("Sort")));
+              const lines = plan.rows.map(row => row["QUERY PLAN"]);
+              // Both B-trees start with the version. PostgreSQL may follow the
+              // filters index with an incremental sort on the remaining keys.
+              assert.ok(lines.some(line => line.includes(`Index Scan using ${table}_pkey on `)
+                || line.includes(`Index Scan using ${table}_filters on `)));
+              assert.ok(lines.some(line => line.includes("Index Cond:") && line.includes("projection_id")
+                && line.includes(">=") && line.includes("<=")));
+              assert.ok(lines.every(line => !line.includes(`${table}_lookup_gist`) && !/^\s*(?:->\s*)?Sort(?:\s+\(|$)/u.test(line)));
               for (const version of boundaryIds) {
                 const selected = await session.query(statement.replace(`nextstop.${table}`, "pg_temp.retention_keys"), [version, 1000]);
                 const expected = await session.query(`SELECT ctid::text AS ctid FROM pg_temp.retention_keys
