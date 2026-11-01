@@ -108,7 +108,9 @@ def backup():
              f'logName="projects/{TARGET.project}/logs/run.googleapis.com%2Fstdout" AND '
              'jsonPayload.event="production_backup_completed"')
     for attempt in range(7):
-        rows = release.json_command(gcloud("logging", "read", query, "--limit=2", "--freshness=2h", "--format=json(jsonPayload)"))
+        rows = release.json_command(gcloud("logging", "read", query, "--bucket=_Default", "--location=global",
+                                          "--view=nextstop-production-backup-completion", "--limit=2",
+                                          "--freshness=2h", "--format=json(jsonPayload)"))
         if len(rows) == 1:
             return completion(rows[0]["jsonPayload"], execution, started, finished)
         if len(rows) > 1 or attempt == 6:

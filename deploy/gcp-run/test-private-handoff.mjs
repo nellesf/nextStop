@@ -2,7 +2,38 @@ import assert from 'node:assert/strict';
 import { createRequire } from 'node:module';
 import { join } from 'node:path';
 import * as fs from 'node:fs/promises';
-import { handoff } from './production-private-handoff.mjs';
+import { handoff, verifiedOperatorToken } from './production-private-handoff.mjs';
+
+const operatorSubject = '115778149333568134767';
+const operator = { sub: operatorSubject, email_verified: true, email: 'nextstop-db-restore-operator@nextstop-tech-staging.iam.gserviceaccount.com' };
+const credential = { accessToken: 'synthetic-operator-access-token-for-tests', expireTime: new Date(Date.now() + 600000).toISOString() };
+const issuedToken = { email: operator.email, scope: 'email https://www.googleapis.com/auth/userinfo.email https://www.googleapis.com/auth/sqlservice.admin', expires_in: '599' };
+const verifyIdentity = (identity, status = 200, issued = issuedToken) => async (url, options) => {
+  if (url === 'https://oauth2.googleapis.com/tokeninfo') {
+    assert.equal(options.method, 'POST');
+    assert.equal(options.body.get('access_token'), credential.accessToken);
+    assert.equal(options.redirect, 'error');
+    return Response.json(issued);
+  }
+  assert.equal(url, 'https://openidconnect.googleapis.com/v1/userinfo');
+  assert.equal(options.redirect, 'error');
+  assert.equal(options.headers.Authorization, 'Bearer ' + credential.accessToken);
+  return Response.json(identity, { status });
+};
+assert.equal(await verifiedOperatorToken(credential, operatorSubject, verifyIdentity(operator)), credential.accessToken);
+for (const identity of [{ ...operator, sub: '923456789012345678901' },
+  { ...operator, email: 'other@example.org' }, { ...operator, email_verified: false }]) {
+  await assert.rejects(verifiedOperatorToken(credential, operatorSubject, verifyIdentity(identity)), /identity/);
+}
+await assert.rejects(verifiedOperatorToken(credential, operatorSubject, verifyIdentity({}, 401)), /authenticate/);
+for (const issued of [{ ...issuedToken, expires_in: 3500 }, { ...issuedToken, expires_in: 5 },
+  { ...issuedToken, scope: issuedToken.scope + ' https://www.googleapis.com/auth/cloud-platform' }]) {
+  await assert.rejects(verifiedOperatorToken(credential, operatorSubject, verifyIdentity(operator, 200, issued)), /scopes or lifetime/);
+}
+for (const offset of [0, 3600000]) {
+  await assert.rejects(verifiedOperatorToken({ ...credential, expireTime: new Date(Date.now() + offset).toISOString() },
+    operatorSubject, () => assert.fail('Invalid lifetime must fail locally')), /short-lived/);
+}
 
 const { Client } = createRequire(new URL('../../backend/package.json', import.meta.url))('pg');
 const base = process.argv[2];

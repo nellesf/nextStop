@@ -104,9 +104,17 @@ class ProductionTests(unittest.TestCase):
                "receiptObject": f"production/{date}/6b065e0e-538a-4205-a002-591df2fd3d04.json"}}
         def invoke():
             with patch.object(backup, "active_image", return_value=IMAGE), \
-                 patch.object(release, "json_command", side_effect=[job, [row]]), \
+                 patch.object(release, "json_command", side_effect=[job, [row]]) as reads, \
                  patch.object(release, "run", return_value=json.dumps(finished)):
-                return backup.backup()
+                receipt = backup.backup()
+                command = reads.call_args.args[0]
+                self.assertEqual(command[:3], ["gcloud", "logging", "read"])
+                for argument in ["--view=nextstop-production-backup-completion", "--bucket=_Default",
+                                 "--location=global", "--project=nextstop-tech-staging"]:
+                    self.assertIn(argument, command)
+                self.assertIn('jsonPayload.event="production_backup_completed"', command[3])
+                self.assertIn(execution, command[3])
+                return receipt
         self.assertEqual(invoke()["receiptGeneration"], "123")
         meta["labels"]["run.googleapis.com/jobGeneration"] = "8"
         with self.assertRaises(release.ReleaseError):

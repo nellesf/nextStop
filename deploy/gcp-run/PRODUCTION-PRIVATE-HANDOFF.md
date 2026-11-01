@@ -55,6 +55,27 @@ exact managed database. All paths must be absolute and canonical.
 }
 ```
 
+The current VM has no attached service account. For this VM also set
+`cloudOperatorSubject` to the independently verified numeric IAM unique ID of
+`nextstop-db-restore-operator@nextstop-tech-staging.iam.gserviceaccount.com`.
+The operator account needs only Cloud SQL instance get/connect on the target.
+An authorized operator uses IAM Credentials to mint a short-lived access token
+for this service account with the `sqlservice.admin` and `userinfo.email` scopes
+and a lifetime of at most 15 minutes. Send the returned JSON fields
+`accessToken` and `expireTime` through the private SSH input stream to the
+operator-owned, mode-0600 file `/run/nextstop-secrets/cloud-operator.json` on
+tmpfs. Refresh the file atomically before each handoff command. Exclude token
+values from arguments, environment variables, output, shell history and logs.
+The program checks the expiration and asks Google's UserInfo endpoint to verify
+both the email and numeric subject of that same token. It then reads the pinned
+Cloud SQL instance after Google confirms the issued scopes and remaining token
+lifetime using a TLS POST to the fixed token information endpoint. The original
+GCE metadata project, zone, name and numeric
+instance checks still run on this VM. Operators on a VM with a separately
+authorized attached identity can omit `cloudOperatorSubject` to use the
+existing metadata credential path. An invalid supplied credential aborts the
+command. Remove the tmpfs file at the end of the operation.
+
 ## Verify the public corpus before either switch
 
 The private transfer deliberately does not copy the public provider corpus,

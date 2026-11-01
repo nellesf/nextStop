@@ -476,8 +476,7 @@ selecting `cloud-run` in the protected GitHub production environment. Set
 `NEXTSTOP_PRODUCTION_RUN_EVIDENCE` there to the production operator record's
 immutable reference with `object`, `generation` and `sha256`. The record lives
 under `operations/evidence/` in the production backup bucket. Grant the deploy
-identity access to those evidence objects only. Its Cloud Logging access must
-cover the specific production backup completion events. The restricted backup
+identity access to those evidence objects only. Its `roles/logging.viewAccessor` binding is scoped to the `nextstop-production-backup-completion` view on the existing global `_Default` bucket. The view admits stdout of the `nextstop-backup` Cloud Run job in `europe-west1`. The protected command selects the exact execution and successful completion event within this view. The restricted backup
 runtime performs the archive and schema checksum readback in GCP.
 
 After commissioning, the normal promotion workflow requires the full staging

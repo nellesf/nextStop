@@ -28,6 +28,9 @@ const runtimeRoles = ['nextstop_api', 'nextstop_auth', 'nextstop_support', 'next
 const maxAge = 4 * 60 * 60 * 1000;
 const project = 'nextstop-tech-staging';
 const managedSocket = '/cloudsql/nextstop-tech-staging:europe-west1:nextstop-production';
+const operatorTokenFile = '/run/nextstop-secrets/cloud-operator.json';
+const operatorEmail = 'nextstop-db-restore-operator@' + project + '.iam.gserviceaccount.com';
+const operatorSubject = '115778149333568134767';
 
 function guard(condition, step) {
   if (!condition) throw new GuardError(step);
@@ -45,6 +48,34 @@ async function privateFile(path) {
       'A small operator-owned private file is required.');
     return await handle.readFile('utf8');
   } finally { await handle.close(); }
+}
+
+export async function verifiedOperatorToken(credential, subject, request = fetch) {
+  const remaining = Date.parse(credential.expireTime) - Date.now();
+  guard(subject === operatorSubject && typeof credential.accessToken === 'string'
+    && /^[A-Za-z0-9._~-]{32,4096}$/.test(credential.accessToken) && remaining > 30000 && remaining <= 900000,
+    'Expected a fresh, short-lived production SQL operator credential.');
+  const response = await request('https://openidconnect.googleapis.com/v1/userinfo', {
+    headers: { Authorization: 'Bearer ' + credential.accessToken }, redirect: 'error', signal: AbortSignal.timeout(10000)
+  });
+  guard(response.ok, 'Cannot authenticate the supplied production SQL operator.');
+  const identity = await response.json();
+  guard(identity.email_verified === true && identity.email === operatorEmail && identity.sub === subject,
+    'Unexpected production SQL operator identity.');
+  // Verify the issued credential itself. Never put a bearer token in a URL.
+  const inspection = await request('https://oauth2.googleapis.com/tokeninfo', {
+    method: 'POST', body: new URLSearchParams({ access_token: credential.accessToken }),
+    redirect: 'error', signal: AbortSignal.timeout(10000)
+  });
+  guard(inspection.ok, 'Cannot verify production SQL operator token restrictions.');
+  const issued = await inspection.json();
+  const scopes = new Set(String(issued.scope).split(' '));
+  const sqlScope = 'https://www.googleapis.com/auth/sqlservice.admin';
+  const emailScope = 'https://www.googleapis.com/auth/userinfo.email';
+  guard(issued.email === operatorEmail && Number(issued.expires_in) > 30 && Number(issued.expires_in) <= 900
+    && scopes.has(sqlScope) && scopes.has(emailScope) && [...scopes].every(s => [sqlScope, emailScope, 'email'].includes(s)),
+    'Production SQL operator has unexpected scopes or lifetime.');
+  return credential.accessToken;
 }
 async function saveJournal(path, state) {
   const tmp = path + '.' + randomBytes(12).toString('hex');
@@ -315,7 +346,14 @@ async function runCLI() {
   guard(/^\d{1,24}$/.test(cfg.vmDatabaseSystemId) && /^\d{1,24}$/.test(cfg.cloudDatabaseSystemId)
     && cfg.vmDatabaseSystemId !== cfg.cloudDatabaseSystemId && /^\d{1,24}$/.test(cfg.filteredRestoreGeneration),
     'Independently verified VM database and filtered restore pins are required.');
-  const token = JSON.parse(await meta('instance/service-accounts/default/token')).access_token;
+  let token;
+  if (Object.hasOwn(cfg, 'cloudOperatorSubject')) {
+    guard((await fs.statfs(dirname(operatorTokenFile))).type === 0x01021994,
+      'Production SQL operator credentials must be on tmpfs.');
+    token = await verifiedOperatorToken(JSON.parse(await privateFile(operatorTokenFile)), cfg.cloudOperatorSubject);
+  } else {
+    token = JSON.parse(await meta('instance/service-accounts/default/token')).access_token;
+  }
   const instance = await fetch('https://sqladmin.googleapis.com/sql/v1beta4/projects/' + project + '/instances/nextstop-production', {
     headers: { Authorization: 'Bearer ' + token }, redirect: 'error', signal: AbortSignal.timeout(10000)
   });
