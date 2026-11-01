@@ -53,6 +53,7 @@ final class UserErrorReportReceiptStoreTests: XCTestCase {
     defer { fixture.remove() }
     let original = try fixture.store().reserve(fixture.request())
     let production = UserErrorReportReceiptStore(
+      backendURL: BackendEnvironmentConfiguration.productionURL,
       storageDirectory: fixture.directory, clock: { fixture.now },
       write: { _, _ in throw CocoaError(.fileWriteOutOfSpace) }
     )

@@ -10,7 +10,8 @@ void test("named presets pair the intended cloud minter with a distinct fixed po
     instance: "nextstop-backend", mode: "cloud-run", region: "europe-west1", service: "nextstop-broker",
     remoteMintCommand: "sudo /usr/local/sbin/nextstop-mint-simulator-token",
   });
-  assert.deepEqual(brokerConfiguration({}), {
+  assert.deepEqual(brokerConfiguration({}), brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "staging" }));
+  assert.deepEqual(brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "production" }), {
     name: "production", port: 8766, project: "nextstop-tech-staging", zone: "europe-west3-a",
     instance: "nextstop-backend", mode: "cloud-run", region: "europe-west1", service: "nextstop-broker",
     remoteMintCommand: "sudo /usr/local/sbin/nextstop-mint-simulator-token",

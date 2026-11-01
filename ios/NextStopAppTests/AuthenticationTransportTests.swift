@@ -11,12 +11,19 @@ final class AuthenticationTransportTests: XCTestCase {
       "NEXTSTOP_BACKEND_ENVIRONMENT": "staging",
       "NEXTSTOP_API_BASE_URL": "https://nextstop-gateway-353471052580.europe-west1.run.app",
     ]
-    #if DEBUG && targetEnvironment(simulator)
+    #if targetEnvironment(simulator)
+      XCTAssertEqual(BackendEnvironmentConfiguration.baseURL(environment: [:]), BackendEnvironmentConfiguration.stagingURL)
       XCTAssertEqual(
         BackendEnvironmentConfiguration.baseURL(environment: requestedStaging)?.host,
         "nextstop-gateway-353471052580.europe-west1.run.app"
       )
+      #if !DEBUG
+        XCTAssertEqual(BackendEnvironmentConfiguration.baseURL(environment: [
+          "NEXTSTOP_BACKEND_ENVIRONMENT": "production",
+        ]), BackendEnvironmentConfiguration.stagingURL)
+      #endif
     #else
+      XCTAssertEqual(BackendEnvironmentConfiguration.baseURL(environment: [:]), BackendEnvironmentConfiguration.productionURL)
       XCTAssertEqual(
         BackendEnvironmentConfiguration.baseURL(environment: requestedStaging),
         BackendEnvironmentConfiguration.productionURL
@@ -31,6 +38,8 @@ final class AuthenticationTransportTests: XCTestCase {
 
   #if DEBUG && targetEnvironment(simulator)
     func testSimulatorPresetsPairAPIAndTokenBrokerWithoutCrossEnvironmentOverrides() throws {
+      let defaultURL = try XCTUnwrap(BackendEnvironmentConfiguration.baseURL(environment: [:]))
+      XCTAssertEqual(BackendEnvironmentConfiguration.brokerURL(for: defaultURL, environment: [:])?.port, 8765)
       for (preset, api, port) in [
         ("staging", "https://nextstop-gateway-353471052580.europe-west1.run.app", 8765),
         ("production", "https://nextstop-gateway-1022346259037.europe-west1.run.app", 8766),

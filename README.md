@@ -229,14 +229,13 @@ The Xcode 26 CI workflow continues to cover the wider app, CarPlay presenter, an
 UI suites. Real-device App Attest and provisioned CarPlay still require their
 separate acceptance checks.
 
-Choose `NextStop-Staging` for the staging Simulator API or
-`NextStop-ProductionTest` for the production Simulator API, with the matching Mac
-broker. `NextStop-Release`, all physical-device builds, and every archive/TestFlight
-build use the stable [native production gateway](docs/adr/0021-native-cloud-run-production-and-staging.md). Staging is Simulator-only. All schemes keep
-the same bundle ID and signing configuration. The original `NextStopApp` scheme
-remains the production default for existing workflows. See the exact commands and
-backend-scoped receipt migration in
-[`docs/development.md`](docs/development.md#backend-environments-and-distribution).
+The Simulator uses staging by default. Run `ios/start-simulator-auth-broker.sh`
+for a connected Debug session. A deliberate production check uses the
+`NextStop-ProductionTest` scheme and its matching broker. Physical devices and
+all TestFlight archives use the native production gateway. All schemes share
+the same bundle ID and signing configuration. See the
+[endpoint decision](docs/adr/0021-native-cloud-run-production-and-staging.md) and
+[development commands](docs/development.md#backend-environments-and-distribution).
 
 Production retains the existing `nextstop-tech-staging` project, VM, and database.
 The separate `nextstop-tech-testing` project is staging for tests and release

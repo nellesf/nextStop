@@ -6,6 +6,11 @@ enum BackendEnvironmentConfiguration {
   static let stagingURL = URL(string: "https://nextstop-gateway-353471052580.europe-west1.run.app")!
   static let legacyProductionURL = URL(string: "https://api.nextstop.tech")!
   static let legacyStagingURL = URL(string: "https://api-staging.nextstop.tech")!
+  #if targetEnvironment(simulator)
+    static let defaultURL = stagingURL
+  #else
+    static let defaultURL = productionURL
+  #endif
 
   static func baseURL(
     bundle: Bundle = .main,
@@ -20,7 +25,7 @@ enum BackendEnvironmentConfiguration {
       }
       let value = environment["NEXTSTOP_API_BASE_URL"]
         ?? (bundle.object(forInfoDictionaryKey: "NextStopAPIBaseURL") as? String)
-        ?? productionURL.absoluteString
+        ?? defaultURL.absoluteString
       guard let url = URL(string: value), url.user == nil, url.password == nil,
         url.query == nil, url.fragment == nil, url.path.isEmpty || url.path == "/"
       else { return nil }
@@ -28,9 +33,8 @@ enum BackendEnvironmentConfiguration {
       guard url.scheme == "http", url.host == "127.0.0.1" || url.host == "::1" else { return nil }
       return url
     #else
-      // Physical devices and every distributed build are always production.
-      // Neither launch variables nor an accidentally changed plist can redirect them.
-      return productionURL
+      // Launch variables and bundle overrides apply only to Debug Simulators.
+      return defaultURL
     #endif
   }
 
@@ -48,7 +52,7 @@ enum BackendEnvironmentConfiguration {
     }
 
     private static func selectedPreset(_ environment: [String: String]) -> (api: URL, broker: URL)? {
-      let name = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] ?? "production"
+      let name = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] ?? "staging"
       guard let preset = simulatorPresets[name] else { return nil }
       let production = name == "production"
       let hosting = production ? "NEXTSTOP_PRODUCTION_HOSTING" : "NEXTSTOP_STAGING_HOSTING"

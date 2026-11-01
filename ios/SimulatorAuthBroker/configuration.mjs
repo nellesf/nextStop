@@ -15,7 +15,7 @@ export function brokerConfiguration(environment = process.env) {
   if (selected !== undefined && oldMode !== undefined) {
     throw new Error("Use a named backend preset or a legacy/local mode, not both.");
   }
-  const name = selected ?? (oldMode === undefined ? "production" : oldMode);
+  const name = selected ?? oldMode ?? "staging";
   const legacy = selected === undefined && oldMode === "staging";
   // The explicit compatibility mode retains the historical host. Its Google
   // project ID contains "staging", but the existing service is now production.

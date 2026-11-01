@@ -115,14 +115,14 @@ and CarPlay provisioning. Installing another scheme replaces the same app; local
 profiles remain available. Select the backend before launch, without an in-app
 switch:
 
-| Scheme | Run configuration | Debug Simulator backend | Archive |
+| Scheme | Run configuration | Simulator backend | Archive |
 | --- | --- | --- | --- |
 | `NextStop-Staging` | Debug | `https://nextstop-gateway-353471052580.europe-west1.run.app` | Release, production |
 | `NextStop-ProductionTest` | Debug | `https://nextstop-gateway-1022346259037.europe-west1.run.app` | Release, production |
-| `NextStop-Release` | Release | `https://nextstop-gateway-1022346259037.europe-west1.run.app`; App Attest unavailable in Simulator | Release, production |
-| `NextStopApp` | Debug | Production by default; retained for CI and existing workflows | Release, production |
+| `NextStop-Release` | Release | Staging. App Attest is unavailable on the Simulator. | Release, production |
+| `NextStopApp` | Debug | Staging by default | Release, production |
 
-Every physical-device build and every Release build resolves to
+Every physical-device build, including internal TestFlight, resolves to
 `https://nextstop-gateway-1022346259037.europe-west1.run.app`. Launch environment variables and changed API values
 in Info.plist cannot redirect these builds. Every checked-in scheme archives
 Release, so TestFlight always uses production and excludes Simulator credential
@@ -402,8 +402,8 @@ Authenticate the Mac operator through the Google Cloud CLI. Each named preset ne
 
 | Scheme | Broker invocation | Port | Google Cloud project |
 | --- | --- | --- | --- |
-| NextStop-Staging | `NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh` | 8765 | `nextstop-tech-testing` |
-| NextStop-ProductionTest or NextStopApp | `NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh` | 8766 | `nextstop-tech-staging` |
+| NextStopApp or NextStop-Staging | `ios/start-simulator-auth-broker.sh` | 8765 | `nextstop-tech-testing` |
+| NextStop-ProductionTest | `NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh` | 8766 | `nextstop-tech-staging` |
 
 Both brokers can run simultaneously. Each invokes the exact private `nextstop-broker` service using the operator's Google identity. The broker keeps its short-lived application token in memory and refreshes one minute before expiry. The Simulator requests it with an empty `POST /token` and `X-NextStop-Simulator-Auth: 1`. The signing key remains in its environment.
 

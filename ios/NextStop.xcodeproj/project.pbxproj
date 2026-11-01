@@ -922,6 +922,7 @@
 				);
 				MARKETING_VERSION = 0.1.0;
 				NEXTSTOP_API_BASE_URL = "https://nextstop-gateway-1022346259037.europe-west1.run.app";
+				"NEXTSTOP_API_BASE_URL[sdk=iphonesimulator*]" = "https://nextstop-gateway-353471052580.europe-west1.run.app";
 				NEXTSTOP_APP_ATTEST_ENVIRONMENT = production;
 				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
 				SDKROOT = iphoneos;
@@ -1158,6 +1159,7 @@
 				);
 				MARKETING_VERSION = 0.1.0;
 				NEXTSTOP_API_BASE_URL = "https://nextstop-gateway-1022346259037.europe-west1.run.app";
+				"NEXTSTOP_API_BASE_URL[sdk=iphonesimulator*]" = "https://nextstop-gateway-353471052580.europe-west1.run.app";
 				NEXTSTOP_APP_ATTEST_ENVIRONMENT = development;
 				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
 				SDKROOT = iphoneos;

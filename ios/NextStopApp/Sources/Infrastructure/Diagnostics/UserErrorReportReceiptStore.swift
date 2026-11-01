@@ -32,7 +32,7 @@ final class UserErrorReportReceiptStore: ObservableObject {
 
   init(
     fileURL: URL? = nil,
-    backendURL: URL = BackendEnvironmentConfiguration.productionURL,
+    backendURL: URL = BackendEnvironmentConfiguration.defaultURL,
     storageDirectory: URL? = nil,
     clock: @escaping () -> Date = Date.init,
     write: ((Data, URL) throws -> Void)? = nil
