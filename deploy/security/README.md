@@ -12,6 +12,10 @@ and removes unused global npm/Yarn. Runtime imports, compression and German
 locale/time-zone checks execute as the unprivileged application user at build
 time. No application behavior is replaced by a security workaround.
 
+The development-only minimatch override fixes GHSA-g3hv-75wg-m249 in the ESLint dependency tree. The application installs neither minimatch nor its glob-matching helper after pruning development packages.
+
+The disposable integration database is built locally on the GitHub runner from the pinned PostgreSQL 17.11/PostGIS 3.6.4 Alpine image. Its versioned source and two upstream patches are checksum-verified. The test job scans all severities, including unfixed entries, runs the exact scanned image as postgres, exercises the patched native decoder and then runs the existing backend integration tests. This image is only used during CI.
+
 Backend CI audits both runtime and complete npm dependencies. Moderate or higher
 npm findings block. The pinned Trivy 0.75.0 scanner verifies its download checksum
 and scans OS/application packages with current advisory data, no suppressions

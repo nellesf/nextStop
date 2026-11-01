@@ -21,6 +21,8 @@ ARCHIVE_SHA256 = 'c6e65abddb348e25f10549df887045629cf28cc72453cd1c63acb717316b3f
 URL = f'https://github.com/aquasecurity/trivy/releases/download/v{VERSION}/trivy_{VERSION}_Linux-64bit.tar.gz'
 DIGEST = re.compile(r'sha256:[0-9a-f]{64}\Z')
 COMMIT = re.compile(r'[0-9a-f]{40}\Z')
+PROFILES = ('backend', 'ci-postgis')
+SEVERITIES = ('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')
 
 
 class GateError(Exception):
@@ -54,9 +56,11 @@ def install(directory: Path) -> Path:
     return executable
 
 
-def archive_identity(archive: Path, commit: str):
+def archive_identity(archive: Path, commit: str, profile='backend'):
     if not COMMIT.fullmatch(commit):
         raise GateError('commit_invalid')
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
     with tarfile.open(archive, mode='r:*') as bundle:
         def read(name):
             member = bundle.getmember(name)
@@ -71,10 +75,16 @@ def archive_identity(archive: Path, commit: str):
     if (config.get('architecture') != 'amd64' or config.get('os') != 'linux'
             or config.get('config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != commit):
         raise GateError('image_platform_or_revision_mismatch')
+    if profile == 'ci-postgis':
+        settings = config['config']
+        if settings.get('User') != 'postgres' or (settings.get('Labels') or {}).get('tech.nextstop.image-purpose') != 'ci-postgis':
+            raise GateError('ci_database_configuration_invalid')
     return 'sha256:' + hashlib.sha256(data).hexdigest()
 
 
-def evaluate(report, image_id):
+def evaluate(report, image_id, profile='backend'):
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
     if (report.get('SchemaVersion') != 2 or report.get('Trivy', {}).get('Version') != VERSION
             or report.get('Metadata', {}).get('ImageID') != image_id
             or report.get('Metadata', {}).get('OS', {}).get('EOSL') is True):
@@ -82,9 +92,11 @@ def evaluate(report, image_id):
     results = report.get('Results', [])
     if not any(r.get('Class') == 'os-pkgs' and r.get('Packages') for r in results):
         raise GateError('os_inventory_missing')
-    if not any(r.get('Class') == 'lang-pkgs' and r.get('Type') in ('npm', 'node-pkg') and r.get('Packages') for r in results):
+    if profile == 'backend' and not any(r.get('Class') == 'lang-pkgs' and r.get('Type') in ('npm', 'node-pkg') and r.get('Packages') for r in results):
         raise GateError('npm_inventory_missing')
-    counts = {s: 0 for s in ('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')}
+    if profile == 'ci-postgis' and report.get('Metadata', {}).get('OS', {}).get('Family') != 'alpine':
+        raise GateError('ci_database_os_invalid')
+    counts = {s: 0 for s in SEVERITIES}
     blockers = []
     for result in results:
         if result.get('ExperimentalModifiedFindings'):
@@ -94,14 +106,14 @@ def evaluate(report, image_id):
             if severity not in counts:
                 raise GateError('unknown_severity_format')
             counts[severity] += 1
-            if severity in ('HIGH', 'CRITICAL'):
+            if profile == 'ci-postgis' or severity in ('HIGH', 'CRITICAL'):
                 blockers.append({k: finding.get(k) for k in
                                  ('VulnerabilityID', 'PkgName', 'InstalledVersion', 'FixedVersion', 'Severity', 'Status')})
     return counts, blockers
 
 
-def scan(archive: Path, commit: str, output: Path):
-    image_id = archive_identity(archive, commit)
+def scan(archive: Path, commit: str, output: Path, profile='backend'):
+    image_id = archive_identity(archive, commit, profile)
     with tempfile.TemporaryDirectory(prefix='nextstop-image-security-') as temporary:
         work = Path(temporary)
         binary = install(work)
@@ -117,18 +129,19 @@ def scan(archive: Path, commit: str, output: Path):
                  '--list-all-pkgs', '--ignore-unfixed=false', '--format', 'json', '--output', str(report_path),
                  '--timeout', '15m', '--disable-telemetry', '--skip-version-check'], cwd=work, env=env)
         report = json.loads(report_path.read_text())
-        counts, blockers = evaluate(report, image_id)
+        counts, blockers = evaluate(report, image_id, profile)
         receipt = {'schemaVersion': 1, 'passed': not blockers, 'commit': commit, 'imageId': image_id,
+                   'inventoryProfile': profile,
                    'image': None, 'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    'scanner': 'trivy', 'scannerVersion': VERSION, 'scannerArchiveSHA256': ARCHIVE_SHA256,
-                   'policy': {'blockSeverities': ['HIGH', 'CRITICAL'], 'includeUnfixed': True,
+                   'policy': {'blockSeverities': list(SEVERITIES) if profile == 'ci-postgis' else ['HIGH', 'CRITICAL'], 'includeUnfixed': True,
                               'scanners': ['os', 'library'], 'suppressions': []},
                    'counts': counts, 'blockingFindings': blockers,
                    'reportSHA256': hashlib.sha256(report_path.read_bytes()).hexdigest()}
         output.write_text(json.dumps(receipt, indent=2) + '\n')
         print(json.dumps(receipt, separators=(',', ':')))
         if blockers:
-            raise GateError('high_or_critical_vulnerabilities')
+            raise GateError('ci_database_vulnerabilities' if profile == 'ci-postgis' else 'high_or_critical_vulnerabilities')
         return receipt
 
 
@@ -142,6 +155,9 @@ def bind(output: Path, inspection, image: str):
             or image not in actual.get('RepoDigests', [])
             or actual.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != receipt.get('commit')):
         raise GateError('scanned_image_digest_binding_mismatch')
+    profile = receipt.get('inventoryProfile', 'backend')
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
     receipt['image'] = image
     output.write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt, separators=(',', ':')))
@@ -155,13 +171,14 @@ def main():
     parser.add_argument('--commit')
     parser.add_argument('--output', type=Path, required=True)
     parser.add_argument('--bind-inspection', type=Path)
+    parser.add_argument('--profile', choices=PROFILES, default='backend')
     args = parser.parse_args()
     try:
         args.output.parent.mkdir(parents=True, exist_ok=True)
         if args.bind_inspection:
             bind(args.output, json.loads(args.bind_inspection.read_text()), args.image or '')
         elif args.archive and not args.image:
-            scan(args.archive, args.commit or '', args.output)
+            scan(args.archive, args.commit or '', args.output, args.profile)
         elif args.image and not args.archive:
             inspection = json.loads(command(['docker', 'image', 'inspect', args.image]))
             if len(inspection) != 1 or not DIGEST.fullmatch(inspection[0].get('Id', '')):
@@ -169,7 +186,7 @@ def main():
             with tempfile.TemporaryDirectory(prefix='nextstop-image-export-') as temporary:
                 archive = Path(temporary) / 'image.tar'
                 command(['docker', 'image', 'save', '--output', str(archive), inspection[0]['Id']])
-                receipt = scan(archive, args.commit or '', args.output)
+                receipt = scan(archive, args.commit or '', args.output, args.profile)
                 if receipt['imageId'] != inspection[0]['Id']:
                     raise GateError('exported_image_mismatch')
                 if '@' in args.image:
