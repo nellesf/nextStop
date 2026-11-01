@@ -1,11 +1,10 @@
 # Deployment architecture
 
-Status: the owner approved the two-VM staging/production scope on 2026-10-01.
-[ADR 0018](adr/0018-staging-production-releases.md) replaces the earlier
-managed-database production target for this deployment phase. Provisioning and
-release activation are tracked in the [infrastructure runbook](../deploy/gcp/README.md).
+The approved architecture and stable native origins for both environments are in [ADR 0021](adr/0021-native-cloud-run-production-and-staging.md). The [Cloud Run controller](../deploy/gcp-run/README.md) checks each environment independently. Provisioning and live traffic are separate release steps.
 
-## Selected deployment
+## Historical VM architecture and production return target
+
+The original [two-VM release decision](adr/0018-staging-production-releases.md) and its [VM runbook](../deploy/gcp/README.md) describe the retained return path. The following settings refer to that deployment.
 
 Retain the existing `e2-standard-2` VM, local PostgreSQL/PostGIS database and
 persistent volumes as production. Its Google Cloud project keeps the historical

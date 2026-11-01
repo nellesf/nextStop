@@ -85,10 +85,10 @@ targets:
       configs:
         Debug:
           NEXTSTOP_APP_ATTEST_ENVIRONMENT: development
-          NEXTSTOP_API_BASE_URL: https://api.nextstop.tech
+          NEXTSTOP_API_BASE_URL: https://nextstop-gateway-1022346259037.europe-west1.run.app
         Release:
           NEXTSTOP_APP_ATTEST_ENVIRONMENT: production
-          NEXTSTOP_API_BASE_URL: https://api.nextstop.tech
+          NEXTSTOP_API_BASE_URL: https://nextstop-gateway-1022346259037.europe-west1.run.app
 
   NextStopAppTests:
     type: bundle.unit-test

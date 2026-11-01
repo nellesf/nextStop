@@ -31,7 +31,7 @@ info:
     an app update can retain its existing key. Full App ID, environment,
     signature, challenge binding and replay-counter checks remain required.
 servers:
-  - url: https://api.nextstop.tech
+  - url: https://nextstop-gateway-1022346259037.europe-west1.run.app
 paths:
   /v1/charging-parks/availability:
     post:

@@ -118,7 +118,7 @@ existing schedule until separately released. The subsequent staging hosting
 decision uses [Cloud Run and small Cloud SQL](docs/adr/0020-cloud-run-cloud-sql-staging.md),
 with bounded jobs and private provider caches. Application instances can scale to
 zero; the database remains running. See the [deployment and cost model](deploy/gcp-run/README.md)
-for migration gates and estimates. Savings require retiring the old staging VM
+for migration gates and estimates. [ADR 0021](docs/adr/0021-native-cloud-run-production-and-staging.md) selects the same isolated architecture and separate native gateways for production and staging. Savings require retiring the old staging VM
 and disks after verification.
 The [staging verification record](docs/operations/staging-demand-ingestion-2026-10-04.md)
 documents the deployed image, search checks, cost baseline and validation limits.
@@ -232,7 +232,7 @@ separate acceptance checks.
 Choose `NextStop-Staging` for the staging Simulator API or
 `NextStop-ProductionTest` for the production Simulator API, with the matching Mac
 broker. `NextStop-Release`, all physical-device builds, and every archive/TestFlight
-build use `https://api.nextstop.tech`; staging is Simulator-only. All schemes keep
+build use the stable [native production gateway](docs/adr/0021-native-cloud-run-production-and-staging.md). Staging is Simulator-only. All schemes keep
 the same bundle ID and signing configuration. The original `NextStopApp` scheme
 remains the production default for existing workflows. See the exact commands and
 backend-scoped receipt migration in

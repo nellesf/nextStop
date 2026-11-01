@@ -68,11 +68,7 @@ Cloud Run request log for all five services. The release preflight checks that t
 exclusion is enabled. Queue request logging also remains disabled. Do not use
 temporary public access to debug a private service.
 
-The staging custom domain can map to the gateway in Belgium without a load
-balancer or retained VM proxy. Cloud Run's regional domain mapping is a preview
-feature with its documented limitations; this is a staging choice, not a change
-to the production availability design. A first cutover requires separately
-verified DNS/TLS and authenticated search before the old staging VM is retired.
+The selected project provides its own stable native gateway in Belgium. Confirm the matching deterministic service URL in the deployed gateway annotation `run.googleapis.com/urls`. Verify readiness, expected digest and authenticated search there before finalizing a release. [ADR 0021](../../docs/adr/0021-native-cloud-run-production-and-staging.md) records both exact endpoints, client bindings and the retained VM return path.
 
 ## Maintenance and backup jobs
 
@@ -256,8 +252,8 @@ readiness, digest, identity, command and pinned environment. It expects the
 post-apply candidate tags and queue to exist. Private defaults change first;
 gateway traffic changes last. Older gateways keep their tagged API/auth targets.
 On an existing staging gateway, manual `promote` also verifies readiness and
-search through the public domain and retires obsolete public release tags. On
-first commissioning, run `finalize-public` after the public domain is serving.
+search through the stable native gateway and retires obsolete public release tags. On
+first commissioning, run `finalize-public` after the untagged native gateway is serving.
 Use the same config, output directory and expected plan hash as for `promote`.
 This finalization can be retried independently after a traffic conflict or an
 interrupted cleanup. After an operator has restored the original allocations,
@@ -283,7 +279,7 @@ Do not run a manual release alongside that workflow.
 
 The operator populates `deploy/environments/staging-cloud-run.json` with actual
 resource names and numeric secret pins, then enables the new hosting selector
-only after the initial migration, DNS/TLS, schedules and acceptance checks pass.
+only after the initial migration, native gateway TLS, schedules and acceptance checks pass.
 The original `staging.json` keeps its registry region for the existing artifact
 builder; do not rewrite that build-registry setting to Belgium.
 
@@ -335,7 +331,7 @@ original scheduler states; pause enabled schedules; preflight; run
 `cloud-migrate.js` (expand-only migrations and role grants); apply definitions;
 verify actual candidate metadata; run tagged API/auth readiness, broker mint,
 synthetic search and forwarded-prefix resistance; promote private defaults and
-then gateway; verify readiness/search through the fixed public staging domain;
+then gateway; verify readiness/search through the fixed native staging gateway;
 restore only schedules that were previously enabled. The prefix test intentionally
 uses the auth limiter, so a bounded10s refill separates it from the public check.
 
@@ -350,7 +346,7 @@ routes. A conflict stops cleanup without undoing a healthy release.
 
 After a failed candidate or a successful rollback, the controller first checks
 the original percentages on all five services and verifies the previous gateway
-digest and an authenticated search through the public domain. A split fallback
+digest and an authenticated search through the stable native gateway. A split fallback
 or failed verification leaves tags intact for operator review. On cancellation
 before the controller can run recovery, compare the live allocations to the
 reviewed snapshot and use the appropriate finalization command above.
@@ -469,12 +465,12 @@ python3 deploy/gcp-run/production.py hashes --image "$IMAGE" --commit "$COMMIT"
 
 For releases after commissioning, the same gateway tag retirement and rollback
 checks run against the fixed production project `nextstop-tech-staging` in
-`europe-west1`. They verify `api.nextstop.tech` using the private production
+`europe-west1`. They verify `nextstop-gateway-1022346259037.europe-west1.run.app` using the private production
 broker, and apply a conditional traffic update only to the production gateway.
 The manual `release.py` finalization commands above are restricted to staging.
 
 Keep `NEXTSTOP_PRODUCTION_HOSTING` at its current VM setting during the initial
-provisioning, filled-state handoff, rollback rehearsal and production domain
+provisioning, filled-state handoff, rollback rehearsal and production gateway
 cutover. Commission the four schedules and verify which jobs may resume before
 selecting `cloud-run` in the protected GitHub production environment. Set
 `NEXTSTOP_PRODUCTION_RUN_EVIDENCE` there to the production operator record's

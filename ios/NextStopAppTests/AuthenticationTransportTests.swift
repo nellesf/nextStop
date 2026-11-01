@@ -9,12 +9,12 @@ final class AuthenticationTransportTests: XCTestCase {
   func testDeviceAndDistributionBackendGuard() {
     let requestedStaging = [
       "NEXTSTOP_BACKEND_ENVIRONMENT": "staging",
-      "NEXTSTOP_API_BASE_URL": "https://api-staging.nextstop.tech",
+      "NEXTSTOP_API_BASE_URL": "https://nextstop-gateway-353471052580.europe-west1.run.app",
     ]
     #if DEBUG && targetEnvironment(simulator)
       XCTAssertEqual(
         BackendEnvironmentConfiguration.baseURL(environment: requestedStaging)?.host,
-        "api-staging.nextstop.tech"
+        "nextstop-gateway-353471052580.europe-west1.run.app"
       )
     #else
       XCTAssertEqual(
@@ -32,8 +32,8 @@ final class AuthenticationTransportTests: XCTestCase {
   #if DEBUG && targetEnvironment(simulator)
     func testSimulatorPresetsPairAPIAndTokenBrokerWithoutCrossEnvironmentOverrides() throws {
       for (preset, api, port) in [
-        ("staging", "https://api-staging.nextstop.tech", 8765),
-        ("production", "https://api.nextstop.tech", 8766),
+        ("staging", "https://nextstop-gateway-353471052580.europe-west1.run.app", 8765),
+        ("production", "https://nextstop-gateway-1022346259037.europe-west1.run.app", 8766),
       ] {
         let environment = ["NEXTSTOP_BACKEND_ENVIRONMENT": preset]
         let url = try XCTUnwrap(BackendEnvironmentConfiguration.baseURL(environment: environment))
@@ -48,13 +48,30 @@ final class AuthenticationTransportTests: XCTestCase {
         "NEXTSTOP_BACKEND_ENVIRONMENT": "staging", "NEXTSTOP_API_BASE_URL": "https://api.nextstop.tech",
       ]))
       XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: ["NEXTSTOP_BACKEND_ENVIRONMENT": "typo"]))
+      let rollback = ["NEXTSTOP_BACKEND_ENVIRONMENT": "production", "NEXTSTOP_PRODUCTION_HOSTING": "vm"]
+      let vm = try XCTUnwrap(BackendEnvironmentConfiguration.baseURL(environment: rollback))
+      XCTAssertEqual(vm.absoluteString, "https://api.nextstop.tech")
+      XCTAssertEqual(BackendEnvironmentConfiguration.brokerURL(for: vm, environment: rollback)?.port, 8766)
+      XCTAssertNil(BackendEnvironmentConfiguration.brokerURL(for: BackendEnvironmentConfiguration.productionURL, environment: rollback))
+      XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: [
+        "NEXTSTOP_BACKEND_ENVIRONMENT": "staging", "NEXTSTOP_PRODUCTION_HOSTING": "vm",
+      ]))
+      XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: ["NEXTSTOP_PRODUCTION_HOSTING": "other"]))
+      XCTAssertNil(BackendEnvironmentConfiguration.brokerURL(for: BackendEnvironmentConfiguration.stagingURL, environment: [
+        "NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL": "http://127.0.0.1:8766/token",
+      ]))
     }
 
     func testSimulatorLocalOverrideCannotRedirectToAnUnknownRemoteHost() {
       XCTAssertEqual(BackendEnvironmentConfiguration.baseURL(environment: [
         "NEXTSTOP_API_BASE_URL": "http://127.0.0.1:3000",
       ])?.port, 3000)
-      for value in ["https://untrusted.example", "https://user:password@api.nextstop.tech", "https://api.nextstop.tech/path"] {
+      for value in [
+        "https://untrusted.example", "https://api.nextstop.tech",
+        "https://r-0123456789ab---nextstop-gateway-353471052580.europe-west1.run.app",
+        "https://user:password@nextstop-gateway-353471052580.europe-west1.run.app",
+        "https://nextstop-gateway-1022346259037.europe-west1.run.app/path",
+      ] {
         XCTAssertNil(BackendEnvironmentConfiguration.baseURL(environment: ["NEXTSTOP_API_BASE_URL": value]))
       }
     }

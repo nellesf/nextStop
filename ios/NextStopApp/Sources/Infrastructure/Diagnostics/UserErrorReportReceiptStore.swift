@@ -42,8 +42,8 @@ final class UserErrorReportReceiptStore: ObservableObject {
     self.clock = clock
     self.write = write ?? Self.writeProtected
     if fileURL == nil,
-      KeychainAppAttestKeyStore.normalizedBackendOrigin(backendURL)
-        == KeychainAppAttestKeyStore.normalizedBackendOrigin(BackendEnvironmentConfiguration.productionURL),
+      KeychainAppAttestKeyStore.backendStorageOrigin(backendURL)
+        == KeychainAppAttestKeyStore.backendStorageOrigin(BackendEnvironmentConfiguration.productionURL),
       let directory
     {
       migrateLegacyReceipts(from: directory.appendingPathComponent("receipts.json"))
@@ -221,7 +221,7 @@ final class UserErrorReportReceiptStore: ObservableObject {
   }
 
   static func scopedFileURL(backendURL: URL, directory: URL) -> URL? {
-    guard let origin = KeychainAppAttestKeyStore.normalizedBackendOrigin(backendURL) else { return nil }
+    guard let origin = KeychainAppAttestKeyStore.backendStorageOrigin(backendURL) else { return nil }
     let key = SHA256.hash(data: Data(origin.utf8)).map { String(format: "%02x", $0) }.joined()
     return directory.appendingPathComponent(key, isDirectory: true)
       .appendingPathComponent("receipts.json", isDirectory: false)

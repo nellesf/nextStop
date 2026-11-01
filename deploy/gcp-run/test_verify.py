@@ -32,7 +32,7 @@ class SyntheticHTTP:
             assert method == "POST" and payload is None
             assert headers == {"Authorization": "Bearer " + "private-identity" * 3}
             return 200, {"accessToken": "private-app-token" * 3, "expiresInSeconds": 900, "tokenType": "Bearer"}, {}
-        base = "https://" + self.target.domain if self.public else render.origin("gateway", tag, self.target)
+        base = render.origin("gateway", None if self.public else tag, self.target)
         assert url.startswith(base + "/")
         assert headers["Authorization"] == "Bearer " + "private-app-token" * 3
         assert ("X-Serverless-Authorization" in headers) is not self.public

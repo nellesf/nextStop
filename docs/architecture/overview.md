@@ -375,7 +375,7 @@ runtime to separate IAM-protected Cloud Run services and small Cloud SQL. The
 secret-free public gateway pins private API/auth revisions. Cloud Tasks carries
 only the fixed Swiss provider identifier; the handler acknowledges after atomic
 publication. Scheduled bounded jobs replace idle timers, while the candidate
-database role remains read-only. Production keeps its existing VM topology.
+database role remains read-only. [ADR 0021](../adr/0021-native-cloud-run-production-and-staging.md) extends this architecture to an independent production project and selects the stable native gateway in each environment. The existing production VM provides the controlled return path.
 
 A search creates a local `RideSearchSnapshot` containing criteria, route identity,
 candidate snapshot token, exact-distance results, and food matches. The displayed

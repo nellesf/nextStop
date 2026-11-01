@@ -185,7 +185,7 @@ class GatewayTagsTests(unittest.TestCase):
         services.assert_called_once_with(prod)
         self.assertIn("--project=" + prod.project, cli.call_args.args[0])
         self.assertEqual(client.calls[0][0], render.origin("broker", target=prod) + "/token")
-        self.assertTrue(all(c[0].startswith("https://" + prod.domain + "/") for c in client.calls[1:]))
+        self.assertTrue(all(c[0].startswith("https://nextstop-gateway-1022346259037.europe-west1.run.app/") for c in client.calls[1:]))
         self.assertEqual(api.call_args_list[2].args[1], op["name"] + "?fields=name,done,error(code)")
         self.assertTrue(all(c.args[1].startswith(resource + "?") for c in (api.call_args_list[0], api.call_args_list[1], api.call_args_list[3])))
         self.assertEqual(api.call_args_list[1].args[3]["traffic"], desired[:1])

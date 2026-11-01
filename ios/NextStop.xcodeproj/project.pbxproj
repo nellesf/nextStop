@@ -921,7 +921,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				NEXTSTOP_API_BASE_URL = "https://api.nextstop.tech";
+				NEXTSTOP_API_BASE_URL = "https://nextstop-gateway-1022346259037.europe-west1.run.app";
 				NEXTSTOP_APP_ATTEST_ENVIRONMENT = production;
 				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
 				SDKROOT = iphoneos;
@@ -1157,7 +1157,7 @@
 					"@executable_path/Frameworks",
 				);
 				MARKETING_VERSION = 0.1.0;
-				NEXTSTOP_API_BASE_URL = "https://api.nextstop.tech";
+				NEXTSTOP_API_BASE_URL = "https://nextstop-gateway-1022346259037.europe-west1.run.app";
 				NEXTSTOP_APP_ATTEST_ENVIRONMENT = development;
 				PRODUCT_BUNDLE_IDENTIFIER = de.nextstop.app;
 				SDKROOT = iphoneos;

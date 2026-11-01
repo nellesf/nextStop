@@ -103,7 +103,7 @@ def _verify(config, token_provider, request, monotonic, public, restored_image=N
     validate(config, config.get("environment"))
     target = TARGETS[config["environment"]]
     tag = "r-" + release_id(config)
-    gateway = "https://" + target.domain if public else origin("gateway", tag, target)
+    gateway = origin("gateway", None if public else tag, target)
     broker = origin("broker", None if restored_image else tag, target)
     try:
         broker_identity = token_provider(origin("broker", target=target))

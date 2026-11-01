@@ -12,7 +12,7 @@ void test("named presets pair the intended cloud minter with a distinct fixed po
   });
   assert.deepEqual(brokerConfiguration({}), {
     name: "production", port: 8766, project: "nextstop-tech-staging", zone: "europe-west3-a",
-    instance: "nextstop-backend", mode: "remote",
+    instance: "nextstop-backend", mode: "cloud-run", region: "europe-west1", service: "nextstop-broker",
     remoteMintCommand: "sudo /usr/local/sbin/nextstop-mint-simulator-token",
   });
 });
@@ -23,7 +23,7 @@ void test("only named staging can explicitly retain the VM broker during migrati
   assert.throws(() => brokerConfiguration({ NEXTSTOP_BACKEND_ENVIRONMENT: "staging", NEXTSTOP_STAGING_HOSTING: "invalid" }));
 });
 
-void test("the production Cloud Run broker is opt-in until cutover and keeps its paired port", () => {
+void test("production defaults to the native broker and permits an explicit VM return on its paired port", () => {
   const variables = { NEXTSTOP_BACKEND_ENVIRONMENT: "production", NEXTSTOP_PRODUCTION_HOSTING: "cloud-run" };
   const cloud = brokerConfiguration(variables);
   assert.equal(cloud.mode, "cloud-run");

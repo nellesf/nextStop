@@ -23,7 +23,7 @@ from render import PROJECT, ConfigurationError, origin, release_id, validate
 from verify import VerificationError, identity_provider, request_json, write_report
 
 PREFIX = b"NEXTSTOP_IP_PROBE:"
-PUBLIC_ORIGIN = "https://api-staging.nextstop.tech"
+PUBLIC_ORIGIN = origin("gateway")
 REMOTE_SCRIPT = r'''
 import json, re, signal, ssl, sys, time, urllib.error, urllib.request
 signal.alarm(90)
@@ -41,7 +41,7 @@ try:
     if public:
         if token is not None: raise ValueError()
     elif not isinstance(token,str) or not re.fullmatch(r"[A-Za-z0-9_.-]{32,8192}",token): raise ValueError()
-    base="https://api-staging.nextstop.tech" if public else "https://r-"+release+"---nextstop-gateway-353471052580.europe-west1.run.app"
+    base="https://nextstop-gateway-353471052580.europe-west1.run.app" if public else "https://r-"+release+"---nextstop-gateway-353471052580.europe-west1.run.app"
     url=base+"/v1/auth/app-attest/challenge"
     client=urllib.request.build_opener(urllib.request.ProxyHandler({}),NoRedirect(),
         urllib.request.HTTPSHandler(context=ssl.create_default_context()))
@@ -228,7 +228,7 @@ def main():
     parser.add_argument("--expected-release", required=True)
     parser.add_argument("--output", type=Path, required=True)
     parser.add_argument("--impersonate-service-account")
-    parser.add_argument("--public", action="store_true", help="After DNS cutover, test only https://api-staging.nextstop.tech.")
+    parser.add_argument("--public", action="store_true", help="Test the stable, untagged staging gateway after promotion.")
     args = parser.parse_args()
     remote = None
     try:

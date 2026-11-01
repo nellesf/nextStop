@@ -47,7 +47,7 @@ export function brokerConfiguration(environment = process.env) {
       (productionHosting !== undefined && (legacy || name !== "production"))) {
     throw new Error("Cloud hosting selection must match the named backend environment.");
   }
-  const hosting = name === "production" ? productionHosting ?? "vm" : stagingHosting ?? "cloud-run";
+  const hosting = name === "production" ? productionHosting ?? "cloud-run" : stagingHosting ?? "cloud-run";
   if (!["vm", "cloud-run"].includes(hosting)) throw new Error("Backend hosting must be vm or cloud-run.");
   const cloud = !legacy && name !== "local" && hosting === "cloud-run";
   return {

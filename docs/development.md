@@ -117,13 +117,13 @@ switch:
 
 | Scheme | Run configuration | Debug Simulator backend | Archive |
 | --- | --- | --- | --- |
-| `NextStop-Staging` | Debug | `https://api-staging.nextstop.tech` | Release, production |
-| `NextStop-ProductionTest` | Debug | `https://api.nextstop.tech` | Release, production |
-| `NextStop-Release` | Release | `https://api.nextstop.tech`; App Attest unavailable in Simulator | Release, production |
+| `NextStop-Staging` | Debug | `https://nextstop-gateway-353471052580.europe-west1.run.app` | Release, production |
+| `NextStop-ProductionTest` | Debug | `https://nextstop-gateway-1022346259037.europe-west1.run.app` | Release, production |
+| `NextStop-Release` | Release | `https://nextstop-gateway-1022346259037.europe-west1.run.app`; App Attest unavailable in Simulator | Release, production |
 | `NextStopApp` | Debug | Production by default; retained for CI and existing workflows | Release, production |
 
 Every physical-device build and every Release build resolves to
-`https://api.nextstop.tech`. Launch environment variables and changed API values
+`https://nextstop-gateway-1022346259037.europe-west1.run.app`. Launch environment variables and changed API values
 in Info.plist cannot redirect these builds. Every checked-in scheme archives
 Release, so TestFlight always uses production and excludes Simulator credential
 fallbacks. The iPhone and CarPlay clients are created together at startup.
@@ -135,8 +135,7 @@ App Attest's `development`/`production` namespace is read from
 fail closed against production. Verify real devices with Release/TestFlight; do
 not enable development attestations globally on production to make Debug work.
 
-App Attest Keychain state is already scoped by backend origin and signing
-environment. Access tokens and candidate snapshots stay in their startup-created
+App Attest Keychain state is scoped by environment and signing entitlement. The legacy and native origins of each environment use its original on-device storage namespace. Selection of a network destination is independent of that storage mapping. Access tokens and candidate snapshots stay in their startup-created
 clients. Report withdrawal receipts now use a directory derived from the
 canonical backend origin. Existing unscoped receipts belong to the previous
 `api.nextstop.tech` service and migrate only to its production namespace. Staging
@@ -399,116 +398,24 @@ conflicting API or broker override fails configuration instead of silently mixin
 environments. Release builds omit this fallback and fail closed when App Attest
 is unavailable.
 
-Install the Google Cloud CLI, authenticate the developer account with
-`gcloud auth login`. Each Cloud Run preset requires `run.invoker` on its own private Simulator token service. The production VM preset uses its existing IAP/SSH access.
-From the repository root, start the corresponding broker and keep it running:
+Authenticate the Mac operator through the Google Cloud CLI. Each named preset needs `run.invoker` on its own private Cloud Run broker in `europe-west1`. Start the corresponding loopback broker before launching the app.
+
+| Scheme | Broker invocation | Port | Google Cloud project |
+| --- | --- | --- | --- |
+| NextStop-Staging | `NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh` | 8765 | `nextstop-tech-testing` |
+| NextStop-ProductionTest or NextStopApp | `NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh` | 8766 | `nextstop-tech-staging` |
+
+Both brokers can run simultaneously. Each invokes the exact private `nextstop-broker` service using the operator's Google identity. The broker keeps its short-lived application token in memory and refreshes one minute before expiry. The Simulator requests it with an empty `POST /token` and `X-NextStop-Simulator-Auth: 1`. The signing key remains in its environment.
+
+For a controlled return to the production VM, complete the [fenced data handoff](../deploy/gcp-run/PRODUCTION-PRIVATE-HANDOFF.md) first. Set **both** `NEXTSTOP_BACKEND_ENVIRONMENT=production` and `NEXTSTOP_PRODUCTION_HOSTING=vm` in the Debug Simulator launch environment and on the Mac:
 
 ```bash
-# Use with the NextStop-Staging scheme.
-NEXTSTOP_BACKEND_ENVIRONMENT=staging ios/start-simulator-auth-broker.sh
-
-# Use with NextStop-ProductionTest or the default NextStopApp scheme.
-NEXTSTOP_BACKEND_ENVIRONMENT=production ios/start-simulator-auth-broker.sh
-
-# Use only after the production Cloud Run broker is commissioned; the VM is the default until cutover.
-NEXTSTOP_BACKEND_ENVIRONMENT=production NEXTSTOP_PRODUCTION_HOSTING=cloud-run ios/start-simulator-auth-broker.sh
+NEXTSTOP_BACKEND_ENVIRONMENT=production NEXTSTOP_PRODUCTION_HOSTING=vm ios/start-simulator-auth-broker.sh
 ```
 
-| Preset | Loopback port | Google Cloud project | Token service | Region / zone |
-| --- | --- | --- | --- | --- |
-| `staging` | 8765 | `nextstop-tech-testing` | Cloud Run `nextstop-broker` | `europe-west1` |
-| `production` (default) | 8766 | `nextstop-tech-staging` | `nextstop-backend` | `europe-west3-a` |
+Stop the regular production broker before switching modes because both bind port 8766. This deliberately pairs `https://api.nextstop.tech` with the existing VM minter over IAP. Other target, host and port overrides are rejected. A physical-device test of the VM uses the retained pre-switch build. Native URLs continue to identify their Google services after a VM return. The [VM verification record](operations/production-release-verification-2026-10-02.md) documents the earlier deployment.
 
-The production project retains its historical `nextstop-tech-staging` ID and the
-existing VM/database; its name does not describe its current role. The new
-`nextstop-tech-testing` project hosts isolated staging. This initial split adds
-no production database migration or production redundancy. The central image
-registry remains in `nextstop-tech-staging`, independently of staging compute.
-
-Both brokers may run simultaneously. Named presets reject cloud-target and port
-overrides that disagree with this table. A preset describes the intended target;
-its service and access permissions must have been provisioned before a connected
-search can succeed.
-
-The broker binds only to `127.0.0.1`. Cloud Run presets obtain the developer's Google identity token and invoke `POST /token` on the fixed, IAM-protected service URL for the selected project and region. Production retains port 8766 for both hosting modes. Credentials remain in memory; the backend signing key is never
-copied to the Mac. During the VM-to-Cloud-Run migration only, explicitly set
-`NEXTSTOP_STAGING_HOSTING=vm` with the named staging preset to use its old IAP
-minter while the new runtime is being verified. Remove this override after
-cutover. This option cannot redirect the production preset.
-
-The production broker uses `gcloud compute ssh` with
-`--tunnel-through-iap` to invoke
-`sudo /usr/local/sbin/nextstop-mint-simulator-token` without arguments. Release
-installation supplies this stable host command; it starts the selected immutable
-backend image as a one-shot container with no network, a read-only filesystem,
-dropped Linux capabilities, and no persisted container stdout. It receives only
-the search-token signing key. Neither the signing key nor a manually copied bearer
-is configured in Xcode or bundled with the app.
-
-The broker caches the 15-minute token only in memory, deducts mint latency, and
-refreshes one minute before expiry. The Simulator sends an empty `POST /token`
-with `X-NextStop-Simulator-Auth: 1`; the response is the usual access-token JSON.
-The Simulator permits 95 seconds for refresh because IAP/SSH minting has a
-90-second timeout.
-
-**Production verified 2026-10-02:** the production release installed the stable
-helper. The named `production` recipe above minted a token and completed one
-synthetic public search with HTTP 200, valid candidates and a snapshot. Tokens
-stayed in memory; the temporary broker stopped and released port 8766. Use this
-named recipe with `NextStop-ProductionTest` or the default `NextStopApp` scheme,
-without API or broker URL overrides. This verifies broker/API connectivity, not a
-full Simulator UI session or real-device App Attest continuity. See the
-[production verification record](operations/production-release-verification-2026-10-02.md).
-
-**Historical compatibility option for hosts not yet adopted by the release
-runner:** before the stable helper is installed, the old production compose
-minter can use the explicit compatibility mode below on port 8766. This is no
-longer the normal setup for the current production host:
-
-```bash
-env -u NEXTSTOP_BACKEND_ENVIRONMENT \
-  -u NEXTSTOP_GCP_PROJECT -u NEXTSTOP_GCP_INSTANCE -u NEXTSTOP_GCP_ZONE \
-  NEXTSTOP_SIMULATOR_AUTH_MODE=staging \
-  NEXTSTOP_SIMULATOR_AUTH_LEGACY_COMMAND=true \
-  NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT=8766 \
-  ios/start-simulator-auth-broker.sh
-```
-
-Run the `NextStop-ProductionTest` scheme with its checked-in
-`NEXTSTOP_BACKEND_ENVIRONMENT=production` launch setting and no API or broker URL
-override. The compatibility variables above belong only to the Mac broker
-process. Its historical `staging` mode name selects the existing production VM
-in `nextstop-tech-staging`; the app remains paired with `api.nextstop.tech` and
-loopback port 8766. This uses the existing minter and does not install or update
-production services.
-
-On 2026-10-01, both this production recipe and the named staging recipe passed a
-real token mint followed by exactly one synthetic search against their public
-API. Each search returned HTTP 200 with a snapshot; tokens stayed in memory and
-both temporary brokers were stopped with their ports released. These checks
-verified the broker/API connection, not the full Simulator app interaction.
-
-For an unadopted host without the stable helper, the historical compose minter
-also retains its original port 9482 recipe:
-
-```bash
-NEXTSTOP_SIMULATOR_AUTH_MODE=staging \
-NEXTSTOP_SIMULATOR_AUTH_LEGACY_COMMAND=true \
-ios/start-simulator-auth-broker.sh
-```
-
-This compatibility mode retains the historical `nextstop-tech-staging` project,
-`nextstop-backend` VM, and port 9482. That existing service is now production;
-the legacy mode name does not select the new staging project. Use the
-`NextStopApp` scheme without `NEXTSTOP_BACKEND_ENVIRONMENT`, and explicitly set
-`NEXTSTOP_API_BASE_URL` to the origin still served by that old deployment plus
-`NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL=http://127.0.0.1:9482/token`.
-The API override accepts only the known staging/production origins or HTTP
-loopback; use the actual pre-cutover origin. Remove these compatibility settings
-when adopting a named preset. An explicit broker override must be HTTP loopback
-(`127.0.0.1` or `::1`) with exactly `/token`, and without user info, query, or
-fragment. Do not combine legacy mode and a named backend preset in the same
-broker process.
+A legacy VM installation without this helper can still use the historical compose minter. In this case the **Mac broker process only** uses `NEXTSTOP_SIMULATOR_AUTH_MODE=staging NEXTSTOP_SIMULATOR_AUTH_LEGACY_COMMAND=true NEXTSTOP_SIMULATOR_AUTH_BROKER_PORT=8766 ios/start-simulator-auth-broker.sh` with no named preset or hosting overrides. The historical name refers to the production VM in `nextstop-tech-staging`. Keep the explicit named production VM launch settings in the Debug Simulator. Earlier VM-targeted Debug builds can still use their documented legacy port 9482.
 
 ### Debug Simulator search against a local backend
 

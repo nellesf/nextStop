@@ -2,15 +2,18 @@ import Foundation
 import NextStopCore
 
 enum BackendEnvironmentConfiguration {
-  static let productionURL = URL(string: "https://api.nextstop.tech")!
+  static let productionURL = URL(string: "https://nextstop-gateway-1022346259037.europe-west1.run.app")!
+  static let stagingURL = URL(string: "https://nextstop-gateway-353471052580.europe-west1.run.app")!
+  static let legacyProductionURL = URL(string: "https://api.nextstop.tech")!
+  static let legacyStagingURL = URL(string: "https://api-staging.nextstop.tech")!
 
   static func baseURL(
     bundle: Bundle = .main,
     environment: [String: String] = ProcessInfo.processInfo.environment
   ) -> URL? {
     #if DEBUG && targetEnvironment(simulator)
-      if let preset = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] {
-        guard let configured = simulatorPresets[preset] else { return nil }
+      if hasPresetSelection(environment) {
+        guard let configured = selectedPreset(environment) else { return nil }
         if let override = environment["NEXTSTOP_API_BASE_URL"],
           URL(string: override) != configured.api { return nil }
         return configured.api
@@ -34,27 +37,49 @@ enum BackendEnvironmentConfiguration {
   #if DEBUG && targetEnvironment(simulator)
     static let simulatorPresets: [String: (api: URL, broker: URL)] = [
       "staging": (
-        URL(string: "https://api-staging.nextstop.tech")!,
-        URL(string: "http://127.0.0.1:8765/token")!
+        stagingURL, URL(string: "http://127.0.0.1:8765/token")!
       ),
       "production": (productionURL, URL(string: "http://127.0.0.1:8766/token")!),
     ]
+
+    private static func hasPresetSelection(_ environment: [String: String]) -> Bool {
+      environment["NEXTSTOP_BACKEND_ENVIRONMENT"] != nil || environment["NEXTSTOP_PRODUCTION_HOSTING"] != nil
+        || environment["NEXTSTOP_STAGING_HOSTING"] != nil
+    }
+
+    private static func selectedPreset(_ environment: [String: String]) -> (api: URL, broker: URL)? {
+      let name = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] ?? "production"
+      guard let preset = simulatorPresets[name] else { return nil }
+      let production = name == "production"
+      let hosting = production ? "NEXTSTOP_PRODUCTION_HOSTING" : "NEXTSTOP_STAGING_HOSTING"
+      let other = production ? "NEXTSTOP_STAGING_HOSTING" : "NEXTSTOP_PRODUCTION_HOSTING"
+      guard environment[other] == nil else { return nil }
+      switch environment[hosting] ?? "cloud-run" {
+      case "cloud-run": return preset
+      case "vm": return (production ? legacyProductionURL : legacyStagingURL, preset.broker)
+      default: return nil
+      }
+    }
 
     static func brokerURL(
       for baseURL: URL,
       environment: [String: String] = ProcessInfo.processInfo.environment
     ) -> URL? {
-      if let preset = environment["NEXTSTOP_BACKEND_ENVIRONMENT"] {
-        guard let configured = simulatorPresets[preset], configured.api == baseURL else { return nil }
+      if hasPresetSelection(environment) {
+        guard let configured = selectedPreset(environment), configured.api == baseURL else { return nil }
         if let override = environment["NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL"],
           URL(string: override) != configured.broker { return nil }
         return configured.broker
       }
+      if let preset = simulatorPresets.values.first(where: { $0.api == baseURL }) {
+        if let override = environment["NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL"],
+          URL(string: override) != preset.broker { return nil }
+        return preset.broker
+      }
+      guard baseURL.scheme == "http", baseURL.host == "127.0.0.1" || baseURL.host == "::1" else { return nil }
       if let override = environment["NEXTSTOP_DEBUG_SIMULATOR_TOKEN_BROKER_URL"] {
         return SimulatorSearchAccessTokenProvider.validatedLoopbackURL(URL(string: override))
       }
-      if let preset = simulatorPresets.values.first(where: { $0.api == baseURL }) { return preset.broker }
-      guard baseURL.scheme == "http", baseURL.host == "127.0.0.1" || baseURL.host == "::1" else { return nil }
       return URL(string: "http://127.0.0.1:9482/token")
     }
   #endif

@@ -29,6 +29,25 @@ final class UserErrorReportReceiptStoreTests: XCTestCase {
     XCTAssertEqual(staging.receipts, [stagingReceipt])
   }
 
+  func testNativeGatewayAndVMShareOnlyTheirOwnWithdrawalCapabilitiesAcrossReturn() throws {
+    let fixture = try ReceiptStoreFixture()
+    defer { fixture.remove() }
+    func store(_ url: URL) -> UserErrorReportReceiptStore {
+      UserErrorReportReceiptStore(backendURL: url, storageDirectory: fixture.directory, clock: { fixture.now })
+    }
+    for (vm, native) in [
+      (BackendEnvironmentConfiguration.legacyProductionURL, BackendEnvironmentConfiguration.productionURL),
+      (BackendEnvironmentConfiguration.legacyStagingURL, BackendEnvironmentConfiguration.stagingURL),
+    ] {
+      let before = try store(vm).reserve(fixture.request())
+      XCTAssertEqual(store(native).receipts, [before])
+      let during = try store(native).reserve(fixture.request())
+      try store(native).remove(reportID: before.reportID)
+      XCTAssertEqual(store(vm).receipts, [during])
+    }
+    XCTAssertNotEqual(store(BackendEnvironmentConfiguration.productionURL).receipts, store(BackendEnvironmentConfiguration.stagingURL).receipts)
+  }
+
   func testFailedLegacyMigrationRetainsTheOriginalWithdrawalCapability() throws {
     let fixture = try ReceiptStoreFixture()
     defer { fixture.remove() }

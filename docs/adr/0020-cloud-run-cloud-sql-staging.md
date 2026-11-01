@@ -86,8 +86,7 @@ before promoting candidate traffic. Require live evidence for IAM, client-IP
 admission isolation, filtered restore and live-task compatibility. A new backend
 artifact is not production-approved merely because it runs in staging.
 
-Use the existing staging domain after its Google ownership and DNS records are
-verified. Preserve a tested recovery path before removing the old VM and disks;
+[ADR 0021](0021-native-cloud-run-production-and-staging.md) selects the stable native gateway for staging and an independent native gateway and Cloud SQL target for production. Preserve a tested recovery path before removing the old VM and disks;
 stopping the VM alone leaves disk/address charges. After accepting writes on the
 new database, the old snapshot is not a lossless data rollback.
 

@@ -591,6 +591,15 @@ final class AppAttestAuthenticationTests: XCTestCase {
     XCTAssertNotEqual(development.service, alternatePort.service)
     XCTAssertEqual(development.service, explicitDefaultPort.service)
     XCTAssertTrue(development.service.hasSuffix("https://api.nextstop.tech:443"))
+    let nativeProduction = KeychainAppAttestKeyStore(
+      bundleIdentifier: "de.nextstop.app", environment: .production, baseURL: BackendEnvironmentConfiguration.productionURL
+    )
+    let nativeStaging = KeychainAppAttestKeyStore(
+      bundleIdentifier: "de.nextstop.app", environment: .production, baseURL: BackendEnvironmentConfiguration.stagingURL
+    )
+    XCTAssertEqual(nativeProduction.service, production.service)
+    XCTAssertNotEqual(nativeStaging.service, nativeProduction.service)
+    XCTAssertTrue(nativeStaging.service.hasSuffix("https://api-staging.nextstop.tech:443"))
   }
 
   func testKeychainDecoderRejectsPersistedNoncanonicalKeyIdentifier() throws {

@@ -44,12 +44,12 @@ struct KeychainAppAttestKeyStore: AppAttestKeyStoring {
   let account: String
 
   init(bundleIdentifier: String, environment: AppAttestEnvironment, baseURL: URL) {
-    let origin = Self.normalizedBackendOrigin(baseURL) ?? "invalid-origin"
+    let origin = Self.backendStorageOrigin(baseURL) ?? "invalid-origin"
     service = "\(bundleIdentifier).app-attest.\(environment.rawValue).\(origin)"
     account = "search-access-key"
   }
 
-  static func normalizedBackendOrigin(_ url: URL) -> String? {
+  static func backendStorageOrigin(_ url: URL) -> String? {
     guard let scheme = url.scheme?.lowercased(),
       let host = url.host?.lowercased(),
       !host.isEmpty
@@ -67,6 +67,16 @@ struct KeychainAppAttestKeyStore: AppAttestKeyStoring {
         port = 443
       default:
         return nil
+      }
+    }
+    // A transferred environment retains its pre-cutover Keychain and withdrawal capability namespace.
+    // These exact aliases apply to local storage only. Network requests still use the selected origin.
+    if scheme == "https", port == 443 {
+      if host == BackendEnvironmentConfiguration.productionURL.host {
+        return BackendEnvironmentConfiguration.legacyProductionURL.absoluteString + ":443"
+      }
+      if host == BackendEnvironmentConfiguration.stagingURL.host {
+        return BackendEnvironmentConfiguration.legacyStagingURL.absoluteString + ":443"
       }
     }
     let serializedHost = host.contains(":") ? "[\(host)]" : host

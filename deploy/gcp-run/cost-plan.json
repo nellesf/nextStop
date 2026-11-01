@@ -59,7 +59,7 @@
     "Application corpus measured22.78GiB and cache0.883GiB before migration.50GiB SQL needs real shadow-import/storage and g1-small-memory validation.",
     "GCP ingress for public provider downloads is not internet egress. CPU/download time, outbound responses and cross-region registry transfer are modeled separately.",
     "Supplemental USD list rates use0.88EUR/USD as a planning conversion; SKU-marked rates came from the live EUR public catalog. No free quota or billing credits assumed.",
-    "No load balancer, NAT gateway or proxy VM. Staging custom domain uses the regional preview domain mapping; its preview constraints must be accepted.",
+    "No load balancer, NAT gateway or proxy VM. Each public gateway uses its stable native HTTPS service address.",
     "10percent reserve does not bound the invoice. Resource caps limit concurrency/durations, not traffic volume, storage growth or all transfer charges.",
     "The old staging VM and retained disks must be retired only after acceptance; overlap and one-time seed/restore costs are additional, not included in steady state.",
     "No automatic SQL resize. A temporary larger DB for import is a separate reviewed cost/change; g1-small performance is not established by this price model."

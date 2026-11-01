@@ -97,7 +97,7 @@ class IsolationTests(unittest.TestCase):
 
     def test_public_mode_is_fixed_and_sends_no_private_iam_token(self):
         def request(url, method, headers, payload, timeout):
-            self.assertEqual(url, "https://api-staging.nextstop.tech/v1/auth/app-attest/challenge")
+            self.assertEqual(url, "https://nextstop-gateway-353471052580.europe-west1.run.app/v1/auth/app-attest/challenge")
             self.assertNotIn("X-Serverless-Authorization", headers)
             return 400, {"type": "urn:nextstop:error:invalid-app-attest-request"}, {"x-request-id": "synthetic"}
         self.assertEqual(probe.local_probe("1c907fe7c046", None, 1, request, lambda: 0, public=True)["kind"], "schema_rejected")
