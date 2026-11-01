@@ -11,10 +11,10 @@ const maximumBatches = 32;
 // parent deletion into an unbounded cleanup. Audit/source tables are absent.
 const searchTables = [
   ["charging_park_food_poi_matches", "charging_projection_id", "food_projection_id, park_id, osm_type, osm_id"],
-  ["charging_campus_power_projection", "projection_id", "campus_id, minimum_power_kw"],
+  ["charging_campus_power_projection", "projection_id", "projection_id, campus_id, minimum_power_kw", "campus_id"],
   ["charging_campus_park_memberships", "projection_id", "campus_id, park_id"],
   ["charging_campus_projection", "projection_id", "campus_id"],
-  ["charging_park_power_projection", "projection_id", "park_id, minimum_power_kw"],
+  ["charging_park_power_projection", "projection_id", "projection_id, park_id, minimum_power_kw", "park_id"],
   ["charging_park_location_memberships", "projection_id", "park_id, location_id"],
   ["charging_park_projection", "projection_id", "park_id"],
 ] as const;
@@ -104,10 +104,17 @@ async function pruneBatch(
     );
     // Follow the primary key within a version. Without the index order, LIMIT
     // can favor a sequential scan even after most rows for that version are gone.
-    const [tableName, projectionColumn, keyOrder] = table;
+    const [tableName, projectionColumn, keyOrder, powerEntityId] = table;
+    // Both power tables also have a spatial GiST starting with projection_id.
+    // The complete inclusive UUID range matches exactly one version and lets
+    // its primary key establish that even a fully depleted version is empty.
+    const versionFilter = powerEntityId
+      ? `(projection_id, ${powerEntityId}) BETWEEN ($1::uuid, '00000000-0000-0000-0000-000000000000'::uuid)
+          AND ($1::uuid, 'ffffffff-ffff-ffff-ffff-ffffffffffff'::uuid)`
+      : `${projectionColumn} = $1`;
     const selected = await client.query<{ ctid: string }>(
       `SELECT ctid::text AS ctid FROM nextstop.${tableName}
-       WHERE ${projectionColumn} = $1
+       WHERE ${versionFilter}
        ORDER BY ${keyOrder}
        LIMIT $2 FOR UPDATE`,
       [target.id, batchSize],

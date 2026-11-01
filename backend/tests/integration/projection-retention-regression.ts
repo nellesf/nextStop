@@ -137,42 +137,62 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
       publisher.release();
     }
 
-    // An empty failed version at the first large power table must advance,
-    // including when the reused session starts with a generic-plan preference.
+    // Both power tables have a competing spatial GiST. Check the actual locked
+    // selection in each stage on an empty version and on every UUID boundary.
     await writer.create({
       id: emptyFailed, sourceDatasetHash: "e".repeat(64),
       sourceObservedAt: "2026-07-07T00:00:00Z", builtAt: "2020-01-01T00:00:00Z",
       coverageStatus: "complete", activeSources: [bundesnetzagenturDescriptor.id], unavailableSources: [],
     });
     await writer.fail(emptyFailed, "SyntheticEmptyFailure");
-    await pool.query("UPDATE nextstop.projection_versions SET search_prune_stage = 1 WHERE id = $1", [emptyFailed]);
     const session = await pool.connect();
+    const boundaryIds = ["00000000-0000-0000-0000-000000000000", emptyFailed, "ffffffff-ffff-ffff-ffff-ffffffffffff"];
     try {
       await session.query("SET plan_cache_mode = 'force_generic_plan'");
-      const sessionPool = { connect: () => Promise.resolve({
-        query: (statement: string, values?: unknown[]) => {
-          if (statement.startsWith("SELECT ctid::text")) {
-            assert.match(statement, /ORDER BY campus_id, minimum_power_kw\s+LIMIT \$2 FOR UPDATE/u,
-              "Depleted campus power batches must follow their primary-key index under LIMIT.");
-          }
-          return session.query(statement, values);
-        }, release: () => {},
-      }) } as unknown as Pool;
-      const empty = await pruneRetiredChargingSearchProjections(sessionPool, () => now, { batchSize: 1, maxBatches: 1 });
-      assert.deepEqual(empty, { kind: "bounded", deletedRows: 0, completedVersions: 0, batches: 1 });
+      // Even tiny fixtures use an index for this plan comparison.
+      await session.query("SET enable_seqscan = off");
+      await session.query("CREATE TEMP TABLE retention_keys (projection_id uuid, campus_id uuid, park_id uuid, minimum_power_kw integer)");
+      await session.query(`INSERT INTO retention_keys SELECT version, entity, entity, power
+        FROM unnest($1::uuid[]) AS version CROSS JOIN unnest($1::uuid[]) AS entity
+        CROSS JOIN (VALUES (11), (400)) AS threshold(power)`, [boundaryIds]);
+      for (const [stage, entity] of [[1, "campus"], [4, "park"]] as const) {
+        const table = `charging_${entity}_power_projection`;
+        await session.query("UPDATE nextstop.projection_versions SET search_prune_stage = $1 WHERE id = $2", [stage, emptyFailed]);
+        const sessionPool = { connect: () => Promise.resolve({
+          query: async (statement: string, values?: unknown[]) => {
+            if (statement.startsWith("SELECT ctid::text")) {
+              const plan = await session.query<{ "QUERY PLAN": string }>(`EXPLAIN (COSTS OFF) ${statement}`, values);
+              assert.ok(plan.rows.some(row => row["QUERY PLAN"].includes(`${table}_pkey`)));
+              assert.ok(plan.rows.every(row => !row["QUERY PLAN"].includes("Sort")));
+              for (const version of boundaryIds) {
+                const selected = await session.query(statement.replace(`nextstop.${table}`, "pg_temp.retention_keys"), [version, 1000]);
+                const expected = await session.query(`SELECT ctid::text AS ctid FROM pg_temp.retention_keys
+                  WHERE projection_id = $1 ORDER BY ${entity}_id, minimum_power_kw`, [version]);
+                assert.equal(expected.rowCount, 6);
+                assert.deepEqual(selected.rows, expected.rows);
+              }
+            }
+            return session.query(statement, values);
+          }, release: () => {},
+        }) } as unknown as Pool;
+        const empty = await pruneRetiredChargingSearchProjections(sessionPool, () => now, { batchSize: 1, maxBatches: 1 });
+        assert.deepEqual(empty, { kind: "bounded", deletedRows: 0, completedVersions: 0, batches: 1 });
+        const next = await session.query<{ stage: number; completed: Date | null }>(
+          "SELECT search_prune_stage AS stage, search_prune_completed_at AS completed FROM nextstop.projection_versions WHERE id = $1",
+          [emptyFailed],
+        );
+        assert.deepEqual(next.rows, [{ stage: stage + 1, completed: null }]);
+      }
       assert.equal((await session.query<{ plan_cache_mode: string }>("SHOW plan_cache_mode")).rows[0]?.plan_cache_mode,
         "force_generic_plan", "Transaction-local selection plans must not leak into pooled sessions.");
     } finally {
+      await session.query("DROP TABLE IF EXISTS pg_temp.retention_keys");
+      await session.query("RESET enable_seqscan");
       await session.query("RESET plan_cache_mode");
       session.release();
     }
-    const emptyStage = await pool.query<{ stage: number; completed: Date | null }>(
-      `SELECT search_prune_stage AS stage, search_prune_completed_at AS completed
-       FROM nextstop.projection_versions WHERE id = $1`, [emptyFailed],
-    );
-    assert.deepEqual(emptyStage.rows, [{ stage: 2, completed: null }]);
-    const emptyFinished = await pruneRetiredChargingSearchProjections(pool, () => now, { batchSize: 1, maxBatches: 5 });
-    assert.deepEqual(emptyFinished, { kind: "bounded", deletedRows: 0, completedVersions: 1, batches: 5 });
+    const emptyFinished = await pruneRetiredChargingSearchProjections(pool, () => now, { batchSize: 1, maxBatches: 2 });
+    assert.deepEqual(emptyFinished, { kind: "bounded", deletedRows: 0, completedVersions: 1, batches: 2 });
     await assertRetained(pool, [oldest, recentlyRetired, rollbackFirst, rollbackSecond, active, building]);
 
     const beforeCount = (await pool.query<{ count: number }>(
