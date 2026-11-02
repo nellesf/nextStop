@@ -93,7 +93,7 @@ async function saveJournal(path, state) {
   }
 }
 
-async function identify(client, migrationCount) {
+async function identify(client, reviewedMigrationCounts) {
   await client.query('SET search_path=pg_catalog');
   // Core errors can include an offending row in DETAIL even when bind-parameter
   // logging is off. Harden a privileged VM session, or require already-safe
@@ -120,7 +120,8 @@ async function identify(client, migrationCount) {
     'Unexpected database, operator, engine or logging policy.');
   const migrations = (await fs.readdir(migrationDirectory)).filter(n => /^\d{4}_.+\.sql$/.test(n)).sort();
   const applied = (await client.query('SELECT name FROM nextstop.schema_migrations ORDER BY name')).rows.map(r => r.name);
-  guard(migrations.length >= migrationCount && equal(applied, migrations.slice(0, migrationCount)), 'Unexpected schema migration state.');
+  guard(reviewedMigrationCounts.includes(applied.length) && equal(applied, migrations.slice(0, applied.length)),
+    'Unexpected schema migration state.');
   const meta = await client.query(`SELECT c.relname, array_agg(a.attname::text ORDER BY a.attnum) AS columns,
       array_agg(format_type(a.atttypid,a.atttypmod) ORDER BY a.attnum) AS types,
       bool_and(c.relkind='r' AND c.relowner=current_user::regrole AND NOT c.relrowsecurity
@@ -225,8 +226,8 @@ export async function handoff(command, vm, cloud, directory, pin) {
         'Another handoff is running.');
       locked.push(client);
     }
-    const sourceLayout = await identify(vm, 15);
-    guard(equal(sourceLayout, await identify(cloud, 19)), 'Private table schemas differ across endpoints.');
+    const sourceLayout = await identify(vm, [15]);
+    guard(equal(sourceLayout, await identify(cloud, [19, 20])), 'Private table schemas differ across endpoints.');
     let state;
     try {
       state = JSON.parse(await privateFile(path));

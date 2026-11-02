@@ -148,6 +148,19 @@ export async function verifyProjectionRetention(pool: Pool): Promise<void> {
     const session = await pool.connect();
     const boundaryIds = ["00000000-0000-0000-0000-000000000000", emptyFailed, "ffffffff-ffff-ffff-ffff-ffffffffffff"];
     try {
+      // PostgreSQL probes both FK columns for every parent park it deletes.
+      // An intervening food_projection_id forces repeated version-wide scans.
+      const foodLookup = await session.query<{ supported: boolean }>(`SELECT EXISTS (
+        SELECT FROM pg_constraint fk
+        JOIN pg_index i ON i.indrelid = fk.conrelid
+        JOIN pg_class idx ON idx.oid = i.indexrelid
+        JOIN pg_am am ON am.oid = idx.relam
+        WHERE fk.contype = 'f' AND fk.conrelid = 'nextstop.charging_park_food_poi_matches'::regclass
+          AND fk.confrelid = 'nextstop.charging_park_projection'::regclass
+          AND am.amname = 'btree' AND i.indisvalid AND i.indisready AND i.indpred IS NULL
+          AND i.indnkeyatts >= 2 AND i.indkey[0] = fk.conkey[1] AND i.indkey[1] = fk.conkey[2]
+      ) AS supported`);
+      assert.equal(foodLookup.rows[0]?.supported, true, "Park deletion needs a direct index on the referencing food-match key.");
       await session.query("SET plan_cache_mode = 'force_generic_plan'");
       // Even tiny fixtures use an index for this plan comparison.
       await session.query("SET enable_seqscan = off");

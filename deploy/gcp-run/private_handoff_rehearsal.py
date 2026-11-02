@@ -70,7 +70,7 @@ def rehearse(case, migrations, *, databases=("rehearsal_vm", "rehearsal_cloudsql
             case.assertTrue(frozen(source) and frozen(destination))
         return before
 
-    for db, count in ((old, 15), (new, 19)):
+    for db, count in ((old, 15), (new, 20)):
         # Never clone the application database, even during a managed rehearsal.
         case.sql(admin, f"CREATE DATABASE {db} OWNER {owner} TEMPLATE template0", database="postgres")
         case.addCleanup(case.sql, admin, "DROP DATABASE " + db, database="postgres")

@@ -12,7 +12,7 @@ import stat
 import subprocess
 
 PROJECT = "nextstop-tech-testing"
-SUPPORTED_MIGRATIONS = (17, 18, 19)
+SUPPORTED_MIGRATIONS = (17, 18, 19, 20)
 BASE_TABLES = frozenset({
     "availability_observations", "availability_snapshots", "charging_campus_park_memberships",
     "charging_campus_power_projection", "charging_campus_projection", "charging_park_food_poi_matches",
@@ -34,8 +34,8 @@ def checked_connection(value):
 def expected_tables(purpose, migrations):
     if purpose not in ("handoff", "backup") or migrations not in SUPPORTED_MIGRATIONS:
         raise ValueError("Unreviewed snapshot purpose or schema version.")
-    # Migration 0019 adds a statistics function, without changing the table inventory.
-    return (BASE_TABLES | ({"monthly_import_budget"} if migrations in (18, 19) else set())) - (
+    # 0018 adds the budget table. 0019 and 0020 add only a function and an index.
+    return (BASE_TABLES | ({"monthly_import_budget"} if migrations >= 18 else set())) - (
         {"user_error_reports"} if purpose == "backup" else set())
 
 

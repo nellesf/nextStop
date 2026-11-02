@@ -45,7 +45,7 @@ pg_restore --dbname=service=nextstop_production_cloudsql --schema=nextstop \
 ```
 
 Verify exactly 15 migration records, zero report rows and matching public data
-before applying 0016–0019 and the reviewed role grants. Compare the active
+before applying 0016–0020 and the reviewed role grants. Compare the active
 projections, public writer state, authentication keys and representative queries
 again before the final fenced transfer. Durable backups exclude reports.
 Remove the transient archive on the operator after verifying restoration.
@@ -201,7 +201,7 @@ need the separate managed-service check.
 ### Filled private-state handoff and return
 
 The `test_filled_private_handoff_and_rollback` integration test creates two
-databases from `template0`, installs migrations through 0015 and 0019 respectively,
+databases from `template0`, installs migrations through 0015 and 0020 respectively,
 and seeds synthetic App Attest keys, challenges, reports and deletion markers.
 It closes both writer logins on each inactive database, drains a transaction
 already in progress, and checks every field after the forward and reverse copies.

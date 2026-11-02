@@ -14,10 +14,15 @@ ROOT = HERE.parents[1]
                      "Set NEXTSTOP_TEST_PG_BIN and NEXTSTOP_TEST_NODE for the two-cluster transfer proof")
 class ProductionPrivateHandoff(unittest.TestCase):
     def test_fenced_transfer_retry_and_purge(self):
+        for managed_count in (19, 20):
+            with self.subTest(managed_count=managed_count):
+                self.verify_transfer(managed_count)
+
+    def verify_transfer(self, managed_count):
         binary = Path(os.environ["NEXTSTOP_TEST_PG_BIN"])
         with contextlib.ExitStack() as cleanup:
             base = Path(cleanup.enter_context(tempfile.TemporaryDirectory(dir="/tmp", prefix="nsh-"))).resolve()
-            for index, count in enumerate((15, 19)):
+            for index, count in enumerate((15, managed_count)):
                 endpoint = base / str(index)
                 endpoint.mkdir(mode=0o700)
                 env = {k: v for k, v in os.environ.items() if not k.startswith("PG")}

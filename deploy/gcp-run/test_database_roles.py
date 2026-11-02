@@ -143,8 +143,10 @@ class RestrictedBootstrapTests(unittest.TestCase):
             self.command("psql", "-Xq", "-v", "ON_ERROR_STOP=1", "-U", "nextstop_app", "-d", target, "-f", str(migration))
         result = self.sql("nextstop_app", """SELECT (SELECT count(*) FROM nextstop.schema_migrations),
           (SELECT count(*) FROM nextstop.app_attest_challenges), (SELECT count(*) FROM nextstop.user_error_reports),
-          to_regnamespace('tiger') IS NULL""", database=target)
-        self.assertEqual(result.stdout.strip(), "19|1|0|t")
+          to_regnamespace('tiger') IS NULL,
+          (SELECT indisvalid AND indisready FROM pg_index
+           WHERE indexrelid = 'nextstop.charging_park_food_matches_park_lookup'::regclass)""", database=target)
+        self.assertEqual(result.stdout.strip(), "20|1|0|t|t")
         self.assertEqual(self.sql("nextstop_app", spatial_read, database=target).stdout, expected_park)
         self.assertEqual(self.sql("nextstop_app", spatial_read, database=source).stdout, expected_park)
 

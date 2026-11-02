@@ -109,7 +109,8 @@ is a release gate for both forward and reverse routing.
    input-check metadata and pending/failed build states. Check stable candidate
    IDs on representative public searches through the restricted API role.
    Keep aggregate results and hashes in the protected receipt. The schema
-   registry must correspond to 0015 on the VM and 0019 on Cloud SQL.
+   registry must correspond to 0015 on the VM and 0019 or 0020 on Cloud SQL.
+   Migration 0020 adds the referencing index used when retired parks are deleted.
 4. Record separately the managed-only `live_refresh_control` lease/cooldown,
    `monthly_ingestion_schedule` due dates and `monthly_import_budget`
    month/attempts immediately after migration. Record queue state including
@@ -141,7 +142,7 @@ switch. For the legacy VM, include its connectable `template_postgis` database.
 A failed check blocks switching ingress. [PostGIS security procedure](../security/POSTGIS-DECODER.md).
 
 1. Restore the verified production filtered backup into the new production
-   instance with its verified empty report schema, apply 0016–0019, then verify
+   instance with its verified empty report schema, apply 0016–0020, then verify
    extensions, grants, valid indexes, correct active projections and bounded
    search. Verify identical deployed App ID, signing identities and key values
    privately. Keep the new gateway closed to users. Never use the app's destructive
