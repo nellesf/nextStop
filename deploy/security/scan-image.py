@@ -24,6 +24,13 @@ COMMIT = re.compile(r'[0-9a-f]{40}\Z')
 PROFILES = ('backend', 'postgres-client', 'ci-postgis')
 SEVERITIES = ('UNKNOWN', 'LOW', 'MEDIUM', 'HIGH', 'CRITICAL')
 POSTGRES_CLIENT_BASE = 'sha256:e4cb93687b062cd25a0e8f672d85a7708235009d70d31f8a7698d9370092a9c4'
+MANIFEST_TYPES = ('application/vnd.oci.image.manifest.v1+json',
+                  'application/vnd.docker.distribution.manifest.v2+json')
+INDEX_TYPES = ('application/vnd.oci.image.index.v1+json',
+               'application/vnd.docker.distribution.manifest.list.v2+json')
+CONFIG_TYPES = ('application/vnd.oci.image.config.v1+json',
+                'application/vnd.docker.container.image.v1+json')
+MAX_METADATA_BYTES = 2 * 1024 * 1024
 
 
 class GateError(Exception):
@@ -68,15 +75,99 @@ def client_configuration(config):
         raise GateError('postgres_client_configuration_invalid')
 
 
-def archive_identity(archive: Path, commit: str, profile='backend'):
+def descriptor_identity(value, media_types):
+    if (not isinstance(value, dict) or value.get('mediaType') not in media_types
+            or not isinstance(value.get('digest'), str) or not DIGEST.fullmatch(value['digest'])
+            or type(value.get('size')) is not int or not 0 <= value['size'] <= MAX_METADATA_BYTES):
+        raise GateError('image_descriptor_invalid')
+    return {key: value[key] for key in ('mediaType', 'digest', 'size')}
+
+
+def archive_descriptors(read, config_data, docker_manifest):
+    """Prove OCI manifest/index digests refer to the exact config Trivy scans."""
+    if json.loads(read('oci-layout')).get('imageLayoutVersion') != '1.0.0':
+        raise GateError('image_layout_invalid')
+    config_id = 'sha256:' + hashlib.sha256(config_data).hexdigest()
+
+    def select(index):
+        if (not isinstance(index, dict) or index.get('schemaVersion') != 2
+                or index.get('mediaType') not in INDEX_TYPES
+                or not isinstance(index.get('manifests'), list)
+                or not 1 <= len(index['manifests']) <= 32):
+            raise GateError('image_index_invalid')
+        # BuildKit provenance is metadata, not another runnable image. It must
+        # explicitly identify itself and refer to the selected image manifest.
+        images, attestations = [], []
+        for item in index['manifests']:
+            descriptor_identity(item, MANIFEST_TYPES + INDEX_TYPES)
+            if item.get('annotations', {}).get('vnd.docker.reference.type') == 'attestation-manifest':
+                if item.get('platform') != {'architecture': 'unknown', 'os': 'unknown'}:
+                    raise GateError('image_attestation_invalid')
+                attestations.append(item)
+            else:
+                images.append(item)
+        # Only one runnable image is supported, as in Docker's manifest.json.
+        if len(images) != 1:
+            raise GateError('one_image_required')
+        chosen = images[0]
+        for item in attestations:
+            if item['annotations'].get('vnd.docker.reference.digest') != chosen['digest']:
+                raise GateError('image_attestation_invalid')
+        return chosen
+
+    def visit(value, depth=0):
+        if depth > 4:
+            raise GateError('image_index_depth_exceeded')
+        descriptor = descriptor_identity(value, MANIFEST_TYPES + INDEX_TYPES)
+        platform = value.get('platform')
+        if platform is not None and (platform.get('os') != 'linux' or platform.get('architecture') != 'amd64'
+                                     or platform.get('variant') not in (None, '', 'v1')):
+            raise GateError('image_platform_or_revision_mismatch')
+        payload = read('blobs/sha256/' + descriptor['digest'].split(':')[1])
+        if (len(payload) != descriptor['size']
+                or 'sha256:' + hashlib.sha256(payload).hexdigest() != descriptor['digest']):
+            raise GateError('image_descriptor_content_mismatch')
+        document = json.loads(payload)
+        if document.get('schemaVersion') != 2 or document.get('mediaType') != descriptor['mediaType']:
+            raise GateError('image_descriptor_media_type_mismatch')
+        if descriptor['mediaType'] in INDEX_TYPES:
+            return [descriptor] + visit(select(document), depth + 1)
+        config_descriptor = descriptor_identity(document.get('config'), CONFIG_TYPES)
+        if config_descriptor['digest'] != config_id or config_descriptor['size'] != len(config_data):
+            raise GateError('image_manifest_config_mismatch')
+        # Docker/Trivy read manifest.json. Bind its ordered layer paths to the
+        # hashed OCI manifest too, not merely its config field.
+        layers = document.get('layers')
+        if not isinstance(layers, list):
+            raise GateError('image_manifest_layers_invalid')
+        paths = []
+        for layer in layers:
+            digest = layer.get('digest', '')
+            if not isinstance(digest, str) or not DIGEST.fullmatch(digest):
+                raise GateError('image_manifest_layers_invalid')
+            paths.append('blobs/sha256/' + digest.split(':')[1])
+        if docker_manifest.get('Layers') != paths:
+            raise GateError('image_manifest_layers_mismatch')
+        return [descriptor]
+
+    return visit(select(json.loads(read('index.json'))))
+
+
+def archive_identities(archive: Path, commit: str, profile='backend'):
     if not COMMIT.fullmatch(commit):
         raise GateError('commit_invalid')
     if profile not in PROFILES:
         raise GateError('inventory_profile_invalid')
     with tarfile.open(archive, mode='r:*') as bundle:
+        members = {}
+        for member in bundle.getmembers():
+            if member.name in members:
+                raise GateError('duplicate_image_archive_entry')
+            members[member.name] = member
+
         def read(name):
-            member = bundle.getmember(name)
-            if not member.isfile() or member.size > 2 * 1024 * 1024:
+            member = members[name]
+            if not member.isfile() or not 0 <= member.size <= MAX_METADATA_BYTES:
                 raise GateError('image_metadata_invalid')
             return bundle.extractfile(member).read()
         manifest = json.loads(read('manifest.json'))
@@ -84,6 +175,7 @@ def archive_identity(archive: Path, commit: str, profile='backend'):
             raise GateError('one_image_required')
         data = read(manifest[0]['Config'])
         config = json.loads(data)
+        descriptors = archive_descriptors(read, data, manifest[0]) if 'index.json' in members else []
     if (config.get('architecture') != 'amd64' or config.get('os') != 'linux'
             or config.get('config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != commit):
         raise GateError('image_platform_or_revision_mismatch')
@@ -93,7 +185,47 @@ def archive_identity(archive: Path, commit: str, profile='backend'):
         settings = config['config']
         if settings.get('User') != 'postgres' or (settings.get('Labels') or {}).get('tech.nextstop.image-purpose') != 'ci-postgis':
             raise GateError('ci_database_configuration_invalid')
-    return 'sha256:' + hashlib.sha256(data).hexdigest()
+    return 'sha256:' + hashlib.sha256(data).hexdigest(), descriptors
+
+
+def archive_identity(archive: Path, commit: str, profile='backend'):
+    return archive_identities(archive, commit, profile)[0]
+
+
+def verify_inspection(inspection, image_id, descriptors, commit, profile='backend', image=None):
+    if (not isinstance(image_id, str) or not DIGEST.fullmatch(image_id)
+            or not isinstance(commit, str) or not COMMIT.fullmatch(commit)
+            or not isinstance(descriptors, list)
+            or not isinstance(inspection, list) or len(inspection) != 1
+            or not isinstance(inspection[0], dict)):
+        raise GateError('docker_image_identity_invalid')
+    descriptors = [descriptor_identity(value, MANIFEST_TYPES + INDEX_TYPES) for value in descriptors]
+    actual = inspection[0]
+    docker_id = actual.get('Id')
+    if not isinstance(docker_id, str) or not DIGEST.fullmatch(docker_id):
+        raise GateError('docker_image_identity_invalid')
+    descriptor = actual.get('Descriptor')
+    if descriptor is not None:
+        descriptor = descriptor_identity(descriptor, MANIFEST_TYPES + INDEX_TYPES)
+        if descriptor not in descriptors:
+            raise GateError('exported_image_mismatch')
+    if docker_id != image_id and (descriptor is None or descriptor['digest'] != docker_id):
+        raise GateError('exported_image_mismatch')
+    if (actual.get('Os') != 'linux' or actual.get('Architecture') != 'amd64'
+            or actual.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != commit):
+        raise GateError('image_platform_or_revision_mismatch')
+    if profile not in PROFILES:
+        raise GateError('inventory_profile_invalid')
+    if profile == 'postgres-client':
+        client_configuration(actual.get('Config', {}))
+    if image is not None:
+        if '@' not in image or not DIGEST.fullmatch(image.rsplit('@', 1)[1]):
+            raise GateError('immutable_image_required')
+        if not isinstance(actual.get('RepoDigests'), list) or image not in actual['RepoDigests']:
+            raise GateError('scanned_image_digest_binding_mismatch')
+        if descriptor is not None and image.rsplit('@', 1)[1] != descriptor['digest']:
+            raise GateError('scanned_image_digest_binding_mismatch')
+    return docker_id
 
 
 def evaluate(report, image_id, profile='backend'):
@@ -128,8 +260,14 @@ def evaluate(report, image_id, profile='backend'):
     return counts, blockers
 
 
-def scan(archive: Path, commit: str, output: Path, profile='backend'):
-    image_id = archive_identity(archive, commit, profile)
+def scan(archive: Path, commit: str, output: Path, profile='backend', *, inspection=None, image=None):
+    if image is not None and inspection is None:
+        raise GateError('docker_image_identity_required')
+    image_id, descriptors = archive_identities(archive, commit, profile)
+    # Check the export before scanning/publishing a passing receipt. Docker's
+    # classic store identifies configs; containerd identifies manifests/indexes.
+    docker_id = (verify_inspection(inspection, image_id, descriptors, commit, profile, image)
+                 if inspection is not None else None)
     with tempfile.TemporaryDirectory(prefix='nextstop-image-security-') as temporary:
         work = Path(temporary)
         binary = install(work)
@@ -147,8 +285,9 @@ def scan(archive: Path, commit: str, output: Path, profile='backend'):
         report = json.loads(report_path.read_text())
         counts, blockers = evaluate(report, image_id, profile)
         receipt = {'schemaVersion': 1, 'passed': not blockers, 'commit': commit, 'imageId': image_id,
+                   'imageDescriptors': descriptors, 'dockerImageId': docker_id,
                    'inventoryProfile': profile,
-                   'image': None, 'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                   'image': image, 'observedAt': datetime.datetime.now(datetime.timezone.utc).isoformat(),
                    'scanner': 'trivy', 'scannerVersion': VERSION, 'scannerArchiveSHA256': ARCHIVE_SHA256,
                    'policy': {'blockSeverities': list(SEVERITIES) if profile == 'ci-postgis' else ['HIGH', 'CRITICAL'], 'includeUnfixed': True,
                               'scanners': ['os', 'library'], 'suppressions': []},
@@ -163,23 +302,30 @@ def scan(archive: Path, commit: str, output: Path, profile='backend'):
 
 def bind(output: Path, inspection, image: str):
     receipt = json.loads(output.read_text())
-    if (not isinstance(inspection, list) or len(inspection) != 1 or '@' not in image
-            or not DIGEST.fullmatch(image.rsplit('@', 1)[1])):
-        raise GateError('immutable_image_required')
-    actual = inspection[0]
-    if (receipt.get('passed') is not True or actual.get('Id') != receipt.get('imageId')
-            or image not in actual.get('RepoDigests', [])
-            or actual.get('Config', {}).get('Labels', {}).get('org.opencontainers.image.revision') != receipt.get('commit')):
+    if receipt.get('passed') is not True:
         raise GateError('scanned_image_digest_binding_mismatch')
-    profile = receipt.get('inventoryProfile', 'backend')
-    if profile not in PROFILES:
-        raise GateError('inventory_profile_invalid')
-    if profile == 'postgres-client':
-        client_configuration(actual.get('Config', {}))
+    receipt['dockerImageId'] = verify_inspection(
+        inspection, receipt.get('imageId'), receipt.get('imageDescriptors', []),
+        receipt.get('commit'), receipt.get('inventoryProfile', 'backend'), image)
     receipt['image'] = image
     output.write_text(json.dumps(receipt, indent=2) + '\n')
     print(json.dumps(receipt, separators=(',', ':')))
     return receipt
+
+
+def invalidate_receipt(output: Path, failure: str):
+    # A failed identity/binding check must never leave an earlier passing receipt.
+    try:
+        receipt = json.loads(output.read_text()) if output.exists() else {}
+        if not isinstance(receipt, dict):
+            receipt = {}
+    except (OSError, ValueError):
+        receipt = {}
+    receipt.update(schemaVersion=1, passed=False, image=None, failure=failure)
+    try:
+        output.write_text(json.dumps(receipt, indent=2) + '\n')
+    except OSError:
+        pass  # The process still fails; an unwritable output cannot be repaired.
 
 
 def main():
@@ -199,22 +345,23 @@ def main():
             scan(args.archive, args.commit or '', args.output, args.profile)
         elif args.image and not args.archive:
             inspection = json.loads(command(['docker', 'image', 'inspect', args.image]))
-            if len(inspection) != 1 or not DIGEST.fullmatch(inspection[0].get('Id', '')):
+            if (not isinstance(inspection, list) or len(inspection) != 1
+                    or not isinstance(inspection[0], dict)
+                    or not DIGEST.fullmatch(inspection[0].get('Id', ''))):
                 raise GateError('docker_image_identity_invalid')
             with tempfile.TemporaryDirectory(prefix='nextstop-image-export-') as temporary:
                 archive = Path(temporary) / 'image.tar'
                 command(['docker', 'image', 'save', '--output', str(archive), inspection[0]['Id']])
-                receipt = scan(archive, args.commit or '', args.output, args.profile)
-                if receipt['imageId'] != inspection[0]['Id']:
-                    raise GateError('exported_image_mismatch')
-                if '@' in args.image:
-                    bind(args.output, inspection, args.image)
+                scan(archive, args.commit or '', args.output, args.profile, inspection=inspection,
+                     image=args.image if '@' in args.image else None)
         else:
             raise GateError('exactly_one_image_input_required')
     except GateError as error:
+        invalidate_receipt(args.output, str(error))
         print(json.dumps({'securityGate': 'failed', 'kind': str(error)}), file=sys.stderr)
         return 1
     except (OSError, ValueError, KeyError, TypeError, AttributeError, IndexError, tarfile.TarError):
+        invalidate_receipt(args.output, 'invalid_input_or_tool_response')
         print('{"securityGate":"failed","kind":"invalid_input_or_tool_response"}', file=sys.stderr)
         return 1
     return 0

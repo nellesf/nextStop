@@ -119,7 +119,7 @@ class SecurityTests(unittest.TestCase):
         with tempfile.TemporaryDirectory() as tmp, patch('builtins.print'):
             output = Path(tmp) / 'receipt.json'
             receipt = {'passed': True, 'imageId': IMAGE_ID, 'commit': COMMIT}
-            inspect = [{'Id': IMAGE_ID, 'RepoDigests': [IMAGE],
+            inspect = [{'Id': IMAGE_ID, 'RepoDigests': [IMAGE], 'Os': 'linux', 'Architecture': 'amd64',
                         'Config': {'Labels': {'org.opencontainers.image.revision': COMMIT}}}]
             for field, value in [('Id', 'sha256:' + 'e' * 64), ('RepoDigests', []), ('Config', {})]:
                 changed = copy.deepcopy(inspect); changed[0][field] = value

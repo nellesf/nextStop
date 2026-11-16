@@ -43,6 +43,27 @@ scan. A failed scan cannot produce the release-image output. CI preserves the
 receipt and full Trivy JSON, including failures, as workflow artifacts. Images
 are built with `--pull` to obtain current Node 24 base-image packages.
 
+The receipt's `imageId` always remains the SHA-256 of the exported configuration
+bytes, matching Trivy's identity. Classic Docker uses that config digest as its
+local ID; Docker's containerd store uses an OCI manifest or index digest instead.
+The gate verifies each manifest/index descriptor's bytes, size and SHA-256 back
+to that same config and the exported layer list. BuildKit provenance attestations
+are recognized as metadata; ambiguous runnable images and unproven IDs fail.
+The verified descriptors are retained as `imageDescriptors` for the separate
+Cloud Build digest-binding step. `dockerImageId` records the verified daemon ID;
+the disposable database starts by that ID with `--platform linux/amd64`.
+Identity checks finish before a passing image receipt is emitted, and a failed
+CLI invocation invalidates any existing receipt at its output path.
+
+The `Docker image identity` CI jobs exercise actual classic and containerd exports
+on Ubuntu 24.04 and 26.04, including BuildKit provenance and an incorrect-ID
+negative check. These scratch-image checks prove export/identity compatibility;
+the separate runtime security job still performs the full Trivy scan. Locally,
+run `python3 deploy/security/check-image-identity.py --help` for the Docker harness.
+
+Format references: [Docker containerd image store](https://docs.docker.com/engine/storage/containerd/),
+[containerd archive exporter](https://github.com/containerd/containerd/blob/v2.2.0/core/images/archive/exporter.go).
+
 For an operator build without a local Docker daemon, commit/push first, then use
 the reviewed Cloud Build configuration (no cloud calls occur by reading it):
 

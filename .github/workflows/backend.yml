@@ -76,8 +76,8 @@ jobs:
 
       - name: Start the scanned database and exercise the native decoder
         run: |
-          image=$(jq -er 'select(.passed == true) | .imageId' security-results/ci-postgis.json)
-          docker run --detach --rm --name nextstop-ci-postgis --publish 127.0.0.1:5432:5432 \
+          image=$(jq -er 'select(.passed == true) | .dockerImageId' security-results/ci-postgis.json)
+          docker run --platform linux/amd64 --detach --rm --name nextstop-ci-postgis --publish 127.0.0.1:5432:5432 \
             -e POSTGRES_DB=nextstop_test -e POSTGRES_USER=nextstop_test \
             -e POSTGRES_PASSWORD=nextstop_test "$image"
           for attempt in {1..60}; do
@@ -104,6 +104,31 @@ jobs:
         with:
           name: ci-postgis-security-${{ github.sha }}
           path: security-results/ci-postgis*.json
+          if-no-files-found: warn
+
+  image-identity:
+    name: Docker image identity (${{ matrix.store }})
+    runs-on: ${{ matrix.runner }}
+    timeout-minutes: 10
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - runner: ubuntu-24.04
+            store: classic
+          - runner: ubuntu-26.04
+            store: containerd
+    steps:
+      - uses: actions/checkout@v7
+      - name: Verify real Docker export identities and reject mismatches
+        run: >-
+          python3 deploy/security/check-image-identity.py --commit "$GITHUB_SHA"
+          --expected-store "${{ matrix.store }}" --output security-results/identity.json
+      - uses: actions/upload-artifact@v7
+        if: always()
+        with:
+          name: image-identity-${{ matrix.store }}-${{ github.sha }}
+          path: security-results/identity.json
           if-no-files-found: warn
 
   security:
