@@ -8,7 +8,9 @@ a successful Backend run whose original event was a trusted main-branch push.
 
 Backend integration runs build a disposable Linux/amd64 PostgreSQL 17 database
 from [the CI Dockerfile](ci-postgis/Dockerfile). It rebuilds the PostGIS 3.6.4
-core library with the upstream FlatGeobuf fixes. The database runs as
+core library with the upstream FlatGeobuf fixes. The shared base stage applies
+current Alpine security packages to both the build and runtime stages while
+retaining the pinned PostgreSQL/PostGIS source. The database runs as
 `postgres` and the image omits `gosu`. The `ci-postgis` scanner profile blocks
 every reported severity, including unfixed findings. CI starts the exact scanned
 image ID, checks valid and malformed input in the [native decoder](ci-postgis/check-decoder.sql)
@@ -57,7 +59,9 @@ CLI invocation invalidates any existing receipt at its output path.
 
 The `Docker image identity` CI jobs exercise actual classic and containerd exports
 on Ubuntu 24.04 and 26.04, including BuildKit provenance and an incorrect-ID
-negative check. These scratch-image checks prove export/identity compatibility;
+negative check. They push/pull only to a disposable loopback registry and check
+the immutable registry reference against the original exported identities.
+These scratch-image checks prove export/identity compatibility;
 the separate runtime security job still performs the full Trivy scan. Locally,
 run `python3 deploy/security/check-image-identity.py --help` for the Docker harness.
 

@@ -1,6 +1,9 @@
 # Ephemeral GitHub integration database only. The source and both patches are
 # pinned independently from the upstream PostgreSQL 17.11/PostGIS 3.6.4 image.
 FROM postgis/postgis@sha256:c3d12aa7443aa24999288f67ef59c12f7527aef6517a900fb6cccb1b5071ef43 AS base
+# Keep the pinned PostgreSQL/PostGIS source while applying supported Alpine
+# security updates consistently to both the build and final runtime stages.
+RUN apk upgrade --no-cache
 
 FROM base AS build
 RUN apk add --no-cache autoconf automake build-base gettext-dev git libtool perl \

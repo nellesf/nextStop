@@ -13,6 +13,8 @@ import json
 from pathlib import Path
 import subprocess
 import tempfile
+import time
+import urllib.request
 import uuid
 
 
@@ -21,16 +23,43 @@ security = importlib.util.module_from_spec(spec)
 spec.loader.exec_module(security)
 
 
+def cleanup(*arguments):
+    try:
+        subprocess.run(['docker', *arguments], capture_output=True, check=False, timeout=30)
+    except (OSError, subprocess.TimeoutExpired):
+        pass  # Keep the original failure and still attempt other cleanup.
+
+
 def check(commit: str, expected_store: str, output: Path):
     if not security.COMMIT.fullmatch(commit):
         raise security.GateError('commit_invalid')
     output.parent.mkdir(parents=True, exist_ok=True)
     observations = []
+    registry = 'nextstop-identity-registry-' + uuid.uuid4().hex
     variants = [('manifest', 'false'), ('default', None)] if expected_store == 'classic' else [
         ('manifest', 'false'), ('attested-index', 'mode=min')]
     try:
+        security.command(['docker', 'run', '--detach', '--rm', '--name', registry,
+                          '--publish', '127.0.0.1::5000', 'registry:3'], timeout=180)
+        address = security.command(['docker', 'port', registry, '5000/tcp'], timeout=30).strip()
+        host, separator, port = address.partition(':')
+        if host != '127.0.0.1' or separator != ':' or not port.isdecimal() or not 0 < int(port) <= 65535:
+            raise security.GateError('local_registry_address_invalid')
+        for attempt in range(30):
+            try:
+                with urllib.request.urlopen('http://' + address + '/v2/', timeout=1) as response:
+                    if response.status == 200:
+                        break
+            except OSError:
+                pass
+            time.sleep(0.2)
+        else:
+            raise security.GateError('local_registry_not_ready')
         for variant, provenance in variants:
             tag = 'nextstop-identity-regression:' + uuid.uuid4().hex
+            repository = address + '/nextstop-identity-' + uuid.uuid4().hex
+            registry_tag = repository + ':regression'
+            immutable = None
             container = None
             with tempfile.TemporaryDirectory(prefix='nextstop-identity-regression-') as temporary:
                 work = Path(temporary)
@@ -76,12 +105,26 @@ def check(commit: str, expected_store: str, output: Path):
                     container = security.command(['docker', 'create', '--platform', 'linux/amd64',
                                                   docker_id, '/not-executed']).strip()
                     observation['verifiedReferenceCreatesContainer'] = True
+                    security.command(['docker', 'tag', tag, registry_tag], timeout=30)
+                    security.command(['docker', 'push', registry_tag], timeout=180)
+                    pushed = json.loads(security.command(['docker', 'image', 'inspect', registry_tag], timeout=30))
+                    references = [ref for ref in pushed[0].get('RepoDigests', [])
+                                  if ref.startswith(repository + '@sha256:')]
+                    if len(references) != 1:
+                        raise security.GateError('local_registry_immutable_reference_missing')
+                    immutable = references[0]
+                    security.verify_inspection(pushed, config_id, descriptors, commit, image=immutable)
+                    security.command(['docker', 'pull', immutable], timeout=180)
+                    pulled = json.loads(security.command(['docker', 'image', 'inspect', immutable], timeout=30))
+                    security.verify_inspection(pulled, config_id, descriptors, commit, image=immutable)
+                    observation['verifiedImmutableRegistryReference'] = immutable
                 finally:
                     if container:
-                        subprocess.run(['docker', 'container', 'rm', '--force', container],
-                                       capture_output=True, check=False)
-                    subprocess.run(['docker', 'image', 'rm', '--force', tag], capture_output=True, check=False)
+                        cleanup('container', 'rm', '--force', container)
+                    references = [tag, registry_tag] + ([immutable] if immutable else [])
+                    cleanup('image', 'rm', '--force', *references)
     finally:
+        cleanup('container', 'rm', '--force', '--volumes', registry)
         output.write_text(json.dumps({'expectedStore': expected_store, 'observations': observations}, indent=2) + '\n')
     print(json.dumps({'identityRegression': 'passed', 'expectedStore': expected_store,
                       'variants': [item['variant'] for item in observations]}))
