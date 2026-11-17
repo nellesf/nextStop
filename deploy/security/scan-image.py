@@ -113,18 +113,41 @@ def archive_descriptors(read, config_data, docker_manifest):
         subject = descriptor_identity(chosen, MANIFEST_TYPES)
         value = document(descriptor)
         if (item['annotations'][REFERRER_SUBJECT] != subject['digest']
-                or item.get('platform') not in (None, {'os': 'unknown', 'architecture': 'unknown'})
-                or value.get('artifactType') != ATTESTATION_TYPE
-                or descriptor_identity(value.get('subject'), MANIFEST_TYPES) != subject):
+                or item.get('platform') not in (None, {'os': 'unknown', 'architecture': 'unknown'})):
             raise GateError('image_referrer_subject_invalid')
-        empty_config = descriptor_identity(value.get('config'), (EMPTY_CONFIG_TYPE,))
-        if payload(empty_config) != b'{}':
-            raise GateError('image_referrer_config_invalid')
         layers = value.get('layers')
         if not isinstance(layers, list) or not 1 <= len(layers) <= 32:
             raise GateError('image_referrer_layers_invalid')
-        for layer in layers:
-            descriptor_identity(layer, ('application/vnd.in-toto+json',))
+        layers = [descriptor_identity(layer, ('application/vnd.in-toto+json',)) for layer in layers]
+        if 'artifactType' in value or 'subject' in value:
+            if (value.get('artifactType') != ATTESTATION_TYPE
+                    or descriptor_identity(value.get('subject'), MANIFEST_TYPES) != subject):
+                raise GateError('image_referrer_subject_invalid')
+            empty_config = descriptor_identity(value.get('config'), (EMPTY_CONFIG_TYPE,))
+            if payload(empty_config) != b'{}':
+                raise GateError('image_referrer_config_invalid')
+        else:
+            # Older BuildKit attestations have no manifest subject. Prove their
+            # metadata-only config and bind every hashed in-toto statement to
+            # the selected image; never rely on the index annotation alone.
+            config = descriptor_identity(value.get('config'), CONFIG_TYPES)
+            if json.loads(payload(config)) != {
+                'architecture': 'unknown', 'os': 'unknown', 'config': {},
+                'rootfs': {'type': 'layers', 'diff_ids': [layer['digest'] for layer in layers]},
+            }:
+                raise GateError('image_referrer_config_invalid')
+            for layer in layers:
+                statement = json.loads(payload(layer))
+                if (not isinstance(statement, dict)
+                        or statement.get('_type') not in ('https://in-toto.io/Statement/v0.1',
+                                                          'https://in-toto.io/Statement/v1')
+                        or not isinstance(statement.get('subject'), list)
+                        or not 1 <= len(statement['subject']) <= 32
+                        or any(not isinstance(entry, dict) or not isinstance(entry.get('name'), str)
+                               or not entry['name']
+                               or entry.get('digest') != {'sha256': subject['digest'].split(':')[1]}
+                               for entry in statement['subject'])):
+                    raise GateError('image_referrer_statement_subject_invalid')
 
     def select(index):
         if (not isinstance(index, dict) or index.get('schemaVersion') != 2

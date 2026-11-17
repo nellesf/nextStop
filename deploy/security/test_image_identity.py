@@ -124,11 +124,13 @@ class Export:
         self.wrapper['manifests'] = [self.top]
         self.files['index.json'] = encoded(self.wrapper)
 
-    def add_referrer(self):
+    def add_referrer(self, *, legacy=False):
         """Containerd's child export: one runtime manifest plus its OCI artifact."""
         empty = b'{}'
         self.files[blob_path(digest(empty))] = empty
-        attestation = encoded({'_type': 'https://in-toto.io/Statement/v1', 'predicate': {}})
+        attestation = encoded({'_type': 'https://in-toto.io/Statement/v1', 'predicate': {},
+                               'subject': [{'name': 'fixture', 'digest': {
+                                   'sha256': self.runtime_descriptor['digest'].split(':')[1]}}]})
         self.files[blob_path(digest(attestation))] = attestation
         self.referrer = {
             'schemaVersion': 2, 'mediaType': MANIFEST, 'artifactType': s.ATTESTATION_TYPE,
@@ -136,6 +138,12 @@ class Export:
             'subject': copy.deepcopy(self.runtime_descriptor),
             'layers': [self.descriptor('application/vnd.in-toto+json', attestation)],
         }
+        if legacy:
+            self.referrer.pop('artifactType')
+            self.referrer.pop('subject')
+            config = {'architecture': 'unknown', 'os': 'unknown', 'config': {},
+                      'rootfs': {'type': 'layers', 'diff_ids': [digest(attestation)]}}
+            self.referrer['config'] = self.store(CONFIG, config)
         self.rebuild_referrer()
 
     def rebuild_referrer(self):
@@ -307,19 +315,55 @@ class ImageIdentityTests(unittest.TestCase):
                     self.identities(export)
 
     def test_canonical_manifest_with_verified_oci_referrer_keeps_one_scanned_runtime(self):
-        export = Export('manifest')
-        export.add_referrer()
-        config_id, descriptors = self.identities(export)
-        self.assertEqual(config_id, export.config_id)
-        self.assertEqual(descriptors, [export.runtime_descriptor])
-        receipt = self.scan(export, inspection=export.inspection(), image=export.image())
-        self.assertTrue(receipt['passed'])
-        self.assertEqual(receipt['imageDescriptors'], [export.runtime_descriptor])
-        self.assertEqual(receipt['imageId'], export.config_id)
-        wrong = export.inspection()
-        wrong[0].update(Id=export.referrer_descriptor['digest'], Descriptor=export.referrer_descriptor)
-        with self.assertRaises(s.GateError):
-            s.verify_inspection(wrong, config_id, descriptors, COMMIT)
+        for legacy in (False, True):
+            with self.subTest(legacy=legacy):
+                export = Export('manifest')
+                export.add_referrer(legacy=legacy)
+                config_id, descriptors = self.identities(export)
+                self.assertEqual(config_id, export.config_id)
+                self.assertEqual(descriptors, [export.runtime_descriptor])
+                receipt = self.scan(export, inspection=export.inspection(), image=export.image())
+                self.assertTrue(receipt['passed'])
+                self.assertEqual(receipt['imageDescriptors'], [export.runtime_descriptor])
+                self.assertEqual(receipt['imageId'], export.config_id)
+                wrong = export.inspection()
+                wrong[0].update(Id=export.referrer_descriptor['digest'], Descriptor=export.referrer_descriptor)
+                with self.assertRaises(s.GateError):
+                    s.verify_inspection(wrong, config_id, descriptors, COMMIT)
+
+    def test_legacy_referrer_requires_exact_nonruntime_config_and_hashed_statement_subject(self):
+        cases = ('architecture', 'os', 'command', 'diff-id', 'config-bytes', 'layer-bytes',
+                 'layer-size', 'layer-type', 'subject', 'missing-subject', 'statement-type',
+                 'mixed-artifact', 'mixed-subject')
+        for corruption in cases:
+            with self.subTest(corruption=corruption):
+                export = Export('manifest')
+                export.add_referrer(legacy=True)
+                config_descriptor = export.referrer['config']
+                config = json.loads(export.files[blob_path(config_descriptor['digest'])])
+                layer_descriptor = export.referrer['layers'][0]
+                statement = json.loads(export.files[blob_path(layer_descriptor['digest'])])
+                if corruption == 'architecture': config['architecture'] = 'amd64'
+                if corruption == 'os': config['os'] = 'linux'
+                if corruption == 'command': config['config'] = {'Cmd': ['/runnable']}
+                if corruption == 'diff-id': config['rootfs']['diff_ids'] = [OTHER]
+                if corruption == 'subject': statement['subject'][0]['digest']['sha256'] = OTHER.split(':')[1]
+                if corruption == 'missing-subject': statement.pop('subject')
+                if corruption == 'statement-type': statement['_type'] = 'not-in-toto'
+                if corruption in ('subject', 'missing-subject', 'statement-type'):
+                    layer_descriptor = export.store('application/vnd.in-toto+json', statement)
+                    export.referrer['layers'] = [layer_descriptor]
+                    config['rootfs']['diff_ids'] = [layer_descriptor['digest']]
+                export.referrer['config'] = export.store(CONFIG, config)
+                if corruption == 'layer-size': layer_descriptor['size'] += 1
+                if corruption == 'layer-type': layer_descriptor['mediaType'] = 'application/vnd.oci.image.layer.v1.tar'
+                if corruption == 'mixed-artifact': export.referrer['artifactType'] = s.ATTESTATION_TYPE
+                if corruption == 'mixed-subject': export.referrer['subject'] = export.runtime_descriptor
+                export.rebuild_referrer()
+                if corruption == 'config-bytes': export.files[blob_path(export.referrer['config']['digest'])] += b' '
+                if corruption == 'layer-bytes': export.files[blob_path(layer_descriptor['digest'])] += b' '
+                with self.assertRaises(s.GateError):
+                    self.identities(export)
 
     def test_referrer_annotation_cannot_hide_unrelated_runnable_or_modified_content(self):
         cases = ('annotation', 'missing-annotation', 'subject-digest', 'subject-size', 'subject-type',

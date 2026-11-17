@@ -170,9 +170,9 @@ def check(commit: str, expected_store: str, output: Path):
                                     continue
                                 if member.isfile() and member.size <= security.MAX_METADATA_BYTES:
                                     metadata[name] = json.loads(bundle.extractfile(member).read())
-                            # Include manifest/config bytes represented as JSON,
-                            # never layer contents, for any unrecognized referrer.
-                            blobs = {}
+                            # Include bounded metadata JSON from the synthetic
+                            # fixture, never runnable filesystem layer contents.
+                            blobs, statements = {}, {}
                             for descriptor in metadata.get('index.json', {}).get('manifests', []):
                                 digest = descriptor.get('digest', '')
                                 if not isinstance(digest, str) or not security.DIGEST.fullmatch(digest):
@@ -184,6 +184,15 @@ def check(commit: str, expected_store: str, output: Path):
                                         continue
                                     value = json.loads(bundle.extractfile(member).read())
                                     blobs[digest] = value
+                                    for layer in value.get('layers', []):
+                                        layer_digest = layer.get('digest', '')
+                                        if (layer.get('mediaType') != 'application/vnd.in-toto+json'
+                                                or not isinstance(layer_digest, str)
+                                                or not security.DIGEST.fullmatch(layer_digest)):
+                                            continue
+                                        member = bundle.getmember('blobs/sha256/' + layer_digest.split(':')[1])
+                                        if member.isfile() and member.size <= security.MAX_METADATA_BYTES:
+                                            statements[layer_digest] = json.loads(bundle.extractfile(member).read())
                                     config_digest = value.get('config', {}).get('digest', '')
                                     if not isinstance(config_digest, str) or not security.DIGEST.fullmatch(config_digest):
                                         continue
@@ -193,6 +202,7 @@ def check(commit: str, expected_store: str, output: Path):
                                 except (KeyError, ValueError):
                                     continue
                             metadata['manifestAndConfigBlobs'] = blobs
+                            metadata['inTotoStatements'] = statements
                             observation['failedCanonicalExportMetadata'] = metadata
                             observation['originalVerifiedDescriptors'] = descriptors
                         raise
