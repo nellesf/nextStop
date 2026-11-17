@@ -1,10 +1,13 @@
 import copy
 import importlib.util
+import io
 import json
 from pathlib import Path
 import shutil
 import subprocess
+import tempfile
 import unittest
+from unittest.mock import patch
 
 spec = importlib.util.spec_from_file_location("candidate", Path(__file__).with_name("validate-staging-candidate.py"))
 candidate = importlib.util.module_from_spec(spec)
@@ -58,6 +61,33 @@ class CandidateTests(unittest.TestCase):
         self.before = fixtures()
         self.proposed = candidate.plan(self.before, IMAGE, COMMIT)
         self.after = applied(self.before, self.proposed)
+
+    def test_prepare_requires_selected_child_for_both_index_and_direct_commit_tags(self):
+        parent = candidate.REGISTRY + "@sha256:" + "d" * 64
+        for tag_image, requested in ((parent, IMAGE), (IMAGE, IMAGE), (parent, parent),
+                                     (parent, candidate.REGISTRY + "@sha256:" + "e" * 64)):
+            with self.subTest(tag_image=tag_image, requested=requested), tempfile.TemporaryDirectory() as temporary:
+                output = Path(temporary) / "candidate.json"
+                arguments = ["candidate.py", "--commit", COMMIT, "--image", requested, "--output", str(output)]
+                selected = {"commit": COMMIT, "tagImage": tag_image, "image": IMAGE,
+                            "manifestAndConfigHashesVerified": True, "platform": "linux/amd64"}
+                with patch("sys.argv", arguments), patch("sys.stdout", new=io.StringIO()), \
+                        patch.object(candidate, "snapshot", return_value=self.before), \
+                        patch.object(candidate, "select_image", return_value=selected), \
+                        patch.object(candidate, "run") as mutation:
+                    if requested == IMAGE:
+                        candidate.main()
+                    else:
+                        with self.assertRaises(SystemExit):
+                            candidate.main()
+                    mutation.assert_not_called()
+                receipt = json.loads(output.read_text())
+                if requested == IMAGE:
+                    self.assertEqual(receipt["phase"], "prepared-read-only")
+                    self.assertEqual(receipt["registryIdentity"], selected)
+                else:
+                    self.assertEqual(receipt["phase"], "failed")
+                    self.assertFalse(output.with_suffix(".plan.json").exists())
 
     def test_plan_retains_every_old_traffic_entry_and_secret_pin(self):
         for name in ("api", "auth"):

@@ -373,13 +373,19 @@ class ReleaseControlTests(unittest.TestCase):
                     self.assertLess(selected.index('Prepare the reviewed PostgreSQL backup clients'),
                                     selected.index('Back up the exact production database'))
 
-    def promotion_runner(self, *, image=IMAGE, state="success", older_success=False, task="nextstop-release"):
+    def promotion_runner(self, *, image=IMAGE, state="success", older_success=False, task="nextstop-release",
+                         tagged_digest=IMAGE.split("@")[1], platform_digest=IMAGE.split("@")[1]):
         deployment = {"sha": COMMIT, "environment": "staging", "id": 42,
                       "task": task, "payload": {"image": image}}
 
         def run(arguments, **kwargs):
             if arguments[0] == "gcloud":
-                return {"image_summary": {"digest": IMAGE.split("@")[1]}}
+                return {"image_summary": {"digest": tagged_digest}}
+            if str(promotion.ROOT / "deploy/gcp-run/registry.py") in arguments:
+                self.assertEqual(arguments[-4:], ["--commit", COMMIT, "--digest", tagged_digest])
+                return {"verified": True, "manifestAndConfigHashesVerified": True,
+                        "commit": COMMIT, "digest": tagged_digest,
+                        "platform": "linux/amd64", "platformDigest": platform_digest}
             if "/statuses?" in arguments[-1]:
                 self.assertIn("/42/", arguments[-1])
                 return [{"state": state}]
@@ -389,6 +395,16 @@ class ReleaseControlTests(unittest.TestCase):
     def test_exact_successful_staged_artifact_can_be_promoted(self):
         self.assertEqual(promotion.verify(COMMIT, IMAGE, run=self.promotion_runner()),
                          {"commit": COMMIT, "image": IMAGE, "stagingDeploymentId": 42})
+
+    def test_index_tag_authorizes_only_its_proven_platform_manifest(self):
+        index_digest = "sha256:" + "c" * 64
+        self.assertEqual(promotion.verify(COMMIT, IMAGE, run=self.promotion_runner(tagged_digest=index_digest)),
+                         {"commit": COMMIT, "image": IMAGE, "stagingDeploymentId": 42})
+        for digest in (index_digest, "sha256:" + "d" * 64):
+            candidate = CONFIG["registry"] + "@" + digest
+            with self.subTest(digest=digest), self.assertRaisesRegex(ValueError, "not the immutable artifact"):
+                promotion.verify(COMMIT, candidate,
+                                 run=self.promotion_runner(image=candidate, tagged_digest=index_digest))
 
     def test_cloud_run_requires_exact_full_staging_and_successful_main_test_runs(self):
         runner = self.promotion_runner()

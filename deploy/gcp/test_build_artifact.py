@@ -30,10 +30,15 @@ class BuildArtifactTests(unittest.TestCase):
         with self.assertRaises(KeyError):
             build.registry_resources({key: value for key, value in split.items() if key != "registryProject"})
 
-    def runner(self, *, revision=COMMIT, head=COMMIT):
+    def runner(self, *, revision=COMMIT, head=COMMIT, platform_digest=DIGEST):
         def run(arguments, **kwargs):
             if arguments[0] == "git":
                 return head + "\n"
+            if str(build.ROOT / "deploy/gcp-run/registry.py") in arguments:
+                return json.dumps({"verified": True, "manifestAndConfigHashesVerified": True,
+                                   "commit": arguments[arguments.index("--commit") + 1],
+                                   "digest": arguments[arguments.index("--digest") + 1],
+                                   "platform": "linux/amd64", "platformDigest": platform_digest})
             if "inspect" in arguments:
                 return revision + "\n"
             return "ignored subprocess output\n"
@@ -60,6 +65,41 @@ class BuildArtifactTests(unittest.TestCase):
                        "--tag", CONFIG["registry"] + ":" + COMMIT, "backend"], commands)
         self.assertIn(["docker", "push", CONFIG["registry"] + ":" + COMMIT], commands)
         self.assertIn(["docker", "pull", IMAGE], commands)
+
+    def test_index_tag_selects_and_scans_only_its_verified_platform_manifest(self):
+        platform_digest = "sha256:" + "c" * 64
+        canonical = CONFIG["registry"] + "@" + platform_digest
+        for fresh in (False, True):
+            with self.subTest(fresh=fresh):
+                registry, run = Mock(), self.runner(platform_digest=platform_digest)
+                registry.get.side_effect = [IMMUTABLE, None, IMMUTABLE, TAG] if fresh else [IMMUTABLE, TAG]
+                self.assertEqual(build.build_artifact(COMMIT, CONFIG, run=run, registry=registry), canonical)
+                commands = [call.args[0] for call in run.call_args_list]
+                proof = next(command for command in commands if "--digest" in command)
+                self.assertEqual(proof[-4:], ["--commit", COMMIT, "--digest", DIGEST])
+                self.assertIn(["docker", "pull", canonical], commands)
+                self.assertNotIn(["docker", "pull", IMAGE], commands)
+                scans = [command for command in commands if any("scan-image.py" in arg for arg in command)]
+                self.assertIn(canonical, scans[-1])
+                self.assertFalse(any(IMAGE in command for command in scans))
+                if fresh:
+                    self.assertIn(["docker", "push", CONFIG["registry"] + ":" + COMMIT], commands)
+
+    def test_registry_proof_failure_cannot_select_or_scan_a_release(self):
+        registry, run = Mock(), self.runner()
+        registry.get.side_effect = [IMMUTABLE, TAG]
+        original = run.side_effect
+
+        def fail_proof(arguments, **kwargs):
+            if "--digest" in arguments:
+                raise build.BuildArtifactError("registry proof failed")
+            return original(arguments, **kwargs)
+
+        run.side_effect = fail_proof
+        with self.assertRaisesRegex(build.BuildArtifactError, "registry proof failed"):
+            build.build_artifact(COMMIT, CONFIG, run=run, registry=registry)
+        self.assertFalse(any("pull" in call.args[0] or any("scan-image.py" in arg for arg in call.args[0])
+                             for call in run.call_args_list))
 
     def test_security_gate_runs_for_reuse_and_fresh_and_failure_never_selects_release(self):
         for fresh in (False, True):

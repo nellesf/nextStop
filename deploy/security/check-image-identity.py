@@ -60,6 +60,7 @@ def check(commit: str, expected_store: str, output: Path):
             repository = address + '/nextstop-identity-' + uuid.uuid4().hex
             registry_tag = repository + ':regression'
             immutable = None
+            canonical = None
             container = None
             with tempfile.TemporaryDirectory(prefix='nextstop-identity-regression-') as temporary:
                 work = Path(temporary)
@@ -118,10 +119,45 @@ def check(commit: str, expected_store: str, output: Path):
                     pulled = json.loads(security.command(['docker', 'image', 'inspect', immutable], timeout=30))
                     security.verify_inspection(pulled, config_id, descriptors, commit, image=immutable)
                     observation['verifiedImmutableRegistryReference'] = immutable
+
+                    # The export has already proved the descriptor chain down
+                    # to this config. Exercise the exact runnable manifest that
+                    # Cloud Run retains, including an attested index's child.
+                    manifests = [item for item in descriptors if item['mediaType'] in security.MANIFEST_TYPES]
+                    if descriptors and len(manifests) != 1:
+                        raise security.GateError('canonical_manifest_not_unique')
+                    canonical = repository + '@' + manifests[0]['digest'] if manifests else immutable
+                    if (canonical != immutable) != (variant == 'attested-index'):
+                        raise security.GateError('expected_canonical_reference_not_exercised')
+                    if canonical != immutable:
+                        security.command(['docker', 'pull', canonical], timeout=180)
+                        pulled = json.loads(security.command(['docker', 'image', 'inspect', canonical], timeout=30))
+                        # Selecting the child must not weaken the distinction
+                        # between its descriptor and the parent index digest.
+                        try:
+                            security.verify_inspection(pulled, config_id, descriptors, commit, image=immutable)
+                        except security.GateError:
+                            pass
+                        else:
+                            raise security.GateError('parent_index_bound_to_child_inspection')
+                    canonical_id = security.verify_inspection(pulled, config_id, descriptors, commit, image=canonical)
+                    if expected_store == 'containerd' and canonical_id != canonical.rsplit('@', 1)[1]:
+                        raise security.GateError('canonical_manifest_identity_mismatch')
+                    canonical_archive = work / 'canonical-image.tar'
+                    security.command(['docker', 'image', 'save', '--output', str(canonical_archive), canonical])
+                    canonical_config, canonical_descriptors = security.archive_identities(canonical_archive, commit)
+                    if canonical_config != config_id:
+                        raise security.GateError('canonical_manifest_config_mismatch')
+                    security.verify_inspection(pulled, canonical_config, canonical_descriptors, commit, image=canonical)
+                    observation['verifiedCanonicalRegistryReference'] = canonical
+                    observation['canonicalDockerImageId'] = canonical_id
+                    observation['canonicalExportMatchesOriginalConfig'] = True
                 finally:
                     if container:
                         cleanup('container', 'rm', '--force', container)
-                    references = [tag, registry_tag] + ([immutable] if immutable else [])
+                    references = list(dict.fromkeys([tag, registry_tag]
+                                                    + ([immutable] if immutable else [])
+                                                    + ([canonical] if canonical else [])))
                     cleanup('image', 'rm', '--force', *references)
     finally:
         cleanup('container', 'rm', '--force', '--volumes', registry)

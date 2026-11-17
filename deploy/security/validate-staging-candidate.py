@@ -16,10 +16,14 @@ import json
 from pathlib import Path
 import re
 import subprocess
+import sys
 import tempfile
 import urllib.error
 import urllib.request
 import uuid
+
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+from platform_image import select_image
 
 PROJECT = "nextstop-tech-testing"
 REGION = "europe-west1"
@@ -339,12 +343,11 @@ def main():
     try:
         before = snapshot()
         proposed = plan(before, args.image, args.commit)
-        tagged = json_run(["gcloud", "artifacts", "docker", "images", "describe", REGISTRY + ":" + args.commit,
-                           "--project=nextstop-tech-staging", "--format=json", "--quiet", "--verbosity=error"])
-        if tagged.get("image_summary", {}).get("digest") != args.image.split("@", 1)[1]:
-            raise CandidateError("Registry commit tag does not match the selected image.")
+        selected = select_image(args.commit, run=json_run)
+        if selected["image"] != args.image:
+            raise CandidateError("Registry commit tag does not resolve to the selected platform image.")
         plan_hash = digest(proposed)
-        receipt.update(planSHA256=plan_hash, commitTagMatches=True)
+        receipt.update(planSHA256=plan_hash, commitTagMatches=True, registryIdentity=selected)
         if args.apply and args.expected_plan_sha256 != plan_hash:
             raise CandidateError("Apply requires the unchanged prepared plan SHA-256.")
         save(args.output.with_suffix(".plan.json"), proposed)

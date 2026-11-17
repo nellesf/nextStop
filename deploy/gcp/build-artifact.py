@@ -12,7 +12,7 @@ import tempfile
 import sys
 import urllib.parse
 
-from common import COMMIT_PATTERN, ROOT, configuration, validate_image
+from common import COMMIT_PATTERN, ROOT, configuration, validate_image, verified_platform_image
 
 API_HOST = "artifactregistry.googleapis.com"
 MAX_RESPONSE_BYTES = 256 * 1024
@@ -143,7 +143,9 @@ def build_artifact(commit: str, config: dict, *, run=run_command, registry=None,
         if digest is None:
             raise BuildArtifactError("Pushed commit tag is not available for verification.")
     image = config["registry"] + "@" + digest
-    validate_image(image, config)
+    # Cloud Run resolves an index to its platform manifest. Select that exact
+    # proven digest before scanning or recording the release identity.
+    image = verified_platform_image(commit, image, config, run=lambda arguments: json.loads(run(arguments)))
     verify_revision(image, commit, run)
     # This runs even for an existing immutable commit tag: advisory data changes.
     if security_output is not None:

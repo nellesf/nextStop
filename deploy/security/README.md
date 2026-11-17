@@ -45,6 +45,13 @@ scan. A failed scan cannot produce the release-image output. CI preserves the
 receipt and full Trivy JSON, including failures, as workflow artifacts. Images
 are built with `--pull` to obtain current Node 24 base-image packages.
 
+Release references use the verified `linux/amd64` platform manifest rather than
+its parent OCI index. The registry verifier checks index, manifest and config
+bytes against their SHA-256 descriptors and binds the config's revision label to
+the tested commit. Build, staging, production and Cloud Run readback therefore
+use the same exact digest. Promotion rejects an unrelated child or a parent index
+in place of the selected platform manifest.
+
 The receipt's `imageId` always remains the SHA-256 of the exported configuration
 bytes, matching Trivy's identity. Classic Docker uses that config digest as its
 local ID; Docker's containerd store uses an OCI manifest or index digest instead.
@@ -79,11 +86,16 @@ gcloud builds submit --no-source --project=nextstop-tech-staging --region=europe
 
 The build checks out that exact commit from the fixed project repository, audits
 npm, builds/exports the image, and scans it **before** the first push. After push,
-a separate Docker inspection binds the passing scan's configuration digest and
-OCI revision to the actual repository digest. The final compact JSON receipt is
-written to Cloud Logging, with no credentials. Root/operator must capture that
-receipt and Cloud Build's `results.images`, then independently verify the
-registry manifest/configuration and exact commit before accepting the image.
+the registry verifier checks the commit tag's immutable root, its unique
+linux/amd64 manifest, and the configuration bytes and OCI revision. Docker then
+pulls and inspects that exact platform manifest, binding the passing scan's
+configuration digest to the release reference. The final compact JSON receipt
+and registry identity proof are written to Cloud Logging, with no credentials.
+Root/operator must capture both and Cloud Build's `results.images`, then
+independently verify the registry manifest/configuration and exact commit before
+accepting the image. `results.images` may identify the parent index; it must
+match the proof's `tagImage`, whose verified child must match the scan receipt
+and the deployment image. Direct manifest tags retain their original digest.
 A pre-push receipt has `image: null` and is **not** a completed release receipt.
 The full Trivy report lives in `/workspace/security-results/image.trivy.json`
 during the build; blocking findings are also included in the logged receipt.

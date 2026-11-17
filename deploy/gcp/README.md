@@ -196,15 +196,18 @@ Successful main backend checks trigger an image build and, after activation, a s
 building or reusing an image, `build-artifact.py` checks that the repository has
 `dockerConfig.immutableTags=true`. Only an exact tag lookup returning HTTP 404
 permits a build; permission, throttling and service failures abort. It verifies
-the checked-out SHA, then pulls the selected immutable digest and checks its OCI
-revision label. A rerun reuses that digest. Only the verified image reference is
-written to the workflow output.
+the checked-out SHA and resolves the immutable tag through hash- and size-checked
+registry metadata to exactly one `linux/amd64` manifest with that OCI revision.
+The builder pulls, scans and emits this platform manifest digest, which Cloud Run
+also reports for its running revisions. Direct manifest tags retain their digest;
+an OCI index remains the immutable tag target but is not the deployment reference.
+A rerun reuses and rescans the same verified platform manifest.
 
 GitHub deployment records bind the actual application commit and digest using
 task `nextstop-release`; automatic environment records alone cannot authorize
 promotion. Dispatch **Backend production promotion** from main with the complete
 staged commit and `repository@sha256:digest`. The workflow verifies main ancestry,
-the registry's commit-to-digest mapping, and the latest matching staging
+the registry's verified commit-tag-to-platform-manifest mapping, and the latest matching staging
 deployment's successful status and digest. It does not rebuild the application.
 
 Before production DDL, `backup.py` must obtain a consistent dump from the existing

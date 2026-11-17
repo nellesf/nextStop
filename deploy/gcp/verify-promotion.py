@@ -6,7 +6,7 @@ import argparse
 import json
 import subprocess
 
-from common import COMMIT_PATTERN, ROOT, configuration, run_json, validate_image
+from common import COMMIT_PATTERN, ROOT, configuration, run_json, validate_image, verified_platform_image
 
 
 def verify(commit: str, image: str, *, run=run_json, require_cloud_run=False) -> dict:
@@ -18,7 +18,11 @@ def verify(commit: str, image: str, *, run=run_json, require_cloud_run=False) ->
         "gcloud", "artifacts", "docker", "images", "describe", config["registry"] + ":" + commit,
         "--project=nextstop-tech-staging", "--format=json", "--quiet",
     ])
-    if artifact.get("image_summary", {}).get("digest") != image.split("@", 1)[1]:
+    tagged_digest = artifact.get("image_summary", {}).get("digest")
+    if not isinstance(tagged_digest, str):
+        raise ValueError("The immutable commit tag did not identify an image digest.")
+    tagged_image = config["registry"] + "@" + tagged_digest
+    if verified_platform_image(commit, tagged_image, config, run=run) != image:
         raise ValueError("The selected image is not the immutable artifact built for this commit.")
     deployments = run([
         "gh", "api", f"repos/nellesf/nextStop/deployments?sha={commit}&environment=staging&per_page=100",

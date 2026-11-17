@@ -19,9 +19,11 @@ and no unfixed-vulnerability exclusion. HIGH/CRITICAL findings, an unsupported
 OS, missing package inventory or image identity mismatch block release.
 
 `cloudbuild.yaml` builds one exact pushed commit, scans before publishing, and
-binds the report to the published immutable digest. The final receipt and
-Cloud Build `results.images` must agree. A local CI image scan alone is not
-evidence that the production image has been replaced.
+binds the report to the published immutable linux/amd64 manifest. The registry
+proof must link Cloud Build `results.images` (possibly an index) to that exact
+manifest and the scanned configuration. The final receipt and deployment must
+use the verified platform manifest. A local CI image scan alone is not evidence
+that the production image has been replaced.
 
 For production, first validate this exact image in isolated private staging
 API/auth revisions and preserve the existing public staging traffic. Record the

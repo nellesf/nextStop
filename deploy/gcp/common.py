@@ -4,6 +4,7 @@ from __future__ import annotations
 import json
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 ROOT = Path(__file__).resolve().parents[2]
@@ -35,3 +36,22 @@ def run_json(arguments: list[str], timeout: int = 180) -> object:
 def validate_image(image: str, config: dict) -> None:
     if not IMAGE_PATTERN.fullmatch(image) or image.split("@", 1)[0] != config["registry"]:
         raise ValueError("Release image must use the configured repository and an immutable SHA-256 digest.")
+
+
+def verified_platform_image(commit: str, image: str, config: dict, *, run=run_json) -> str:
+    """Select the proven linux/amd64 manifest, retaining direct manifest identity."""
+    if not COMMIT_PATTERN.fullmatch(commit):
+        raise ValueError("A complete Git commit is required.")
+    validate_image(image, config)
+    digest = image.split("@", 1)[1]
+    proof = run([sys.executable, str(ROOT / "deploy/gcp-run/registry.py"),
+                 "--commit", commit, "--digest", digest])
+    if (not isinstance(proof, dict) or proof.get("verified") is not True
+            or proof.get("manifestAndConfigHashesVerified") is not True
+            or proof.get("commit") != commit or proof.get("digest") != digest
+            or proof.get("platform") != "linux/amd64"
+            or not isinstance(proof.get("platformDigest"), str)):
+        raise ValueError("Registry metadata did not prove the release platform manifest.")
+    canonical = config["registry"] + "@" + proof["platformDigest"]
+    validate_image(canonical, config)
+    return canonical

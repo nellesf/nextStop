@@ -15,7 +15,7 @@ steps:
         git init .
         git remote add origin https://github.com/nellesf/nextStop.git
         git sparse-checkout init --cone
-        git sparse-checkout set backend deploy/security
+        git sparse-checkout set backend deploy/security deploy/gcp deploy/gcp-run
         git fetch --depth=1 --filter=blob:none origin "${_COMMIT}"
         git checkout --detach "${_COMMIT}"
         test "$$(git rev-parse HEAD)" = "${_COMMIT}"
@@ -37,14 +37,19 @@ steps:
   - id: push
     name: gcr.io/cloud-builders/docker
     args: ['push', '${_REGISTRY}:${_COMMIT}']
+  - id: verify-platform-image
+    name: gcr.io/google.com/cloudsdktool/google-cloud-cli:stable
+    entrypoint: /usr/lib/google-cloud-sdk/platform/bundledpythonunix/bin/python3
+    args: ['deploy/security/platform_image.py', '--commit', '${_COMMIT}', '--registry', '${_REGISTRY}', '--output-ref', '/workspace/security-results/image.ref', '--output-proof', '/workspace/security-results/registry.json']
   - id: inspect-pushed-image
     name: gcr.io/cloud-builders/docker
     entrypoint: bash
     args:
       - -ceu
       - |
-        docker image inspect '${_REGISTRY}:${_COMMIT}' > /workspace/security-results/inspection.json
-        docker image inspect --format '{{index .RepoDigests 0}}' '${_REGISTRY}:${_COMMIT}' > /workspace/security-results/image.ref
+        image_ref="$$(cat /workspace/security-results/image.ref)"
+        docker pull --platform linux/amd64 "$$image_ref"
+        docker image inspect "$$image_ref" > /workspace/security-results/inspection.json
   - id: bind-security-receipt-to-digest
     name: python:3.13-slim-bookworm
     entrypoint: bash
