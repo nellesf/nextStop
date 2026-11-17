@@ -123,10 +123,15 @@ def check(commit: str, expected_store: str, output: Path):
                     # The export has already proved the descriptor chain down
                     # to this config. Exercise the exact runnable manifest that
                     # Cloud Run retains, including an attested index's child.
-                    manifests = [item for item in descriptors if item['mediaType'] in security.MANIFEST_TYPES]
-                    if descriptors and len(manifests) != 1:
-                        raise security.GateError('canonical_manifest_not_unique')
-                    canonical = repository + '@' + manifests[0]['digest'] if manifests else immutable
+                    canonical = immutable
+                    if expected_store == 'containerd':
+                        manifests = [item for item in descriptors if item['mediaType'] in security.MANIFEST_TYPES]
+                        if len(manifests) != 1:
+                            raise security.GateError('canonical_manifest_not_unique')
+                        canonical = repository + '@' + manifests[0]['digest']
+                    # A classic store's save metadata can use another manifest
+                    # representation from its registry push. Its proven config
+                    # identity and direct registry digest remain unchanged.
                     if (canonical != immutable) != (variant == 'attested-index'):
                         raise security.GateError('expected_canonical_reference_not_exercised')
                     if canonical != immutable:
@@ -143,14 +148,16 @@ def check(commit: str, expected_store: str, output: Path):
                     canonical_id = security.verify_inspection(pulled, config_id, descriptors, commit, image=canonical)
                     if expected_store == 'containerd' and canonical_id != canonical.rsplit('@', 1)[1]:
                         raise security.GateError('canonical_manifest_identity_mismatch')
+                    observation['verifiedCanonicalRegistryReference'] = canonical
+                    observation['canonicalDockerImageId'] = canonical_id
                     canonical_archive = work / 'canonical-image.tar'
-                    security.command(['docker', 'image', 'save', '--output', str(canonical_archive), canonical])
+                    # Save exactly the identity just inspected. Exporting a
+                    # repository reference can include additional image aliases.
+                    security.command(['docker', 'image', 'save', '--output', str(canonical_archive), canonical_id])
                     canonical_config, canonical_descriptors = security.archive_identities(canonical_archive, commit)
                     if canonical_config != config_id:
                         raise security.GateError('canonical_manifest_config_mismatch')
                     security.verify_inspection(pulled, canonical_config, canonical_descriptors, commit, image=canonical)
-                    observation['verifiedCanonicalRegistryReference'] = canonical
-                    observation['canonicalDockerImageId'] = canonical_id
                     observation['canonicalExportMatchesOriginalConfig'] = True
                 finally:
                     if container:
