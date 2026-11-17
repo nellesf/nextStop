@@ -12,6 +12,7 @@ import importlib.util
 import json
 from pathlib import Path
 import subprocess
+import tarfile
 import tempfile
 import time
 import urllib.request
@@ -154,7 +155,24 @@ def check(commit: str, expected_store: str, output: Path):
                     # Save exactly the identity just inspected. Exporting a
                     # repository reference can include additional image aliases.
                     security.command(['docker', 'image', 'save', '--output', str(canonical_archive), canonical_id])
-                    canonical_config, canonical_descriptors = security.archive_identities(canonical_archive, commit)
+                    try:
+                        canonical_config, canonical_descriptors = security.archive_identities(canonical_archive, commit)
+                    except security.GateError:
+                        # Only this disposable, synthetic fixture is exported.
+                        # Retain its bounded manifest metadata for diagnosing
+                        # daemon alias/layout differences without relaxing the gate.
+                        with tarfile.open(canonical_archive, mode='r:*') as bundle:
+                            metadata = {}
+                            for name in ('manifest.json', 'index.json'):
+                                try:
+                                    member = bundle.getmember(name)
+                                except KeyError:
+                                    continue
+                                if member.isfile() and member.size <= security.MAX_METADATA_BYTES:
+                                    metadata[name] = json.loads(bundle.extractfile(member).read())
+                            observation['failedCanonicalExportMetadata'] = metadata
+                            observation['originalVerifiedDescriptors'] = descriptors
+                        raise
                     if canonical_config != config_id:
                         raise security.GateError('canonical_manifest_config_mismatch')
                     security.verify_inspection(pulled, canonical_config, canonical_descriptors, commit, image=canonical)
