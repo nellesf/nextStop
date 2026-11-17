@@ -30,6 +30,9 @@ INDEX_TYPES = ('application/vnd.oci.image.index.v1+json',
                'application/vnd.docker.distribution.manifest.list.v2+json')
 CONFIG_TYPES = ('application/vnd.oci.image.config.v1+json',
                 'application/vnd.docker.container.image.v1+json')
+ATTESTATION_TYPE = 'application/vnd.docker.attestation.manifest.v1+json'
+EMPTY_CONFIG_TYPE = 'application/vnd.oci.empty.v1+json'
+REFERRER_SUBJECT = 'io.containerd.manifest.subject'
 MAX_METADATA_BYTES = 2 * 1024 * 1024
 
 
@@ -89,6 +92,40 @@ def archive_descriptors(read, config_data, docker_manifest):
         raise GateError('image_layout_invalid')
     config_id = 'sha256:' + hashlib.sha256(config_data).hexdigest()
 
+    def payload(descriptor):
+        data = read('blobs/sha256/' + descriptor['digest'].split(':')[1])
+        if (len(data) != descriptor['size']
+                or 'sha256:' + hashlib.sha256(data).hexdigest() != descriptor['digest']):
+            raise GateError('image_descriptor_content_mismatch')
+        return data
+
+    def document(descriptor):
+        value = json.loads(payload(descriptor))
+        if (not isinstance(value, dict) or value.get('schemaVersion') != 2
+                or value.get('mediaType') != descriptor['mediaType']):
+            raise GateError('image_descriptor_media_type_mismatch')
+        return value
+
+    def verify_referrer(item, chosen):
+        # Containerd exports an OCI attestation beside a directly pulled child
+        # manifest. The index annotation alone must never hide another image.
+        descriptor = descriptor_identity(item, (MANIFEST_TYPES[0],))
+        subject = descriptor_identity(chosen, MANIFEST_TYPES)
+        value = document(descriptor)
+        if (item['annotations'][REFERRER_SUBJECT] != subject['digest']
+                or item.get('platform') not in (None, {'os': 'unknown', 'architecture': 'unknown'})
+                or value.get('artifactType') != ATTESTATION_TYPE
+                or descriptor_identity(value.get('subject'), MANIFEST_TYPES) != subject):
+            raise GateError('image_referrer_subject_invalid')
+        empty_config = descriptor_identity(value.get('config'), (EMPTY_CONFIG_TYPE,))
+        if payload(empty_config) != b'{}':
+            raise GateError('image_referrer_config_invalid')
+        layers = value.get('layers')
+        if not isinstance(layers, list) or not 1 <= len(layers) <= 32:
+            raise GateError('image_referrer_layers_invalid')
+        for layer in layers:
+            descriptor_identity(layer, ('application/vnd.in-toto+json',))
+
     def select(index):
         if (not isinstance(index, dict) or index.get('schemaVersion') != 2
                 or index.get('mediaType') not in INDEX_TYPES
@@ -97,10 +134,15 @@ def archive_descriptors(read, config_data, docker_manifest):
             raise GateError('image_index_invalid')
         # BuildKit provenance is metadata, not another runnable image. It must
         # explicitly identify itself and refer to the selected image manifest.
-        images, attestations = [], []
+        images, attestations, referrers = [], [], []
         for item in index['manifests']:
             descriptor_identity(item, MANIFEST_TYPES + INDEX_TYPES)
-            if item.get('annotations', {}).get('vnd.docker.reference.type') == 'attestation-manifest':
+            annotations = item.get('annotations', {})
+            if not isinstance(annotations, dict):
+                raise GateError('image_descriptor_annotations_invalid')
+            if REFERRER_SUBJECT in annotations:
+                referrers.append(item)
+            elif annotations.get('vnd.docker.reference.type') == 'attestation-manifest':
                 if item.get('platform') != {'architecture': 'unknown', 'os': 'unknown'}:
                     raise GateError('image_attestation_invalid')
                 attestations.append(item)
@@ -113,6 +155,8 @@ def archive_descriptors(read, config_data, docker_manifest):
         for item in attestations:
             if item['annotations'].get('vnd.docker.reference.digest') != chosen['digest']:
                 raise GateError('image_attestation_invalid')
+        for item in referrers:
+            verify_referrer(item, chosen)
         return chosen
 
     def visit(value, depth=0):
@@ -123,21 +167,15 @@ def archive_descriptors(read, config_data, docker_manifest):
         if platform is not None and (platform.get('os') != 'linux' or platform.get('architecture') != 'amd64'
                                      or platform.get('variant') not in (None, '', 'v1')):
             raise GateError('image_platform_or_revision_mismatch')
-        payload = read('blobs/sha256/' + descriptor['digest'].split(':')[1])
-        if (len(payload) != descriptor['size']
-                or 'sha256:' + hashlib.sha256(payload).hexdigest() != descriptor['digest']):
-            raise GateError('image_descriptor_content_mismatch')
-        document = json.loads(payload)
-        if document.get('schemaVersion') != 2 or document.get('mediaType') != descriptor['mediaType']:
-            raise GateError('image_descriptor_media_type_mismatch')
+        manifest = document(descriptor)
         if descriptor['mediaType'] in INDEX_TYPES:
-            return [descriptor] + visit(select(document), depth + 1)
-        config_descriptor = descriptor_identity(document.get('config'), CONFIG_TYPES)
+            return [descriptor] + visit(select(manifest), depth + 1)
+        config_descriptor = descriptor_identity(manifest.get('config'), CONFIG_TYPES)
         if config_descriptor['digest'] != config_id or config_descriptor['size'] != len(config_data):
             raise GateError('image_manifest_config_mismatch')
         # Docker/Trivy read manifest.json. Bind its ordered layer paths to the
         # hashed OCI manifest too, not merely its config field.
-        layers = document.get('layers')
+        layers = manifest.get('layers')
         if not isinstance(layers, list):
             raise GateError('image_manifest_layers_invalid')
         paths = []

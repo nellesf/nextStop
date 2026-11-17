@@ -152,12 +152,12 @@ def check(commit: str, expected_store: str, output: Path):
                     observation['verifiedCanonicalRegistryReference'] = canonical
                     observation['canonicalDockerImageId'] = canonical_id
                     canonical_archive = work / 'canonical-image.tar'
-                    # Save exactly the identity just inspected. Exporting a
-                    # repository reference can include additional image aliases.
+                    # Save exactly the identity just inspected, as with the
+                    # original export, rather than resolving a repository alias.
                     security.command(['docker', 'image', 'save', '--output', str(canonical_archive), canonical_id])
                     try:
                         canonical_config, canonical_descriptors = security.archive_identities(canonical_archive, commit)
-                    except security.GateError:
+                    except (security.GateError, KeyError, ValueError):
                         # Only this disposable, synthetic fixture is exported.
                         # Retain its bounded manifest metadata for diagnosing
                         # daemon alias/layout differences without relaxing the gate.
@@ -170,6 +170,29 @@ def check(commit: str, expected_store: str, output: Path):
                                     continue
                                 if member.isfile() and member.size <= security.MAX_METADATA_BYTES:
                                     metadata[name] = json.loads(bundle.extractfile(member).read())
+                            # Include manifest/config bytes represented as JSON,
+                            # never layer contents, for any unrecognized referrer.
+                            blobs = {}
+                            for descriptor in metadata.get('index.json', {}).get('manifests', []):
+                                digest = descriptor.get('digest', '')
+                                if not isinstance(digest, str) or not security.DIGEST.fullmatch(digest):
+                                    continue
+                                name = 'blobs/sha256/' + digest.split(':')[1]
+                                try:
+                                    member = bundle.getmember(name)
+                                    if not member.isfile() or member.size > security.MAX_METADATA_BYTES:
+                                        continue
+                                    value = json.loads(bundle.extractfile(member).read())
+                                    blobs[digest] = value
+                                    config_digest = value.get('config', {}).get('digest', '')
+                                    if not isinstance(config_digest, str) or not security.DIGEST.fullmatch(config_digest):
+                                        continue
+                                    member = bundle.getmember('blobs/sha256/' + config_digest.split(':')[1])
+                                    if member.isfile() and member.size <= security.MAX_METADATA_BYTES:
+                                        blobs[config_digest] = json.loads(bundle.extractfile(member).read())
+                                except (KeyError, ValueError):
+                                    continue
+                            metadata['manifestAndConfigBlobs'] = blobs
                             observation['failedCanonicalExportMetadata'] = metadata
                             observation['originalVerifiedDescriptors'] = descriptors
                         raise
