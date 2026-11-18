@@ -1,0 +1,14 @@
+{
+  "name": "@nextstop/typescript-project-glob",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Reviewed project-file glob adapter for typescript-estree 8.67.0",
+  "type": "commonjs",
+  "main": "index.cjs",
+  "engines": {
+    "node": ">=24 <25"
+  },
+  "dependencies": {
+    "glob": "14.0.3"
+  }
+}

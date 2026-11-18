@@ -34,6 +34,7 @@ scheduled check updates advisory data, not the executable itself.
 ```bash
 python3 -m unittest discover -s deploy/security -p 'test_*.py'
 node --test deploy/security/gaxios-uuid.test.cjs
+node --test deploy/security/typescript-project-glob.test.cjs
 # Linux amd64 runner with Docker; image must carry the exact OCI revision label.
 python3 deploy/security/scan-image.py --image "$IMMUTABLE_IMAGE" \
   --commit "$COMMIT" --output security-results/image.json
@@ -115,6 +116,35 @@ Storage major. The executable transport regression exercises the actual gaxios
 multipart preparation without network access. Remove the override when upstream
 ships a compatible repaired dependency. The development-only brace-expansion
 package is updated to 5.0.12 by the existing semver range.
+
+The November 18, 2026 scheduled audit also blocked the development-only
+`typescript-eslint -> tinyglobby -> picomatch` chain. At remediation time,
+GHSA-fc5q-39xc-vjpf covered every published picomatch version (through 4.0.7)
+with no patched release. The version-scoped override for
+`@typescript-eslint/typescript-estree@8.67.0` therefore replaces tinyglobby with
+the local `@nextstop/typescript-project-glob` adapter, backed by the already
+used `glob@14.0.3`. The vulnerable picomatch and fdir packages are removed from
+the lockfile; no advisory is suppressed and no audit threshold changes.
+
+The adapter implements only the reviewed consumer's `isDynamicPattern` and
+`globSync(pattern, { cwd, expandDirectories: false, ignore })` calls and rejects
+unsupported options. It retains files-only, case-sensitive discovery, symlink
+following, and dotfile exclusion. Matches within each pattern are sorted;
+typescript-estree retains pattern precedence and deduplication. This is a
+project-file adapter, not a general tinyglobby replacement. The explicit local
+development dependency lets npm resolve the scoped override from the project
+root. Docker copies its sources before `npm ci`; production pruning removes
+the development dependency.
+
+The regression test exercises the installed parser's project discovery and real
+type information, ignores, escaped paths, symlinks, and repeated-extglob inputs
+in a subprocess with a deadline. Both GitHub and Cloud Build run it before the
+unchanged npm audits. ESLint applies its existing typed rules to TypeScript;
+the CommonJS adapter receives the core recommended rules. Reassess and remove
+the adapter/override when upstream provides a repaired dependency; upgrading
+typescript-estree requires reviewing its glob API and rerunning these tests.
+
+Source: [picomatch repeated-extglob advisory](https://github.com/advisories/GHSA-fc5q-39xc-vjpf).
 
 Sources: [UUID advisory and patched versions](https://github.com/uuidjs/uuid/security/advisories/GHSA-w5hq-g745-h8pq),
 [official Trivy release](https://github.com/aquasecurity/trivy/releases/tag/v0.75.0),

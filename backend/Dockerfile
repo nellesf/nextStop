@@ -3,6 +3,7 @@ FROM node:24-alpine3.24 AS build
 WORKDIR /app
 
 COPY package.json package-lock.json ./
+COPY tools/typescript-project-glob ./tools/typescript-project-glob
 RUN npm ci
 
 COPY tsconfig.json tsconfig.build.json eslint.config.mjs ./

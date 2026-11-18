@@ -6,9 +6,9 @@ export default tseslint.config(
     ignores: ["coverage/**", "dist/**", "eslint.config.mjs", "node_modules/**"],
   },
   eslint.configs.recommended,
-  ...tseslint.configs.recommendedTypeChecked,
   {
     files: ["**/*.ts"],
+    extends: [...tseslint.configs.recommendedTypeChecked],
     languageOptions: {
       globals: {
         process: "readonly",

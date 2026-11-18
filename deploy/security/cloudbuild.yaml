@@ -23,7 +23,7 @@ steps:
     name: node:24-bookworm-slim
     dir: backend
     entrypoint: bash
-    args: ['-ceu', 'npm ci; node --test ../deploy/security/gaxios-uuid.test.cjs; npm audit --omit=dev --audit-level=moderate; npm audit --audit-level=moderate']
+    args: ['-ceu', 'npm ci; node --test ../deploy/security/gaxios-uuid.test.cjs ../deploy/security/typescript-project-glob.test.cjs; npm audit --omit=dev --audit-level=moderate; npm audit --audit-level=moderate']
   - id: build
     name: gcr.io/cloud-builders/docker
     args: ['build', '--pull', '--platform', 'linux/amd64', '--label', 'org.opencontainers.image.revision=${_COMMIT}', '--tag', '${_REGISTRY}:${_COMMIT}', 'backend']
